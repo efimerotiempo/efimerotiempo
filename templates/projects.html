@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Proyectos</h2>
+<table>
+    <tr><th>Nombre</th><th>Cliente</th><th>Fecha inicio</th><th>Fecha límite</th><th>Prioridad</th><th>Cambiar</th></tr>
+    {% for p in projects %}
+    <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.client }}</td>
+        <td>{{ p.start_date }}</td>
+        <td>{{ p.due_date }}</td>
+        <td>{{ p.priority }}</td>
+        <td>
+            <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                <select name="priority">
+                    {% for pr in priorities %}
+                    <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Actualizar</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

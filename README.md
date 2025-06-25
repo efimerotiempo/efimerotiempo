@@ -1,16 +1,14 @@
-## Hi there 👋
+## Planificador de proyectos
 
-<!--
-**efimerotiempo/efimerotiempo** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+Esta aplicación web permite introducir proyectos y planificar automáticamente sus
+fases utilizando la disponibilidad de los trabajadores.
 
-Here are some ideas to get you started:
+### Uso rápido
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+```bash
+pip install flask
+python app.py
+```
+
+Visita `http://localhost:5000` en tu navegador para visualizar el calendario y
+los proyectos.

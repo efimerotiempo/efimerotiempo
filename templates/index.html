@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Calendario (dos semanas)</h2>
+<div class="schedule-wrapper">
+<table class="schedule">
+    <tr>
+        <th>Recurso</th>
+        {% for d in days %}
+        <th>{{ d.strftime('%d/%m') }}</th>
+        {% endfor %}
+    </tr>
+    {% for worker, days_data in schedule.items() %}
+    <tr>
+        <td>{{ worker }}</td>
+        {% for d in days %}
+        <td>
+            {% set tasks = days_data.get(d.isoformat(), []) %}
+            {% for t in tasks %}
+            <div class="task">
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+            </div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>
+</div>
+
+<h3>Conflictos</h3>
+<ul>
+{% for c in conflicts %}
+    <li>{{ c.project }}: {{ c.message }}
+        <form method="post" action="{{ url_for('delete_conflict', cid=c.id) }}" style="display:inline;">
+            <button type="submit">Borrar</button>
+        </form>
+    </li>
+{% endfor %}
+</ul>
+{% endblock %}

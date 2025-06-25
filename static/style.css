@@ -1,0 +1,7 @@
+body { font-family: Arial, sans-serif; }
+table.schedule { border-collapse: collapse; width: 100%; }
+.schedule-wrapper { overflow-x: auto; }
+table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
+.ok { color: green; }
+.late { color: red; }
+.task { margin-bottom: 2px; }
