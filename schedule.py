@@ -4,7 +4,7 @@ import os
 
 DATA_DIR = 'data'
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
-CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
+DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 
 PHASE_ORDER = ['dibujo', 'recepcionar material', 'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento']
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
@@ -41,17 +41,17 @@ def save_projects(projects):
         json.dump(projects, f)
 
 
-def load_conflicts():
-    if os.path.exists(CONFLICTS_FILE):
-        with open(CONFLICTS_FILE, 'r') as f:
+def load_dismissed():
+    if os.path.exists(DISMISSED_FILE):
+        with open(DISMISSED_FILE, 'r') as f:
             return json.load(f)
     return []
 
 
-def save_conflicts(conflicts):
+def save_dismissed(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CONFLICTS_FILE, 'w') as f:
-        json.dump(conflicts, f)
+    with open(DISMISSED_FILE, 'w') as f:
+        json.dump(data, f)
 
 
 def next_workday(d):
@@ -75,20 +75,37 @@ def schedule_projects(projects):
                 continue
             worker = find_worker_for_phase(phase)
             if not worker:
-                conflicts.append({'id': len(conflicts)+1, 'project': project['name'],
-                                  'message': f'Sin recurso para fase {phase}'})
+                msg = f'Sin recurso para fase {phase}'
+                conflicts.append({
+                    'id': len(conflicts) + 1,
+                    'project': project['name'],
+                    'message': msg,
+                    'key': f"{project['name']}|{msg}",
+                })
                 continue
-            current, end_date = assign_phase(worker_schedule[worker], current, phase,
-                                              project['name'], project['client'], hours, project['due_date'])
+            current, end_date = assign_phase(
+                worker_schedule[worker],
+                current,
+                phase,
+                project['name'],
+                project['client'],
+                hours,
+                project['due_date'],
+                project.get('color', '#ddd'),
+            )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
-            conflicts.append({'id': len(conflicts)+1, 'project': project['name'],
-                              'message': 'No se cumple la fecha de entrega'})
-    save_conflicts(conflicts)
+            msg = 'No se cumple la fecha de entrega'
+            conflicts.append({
+                'id': len(conflicts) + 1,
+                'project': project['name'],
+                'message': msg,
+                'key': f"{project['name']}|{msg}",
+            })
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color):
     day = start_day
     while day.weekday() in WEEKEND:
         day = next_workday(day)
@@ -104,8 +121,14 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
         if used < HOURS_PER_DAY:
             allocate = min(remaining, HOURS_PER_DAY - used)
             late = day > date.fromisoformat(due_date)
-            tasks.append({'project': project_name, 'client': client,
-                          'phase': phase, 'hours': allocate, 'late': late})
+            tasks.append({
+                'project': project_name,
+                'client': client,
+                'phase': phase,
+                'hours': allocate,
+                'late': late,
+                'color': color,
+            })
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day

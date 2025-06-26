@@ -16,7 +16,7 @@
         <td>
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
-            <div class="task">
+            <div class="task" style="background-color: {{ t.color }};">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -36,7 +36,7 @@
 <ul>
 {% for c in conflicts %}
     <li>{{ c.project }}: {{ c.message }}
-        <form method="post" action="{{ url_for('delete_conflict', cid=c.id) }}" style="display:inline;">
+        <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
             <button type="submit">Borrar</button>
         </form>
     </li>
