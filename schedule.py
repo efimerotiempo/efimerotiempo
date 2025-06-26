@@ -71,12 +71,13 @@ def schedule_projects(projects):
     for project in projects:
         current = date.fromisoformat(project['start_date'])
         end_date = current
+        assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
             hours = project['phases'].get(phase)
             if not hours:
                 continue
-            worker = find_worker_for_phase(phase)
-            if not worker:
+            worker = assigned.get(phase) or find_worker_for_phase(phase)
+            if not worker or phase not in WORKERS.get(worker, []):
                 msg = f'Sin recurso para fase {phase}'
                 conflicts.append({
                     'id': len(conflicts) + 1,

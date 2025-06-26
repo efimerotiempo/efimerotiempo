@@ -20,3 +20,7 @@ Existe una pestaña **Completo** que combina el calendario, la lista de proyecto
 y el formulario de alta en una sola página. El calendario muestra el número de
 semana encima de cada fecha y la barra deslizante puede moverse también con la
 rueda del ratón.
+
+En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
+persona asignada desde un desplegable. Cualquier cambio se guarda
+automáticamente.

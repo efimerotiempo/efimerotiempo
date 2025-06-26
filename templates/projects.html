@@ -19,7 +19,19 @@
         <td>{{ p.due_date }}</td>
         <td>{{ p.priority }}</td>
         {% for ph in phases %}
-            <td>{% if p.phases.get(ph) %}{{ p.phases[ph] }}h{% endif %}</td>
+            <td>
+            {% if p.phases.get(ph) %}
+                {{ p.phases[ph] }}h<br>
+                <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                    <select name="worker">
+                        {% for w in all_workers %}
+                            <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Guardar</button>
+                </form>
+            {% endif %}
+            </td>
         {% endfor %}
         <td>
             <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">

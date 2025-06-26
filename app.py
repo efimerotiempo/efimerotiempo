@@ -10,6 +10,7 @@ from schedule import (
     PRIORITY_ORDER,
     PHASE_ORDER,
     WORKERS,
+    find_worker_for_phase,
 )
 
 app = Flask(__name__)
@@ -88,6 +89,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
+        all_workers=list(WORKERS.keys()),
     )
 
 
@@ -105,13 +107,15 @@ def add_project():
             'due_date': data['due_date'],
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
-            'phases': {}
+            'phases': {},
+            'assigned': {}
         }
         for phase in PHASE_ORDER:
             hours = data.get(phase)
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
+                    project['assigned'][phase] = find_worker_for_phase(phase)
                 except ValueError:
                     pass
         projects.append(project)
@@ -134,13 +138,15 @@ def complete():
             'due_date': data['due_date'],
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
-            'phases': {}
+            'phases': {},
+            'assigned': {}
         }
         for phase in PHASE_ORDER:
             hours = data.get(phase)
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
+                    project['assigned'][phase] = find_worker_for_phase(phase)
                 except ValueError:
                     pass
         projects.append(project)
@@ -191,6 +197,7 @@ def complete():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
+        all_workers=list(WORKERS.keys()),
     )
 
 
@@ -200,6 +207,17 @@ def update_priority(pid):
     for p in projects:
         if p['id'] == pid:
             p['priority'] = request.form['priority']
+            break
+    save_projects(projects)
+    return redirect(url_for('project_list'))
+
+
+@app.route('/update_worker/<pid>/<phase>', methods=['POST'])
+def update_worker(pid, phase):
+    projects = load_projects()
+    for p in projects:
+        if p['id'] == pid:
+            p.setdefault('assigned', {})[phase] = request.form['worker']
             break
     save_projects(projects)
     return redirect(url_for('project_list'))
