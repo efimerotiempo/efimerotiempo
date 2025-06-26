@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario (dos semanas)</h2>
+<div class="slider">
+    <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
+</div>
 <div class="schedule-wrapper">
 <table class="schedule">
     <tr>
@@ -57,4 +60,12 @@
     </li>
 {% endfor %}
 </ul>
+<script>
+  const slider = document.getElementById('day-range');
+  slider.addEventListener('change', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('offset', slider.value);
+    window.location.href = url.toString();
+  });
+</script>
 {% endblock %}

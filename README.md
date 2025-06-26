@@ -11,4 +11,5 @@ python app.py
 ```
 
 Visita `http://localhost:5000` en tu navegador para visualizar el calendario y
-los proyectos.
+los proyectos. Usa la barra deslizante sobre la tabla para cambiar las dos
+semanas visibles entre 2024 y 2026.

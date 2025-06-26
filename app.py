@@ -20,6 +20,8 @@ COLORS = [
     '#8d99ae', '#a8dadc', '#457b9d', '#ffb4a2', '#b5838d', '#5e548e',
     '#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#ffbe0b', '#ff7f50',
 ]
+MIN_DATE = date(2024, 1, 1)
+MAX_DATE = date(2026, 12, 31)
 
 
 def get_projects():
@@ -35,15 +37,28 @@ def index():
     schedule, conflicts = schedule_projects(projects)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
-    start = date.today()
-    start -= timedelta(days=start.weekday())  # Monday
+
+    default_start = date.today() - timedelta(days=date.today().weekday())
+    default_offset = (default_start - MIN_DATE).days
+    max_offset = (MAX_DATE - MIN_DATE).days - 13
+
+    try:
+        offset = int(request.args.get('offset', default_offset))
+    except ValueError:
+        offset = default_offset
+    offset = max(0, min(offset, max_offset))
+
+    start = MIN_DATE + timedelta(days=offset)
     days = [start + timedelta(days=i) for i in range(14)]
+
     return render_template(
         'index.html',
         schedule=schedule,
         days=days,
         conflicts=conflicts,
         workers=WORKERS,
+        offset=offset,
+        max_offset=max_offset,
     )
 
 
