@@ -15,12 +15,21 @@
 </div>
 <div class="schedule-wrapper">
 <table class="schedule">
+    <thead>
+    <tr class="weeknums">
+        <th></th>
+        {% for d in days %}
+        <th>{{ d.isocalendar().week }}</th>
+        {% endfor %}
+    </tr>
     <tr>
         <th>Recurso</th>
         {% for d in days %}
         <th>{{ d.strftime('%d/%m') }}</th>
         {% endfor %}
     </tr>
+    </thead>
+    <tbody>
     {% for worker, days_data in schedule.items() %}
     <tr>
         <td>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
@@ -56,6 +65,7 @@
         {% endfor %}
     </tr>
     {% endfor %}
+    </tbody>
 </table>
 </div>
 
@@ -75,6 +85,16 @@
   const offsetInput = filterForm.querySelector('input[name="offset"]');
   slider.addEventListener('change', () => {
     offsetInput.value = slider.value;
+    filterForm.submit();
+  });
+
+  slider.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let val = parseInt(slider.value) + step;
+    val = Math.max(0, Math.min(val, parseInt(slider.max)));
+    slider.value = val;
+    offsetInput.value = val;
     filterForm.submit();
   });
 

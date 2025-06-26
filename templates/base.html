@@ -9,7 +9,8 @@
     <nav>
         <a href="{{ url_for('index') }}">Calendario</a> |
         <a href="{{ url_for('project_list') }}">Proyectos</a> |
-        <a href="{{ url_for('add_project') }}">Añadir proyecto</a>
+        <a href="{{ url_for('add_project') }}">Añadir proyecto</a> |
+        <a href="{{ url_for('complete') }}">Completo</a>
     </nav>
     <hr/>
     {% block content %}{% endblock %}

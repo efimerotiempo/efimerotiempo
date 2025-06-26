@@ -120,6 +120,80 @@ def add_project():
     return render_template('add_project.html')
 
 
+@app.route('/complete', methods=['GET', 'POST'])
+def complete():
+    projects = load_projects()
+    if request.method == 'POST':
+        data = request.form
+        color = COLORS[len(projects) % len(COLORS)]
+        project = {
+            'id': str(uuid.uuid4()),
+            'name': data['name'],
+            'client': data['client'],
+            'start_date': date.today().isoformat(),
+            'due_date': data['due_date'],
+            'priority': data.get('priority', 'Sin prioridad'),
+            'color': color,
+            'phases': {}
+        }
+        for phase in PHASE_ORDER:
+            hours = data.get(phase)
+            if hours:
+                try:
+                    project['phases'][phase] = int(hours)
+                except ValueError:
+                    pass
+        projects.append(project)
+        save_projects(projects)
+        return redirect(url_for('complete'))
+
+    schedule, conflicts = schedule_projects(projects)
+    dismissed = load_dismissed()
+    conflicts = [c for c in conflicts if c['key'] not in dismissed]
+
+    default_start = date.today() - timedelta(days=date.today().weekday())
+    default_offset = (default_start - MIN_DATE).days
+    max_offset = (MAX_DATE - MIN_DATE).days - 13
+
+    try:
+        offset = int(request.args.get('offset', default_offset))
+    except ValueError:
+        offset = default_offset
+    offset = max(0, min(offset, max_offset))
+
+    project_filter = request.args.get('project', '').strip()
+    client_filter = request.args.get('client', '').strip()
+
+    if project_filter or client_filter:
+        for worker, days_data in schedule.items():
+            for day, tasks in days_data.items():
+                schedule[worker][day] = [
+                    t for t in tasks
+                    if (not project_filter or project_filter.lower() in t['project'].lower())
+                    and (not client_filter or client_filter.lower() in t['client'].lower())
+                ]
+
+    start = MIN_DATE + timedelta(days=offset)
+    days = [start + timedelta(days=i) for i in range(14)]
+    today_offset = (date.today() - MIN_DATE).days
+
+    return render_template(
+        'complete.html',
+        schedule=schedule,
+        days=days,
+        conflicts=conflicts,
+        workers=WORKERS,
+        offset=offset,
+        max_offset=max_offset,
+        today_offset=today_offset,
+        project_filter=project_filter,
+        client_filter=client_filter,
+        projects=projects,
+        priorities=list(PRIORITY_ORDER.keys()),
+        phases=PHASE_ORDER,
+    )
+
+
 @app.route('/update_priority/<pid>', methods=['POST'])
 def update_priority(pid):
     projects = load_projects()
