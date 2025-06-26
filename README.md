@@ -11,5 +11,7 @@ python app.py
 ```
 
 Visita `http://localhost:5000` en tu navegador para visualizar el calendario y
-los proyectos. Usa la barra deslizante sobre la tabla para cambiar las dos
-semanas visibles entre 2024 y 2026.
+los proyectos. Utiliza la barra deslizante situada bajo los filtros para
+cambiar la ventana de 14 días entre 2024 y 2026. El botón **HOY** devuelve la
+vista al día actual. Puedes filtrar por nombre de proyecto y cliente desde los
+dos cuadros de búsqueda.

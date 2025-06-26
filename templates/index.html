@@ -1,6 +1,15 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario (dos semanas)</h2>
+<div class="controls">
+    <form id="filter-form" method="get">
+        <input type="hidden" name="offset" value="{{ offset }}">
+        <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+        <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+        <button type="submit">Filtrar</button>
+    </form>
+    <button id="today-btn">HOY</button>
+</div>
 <div class="slider">
     <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
 </div>
@@ -62,10 +71,17 @@
 </ul>
 <script>
   const slider = document.getElementById('day-range');
+  const filterForm = document.getElementById('filter-form');
+  const offsetInput = filterForm.querySelector('input[name="offset"]');
   slider.addEventListener('change', () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('offset', slider.value);
-    window.location.href = url.toString();
+    offsetInput.value = slider.value;
+    filterForm.submit();
+  });
+
+  const todayBtn = document.getElementById('today-btn');
+  todayBtn.addEventListener('click', () => {
+    offsetInput.value = {{ today_offset }};
+    filterForm.submit();
   });
 </script>
 {% endblock %}

@@ -48,8 +48,23 @@ def index():
         offset = default_offset
     offset = max(0, min(offset, max_offset))
 
+    project_filter = request.args.get('project', '').strip()
+    client_filter = request.args.get('client', '').strip()
+
+    # filter tasks by project and client
+    if project_filter or client_filter:
+        for worker, days_data in schedule.items():
+            for day, tasks in days_data.items():
+                schedule[worker][day] = [
+                    t for t in tasks
+                    if (not project_filter or project_filter.lower() in t['project'].lower())
+                    and (not client_filter or client_filter.lower() in t['client'].lower())
+                ]
+
     start = MIN_DATE + timedelta(days=offset)
     days = [start + timedelta(days=i) for i in range(14)]
+
+    today_offset = (date.today() - MIN_DATE).days
 
     return render_template(
         'index.html',
@@ -59,6 +74,9 @@ def index():
         workers=WORKERS,
         offset=offset,
         max_offset=max_offset,
+        today_offset=today_offset,
+        project_filter=project_filter,
+        client_filter=client_filter,
     )
 
 
