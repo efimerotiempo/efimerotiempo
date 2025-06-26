@@ -13,7 +13,7 @@ WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba': ['dibujo', 'montar'],
     'Irene': ['recepcionar material'],
-    'Mikel': ['montar', 'mecanizar', 'tratamiento'],
+    'Mikel': ['montar'],
     'Iban': ['montar'],
     'Naparra': ['montar'],
     'Unai': ['montar', 'soldar'],
@@ -21,7 +21,9 @@ WORKERS = {
     'Beltxa': ['soldar'],
     'Igor': ['soldar'],
     'Albi': ['recepcionar material', 'soldar', 'montar'],
-    'Eneko': ['pintar', 'montar', 'soldar']
+    'Eneko': ['pintar', 'montar', 'soldar'],
+    'Mecanizar': ['mecanizar'],
+    'Tratamiento': ['tratamiento'],
 }
 
 HOURS_PER_DAY = 8

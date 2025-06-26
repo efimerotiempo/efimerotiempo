@@ -5,3 +5,5 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .ok { color: green; }
 .late { color: red; }
 .task { margin-bottom: 2px; }
+.hours td { text-align: center; background: #f7f7f7; font-size: 0.9em; }
+.full { color: green; font-weight: bold; }

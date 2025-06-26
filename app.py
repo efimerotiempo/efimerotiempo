@@ -1,8 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
 from datetime import date, timedelta
 import uuid
-import json
-import random
 from schedule import (
     load_projects,
     save_projects,
@@ -11,18 +9,16 @@ from schedule import (
     save_dismissed,
     PRIORITY_ORDER,
     PHASE_ORDER,
+    WORKERS,
 )
 
 app = Flask(__name__)
 
 COLORS = [
-    '#f8b195',
-    '#c06c84',
-    '#355c7d',
-    '#6c5b7b',
-    '#f67280',
-    '#99b898',
-    '#ff8c94',
+    '#f8b195', '#c06c84', '#355c7d', '#6c5b7b', '#f67280', '#99b898',
+    '#ff8c94', '#ffc857', '#698f3f', '#f4a259', '#51adcf', '#e63946',
+    '#8d99ae', '#a8dadc', '#457b9d', '#ffb4a2', '#b5838d', '#5e548e',
+    '#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#ffbe0b', '#ff7f50',
 ]
 
 
@@ -47,6 +43,7 @@ def index():
         schedule=schedule,
         days=days,
         conflicts=conflicts,
+        workers=WORKERS,
     )
 
 
@@ -65,6 +62,8 @@ def project_list():
 def add_project():
     if request.method == 'POST':
         data = request.form
+        projects = load_projects()
+        color = COLORS[len(projects) % len(COLORS)]
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
@@ -72,7 +71,7 @@ def add_project():
             'start_date': date.today().isoformat(),
             'due_date': data['due_date'],
             'priority': data.get('priority', 'Sin prioridad'),
-            'color': random.choice(COLORS),
+            'color': color,
             'phases': {}
         }
         for phase in PHASE_ORDER:
@@ -82,7 +81,6 @@ def add_project():
                     project['phases'][phase] = int(hours)
                 except ValueError:
                     pass
-        projects = load_projects()
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('project_list'))
