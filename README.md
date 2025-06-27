@@ -20,11 +20,13 @@ proyecto y cliente desde los dos cuadros de búsqueda.
 
 También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
 vistas de calendario aparecerá una línea roja en la fecha del hito junto con su
-descripción.
+descripción. Existe una pestaña **Hitos** que muestra la lista completa y permite
+eliminarlos con una **X** roja.
 
-La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
-abajo se muestran el formulario de alta, el de hitos, la lista de conflictos,
-el calendario y por último los proyectos. Cada sección se expande por
+La pestaña **Completo** reúne todas las vistas en una sola página. En la
+parte superior se muestran, de izquierda a derecha, el formulario de alta, el
+de hitos y la lista de conflictos. Debajo aparecen el calendario y, al final,
+la lista de proyectos. Cada sección se expande por
 completo y la página ofrece una barra de desplazamiento vertical para consultar
 la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana encima de cada fecha y la barra

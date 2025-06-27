@@ -141,13 +141,30 @@ def add_project():
 
 @app.route('/add_milestone', methods=['POST'])
 def add_milestone():
+    """Add a milestone with a unique id."""
     milestones = load_milestones()
     milestones.append({
+        'id': str(uuid.uuid4()),
         'description': request.form['description'],
         'date': request.form['date'],
     })
     save_milestones(milestones)
     next_url = request.form.get('next') or url_for('complete')
+    return redirect(next_url)
+
+
+@app.route('/milestones')
+def milestone_list():
+    milestones = load_milestones()
+    return render_template('milestones.html', milestones=milestones)
+
+
+@app.route('/delete_milestone/<mid>', methods=['POST'])
+def delete_milestone(mid):
+    milestones = load_milestones()
+    milestones = [m for m in milestones if m.get('id') != mid]
+    save_milestones(milestones)
+    next_url = request.form.get('next') or url_for('milestone_list')
     return redirect(next_url)
 
 

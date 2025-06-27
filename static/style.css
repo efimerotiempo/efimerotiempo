@@ -29,10 +29,15 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 }
 
 .complete-container > div { padding: 5px; }
-.complete-add { flex: none; }
+.complete-top { display: flex; gap: 10px; }
+.complete-add,
+.complete-milestones { flex: 1; }
+.complete-conflicts {
+    flex: 1;
+    overflow-x: auto;
+}
 .complete-calendar { flex: none; }
 .complete-projects { flex: none; overflow-x: auto; }
-.complete-conflicts { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 /* make first column fit contents */
