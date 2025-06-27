@@ -18,10 +18,11 @@ vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
 ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
-También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
-vistas de calendario aparecerá una línea roja en la fecha del hito junto con su
-descripción. Existe una pestaña **Hitos** que muestra la lista completa y permite
-eliminarlos con una **X** roja.
+ También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
+ vistas de calendario aparecerá una línea roja en la fecha del hito y la
+ descripción se muestra en horizontal dentro de su celda en color rojo. Existe
+ una pestaña **Hitos** que muestra la lista completa y permite eliminarlos con
+ una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
 parte superior se muestran, de izquierda a derecha, el formulario de alta, el
@@ -44,6 +45,9 @@ Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos
 distintos se asignan a personas diferentes para poder avanzar en paralelo
 si hay recursos libres.
+
+La fase **Pedidos**, realizada por Irene, aparece tras **dibujo** y ocupa por
+defecto dos semanas (80 horas) al crear un proyecto, aunque puede ajustarse.
 
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas.

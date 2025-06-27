@@ -125,6 +125,8 @@ def add_project():
         }
         for phase in PHASE_ORDER:
             hours = data.get(phase)
+            if not hours and phase == 'pedidos':
+                hours = '80'
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
@@ -136,7 +138,7 @@ def add_project():
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('project_list'))
-    return render_template('add_project.html')
+    return render_template('add_project.html', phases=PHASE_ORDER)
 
 
 @app.route('/add_milestone', methods=['POST'])
@@ -188,6 +190,8 @@ def complete():
         }
         for phase in PHASE_ORDER:
             hours = data.get(phase)
+            if not hours and phase == 'pedidos':
+                hours = '80'
             if hours:
                 try:
                     project['phases'][phase] = int(hours)

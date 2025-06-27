@@ -8,13 +8,22 @@ DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 
-PHASE_ORDER = ['dibujo', 'recepcionar material', 'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento']
+PHASE_ORDER = [
+    'dibujo',
+    'pedidos',
+    'recepcionar material',
+    'montar',
+    'soldar',
+    'pintar',
+    'mecanizar',
+    'tratamiento',
+]
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
 WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
-    'Irene': ['recepcionar material'],
+    'Irene': ['pedidos'],
     'Joseba 2': ['montar', 'soldar'],
     'Mikel': ['montar', 'soldar'],
     'Iban': ['montar', 'soldar'],
