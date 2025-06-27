@@ -27,15 +27,15 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     display: flex;
     flex-direction: column;
     gap: 10px;
-    height: 90vh;
+    height: 100vh;
     overflow-y: auto;
 }
 
 .complete-container > div { padding: 5px; }
-.complete-add { flex: 1; }
-.complete-calendar { flex: 2; }
-.complete-projects { flex: 3; overflow: auto; }
-.complete-conflicts { flex: 3; overflow: auto; }
+.complete-add { flex: none; }
+.complete-calendar { flex: none; }
+.complete-projects { flex: none; overflow-x: auto; }
+.complete-conflicts { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 /* make first column fit contents */

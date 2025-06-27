@@ -18,8 +18,9 @@ dos cuadros de búsqueda.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
 abajo se muestran el formulario de alta, los proyectos, la lista de conflictos
-y finalmente el calendario de dos semanas. Todo el conjunto cuenta con una barra
-de desplazamiento vertical para consultar la información cómodamente. El
+y finalmente el calendario de dos semanas. Cada sección se expande por
+completo y la página ofrece una barra de desplazamiento vertical para consultar
+la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana encima de cada fecha y la barra
 deslizante puede moverse con la rueda del ratón manteniendo pulsada la tecla
 Shift. Las columnas del calendario se ajustan automáticamente al contenido.
