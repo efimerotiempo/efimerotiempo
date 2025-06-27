@@ -33,3 +33,9 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .complete-add {}
 .complete-conflicts { overflow: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+
+/* make first column fit contents */
+.resource-col { white-space: nowrap; width: 1%; }
+
+/* keep projects table width */
+.complete-projects table { width: 100%; }

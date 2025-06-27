@@ -23,7 +23,7 @@
         {% endfor %}
     </tr>
     <tr>
-        <th>Recurso</th>
+        <th class="resource-col">Recurso</th>
         {% for d in days %}
         <th>{{ d.strftime('%d/%m') }}</th>
         {% endfor %}
@@ -32,7 +32,7 @@
     <tbody>
     {% for worker, days_data in schedule.items() %}
     <tr class="hours">
-        <td>Horas</td>
+        <td class="resource-col">Horas</td>
         {% for d in days %}
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set used = 0 %}
@@ -45,7 +45,7 @@
         {% endfor %}
     </tr>
     <tr>
-        <td>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
         <td>
             {% set tasks = days_data.get(d.isoformat(), []) %}
