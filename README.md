@@ -27,3 +27,8 @@ automáticamente. Tanto en la vista de **Calendario** como en **Completo** se
 muestra una fila de **Horas** sobre cada trabajador indicando la carga diaria;
 los días sin tareas se muestran como "0h" en rojo y los días completos con
 "8h" en verde.
+
+Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
+disponible con menos carga, de modo que fases idénticas en proyectos
+distintos se asignan a personas diferentes para poder avanzar en paralelo
+si hay recursos libres.

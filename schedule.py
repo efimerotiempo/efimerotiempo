@@ -77,7 +77,9 @@ def schedule_projects(projects):
             hours = project['phases'].get(phase)
             if not hours:
                 continue
-            worker = assigned.get(phase) or find_worker_for_phase(phase, project.get('priority'))
+            worker = assigned.get(phase) or find_worker_for_phase(
+                phase, worker_schedule, project.get('priority')
+            )
             if not worker or phase not in WORKERS.get(worker, []):
                 msg = f'Sin recurso para fase {phase}'
                 conflicts.append({
@@ -141,16 +143,27 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
     return next_workday(last_day), last_day
 
 
-def find_worker_for_phase(phase, priority=None):
+def _worker_load(schedule, worker):
+    """Return total assigned hours for a worker."""
+    return sum(
+        t['hours']
+        for day in schedule.get(worker, {}).values()
+        for t in day
+    )
+
+
+def find_worker_for_phase(phase, schedule, priority=None):
+    """Choose the least busy worker that can perform the phase."""
     candidates = []
     for worker, skills in WORKERS.items():
         if phase in skills:
-            candidates.append((skills.index(phase), worker))
+            load = _worker_load(schedule, worker)
+            candidates.append((skills.index(phase), load, worker))
     if not candidates:
         return None
     if priority == 'Alta':
-        priority_workers = [w for idx, w in candidates if idx == 0]
-        if priority_workers:
-            return priority_workers[0]
-    candidates.sort(key=lambda x: x[0])
-    return candidates[0][1]
+        prio = [c for c in candidates if c[0] == 0]
+        if prio:
+            candidates = prio
+    candidates.sort(key=lambda c: (c[1], c[0]))
+    return candidates[0][2]

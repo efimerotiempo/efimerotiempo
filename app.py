@@ -98,6 +98,7 @@ def add_project():
     if request.method == 'POST':
         data = request.form
         projects = load_projects()
+        schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         project = {
             'id': str(uuid.uuid4()),
@@ -115,7 +116,9 @@ def add_project():
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
-                    project['assigned'][phase] = find_worker_for_phase(phase, project['priority'])
+                    project['assigned'][phase] = find_worker_for_phase(
+                        phase, schedule, project['priority']
+                    )
                 except ValueError:
                     pass
         projects.append(project)
@@ -129,6 +132,7 @@ def complete():
     projects = load_projects()
     if request.method == 'POST':
         data = request.form
+        schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         project = {
             'id': str(uuid.uuid4()),
@@ -146,7 +150,9 @@ def complete():
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
-                    project['assigned'][phase] = find_worker_for_phase(phase, project['priority'])
+                    project['assigned'][phase] = find_worker_for_phase(
+                        phase, schedule, project['priority']
+                    )
                 except ValueError:
                     pass
         projects.append(project)
