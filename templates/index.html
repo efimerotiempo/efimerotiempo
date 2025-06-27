@@ -30,13 +30,22 @@
         <th>{{ d.strftime('%d/%m') }}</th>
         {% endfor %}
     </tr>
+    <tr class="milestones-row">
+        <td></td>
+        {% for d in days %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td class="milestone-cell">
+            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
+        </td>
+        {% endfor %}
+    </tr>
     </thead>
     <tbody>
     {% for worker, days_data in schedule.items() %}
     <tr>
         <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
-        <td>
+        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             <div class="task" style="background-color: {{ t.color }};">

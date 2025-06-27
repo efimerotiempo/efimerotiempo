@@ -18,9 +18,13 @@ vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
 ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
+También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
+vistas de calendario aparecerá una línea roja en la fecha del hito junto con su
+descripción.
+
 La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
-abajo se muestran el formulario de alta, la lista de conflictos, el calendario
-y por último los proyectos. Cada sección se expande por
+abajo se muestran el formulario de alta, el de hitos, la lista de conflictos,
+el calendario y por último los proyectos. Cada sección se expande por
 completo y la página ofrece una barra de desplazamiento vertical para consultar
 la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana encima de cada fecha y la barra

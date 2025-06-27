@@ -9,6 +9,8 @@ from schedule import (
     save_dismissed,
     load_extra_conflicts,
     save_extra_conflicts,
+    load_milestones,
+    save_milestones,
     PRIORITY_ORDER,
     PHASE_ORDER,
     WORKERS,
@@ -38,6 +40,7 @@ def get_projects():
 def index():
     projects = load_projects()
     schedule, conflicts = schedule_projects(projects)
+    milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
@@ -71,6 +74,10 @@ def index():
 
     today_offset = (date.today() - MIN_DATE).days
 
+    milestone_map = {}
+    for m in milestones:
+        milestone_map.setdefault(m['date'], []).append(m['description'])
+
     return render_template(
         'index.html',
         schedule=schedule,
@@ -82,6 +89,7 @@ def index():
         today_offset=today_offset,
         project_filter=project_filter,
         client_filter=client_filter,
+        milestones=milestone_map,
     )
 
 
@@ -131,6 +139,18 @@ def add_project():
     return render_template('add_project.html')
 
 
+@app.route('/add_milestone', methods=['POST'])
+def add_milestone():
+    milestones = load_milestones()
+    milestones.append({
+        'description': request.form['description'],
+        'date': request.form['date'],
+    })
+    save_milestones(milestones)
+    next_url = request.form.get('next') or url_for('complete')
+    return redirect(next_url)
+
+
 @app.route('/complete', methods=['GET', 'POST'])
 def complete():
     projects = load_projects()
@@ -164,6 +184,7 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
@@ -195,6 +216,10 @@ def complete():
     days = [start + timedelta(days=i) for i in range(14)]
     today_offset = (date.today() - MIN_DATE).days
 
+    milestone_map = {}
+    for m in milestones:
+        milestone_map.setdefault(m['date'], []).append(m['description'])
+
     return render_template(
         'complete.html',
         schedule=schedule,
@@ -210,6 +235,7 @@ def complete():
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=list(WORKERS.keys()),
+        milestones=milestone_map,
     )
 
 

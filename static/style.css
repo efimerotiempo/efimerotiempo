@@ -48,3 +48,24 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     font-size: 1.2em;
     cursor: pointer;
 }
+
+.milestone-day {
+    border-left: 2px solid red;
+}
+
+.milestone-cell {
+    border-left: 2px solid red;
+    height: 30px;
+    position: relative;
+}
+
+.milestone-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 0.8em;
+    color: red;
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
