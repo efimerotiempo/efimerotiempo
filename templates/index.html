@@ -31,6 +31,19 @@
     </thead>
     <tbody>
     {% for worker, days_data in schedule.items() %}
+    <tr class="hours">
+        <td>Horas</td>
+        {% for d in days %}
+        {% set tasks = days_data.get(d.isoformat(), []) %}
+        {% set used = 0 %}
+        {% for t in tasks %}
+            {% set used = used + t.hours %}
+        {% endfor %}
+        <td>
+            <span class="{% if used >= 8 %}full{% elif used == 0 %}empty{% endif %}">{{ used }}h</span>
+        </td>
+        {% endfor %}
+    </tr>
     <tr>
         <td>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
@@ -46,21 +59,6 @@
                 {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
             </div>
             {% endfor %}
-        </td>
-        {% endfor %}
-    </tr>
-    <tr class="hours">
-        <td>Horas</td>
-        {% for d in days %}
-        {% set tasks = days_data.get(d.isoformat(), []) %}
-        {% set used = 0 %}
-        {% for t in tasks %}
-            {% set used = used + t.hours %}
-        {% endfor %}
-        <td>
-            {% if used > 0 %}
-                <span class="{% if used >= 8 %}full{% endif %}">{{ used }}h</span>
-            {% endif %}
         </td>
         {% endfor %}
     </tr>

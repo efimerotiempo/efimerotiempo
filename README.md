@@ -23,4 +23,6 @@ rueda del ratón.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
-automáticamente.
+automáticamente. En el calendario aparece una fila de **Horas** sobre cada
+trabajador indicando la carga diaria; los días sin tareas se muestran como
+"0h" en rojo y los días completos con "8h" en verde.
