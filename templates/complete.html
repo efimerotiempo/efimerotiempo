@@ -21,6 +21,75 @@
             <button type="submit">Guardar</button>
         </form>
     </div>
+    <div class="complete-conflicts">
+        <h3>Conflictos</h3>
+        <ul>
+        {% for c in conflicts %}
+            <li>{{ c.project }}: {{ c.message }}
+                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
+                    <button type="submit">Borrar</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    <div class="complete-calendar">
+        <h2>Calendario (dos semanas)</h2>
+        <div class="controls">
+            <form id="filter-form" method="get">
+                <input type="hidden" name="offset" value="{{ offset }}">
+                <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+                <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+                <button type="submit">Filtrar</button>
+            </form>
+            <button id="today-btn">HOY</button>
+            <button id="left-btn">&lt;</button>
+            <button id="right-btn">&gt;</button>
+        </div>
+        <div class="slider">
+            <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
+        </div>
+        <div class="schedule-wrapper">
+<table class="schedule">
+    <thead>
+    <tr class="weeknums">
+        <th></th>
+        {% for d in days %}
+        <th>{{ d.isocalendar().week }}</th>
+        {% endfor %}
+    </tr>
+    <tr>
+        <th class="resource-col">Recurso</th>
+        {% for d in days %}
+        <th>{{ d.strftime('%d/%m') }}</th>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for worker, days_data in schedule.items() %}
+    <tr>
+        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        {% for d in days %}
+        <td>
+            {% set tasks = days_data.get(d.isoformat(), []) %}
+            {% for t in tasks %}
+            <div class="task" style="background-color: {{ t.color }};">
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+            </div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+        </div>
+    </div>
     <div class="complete-projects">
         <h2>Proyectos</h2>
         <table>
@@ -68,88 +137,6 @@
             </tr>
             {% endfor %}
         </table>
-    </div>
-    <div class="complete-conflicts">
-        <h3>Conflictos</h3>
-        <ul>
-        {% for c in conflicts %}
-            <li>{{ c.project }}: {{ c.message }}
-                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
-                    <button type="submit">Borrar</button>
-                </form>
-            </li>
-        {% endfor %}
-        </ul>
-    </div>
-    <div class="complete-calendar">
-        <h2>Calendario (dos semanas)</h2>
-        <div class="controls">
-            <form id="filter-form" method="get">
-                <input type="hidden" name="offset" value="{{ offset }}">
-                <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
-                <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
-                <button type="submit">Filtrar</button>
-            </form>
-            <button id="today-btn">HOY</button>
-            <button id="left-btn">&lt;</button>
-            <button id="right-btn">&gt;</button>
-        </div>
-        <div class="slider">
-            <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
-        </div>
-        <div class="schedule-wrapper">
-<table class="schedule">
-    <thead>
-    <tr class="weeknums">
-        <th></th>
-        {% for d in days %}
-        <th>{{ d.isocalendar().week }}</th>
-        {% endfor %}
-    </tr>
-    <tr>
-        <th class="resource-col">Recurso</th>
-        {% for d in days %}
-        <th>{{ d.strftime('%d/%m') }}</th>
-        {% endfor %}
-    </tr>
-    </thead>
-    <tbody>
-    {% for worker, days_data in schedule.items() %}
-    <tr class="hours">
-        <td class="resource-col">Horas</td>
-        {% for d in days %}
-        {% set tasks = days_data.get(d.isoformat(), []) %}
-        {% set used = 0 %}
-        {% for t in tasks %}
-            {% set used = used + t.hours %}
-        {% endfor %}
-        <td>
-            <span class="{% if used >= 8 %}full{% elif used == 0 %}empty{% endif %}">{{ used }}h</span>
-        </td>
-        {% endfor %}
-    </tr>
-    <tr>
-        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
-        {% for d in days %}
-        <td>
-            {% set tasks = days_data.get(d.isoformat(), []) %}
-            {% for t in tasks %}
-            <div class="task" style="background-color: {{ t.color }};">
-                {% if t.late %}
-                    <span class="late">&#10060;</span>
-                {% else %}
-                    <span class="ok">&#10004;</span>
-                {% endif %}
-                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
-            </div>
-            {% endfor %}
-        </td>
-        {% endfor %}
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
-        </div>
     </div>
 </div>
 <script>

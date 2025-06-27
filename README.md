@@ -19,8 +19,8 @@ ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
-abajo se muestran el formulario de alta, los proyectos, la lista de conflictos
-y finalmente el calendario de dos semanas. Cada sección se expande por
+abajo se muestran el formulario de alta, la lista de conflictos, el calendario
+y por último los proyectos. Cada sección se expande por
 completo y la página ofrece una barra de desplazamiento vertical para consultar
 la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana encima de cada fecha y la barra
@@ -29,10 +29,7 @@ Shift. Las columnas del calendario se ajustan automáticamente al contenido.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
-automáticamente. Tanto en la vista de **Calendario** como en **Completo** se
-muestra una fila de **Horas** sobre cada trabajador indicando la carga diaria;
-los días sin tareas se muestran como "0h" en rojo y los días completos con
-"8h" en verde.
+automáticamente.
 
 Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos

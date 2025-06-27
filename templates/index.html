@@ -33,19 +33,6 @@
     </thead>
     <tbody>
     {% for worker, days_data in schedule.items() %}
-    <tr class="hours">
-        <td class="resource-col">Horas</td>
-        {% for d in days %}
-        {% set tasks = days_data.get(d.isoformat(), []) %}
-        {% set used = 0 %}
-        {% for t in tasks %}
-            {% set used = used + t.hours %}
-        {% endfor %}
-        <td>
-            <span class="{% if used >= 8 %}full{% elif used == 0 %}empty{% endif %}">{{ used }}h</span>
-        </td>
-        {% endfor %}
-    </tr>
     <tr>
         <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
