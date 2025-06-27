@@ -40,3 +40,11 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 
 /* keep projects table width */
 .complete-projects table { width: 100%; }
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: red;
+    font-size: 1.2em;
+    cursor: pointer;
+}

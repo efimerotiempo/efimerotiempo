@@ -5,6 +5,7 @@ import os
 DATA_DIR = 'data'
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
+EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 
 PHASE_ORDER = ['dibujo', 'recepcionar material', 'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento']
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
@@ -55,6 +56,19 @@ def save_dismissed(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(DISMISSED_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def load_extra_conflicts():
+    if os.path.exists(EXTRA_CONFLICTS_FILE):
+        with open(EXTRA_CONFLICTS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_extra_conflicts(conflicts):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(EXTRA_CONFLICTS_FILE, 'w') as f:
+        json.dump(conflicts, f)
 
 
 def next_workday(d):

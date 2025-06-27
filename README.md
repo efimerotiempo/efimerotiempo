@@ -29,7 +29,10 @@ Shift. Las columnas del calendario se ajustan automáticamente al contenido.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
-automáticamente.
+automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
+eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
+lista de conflictos aparece un aviso indicando la eliminación y los cambios que
+ha producido.
 
 Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos

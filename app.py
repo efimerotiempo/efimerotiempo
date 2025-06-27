@@ -7,6 +7,8 @@ from schedule import (
     schedule_projects,
     load_dismissed,
     save_dismissed,
+    load_extra_conflicts,
+    save_extra_conflicts,
     PRIORITY_ORDER,
     PHASE_ORDER,
     WORKERS,
@@ -36,6 +38,8 @@ def get_projects():
 def index():
     projects = load_projects()
     schedule, conflicts = schedule_projects(projects)
+    extra = load_extra_conflicts()
+    conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
 
@@ -160,6 +164,8 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    extra = load_extra_conflicts()
+    conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
 
@@ -229,12 +235,40 @@ def update_worker(pid, phase):
     return redirect(url_for('project_list'))
 
 
+@app.route('/delete_project/<pid>', methods=['POST'])
+def delete_project(pid):
+    projects = load_projects()
+    removed = None
+    for p in projects:
+        if p['id'] == pid:
+            removed = p
+            break
+    if removed:
+        projects.remove(removed)
+        save_projects(projects)
+        extras = load_extra_conflicts()
+        msg = f"Proyecto {removed['name']} eliminado; la planificación se reorganizó"
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': removed['name'],
+            'message': msg,
+            'key': f'del-{pid}',
+        })
+        save_extra_conflicts(extras)
+    next_url = request.args.get('next') or url_for('project_list')
+    return redirect(next_url)
+
+
 @app.route('/delete_conflict/<path:key>', methods=['POST'])
 def delete_conflict(key):
     dismissed = load_dismissed()
     if key not in dismissed:
         dismissed.append(key)
         save_dismissed(dismissed)
+    extras = load_extra_conflicts()
+    new_extras = [e for e in extras if e['key'] != key]
+    if len(new_extras) != len(extras):
+        save_extra_conflicts(new_extras)
     return redirect(url_for('index'))
 
 
