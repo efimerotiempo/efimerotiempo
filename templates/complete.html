@@ -91,6 +91,8 @@
                 <button type="submit">Filtrar</button>
             </form>
             <button id="today-btn">HOY</button>
+            <button id="left-btn">&lt;</button>
+            <button id="right-btn">&gt;</button>
         </div>
         <div class="slider">
             <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
@@ -154,10 +156,13 @@
   const slider = document.getElementById('day-range');
   const filterForm = document.getElementById('filter-form');
   const offsetInput = filterForm.querySelector('input[name="offset"]');
-  slider.addEventListener('change', () => {
+
+  function update() {
     offsetInput.value = slider.value;
     filterForm.submit();
-  });
+  }
+
+  slider.addEventListener('input', update);
   slider.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();
@@ -165,13 +170,20 @@
     let val = parseInt(slider.value) + step;
     val = Math.max(0, Math.min(val, parseInt(slider.max)));
     slider.value = val;
-    offsetInput.value = val;
-    filterForm.submit();
+    update();
   });
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
     offsetInput.value = {{ today_offset }};
     filterForm.submit();
+  });
+  document.getElementById('left-btn').addEventListener('click', () => {
+    slider.stepDown();
+    update();
+  });
+  document.getElementById('right-btn').addEventListener('click', () => {
+    slider.stepUp();
+    update();
   });
 </script>
 {% endblock %}

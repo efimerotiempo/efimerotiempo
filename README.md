@@ -13,8 +13,10 @@ python app.py
 Visita `http://localhost:5000` en tu navegador para visualizar el calendario y
 los proyectos. Utiliza la barra deslizante situada bajo los filtros para
 cambiar la ventana de 14 días entre 2024 y 2026. El botón **HOY** devuelve la
-vista al día actual. Puedes filtrar por nombre de proyecto y cliente desde los
-dos cuadros de búsqueda.
+vista al día actual. Junto a él hay dos flechas **<** y **>** para mover la
+vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
+ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
+proyecto y cliente desde los dos cuadros de búsqueda.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
 abajo se muestran el formulario de alta, los proyectos, la lista de conflictos
