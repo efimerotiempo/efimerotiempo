@@ -16,10 +16,12 @@ cambiar la ventana de 14 días entre 2024 y 2026. El botón **HOY** devuelve la
 vista al día actual. Puedes filtrar por nombre de proyecto y cliente desde los
 dos cuadros de búsqueda.
 
-Existe una pestaña **Completo** que combina el calendario, la lista de proyectos
-y el formulario de alta en una sola página. El calendario muestra el número de
-semana encima de cada fecha y la barra deslizante puede moverse también con la
-rueda del ratón.
+La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
+abajo se muestran el formulario de alta, el calendario de dos semanas, la lista
+de conflictos y finalmente los proyectos. Todo el conjunto cuenta con una barra
+de desplazamiento vertical para consultar la información cómodamente. El
+calendario muestra el número de semana encima de cada fecha y la barra
+deslizante puede moverse también con la rueda del ratón.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
@@ -32,3 +34,6 @@ Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos
 distintos se asignan a personas diferentes para poder avanzar en paralelo
 si hay recursos libres.
+
+Cada proyecto se colorea automáticamente con tonos claros para que el texto
+sea legible en todas las vistas.

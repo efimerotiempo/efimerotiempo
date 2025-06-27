@@ -20,17 +20,16 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 }
 
 .complete-container {
-    display: grid;
-    grid-template-columns: 3fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    grid-template-areas:
-        "calendar add"
-        "projects add";
+    display: flex;
+    flex-direction: column;
     gap: 10px;
     height: 90vh;
+    overflow-y: auto;
 }
 
-.complete-calendar { grid-area: calendar; }
-.complete-projects { grid-area: projects; overflow: auto; }
-.complete-add { grid-area: add; overflow-y: auto; }
+.complete-container > div { padding: 5px; }
+.complete-calendar {}
+.complete-projects { overflow: auto; }
+.complete-add {}
+.complete-conflicts { overflow: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }

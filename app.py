@@ -16,10 +16,10 @@ from schedule import (
 app = Flask(__name__)
 
 COLORS = [
-    '#f8b195', '#c06c84', '#355c7d', '#6c5b7b', '#f67280', '#99b898',
-    '#ff8c94', '#ffc857', '#698f3f', '#f4a259', '#51adcf', '#e63946',
-    '#8d99ae', '#a8dadc', '#457b9d', '#ffb4a2', '#b5838d', '#5e548e',
-    '#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#ffbe0b', '#ff7f50',
+    '#ffd9e8', '#ffe4c4', '#e0ffff', '#d0f0c0', '#fef9b7', '#ffe8d6',
+    '#dcebf1', '#e6d3f8', '#fdfd96', '#e7f5ff', '#ccffcc', '#e9f7fd',
+    '#ffd8be', '#f8f0fb', '#f2ffde', '#fae1dd', '#fffff0', '#e8f0fe',
+    '#ffcfd2', '#f0fff4', '#e7f9ea', '#fff2cc', '#e0e0ff', '#f0f8ff',
 ]
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
