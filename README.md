@@ -21,7 +21,8 @@ abajo se muestran el formulario de alta, el calendario de dos semanas, la lista
 de conflictos y finalmente los proyectos. Todo el conjunto cuenta con una barra
 de desplazamiento vertical para consultar la información cómodamente. El
 calendario muestra el número de semana encima de cada fecha y la barra
-deslizante puede moverse también con la rueda del ratón.
+deslizante puede moverse con la rueda del ratón manteniendo pulsada la tecla
+Shift. Las columnas del calendario se ajustan automáticamente al contenido.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda

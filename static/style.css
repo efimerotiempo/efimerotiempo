@@ -1,5 +1,9 @@
 body { font-family: Arial, sans-serif; }
-table.schedule { border-collapse: collapse; width: 100%; }
+table.schedule {
+    border-collapse: collapse;
+    width: auto; /* fit content so columns match cells */
+    table-layout: auto;
+}
 .schedule-wrapper { overflow-x: auto; }
 table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
 .ok { color: green; }
@@ -28,10 +32,10 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 }
 
 .complete-container > div { padding: 5px; }
-.complete-calendar {}
-.complete-projects { overflow: auto; }
-.complete-add {}
-.complete-conflicts { overflow: auto; }
+.complete-add { flex: 1; }
+.complete-calendar { flex: 2; }
+.complete-projects { flex: 3; overflow: auto; }
+.complete-conflicts { flex: 3; overflow: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 /* make first column fit contents */

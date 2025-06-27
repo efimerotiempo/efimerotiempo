@@ -12,8 +12,8 @@ PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
-    'Joseba 2': ['montar', 'soldar'],
     'Irene': ['recepcionar material'],
+    'Joseba 2': ['montar', 'soldar'],
     'Mikel': ['montar', 'soldar'],
     'Iban': ['montar', 'soldar'],
     'Naparra': ['montar', 'soldar'],

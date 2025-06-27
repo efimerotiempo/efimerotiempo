@@ -87,6 +87,7 @@
   });
 
   slider.addEventListener('wheel', (e) => {
+    if (!e.shiftKey) return;
     e.preventDefault();
     const step = e.deltaY > 0 ? 1 : -1;
     let val = parseInt(slider.value) + step;
