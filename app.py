@@ -115,7 +115,7 @@ def add_project():
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
-                    project['assigned'][phase] = find_worker_for_phase(phase)
+                    project['assigned'][phase] = find_worker_for_phase(phase, project['priority'])
                 except ValueError:
                     pass
         projects.append(project)
@@ -146,7 +146,7 @@ def complete():
             if hours:
                 try:
                     project['phases'][phase] = int(hours)
-                    project['assigned'][phase] = find_worker_for_phase(phase)
+                    project['assigned'][phase] = find_worker_for_phase(phase, project['priority'])
                 except ValueError:
                     pass
         projects.append(project)

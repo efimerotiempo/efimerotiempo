@@ -11,14 +11,15 @@ PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
 WORKERS = {
     'Pilar': ['dibujo'],
-    'Joseba': ['dibujo', 'montar'],
+    'Joseba 1': ['dibujo'],
+    'Joseba 2': ['montar', 'soldar'],
     'Irene': ['recepcionar material'],
-    'Mikel': ['montar'],
-    'Iban': ['montar'],
-    'Naparra': ['montar'],
+    'Mikel': ['montar', 'soldar'],
+    'Iban': ['montar', 'soldar'],
+    'Naparra': ['montar', 'soldar'],
     'Unai': ['montar', 'soldar'],
-    'Fabio': ['soldar'],
-    'Beltxa': ['soldar'],
+    'Fabio': ['soldar', 'montar'],
+    'Beltxa': ['soldar', 'montar'],
     'Igor': ['soldar'],
     'Albi': ['recepcionar material', 'soldar', 'montar'],
     'Eneko': ['pintar', 'montar', 'soldar'],
@@ -76,7 +77,7 @@ def schedule_projects(projects):
             hours = project['phases'].get(phase)
             if not hours:
                 continue
-            worker = assigned.get(phase) or find_worker_for_phase(phase)
+            worker = assigned.get(phase) or find_worker_for_phase(phase, project.get('priority'))
             if not worker or phase not in WORKERS.get(worker, []):
                 msg = f'Sin recurso para fase {phase}'
                 conflicts.append({
@@ -140,8 +141,16 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
     return next_workday(last_day), last_day
 
 
-def find_worker_for_phase(phase):
+def find_worker_for_phase(phase, priority=None):
+    candidates = []
     for worker, skills in WORKERS.items():
         if phase in skills:
-            return worker
-    return None
+            candidates.append((skills.index(phase), worker))
+    if not candidates:
+        return None
+    if priority == 'Alta':
+        priority_workers = [w for idx, w in candidates if idx == 0]
+        if priority_workers:
+            return priority_workers[0]
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
