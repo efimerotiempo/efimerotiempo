@@ -21,6 +21,66 @@
             <button type="submit">Guardar</button>
         </form>
     </div>
+    <div class="complete-projects">
+        <h2>Proyectos</h2>
+        <table>
+            <tr>
+                <th>Nombre</th>
+                <th>Cliente</th>
+                <th>Fecha inicio</th>
+                <th>Fecha límite</th>
+                <th>Prioridad</th>
+                {% for ph in phases %}<th>{{ ph }}</th>{% endfor %}
+                <th>Cambiar</th>
+            </tr>
+            {% for p in projects %}
+            <tr style="background-color: {{ p.color }};">
+                <td>{{ p.name }}</td>
+                <td>{{ p.client }}</td>
+                <td>{{ p.start_date }}</td>
+                <td>{{ p.due_date }}</td>
+                <td>{{ p.priority }}</td>
+                {% for ph in phases %}
+                    <td>
+                    {% if p.phases.get(ph) %}
+                        {{ p.phases[ph] }}h<br>
+                        <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                            <select name="worker">
+                                {% for w in all_workers %}
+                                    <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit">Guardar</button>
+                        </form>
+                    {% endif %}
+                    </td>
+                {% endfor %}
+                <td>
+                    <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                        <select name="priority">
+                            {% for pr in priorities %}
+                                <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Actualizar</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="complete-conflicts">
+        <h3>Conflictos</h3>
+        <ul>
+        {% for c in conflicts %}
+            <li>{{ c.project }}: {{ c.message }}
+                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
+                    <button type="submit">Borrar</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
     <div class="complete-calendar">
         <h2>Calendario (dos semanas)</h2>
         <div class="controls">
@@ -88,66 +148,6 @@
     </tbody>
 </table>
         </div>
-    </div>
-    <div class="complete-conflicts">
-        <h3>Conflictos</h3>
-        <ul>
-        {% for c in conflicts %}
-            <li>{{ c.project }}: {{ c.message }}
-                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
-                    <button type="submit">Borrar</button>
-                </form>
-            </li>
-        {% endfor %}
-        </ul>
-    </div>
-    <div class="complete-projects">
-        <h2>Proyectos</h2>
-        <table>
-            <tr>
-                <th>Nombre</th>
-                <th>Cliente</th>
-                <th>Fecha inicio</th>
-                <th>Fecha límite</th>
-                <th>Prioridad</th>
-                {% for ph in phases %}<th>{{ ph }}</th>{% endfor %}
-                <th>Cambiar</th>
-            </tr>
-            {% for p in projects %}
-            <tr style="background-color: {{ p.color }};">
-                <td>{{ p.name }}</td>
-                <td>{{ p.client }}</td>
-                <td>{{ p.start_date }}</td>
-                <td>{{ p.due_date }}</td>
-                <td>{{ p.priority }}</td>
-                {% for ph in phases %}
-                    <td>
-                    {% if p.phases.get(ph) %}
-                        {{ p.phases[ph] }}h<br>
-                        <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
-                            <select name="worker">
-                                {% for w in all_workers %}
-                                    <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="submit">Guardar</button>
-                        </form>
-                    {% endif %}
-                    </td>
-                {% endfor %}
-                <td>
-                    <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
-                        <select name="priority">
-                            {% for pr in priorities %}
-                                <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
-                            {% endfor %}
-                        </select>
-                        <button type="submit">Actualizar</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
     </div>
 </div>
 <script>

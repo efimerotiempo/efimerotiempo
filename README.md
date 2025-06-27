@@ -17,8 +17,8 @@ vista al día actual. Puedes filtrar por nombre de proyecto y cliente desde los
 dos cuadros de búsqueda.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. De arriba
-abajo se muestran el formulario de alta, el calendario de dos semanas, la lista
-de conflictos y finalmente los proyectos. Todo el conjunto cuenta con una barra
+abajo se muestran el formulario de alta, los proyectos, la lista de conflictos
+y finalmente el calendario de dos semanas. Todo el conjunto cuenta con una barra
 de desplazamiento vertical para consultar la información cómodamente. El
 calendario muestra el número de semana encima de cada fecha y la barra
 deslizante puede moverse con la rueda del ratón manteniendo pulsada la tecla
