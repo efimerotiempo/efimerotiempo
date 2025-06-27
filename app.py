@@ -221,7 +221,8 @@ def update_priority(pid):
             p['priority'] = request.form['priority']
             break
     save_projects(projects)
-    return redirect(url_for('project_list'))
+    next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
+    return redirect(next_url)
 
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
@@ -232,7 +233,8 @@ def update_worker(pid, phase):
             p.setdefault('assigned', {})[phase] = request.form['worker']
             break
     save_projects(projects)
-    return redirect(url_for('project_list'))
+    next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
+    return redirect(next_url)
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])

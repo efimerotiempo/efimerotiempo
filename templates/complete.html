@@ -115,6 +115,7 @@
                     {% if p.phases.get(ph) %}
                         {{ p.phases[ph] }}h<br>
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <select name="worker">
                                 {% for w in all_workers %}
                                     <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
@@ -127,6 +128,7 @@
                 {% endfor %}
                 <td>
                     <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
                         <select name="priority">
                             {% for pr in priorities %}
                                 <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
