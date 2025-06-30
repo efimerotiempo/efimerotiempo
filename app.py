@@ -31,14 +31,25 @@ MAX_DATE = date(2026, 12, 31)
 
 def get_projects():
     projects = load_projects()
-    if not projects:
-        return []
+    changed = False
+    used = {p.get('color') for p in projects if p.get('color')}
+    color_index = 0
+    for p in projects:
+        if not p.get('color'):
+            while COLORS[color_index % len(COLORS)] in used:
+                color_index += 1
+            p['color'] = COLORS[color_index % len(COLORS)]
+            used.add(p['color'])
+            color_index += 1
+            changed = True
+    if changed:
+        save_projects(projects)
     return projects
 
 
 @app.route('/')
 def index():
-    projects = load_projects()
+    projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     milestones = load_milestones()
     extra = load_extra_conflicts()
@@ -95,7 +106,7 @@ def index():
 
 @app.route('/projects')
 def project_list():
-    projects = load_projects()
+    projects = get_projects()
     return render_template(
         'projects.html',
         projects=projects,
@@ -109,7 +120,7 @@ def project_list():
 def add_project():
     if request.method == 'POST':
         data = request.form
-        projects = load_projects()
+        projects = get_projects()
         schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         project = {
@@ -172,7 +183,7 @@ def delete_milestone(mid):
 
 @app.route('/complete', methods=['GET', 'POST'])
 def complete():
-    projects = load_projects()
+    projects = get_projects()
     if request.method == 'POST':
         data = request.form
         schedule, _ = schedule_projects(projects)
@@ -262,7 +273,7 @@ def complete():
 
 @app.route('/update_priority/<pid>', methods=['POST'])
 def update_priority(pid):
-    projects = load_projects()
+    projects = get_projects()
     for p in projects:
         if p['id'] == pid:
             p['priority'] = request.form['priority']
@@ -274,7 +285,7 @@ def update_priority(pid):
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
 def update_worker(pid, phase):
-    projects = load_projects()
+    projects = get_projects()
     for p in projects:
         if p['id'] == pid:
             p.setdefault('assigned', {})[phase] = request.form['worker']
@@ -286,7 +297,7 @@ def update_worker(pid, phase):
 
 @app.route('/delete_project/<pid>', methods=['POST'])
 def delete_project(pid):
-    projects = load_projects()
+    projects = get_projects()
     removed = None
     for p in projects:
         if p['id'] == pid:
