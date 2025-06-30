@@ -22,7 +22,11 @@
         {% for ph in phases %}
             <td>
             {% if p.phases.get(ph) %}
-                {{ p.phases[ph] }}h<br>
+                {% if ph == 'pedidos' %}
+                    {{ p.phases[ph] }}<br>
+                {% else %}
+                    {{ p.phases[ph] }}h<br>
+                {% endif %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <select name="worker">

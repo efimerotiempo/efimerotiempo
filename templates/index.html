@@ -55,7 +55,7 @@
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
-                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endfor %}
         </td>

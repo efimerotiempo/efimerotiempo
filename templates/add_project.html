@@ -14,9 +14,13 @@
         </select>
     </label><br>
     {% for phase in phases %}
-        <label>{{ phase }} (horas):
-            <input type="number" name="{{ phase }}" {% if phase == 'pedidos' %}value="80"{% endif %}>
-        </label><br>
+        {% if phase == 'pedidos' %}
+            <label>Plazo acopio:<input type="date" name="pedidos"></label><br>
+        {% else %}
+            <label>{{ phase }} (horas):
+                <input type="number" name="{{ phase }}">
+            </label><br>
+        {% endif %}
     {% endfor %}
     <button type="submit">Guardar</button>
 </form>

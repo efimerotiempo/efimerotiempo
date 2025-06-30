@@ -113,8 +113,8 @@ def schedule_projects(projects):
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
-            hours = project['phases'].get(phase)
-            if not hours:
+            val = project['phases'].get(phase)
+            if not val:
                 continue
             worker = assigned.get(phase) or find_worker_for_phase(
                 phase, worker_schedule, project.get('priority')
@@ -128,17 +128,29 @@ def schedule_projects(projects):
                     'key': f"{project['name']}|{msg}",
                 })
                 continue
-            current, end_date = assign_phase(
-                worker_schedule[worker],
-                current,
-                phase,
-                project['name'],
-                project['client'],
-                hours,
-                project['due_date'],
-                project.get('color', '#ddd'),
-                worker,
-            )
+            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                current, end_date = assign_pedidos(
+                    worker_schedule[worker],
+                    current,
+                    date.fromisoformat(val),
+                    project['name'],
+                    project['client'],
+                    project['due_date'],
+                    project.get('color', '#ddd'),
+                )
+            else:
+                hours = int(val)
+                current, end_date = assign_phase(
+                    worker_schedule[worker],
+                    current,
+                    phase,
+                    project['name'],
+                    project['client'],
+                    hours,
+                    project['due_date'],
+                    project.get('color', '#ddd'),
+                    worker,
+                )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'
@@ -181,6 +193,33 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
             last_day = day
         if remaining > 0:
             day = next_workday(day)
+    return next_workday(last_day), last_day
+
+
+def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color):
+    """Assign the 'pedidos' phase as a continuous range without hour limits."""
+    day = start_day
+    while day.weekday() in WEEKEND:
+        day = next_workday(day)
+    last_day = day
+    while day <= end_day:
+        if day.weekday() in WEEKEND:
+            day += timedelta(days=1)
+            continue
+        day_str = day.isoformat()
+        tasks = schedule.get(day_str, [])
+        late = day > date.fromisoformat(due_date)
+        tasks.append({
+            'project': project_name,
+            'client': client,
+            'phase': 'pedidos',
+            'hours': 0,
+            'late': late,
+            'color': color,
+        })
+        schedule[day_str] = tasks
+        last_day = day
+        day += timedelta(days=1)
     return next_workday(last_day), last_day
 
 

@@ -17,9 +17,13 @@
                 </select>
             </label><br>
             {% for phase in phases %}
-                <label>{{ phase }} (horas):
-                    <input type="number" name="{{ phase }}" {% if phase == 'pedidos' %}value="80"{% endif %}>
-                </label><br>
+                {% if phase == 'pedidos' %}
+                    <label>Plazo acopio:<input type="date" name="pedidos"></label><br>
+                {% else %}
+                    <label>{{ phase }} (horas):
+                        <input type="number" name="{{ phase }}">
+                    </label><br>
+                {% endif %}
             {% endfor %}
             <button type="submit">Guardar</button>
         </form>
@@ -102,7 +106,7 @@
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
-                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endfor %}
         </td>
@@ -136,7 +140,11 @@
                 {% for ph in phases %}
                     <td>
                     {% if p.phases.get(ph) %}
-                        {{ p.phases[ph] }}h<br>
+                        {% if ph == 'pedidos' %}
+                            {{ p.phases[ph] }}<br>
+                        {% else %}
+                            {{ p.phases[ph] }}h<br>
+                        {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <select name="worker">

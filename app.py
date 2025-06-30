@@ -159,12 +159,17 @@ def add_project():
             'assigned': {}
         }
         for phase in PHASE_ORDER:
-            hours = data.get(phase)
-            if not hours and phase == 'pedidos':
-                hours = '80'
-            if hours:
+            value = data.get(phase)
+            if phase == 'pedidos':
+                if not value:
+                    value = (date.today() + timedelta(days=14)).isoformat()
+                project['phases'][phase] = value
+                project['assigned'][phase] = find_worker_for_phase(
+                    phase, schedule, project['priority']
+                )
+            elif value:
                 try:
-                    project['phases'][phase] = int(hours)
+                    project['phases'][phase] = int(value)
                     project['assigned'][phase] = find_worker_for_phase(
                         phase, schedule, project['priority']
                     )
@@ -224,12 +229,17 @@ def complete():
             'assigned': {}
         }
         for phase in PHASE_ORDER:
-            hours = data.get(phase)
-            if not hours and phase == 'pedidos':
-                hours = '80'
-            if hours:
+            value = data.get(phase)
+            if phase == 'pedidos':
+                if not value:
+                    value = (date.today() + timedelta(days=14)).isoformat()
+                project['phases'][phase] = value
+                project['assigned'][phase] = find_worker_for_phase(
+                    phase, schedule, project['priority']
+                )
+            elif value:
                 try:
-                    project['phases'][phase] = int(hours)
+                    project['phases'][phase] = int(value)
                     project['assigned'][phase] = find_worker_for_phase(
                         phase, schedule, project['priority']
                     )
