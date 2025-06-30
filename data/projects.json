@@ -8,7 +8,7 @@
     "priority": "Alto",
     "color": null,
     "phases": {
-      "pedidos": 16,
+      "pedidos": "2025-07-01",
       "montar": 27,
       "soldar": 37,
       "pintar": 11
@@ -24,7 +24,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 8,
+      "pedidos": "2025-06-30",
       "recepcionar material": 20,
       "montar": 47,
       "tratamiento": 24
@@ -53,7 +53,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 16,
+      "pedidos": "2025-07-01",
       "montar": 1,
       "soldar": 1
     },
@@ -96,7 +96,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 16,
+      "pedidos": "2025-07-01",
       "montar": 1,
       "pintar": 1
     },
@@ -111,7 +111,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 16,
+      "pedidos": "2025-07-01",
       "recepcionar material": 4,
       "montar": 19,
       "soldar": 15,
@@ -158,7 +158,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 16
+      "pedidos": "2025-07-01"
     },
     "assigned": {}
   },
@@ -185,7 +185,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 16,
+      "pedidos": "2025-07-01",
       "montar": 1,
       "soldar": 1
     },
@@ -215,7 +215,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 40,
+      "pedidos": "2025-07-04",
       "montar": 2,
       "pintar": 1
     },
@@ -230,7 +230,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 8,
+      "pedidos": "2025-06-30",
       "montar": 35,
       "soldar": 50,
       "tratamiento": 32
@@ -286,7 +286,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 48,
+      "pedidos": "2025-07-07",
       "montar": 8,
       "soldar": 6,
       "pintar": 7
@@ -316,7 +316,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 32,
+      "pedidos": "2025-07-03",
       "montar": 7,
       "soldar": 10,
       "tratamiento": 32
@@ -332,7 +332,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 24,
+      "pedidos": "2025-07-02",
       "montar": 18,
       "soldar": 15,
       "tratamiento": 32
@@ -348,7 +348,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 32
+      "pedidos": "2025-07-03"
     },
     "assigned": {}
   },
@@ -376,7 +376,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 64
+      "pedidos": "2025-07-09"
     },
     "assigned": {}
   },
@@ -389,7 +389,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 64,
+      "pedidos": "2025-07-09",
       "montar": 1
     },
     "assigned": {}
@@ -403,7 +403,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 120,
+      "pedidos": "2025-07-18",
       "montar": 7
     },
     "assigned": {}
@@ -417,7 +417,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 40,
+      "pedidos": "2025-07-04",
       "recepcionar material": 1,
       "montar": 11,
       "soldar": 11
@@ -433,7 +433,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 40,
+      "pedidos": "2025-07-04",
       "montar": 4,
       "soldar": 4
     },
@@ -449,7 +449,7 @@
     "color": null,
     "phases": {
       "dibujo": 8,
-      "pedidos": 56,
+      "pedidos": "2025-07-08",
       "montar": 4,
       "soldar": 3
     },
@@ -464,7 +464,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 80,
+      "pedidos": "2025-07-11",
       "montar": 2,
       "pintar": 1
     },
@@ -479,7 +479,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 56,
+      "pedidos": "2025-07-08",
       "montar": 10,
       "soldar": 16
     },
@@ -494,7 +494,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 80,
+      "pedidos": "2025-07-11",
       "montar": 2
     },
     "assigned": {}
@@ -508,7 +508,7 @@
     "priority": "Baja",
     "color": null,
     "phases": {
-      "pedidos": 80,
+      "pedidos": "2025-07-11",
       "montar": 2
     },
     "assigned": {}
@@ -522,7 +522,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 80,
+      "pedidos": "2025-07-11",
       "montar": 16,
       "soldar": 24,
       "pintar": 2
@@ -538,7 +538,7 @@
     "priority": "Sin prioridad",
     "color": null,
     "phases": {
-      "pedidos": 80,
+      "pedidos": "2025-07-11",
       "montar": 10,
       "soldar": 13
     },

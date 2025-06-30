@@ -8,7 +8,13 @@
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
         <th>Prioridad</th>
-        {% for ph in phases %}<th>{{ ph }}</th>{% endfor %}
+        {% for ph in phases %}
+            {% if ph == 'pedidos' %}
+                <th>Plazo acopio</th>
+            {% else %}
+                <th>{{ ph }}</th>
+            {% endif %}
+        {% endfor %}
         <th>Cambiar</th>
         <th></th>
     </tr>
