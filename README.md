@@ -59,6 +59,10 @@ proyectos como sea necesario dentro de ese margen sin limitación diaria.
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas.
 
+Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
+`static/uploads` y se muestra en el recuadro informativo que aparece al pulsar
+una tarea en el calendario.
+
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
 cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista

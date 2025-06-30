@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Añadir proyecto</h2>
-<form method="post">
+<form method="post" enctype="multipart/form-data">
     <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
     <label>Cliente:<input type="text" name="client" required></label><br>
     <label>Fecha límite:<input type="date" name="due_date" required></label><br>
@@ -22,6 +22,7 @@
             </label><br>
         {% endif %}
     {% endfor %}
+    <label>Imagen:<input type="file" name="image" accept="image/*"></label><br>
     <button type="submit">Guardar</button>
 </form>
 {% endblock %}

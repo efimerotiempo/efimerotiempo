@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for
 from datetime import date, timedelta
 import uuid
+import os
+from werkzeug.utils import secure_filename
 from schedule import (
     load_projects,
     save_projects,
@@ -27,6 +29,8 @@ COLORS = [
 ]
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 def get_projects():
@@ -159,6 +163,14 @@ def project_list():
 def add_project():
     if request.method == 'POST':
         data = request.form
+        file = request.files.get('image')
+        image_path = None
+        if file and file.filename:
+            ext = os.path.splitext(secure_filename(file.filename))[1]
+            fname = f"{uuid.uuid4()}{ext}"
+            save_path = os.path.join(UPLOAD_FOLDER, fname)
+            file.save(save_path)
+            image_path = f"uploads/{fname}"
         projects = get_projects()
         schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
@@ -171,7 +183,8 @@ def add_project():
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
-            'assigned': {}
+            'assigned': {},
+            'image': image_path,
         }
         for phase in PHASE_ORDER:
             value = data.get(phase)
@@ -230,6 +243,14 @@ def complete():
     projects = get_projects()
     if request.method == 'POST':
         data = request.form
+        file = request.files.get('image')
+        image_path = None
+        if file and file.filename:
+            ext = os.path.splitext(secure_filename(file.filename))[1]
+            fname = f"{uuid.uuid4()}{ext}"
+            save_path = os.path.join(UPLOAD_FOLDER, fname)
+            file.save(save_path)
+            image_path = f"uploads/{fname}"
         schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         project = {
@@ -241,7 +262,8 @@ def complete():
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
-            'assigned': {}
+            'assigned': {},
+            'image': image_path,
         }
         for phase in PHASE_ORDER:
             value = data.get(phase)

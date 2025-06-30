@@ -80,6 +80,7 @@
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
+  const STATIC_URL = "{{ url_for('static', filename='') }}";
   const slider = document.getElementById('day-range');
   const filterForm = document.getElementById('filter-form');
   const offsetInput = filterForm.querySelector('input[name="offset"]');
@@ -147,6 +148,9 @@
           }
         }
       });
+      if (info.image) {
+        html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
+      }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
