@@ -34,6 +34,7 @@ def get_projects():
     changed = False
     used = {p.get('color') for p in projects if p.get('color')}
     color_index = 0
+    assigned_projects = []
     for p in projects:
         if not p.get('color'):
             while COLORS[color_index % len(COLORS)] in used:
@@ -42,6 +43,19 @@ def get_projects():
             used.add(p['color'])
             color_index += 1
             changed = True
+
+        p.setdefault('assigned', {})
+        missing = [ph for ph in p['phases'] if ph not in p['assigned']]
+        if missing:
+            schedule, _ = schedule_projects(assigned_projects)
+            for ph in missing:
+                worker = find_worker_for_phase(
+                    ph, {w: schedule.get(w, {}) for w in WORKERS}, p.get('priority')
+                )
+                if worker:
+                    p['assigned'][ph] = worker
+                    changed = True
+        assigned_projects.append(p)
     if changed:
         save_projects(projects)
     return projects
