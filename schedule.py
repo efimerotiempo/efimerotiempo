@@ -139,6 +139,7 @@ def schedule_projects(projects):
                     project.get('color', '#ddd'),
                     project['start_date'],
                     project.get('priority'),
+                    project['id'],
                 )
             else:
                 hours = int(val)
@@ -154,6 +155,7 @@ def schedule_projects(projects):
                     worker,
                     project['start_date'],
                     project.get('priority'),
+                    project['id'],
                 )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -167,7 +169,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
     day = start_day
     while day.weekday() in WEEKEND:
         day = next_workday(day)
@@ -194,6 +196,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
                 'due_date': due_date,
                 'start_date': start_date,
                 'priority': priority,
+                'pid': pid,
             })
             schedule[day_str] = tasks
             remaining -= allocate
@@ -203,7 +206,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
     return next_workday(last_day), last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority):
+def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
     while day.weekday() in WEEKEND:
@@ -226,6 +229,7 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
             'due_date': due_date,
             'start_date': start_date,
             'priority': priority,
+            'pid': pid,
         })
         schedule[day_str] = tasks
         last_day = day

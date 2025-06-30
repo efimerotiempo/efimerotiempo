@@ -112,6 +112,8 @@ def index():
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
+    project_map = {p['id']: p for p in projects}
+
     return render_template(
         'index.html',
         schedule=schedule,
@@ -125,6 +127,8 @@ def index():
         project_filter=project_filter,
         client_filter=client_filter,
         milestones=milestone_map,
+        project_data=project_map,
+        phases=PHASE_ORDER,
     )
 
 
@@ -298,6 +302,8 @@ def complete():
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
+    project_map = {p['id']: p for p in projects}
+
     return render_template(
         'complete.html',
         schedule=schedule,
@@ -315,6 +321,7 @@ def complete():
         phases=PHASE_ORDER,
         all_workers=list(WORKERS.keys()),
         milestones=milestone_map,
+        project_data=project_map,
     )
 
 
