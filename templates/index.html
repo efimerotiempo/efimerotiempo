@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Calendario (dos semanas)</h2>
+<div class="controls">
+    <form id="filter-form" method="get">
+        <input type="hidden" name="offset" value="{{ offset }}">
+        <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+        <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+        <button type="submit">Filtrar</button>
+    </form>
+    <button id="today-btn">HOY</button>
+    <button id="left-btn">&lt;</button>
+    <button id="right-btn">&gt;</button>
+</div>
+<div class="slider">
+    <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
+</div>
+<div class="schedule-wrapper">
+<table class="schedule">
+    <thead>
+    <tr class="weeknums">
+        <th></th>
+        {% for d in days %}
+        <th>{{ d.isocalendar().week }}</th>
+        {% endfor %}
+    </tr>
+    <tr>
+        <th class="resource-col">Recurso</th>
+        {% for d in days %}
+        <th>{{ d.strftime('%d/%m') }}</th>
+        {% endfor %}
+    </tr>
+    <tr class="milestones-row">
+        <td></td>
+        {% for d in days %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td class="milestone-cell">
+            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for worker, days_data in schedule.items() %}
+    <tr>
+        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        {% for d in days %}
+        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}">
+            {% set tasks = days_data.get(d.isoformat(), []) %}
+            {% for t in tasks %}
+            <div class="task" style="background-color: {{ t.color }};">
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+            </div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<h3>Conflictos</h3>
+<ul>
+{% for c in conflicts %}
+    <li>{{ c.project }}: {{ c.message }}
+        <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
+            <button type="submit">Borrar</button>
+        </form>
+    </li>
+{% endfor %}
+</ul>
+<script>
+  const slider = document.getElementById('day-range');
+  const filterForm = document.getElementById('filter-form');
+  const offsetInput = filterForm.querySelector('input[name="offset"]');
+
+  function update() {
+    offsetInput.value = slider.value;
+    filterForm.submit();
+  }
+
+  slider.addEventListener('input', update);
+
+  slider.addEventListener('wheel', (e) => {
+    if (!e.shiftKey) return;
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let val = parseInt(slider.value) + step;
+    val = Math.max(0, Math.min(val, parseInt(slider.max)));
+    slider.value = val;
+    update();
+  });
+
+  const todayBtn = document.getElementById('today-btn');
+  todayBtn.addEventListener('click', () => {
+    offsetInput.value = {{ today_offset }};
+    filterForm.submit();
+  });
+
+  document.getElementById('left-btn').addEventListener('click', () => {
+    slider.stepDown();
+    update();
+  });
+  document.getElementById('right-btn').addEventListener('click', () => {
+    slider.stepUp();
+    update();
+  });
+</script>
+{% endblock %}

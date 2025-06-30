@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Añadir proyecto</h2>
+<form method="post">
+    <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
+    <label>Cliente:<input type="text" name="client" required></label><br>
+    <label>Fecha límite:<input type="date" name="due_date" required></label><br>
+    <label>Prioridad:
+        <select name="priority">
+            <option value="Alta">Alta</option>
+            <option value="Media">Media</option>
+            <option value="Baja">Baja</option>
+            <option value="Sin prioridad" selected>Sin prioridad</option>
+        </select>
+    </label><br>
+    {% for phase in phases %}
+        <label>{{ phase }} (horas):
+            <input type="number" name="{{ phase }}" {% if phase == 'pedidos' %}value="80"{% endif %}>
+        </label><br>
+    {% endfor %}
+    <button type="submit">Guardar</button>
+</form>
+{% endblock %}

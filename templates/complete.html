@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="complete-container">
+    <div class="complete-top">
+    <div class="complete-add">
+        <h2>Añadir proyecto</h2>
+        <form method="post">
+            <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
+            <label>Cliente:<input type="text" name="client" required></label><br>
+            <label>Fecha límite:<input type="date" name="due_date" required></label><br>
+            <label>Prioridad:
+                <select name="priority">
+                    <option value="Alta">Alta</option>
+                    <option value="Media">Media</option>
+                    <option value="Baja">Baja</option>
+                    <option value="Sin prioridad" selected>Sin prioridad</option>
+                </select>
+            </label><br>
+            {% for phase in phases %}
+                <label>{{ phase }} (horas):
+                    <input type="number" name="{{ phase }}" {% if phase == 'pedidos' %}value="80"{% endif %}>
+                </label><br>
+            {% endfor %}
+            <button type="submit">Guardar</button>
+        </form>
+    </div>
+    <div class="complete-milestones">
+        <h2>Hitos</h2>
+        <form method="post" action="{{ url_for('add_milestone') }}">
+            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+            <label>Descripción:<input type="text" name="description" required></label><br>
+            <label>Fecha:<input type="date" name="date" required></label><br>
+            <button type="submit">Añadir</button>
+        </form>
+    </div>
+    <div class="complete-conflicts">
+        <h3>Conflictos</h3>
+        <ul>
+        {% for c in conflicts %}
+            <li>{{ c.project }}: {{ c.message }}
+                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
+                    <button type="submit">Borrar</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    </div> <!-- end complete-top -->
+    <div class="complete-calendar">
+        <h2>Calendario (dos semanas)</h2>
+        <div class="controls">
+            <form id="filter-form" method="get">
+                <input type="hidden" name="offset" value="{{ offset }}">
+                <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+                <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+                <button type="submit">Filtrar</button>
+            </form>
+            <button id="today-btn">HOY</button>
+            <button id="left-btn">&lt;</button>
+            <button id="right-btn">&gt;</button>
+        </div>
+        <div class="slider">
+            <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
+        </div>
+        <div class="schedule-wrapper">
+<table class="schedule">
+    <thead>
+    <tr class="weeknums">
+        <th></th>
+        {% for d in days %}
+        <th>{{ d.isocalendar().week }}</th>
+        {% endfor %}
+    </tr>
+    <tr>
+        <th class="resource-col">Recurso</th>
+        {% for d in days %}
+        <th>{{ d.strftime('%d/%m') }}</th>
+        {% endfor %}
+    </tr>
+    <tr class="milestones-row">
+        <td></td>
+        {% for d in days %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td class="milestone-cell">
+            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for worker, days_data in schedule.items() %}
+    <tr>
+        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        {% for d in days %}
+        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}">
+            {% set tasks = days_data.get(d.isoformat(), []) %}
+            {% for t in tasks %}
+            <div class="task" style="background-color: {{ t.color }};">
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {{ t.project }} ({{ t.client }}) - {{ t.phase }} ({{ t.hours }}h)
+            </div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+        </div>
+    </div>
+    <div class="complete-projects">
+        <h2>Proyectos</h2>
+        <table>
+            <tr>
+                <th>Nombre</th>
+                <th>Cliente</th>
+                <th>Fecha inicio</th>
+                <th>Fecha límite</th>
+                <th>Prioridad</th>
+                {% for ph in phases %}<th>{{ ph }}</th>{% endfor %}
+                <th>Cambiar</th>
+                <th></th>
+            </tr>
+            {% for p in projects %}
+            <tr style="background-color: {{ p.color }};">
+                <td>{{ p.name }}</td>
+                <td>{{ p.client }}</td>
+                <td>{{ p.start_date }}</td>
+                <td>{{ p.due_date }}</td>
+                <td>{{ p.priority }}</td>
+                {% for ph in phases %}
+                    <td>
+                    {% if p.phases.get(ph) %}
+                        {{ p.phases[ph] }}h<br>
+                        <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <select name="worker">
+                                {% for w in all_workers %}
+                                    <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit">Guardar</button>
+                        </form>
+                    {% endif %}
+                    </td>
+                {% endfor %}
+                <td>
+                    <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <select name="priority">
+                            {% for pr in priorities %}
+                                <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Actualizar</button>
+                    </form>
+                </td>
+                <td>
+                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}">
+                        <button class="delete-btn" type="submit">&#10060;</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+<script>
+  const slider = document.getElementById('day-range');
+  const filterForm = document.getElementById('filter-form');
+  const offsetInput = filterForm.querySelector('input[name="offset"]');
+
+  function update() {
+    offsetInput.value = slider.value;
+    filterForm.submit();
+  }
+
+  slider.addEventListener('input', update);
+  slider.addEventListener('wheel', (e) => {
+    if (!e.shiftKey) return;
+    e.preventDefault();
+    const step = e.deltaY > 0 ? 1 : -1;
+    let val = parseInt(slider.value) + step;
+    val = Math.max(0, Math.min(val, parseInt(slider.max)));
+    slider.value = val;
+    update();
+  });
+  const todayBtn = document.getElementById('today-btn');
+  todayBtn.addEventListener('click', () => {
+    offsetInput.value = {{ today_offset }};
+    filterForm.submit();
+  });
+  document.getElementById('left-btn').addEventListener('click', () => {
+    slider.stepDown();
+    update();
+  });
+  document.getElementById('right-btn').addEventListener('click', () => {
+    slider.stepUp();
+    update();
+  });
+</script>
+{% endblock %}

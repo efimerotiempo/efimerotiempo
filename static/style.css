@@ -1,0 +1,77 @@
+body { font-family: Arial, sans-serif; }
+table.schedule {
+    border-collapse: collapse;
+    width: auto; /* fit content so columns match cells */
+    table-layout: auto;
+}
+.schedule-wrapper { overflow-x: auto; }
+table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
+.ok { color: green; }
+.late { color: red; }
+.task { margin-bottom: 2px; }
+.slider { margin: 10px 0; }
+.slider input[type=range] {
+    width: 100%;
+    height: 16px;
+}
+
+.weeknums th {
+    background: #eee;
+    font-size: 0.8em;
+}
+
+.complete-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.complete-container > div { padding: 5px; }
+.complete-top { display: flex; gap: 10px; }
+.complete-add,
+.complete-milestones { flex: 1; }
+.complete-conflicts {
+    flex: 1;
+    overflow-x: auto;
+}
+.complete-calendar { flex: none; }
+.complete-projects { flex: none; overflow-x: auto; }
+.controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+
+/* make first column fit contents */
+.resource-col { white-space: nowrap; width: 1%; }
+
+/* keep projects table width */
+.complete-projects table { width: 100%; }
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: red;
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+.milestone-day {
+    border-left: 2px solid red;
+}
+
+.milestone-cell {
+    border-left: 2px solid red;
+    height: 30px;
+    position: relative;
+}
+
+.milestone-label {
+    font-size: 0.8em;
+    color: red;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+}
