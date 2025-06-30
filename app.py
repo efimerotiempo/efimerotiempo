@@ -124,6 +124,7 @@ def index():
         offset=offset,
         max_offset=max_offset,
         today_offset=today_offset,
+        today=date.today(),
         project_filter=project_filter,
         client_filter=client_filter,
         milestones=milestone_map,
@@ -135,12 +136,22 @@ def index():
 @app.route('/projects')
 def project_list():
     projects = get_projects()
+    project_filter = request.args.get('project', '').strip()
+    client_filter = request.args.get('client', '').strip()
+    if project_filter or client_filter:
+        projects = [
+            p for p in projects
+            if (not project_filter or project_filter.lower() in p['name'].lower())
+            and (not client_filter or client_filter.lower() in p['client'].lower())
+        ]
     return render_template(
         'projects.html',
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=list(WORKERS.keys()),
+        project_filter=project_filter,
+        client_filter=client_filter,
     )
 
 
@@ -281,6 +292,13 @@ def complete():
                     if (not project_filter or project_filter.lower() in t['project'].lower())
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
+        filtered_projects = [
+            p for p in projects
+            if (not project_filter or project_filter.lower() in p['name'].lower())
+            and (not client_filter or client_filter.lower() in p['client'].lower())
+        ]
+    else:
+        filtered_projects = projects
 
     start = MIN_DATE + timedelta(days=offset)
     days = [start + timedelta(days=i) for i in range(14)]
@@ -316,7 +334,8 @@ def complete():
         today_offset=today_offset,
         project_filter=project_filter,
         client_filter=client_filter,
-        projects=projects,
+        projects=filtered_projects,
+        today=date.today(),
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=list(WORKERS.keys()),

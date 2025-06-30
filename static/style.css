@@ -82,3 +82,7 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     white-space: nowrap;
     overflow: hidden;
 }
+
+.today { border: 3px solid red !important; }
+.worker-toggle { cursor: pointer; margin-right: 4px; }
+tr.collapsed td:not(:first-child) { display: none; }

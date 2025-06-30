@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Proyectos</h2>
+<form method="get" class="controls">
+    <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+    <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+    <button type="submit">Filtrar</button>
+</form>
 <table>
     <tr>
         <th>Nombre</th>

@@ -28,25 +28,25 @@
     <tr>
         <th class="resource-col">Recurso</th>
         {% for d in days %}
-        <th>{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
         {% endfor %}
     </tr>
     <tr class="milestones-row">
         <td></td>
         {% for d in days %}
         {% set ms = milestones.get(d.isoformat()) %}
-        <td class="milestone-cell">
+        <td class="milestone-cell{% if d == today %} today{% endif %}">
             {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
         </td>
         {% endfor %}
     </tr>
     </thead>
     <tbody>
-    {% for worker, days_data in schedule.items() %}
+{% for worker, days_data in schedule.items() %}
     <tr>
-        <td class="resource-col">{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
-        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}">
+        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}">
@@ -159,5 +159,12 @@
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
+  document.querySelectorAll('.worker-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr = btn.closest('tr');
+      tr.classList.toggle('collapsed');
+      btn.textContent = tr.classList.contains('collapsed') ? '+' : '−';
+    });
+  });
 </script>
 {% endblock %}

@@ -58,3 +58,9 @@ proyectos como sea necesario dentro de ese margen sin limitación diaria.
 
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas.
+
+El día actual aparece destacado con un borde rojo grueso en el calendario. Las
+vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
+cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista
+de proyectos incluye los mismos cuadros de búsqueda por proyecto y cliente que
+el calendario, para filtrar rápidamente la información mostrada.
