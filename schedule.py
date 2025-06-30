@@ -137,6 +137,8 @@ def schedule_projects(projects):
                     project['client'],
                     project['due_date'],
                     project.get('color', '#ddd'),
+                    project['start_date'],
+                    project.get('priority'),
                 )
             else:
                 hours = int(val)
@@ -150,6 +152,8 @@ def schedule_projects(projects):
                     project['due_date'],
                     project.get('color', '#ddd'),
                     worker,
+                    project['start_date'],
+                    project.get('priority'),
                 )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -163,7 +167,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority):
     day = start_day
     while day.weekday() in WEEKEND:
         day = next_workday(day)
@@ -187,6 +191,9 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
                 'hours': allocate,
                 'late': late,
                 'color': color,
+                'due_date': due_date,
+                'start_date': start_date,
+                'priority': priority,
             })
             schedule[day_str] = tasks
             remaining -= allocate
@@ -196,7 +203,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
     return next_workday(last_day), last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color):
+def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
     while day.weekday() in WEEKEND:
@@ -216,6 +223,9 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
             'hours': 0,
             'late': late,
             'color': color,
+            'due_date': due_date,
+            'start_date': start_date,
+            'priority': priority,
         })
         schedule[day_str] = tasks
         last_day = day

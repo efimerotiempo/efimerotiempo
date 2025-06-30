@@ -100,7 +100,7 @@
         <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
-            <div class="task" style="background-color: {{ t.color }};">
+            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -116,6 +116,7 @@
     </tbody>
 </table>
         </div>
+        <div id="info-popup" class="info-popup"></div>
     </div>
     <div class="complete-projects">
         <h2>Proyectos</h2>
@@ -217,5 +218,37 @@
     slider.stepUp();
     update();
   });
+
+  const tasks = document.querySelectorAll('.task');
+  const popup = document.getElementById('info-popup');
+  tasks.forEach(t => {
+    t.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const proj = t.dataset.project;
+      tasks.forEach(o => {
+        if (o.dataset.project === proj) {
+          o.classList.add('highlight');
+          o.classList.remove('dim');
+        } else {
+          o.classList.add('dim');
+          o.classList.remove('highlight');
+        }
+      });
+      popup.innerHTML = `<strong>${t.dataset.project}</strong><br>` +
+        `Cliente: ${t.dataset.client}<br>` +
+        `Inicio: ${t.dataset.start}<br>` +
+        `Límite: ${t.dataset.due}<br>` +
+        `Prioridad: ${t.dataset.priority}`;
+      const rect = t.getBoundingClientRect();
+      popup.style.left = (rect.left + window.scrollX + 5) + 'px';
+      popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+      popup.style.display = 'block';
+    });
+  });
+  document.addEventListener('click', () => {
+    tasks.forEach(o => o.classList.remove('highlight', 'dim'));
+    popup.style.display = 'none';
+  });
+  popup.addEventListener('click', (e) => e.stopPropagation());
 </script>
 {% endblock %}
