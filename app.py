@@ -93,6 +93,19 @@ def index():
     start = MIN_DATE + timedelta(days=offset)
     days = [start + timedelta(days=i) for i in range(14)]
 
+    week_spans = []
+    current_week = days[0].isocalendar().week
+    span = 0
+    for d in days:
+        week = d.isocalendar().week
+        if week != current_week:
+            week_spans.append({'week': current_week, 'span': span})
+            current_week = week
+            span = 1
+        else:
+            span += 1
+    week_spans.append({'week': current_week, 'span': span})
+
     today_offset = (date.today() - MIN_DATE).days
 
     milestone_map = {}
@@ -103,6 +116,7 @@ def index():
         'index.html',
         schedule=schedule,
         days=days,
+        week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
         offset=offset,
@@ -256,6 +270,18 @@ def complete():
 
     start = MIN_DATE + timedelta(days=offset)
     days = [start + timedelta(days=i) for i in range(14)]
+    week_spans = []
+    current_week = days[0].isocalendar().week
+    span = 0
+    for d in days:
+        week = d.isocalendar().week
+        if week != current_week:
+            week_spans.append({'week': current_week, 'span': span})
+            current_week = week
+            span = 1
+        else:
+            span += 1
+    week_spans.append({'week': current_week, 'span': span})
     today_offset = (date.today() - MIN_DATE).days
 
     milestone_map = {}
@@ -266,6 +292,7 @@ def complete():
         'complete.html',
         schedule=schedule,
         days=days,
+        week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
         offset=offset,

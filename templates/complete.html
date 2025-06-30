@@ -65,16 +65,17 @@
         <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
+    {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
     <tr class="weeknums">
         <th></th>
-        {% for d in days %}
-        <th>{{ d.isocalendar().week }}</th>
+        {% for w in week_spans %}
+        <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
         {% endfor %}
     </tr>
     <tr>
         <th class="resource-col">Recurso</th>
         {% for d in days %}
-        <th>{{ d.strftime('%d/%m') }}</th>
+        <th>{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
         {% endfor %}
     </tr>
     <tr class="milestones-row">

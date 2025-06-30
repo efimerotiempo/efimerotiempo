@@ -19,6 +19,10 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     background: #eee;
     font-size: 0.8em;
 }
+.weeknum {
+    color: purple;
+    font-weight: bold;
+}
 
 .complete-container {
     display: flex;
