@@ -32,15 +32,11 @@ MAX_DATE = date(2026, 12, 31)
 def get_projects():
     projects = load_projects()
     changed = False
-    used = {p.get('color') for p in projects if p.get('color')}
     color_index = 0
     assigned_projects = []
     for p in projects:
         if not p.get('color'):
-            while COLORS[color_index % len(COLORS)] in used:
-                color_index += 1
             p['color'] = COLORS[color_index % len(COLORS)]
-            used.add(p['color'])
             color_index += 1
             changed = True
 
