@@ -53,5 +53,8 @@ si hay recursos libres.
 La fase **Pedidos**, realizada por Irene, aparece tras **dibujo** y ocupa por
 defecto dos semanas (80 horas) al crear un proyecto, aunque puede ajustarse.
 
+Irene no tiene una jornada diaria limitada; puede asumir tantas horas de
+"Pedidos" como sean necesarias en un mismo día.
+
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas.

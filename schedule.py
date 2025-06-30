@@ -39,6 +39,8 @@ WORKERS = {
 }
 
 HOURS_PER_DAY = 8
+HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
+HOURS_LIMITS['Irene'] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
 
@@ -135,6 +137,7 @@ def schedule_projects(projects):
                 hours,
                 project['due_date'],
                 project.get('color', '#ddd'),
+                worker,
             )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -148,7 +151,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker):
     day = start_day
     while day.weekday() in WEEKEND:
         day = next_workday(day)
@@ -161,8 +164,9 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
         used = sum(t['hours'] for t in tasks)
-        if used < HOURS_PER_DAY:
-            allocate = min(remaining, HOURS_PER_DAY - used)
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        if used < limit:
+            allocate = min(remaining, limit - used)
             late = day > date.fromisoformat(due_date)
             tasks.append({
                 'project': project_name,
