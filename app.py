@@ -39,9 +39,6 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if 'of_number' not in p:
-            p['of_number'] = p.get('name', '')
-            changed = True
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
@@ -186,7 +183,6 @@ def add_project():
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
-            'of_number': data['of_number'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
             'due_date': data['due_date'],
@@ -266,7 +262,6 @@ def complete():
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
-            'of_number': data['of_number'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
             'due_date': data['due_date'],
