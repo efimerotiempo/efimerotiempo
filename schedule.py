@@ -246,10 +246,16 @@ def _worker_load(schedule, worker):
     )
 
 
-def find_worker_for_phase(phase, schedule, priority=None):
-    """Choose the least busy worker that can perform the phase."""
+def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False):
+    """Choose the least busy worker that can perform the phase.
+
+    By default Unai is excluded from automatic assignments so that he can
+    only be seleccionado manualmente desde la vista de proyectos.
+    """
     candidates = []
     for worker, skills in WORKERS.items():
+        if not include_unai and worker == 'Unai':
+            continue
         if phase in skills:
             load = _worker_load(schedule, worker)
             candidates.append((skills.index(phase), load, worker))
