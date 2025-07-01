@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for
 from datetime import date, timedelta
 import uuid
 import os
+import copy
 from werkzeug.utils import secure_filename
 from schedule import (
     load_projects,
