@@ -386,23 +386,32 @@ def update_priority(pid):
     save_projects(projects)
     new_map = compute_schedule_map(projects)
 
-    changed = []
+    changed_ids = []
     for pr in projects:
         if pr['id'] == pid:
             continue
         if old_map.get(pr['id']) != new_map.get(pr['id']):
-            changed.append(pr['name'])
+            changed_ids.append(pr['id'])
 
-    if changed_proj and changed:
+    if changed_proj and changed_ids:
+        projects_copy = copy.deepcopy(projects)
+        schedule_projects(projects_copy)
+        end_dates = {p['id']: p['end_date'] for p in projects_copy}
+        details = []
+        for cid in changed_ids:
+            pr = next(p for p in projects if p['id'] == cid)
+            met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+            details.append({'name': pr['name'], 'client': pr['client'], 'met': met})
+
         extras = load_extra_conflicts()
         msg = (
-            f"Prioridad de {changed_proj['name']} cambiada a {changed_proj['priority']}; "
-            f"se reprogramaron: {', '.join(changed)}"
+            f"Prioridad de {changed_proj['name']} cambiada a {changed_proj['priority']}"
         )
         extras.append({
             'id': str(uuid.uuid4()),
             'project': changed_proj['name'],
             'message': msg,
+            'changes': details,
             'key': f'prio-{pid}-{len(extras)}',
         })
         save_extra_conflicts(extras)

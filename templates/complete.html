@@ -46,6 +46,19 @@
         <ul>
         {% for c in conflicts %}
             <li>{{ c.project }}: {{ c.message }}
+                {% if c.changes %}
+                <ul>
+                {% for ch in c.changes %}
+                    <li>{{ ch.name }} - {{ ch.client }}
+                        {% if ch.met %}
+                            <span class="ok">&#10004;</span>
+                        {% else %}
+                            <span class="late">&#10060;</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+                {% endif %}
                 <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
                     <button type="submit">Borrar</button>
                 </form>

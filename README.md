@@ -49,7 +49,9 @@ lista de conflictos aparece un aviso indicando la eliminación y los cambios que
 ha producido.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
-de fechas debido a esa prioridad.
+de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
+proyecto afectado junto con un ✔ verde si ahora llega a su límite o una ❌
+roja en caso contrario.
 
 Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos
