@@ -1,0 +1,12 @@
+[
+  {
+    "key": "e546fafb-9dbb-426d-8a0f-d6ccb73c2141",
+    "project": "ProjectA",
+    "note": "Priority changed from 1 to 5. Other tasks may shift."
+  },
+  {
+    "key": "fc8aa865-85de-4adc-9a43-ce2946ed535b",
+    "project": "ProjectB",
+    "note": "Priority changed from 2 to 3. Other tasks may shift."
+  }
+]
