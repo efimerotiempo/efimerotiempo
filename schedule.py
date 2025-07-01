@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 import json
 import os
+import copy
 
 DATA_DIR = 'data'
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
@@ -267,3 +268,20 @@ def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False)
             candidates = prio
     candidates.sort(key=lambda c: (c[1], c[0]))
     return candidates[0][2]
+
+import copy
+
+
+def compute_schedule_map(projects):
+    """Return a mapping of project id to scheduled tasks."""
+    temp = copy.deepcopy(projects)
+    schedule, _ = schedule_projects(temp)
+    mapping = {}
+    for worker, days in schedule.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                pid = t['pid']
+                mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours']))
+    for lst in mapping.values():
+        lst.sort()
+    return mapping

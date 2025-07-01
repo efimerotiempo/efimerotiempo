@@ -87,3 +87,5 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
 
+
+.complete-projects.collapsed table, .complete-projects.collapsed .controls {display:none;}

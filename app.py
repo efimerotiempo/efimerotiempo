@@ -17,6 +17,7 @@ from schedule import (
     PHASE_ORDER,
     WORKERS,
     find_worker_for_phase,
+    compute_schedule_map,
 )
 
 app = Flask(__name__)
@@ -375,11 +376,37 @@ def complete():
 @app.route('/update_priority/<pid>', methods=['POST'])
 def update_priority(pid):
     projects = get_projects()
+    old_map = compute_schedule_map(projects)
+    changed_proj = None
     for p in projects:
         if p['id'] == pid:
+            changed_proj = p
             p['priority'] = request.form['priority']
             break
     save_projects(projects)
+    new_map = compute_schedule_map(projects)
+
+    changed = []
+    for pr in projects:
+        if pr['id'] == pid:
+            continue
+        if old_map.get(pr['id']) != new_map.get(pr['id']):
+            changed.append(pr['name'])
+
+    if changed_proj and changed:
+        extras = load_extra_conflicts()
+        msg = (
+            f"Prioridad de {changed_proj['name']} cambiada a {changed_proj['priority']}; "
+            f"se reprogramaron: {', '.join(changed)}"
+        )
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': changed_proj['name'],
+            'message': msg,
+            'key': f'prio-{pid}-{len(extras)}',
+        })
+        save_extra_conflicts(extras)
+
     next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
     return redirect(next_url)
 

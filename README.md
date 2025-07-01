@@ -47,6 +47,9 @@ automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
 eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
 lista de conflictos aparece un aviso indicando la eliminación y los cambios que
 ha producido.
+Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
+lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
+de fechas debido a esa prioridad.
 
 Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos
@@ -76,3 +79,5 @@ vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
 cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista
 de proyectos incluye los mismos cuadros de búsqueda por proyecto y cliente que
 el calendario, para filtrar rápidamente la información mostrada.
+La sección de proyectos en la vista **Completo** puede plegarse o desplegarse
+completamente pulsando el botón que aparece junto a su título.

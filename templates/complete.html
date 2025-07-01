@@ -123,7 +123,7 @@
         <div id="info-popup" class="info-popup"></div>
     </div>
     <div class="complete-projects">
-        <h2>Proyectos</h2>
+        <h2>Proyectos <button id="projects-toggle" type="button">&#8722;</button></h2>
         <form method="get" class="controls">
             <input type="hidden" name="offset" value="{{ offset }}">
             <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
@@ -282,5 +282,13 @@
       btn.textContent = tr.classList.contains('collapsed') ? '+' : '−';
     });
   });
+  const projToggle = document.getElementById('projects-toggle');
+  if (projToggle) {
+    const projDiv = document.querySelector('.complete-projects');
+    projToggle.addEventListener('click', () => {
+      projDiv.classList.toggle('collapsed');
+      projToggle.innerHTML = projDiv.classList.contains('collapsed') ? '&#43;' : '&#8722;';
+    });
+  }
 </script>
 {% endblock %}
