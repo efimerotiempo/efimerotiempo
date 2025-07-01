@@ -62,7 +62,13 @@ def get_projects():
 
 
 @app.route('/')
-def index():
+def home():
+    """Redirect to the combined view by default."""
+    return redirect(url_for('complete'))
+
+
+@app.route('/calendar')
+def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     milestones = load_milestones()
@@ -424,7 +430,7 @@ def delete_conflict(key):
     new_extras = [e for e in extras if e['key'] != key]
     if len(new_extras) != len(extras):
         save_extra_conflicts(new_extras)
-    return redirect(url_for('index'))
+    return redirect(url_for('calendar_view'))
 
 
 if __name__ == '__main__':
