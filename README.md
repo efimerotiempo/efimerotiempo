@@ -62,7 +62,9 @@ de acopio indicada y no se reparte por horas. Irene puede acumular tantos
 proyectos como sea necesario dentro de ese margen sin limitación diaria.
 
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
-sea legible en todas las vistas.
+sea legible en todas las vistas. Las tareas en el calendario muestran primero
+el nombre del proyecto seguido del cliente y la fase para identificar mejor
+cada entrada.
 
 Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar

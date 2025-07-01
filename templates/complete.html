@@ -104,13 +104,13 @@
         <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
-            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}">
+            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
-                {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endfor %}
         </td>
@@ -247,12 +247,11 @@
           o.classList.remove('highlight');
         }
       });
-      const info = PROJECT_DATA[t.dataset.pid];
-      let html = '';
-      html += `Cliente: ${info.client}<br>`;
-      html += `Inicio: ${info.start_date}<br>`;
-      html += `Límite: ${info.due_date}<br>`;
-      html += `Prioridad: ${info.priority}<br>`;
+        const info = PROJECT_DATA[t.dataset.pid];
+        let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
+        html += `Inicio: ${info.start_date}<br>`;
+        html += `Límite: ${info.due_date}<br>`;
+        html += `Prioridad: ${info.priority}<br>`;
       PHASES.forEach(ph => {
         const val = info.phases[ph];
         if (val) {
