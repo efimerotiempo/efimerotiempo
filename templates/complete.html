@@ -209,14 +209,12 @@
   }
 
   slider.addEventListener('input', update);
-  slider.addEventListener('wheel', (e) => {
+
+  const wrapper = document.querySelector('.schedule-wrapper');
+  wrapper.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();
-    const step = e.deltaY > 0 ? 1 : -1;
-    let val = parseInt(slider.value) + step;
-    val = Math.max(0, Math.min(val, parseInt(slider.max)));
-    slider.value = val;
-    update();
+    wrapper.scrollLeft += e.deltaY;
   });
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {

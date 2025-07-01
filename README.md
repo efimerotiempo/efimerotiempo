@@ -36,9 +36,10 @@ la lista de proyectos. Cada sección se expande por
 completo y la página ofrece una barra de desplazamiento vertical para consultar
 la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana una sola vez por semana, en negrita y
-color violeta, y la barra
-deslizante puede moverse con la rueda del ratón manteniendo pulsada la tecla
-Shift. Las columnas del calendario se ajustan automáticamente al contenido.
+color violeta. Puedes desplazarte horizontalmente por el calendario
+mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
+sobre la tabla. Las columnas del calendario se ajustan automáticamente al
+contenido para que no haya saltos.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
