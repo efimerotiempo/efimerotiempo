@@ -4,7 +4,8 @@
     <div class="complete-top">
     <div class="complete-add">
         <h2>Añadir proyecto</h2>
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" class="aligned-form">
+            <label>Nº OF:<input type="text" name="of_number" required></label><br>
             <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
             <label>Cliente:<input type="text" name="client" required></label><br>
             <label>Fecha límite:<input type="date" name="due_date" required></label><br>
@@ -40,6 +41,9 @@
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
+        <form method="post" action="{{ url_for('clear_conflicts') }}">
+            <button type="submit">Borrar todos</button>
+        </form>
         <ul>
         {% for c in conflicts %}
             <li>{{ c.project }}: {{ c.message }}
@@ -101,13 +105,13 @@
         <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
-            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}">
+            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-of="{{ t.of }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
-                {{ t.project }} ({{ t.client }}) - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                {{ t.of }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endfor %}
         </td>
@@ -245,7 +249,7 @@
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
-      let html = `<strong>${info.name}</strong><br>`;
+      let html = `<strong>${info.of_number} - ${info.name}</strong><br>`;
       html += `Cliente: ${info.client}<br>`;
       html += `Inicio: ${info.start_date}<br>`;
       html += `Límite: ${info.due_date}<br>`;

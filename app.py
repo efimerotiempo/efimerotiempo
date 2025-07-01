@@ -39,6 +39,9 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
+        if 'of_number' not in p:
+            p['of_number'] = p.get('name', '')
+            changed = True
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
@@ -183,6 +186,7 @@ def add_project():
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
+            'of_number': data['of_number'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
             'due_date': data['due_date'],
@@ -262,6 +266,7 @@ def complete():
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
+            'of_number': data['of_number'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
             'due_date': data['due_date'],
@@ -431,6 +436,22 @@ def delete_conflict(key):
     if len(new_extras) != len(extras):
         save_extra_conflicts(new_extras)
     return redirect(url_for('calendar_view'))
+
+
+@app.route('/clear_conflicts', methods=['POST'])
+def clear_conflicts():
+    """Mark all current conflicts as dismissed and clear extras."""
+    projects = get_projects()
+    _, conflicts = schedule_projects(projects)
+    extras = load_extra_conflicts()
+    keys = [c['key'] for c in conflicts] + [e['key'] for e in extras]
+    dismissed = load_dismissed()
+    for k in keys:
+        if k not in dismissed:
+            dismissed.append(k)
+    save_dismissed(dismissed)
+    save_extra_conflicts([])
+    return redirect(request.referrer or url_for('calendar_view'))
 
 
 if __name__ == '__main__':

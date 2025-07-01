@@ -86,3 +86,15 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .today { border: 3px solid red !important; }
 .worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
+
+/* align input labels */
+.aligned-form label {
+    display: flex;
+    justify-content: space-between;
+    gap: 5px;
+    width: 100%;
+}
+.aligned-form input,
+.aligned-form select {
+    flex: 1;
+}

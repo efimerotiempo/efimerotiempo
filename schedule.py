@@ -140,6 +140,7 @@ def schedule_projects(projects):
                     project['start_date'],
                     project.get('priority'),
                     project['id'],
+                    project.get('of_number', project['name']),
                 )
             else:
                 hours = int(val)
@@ -156,6 +157,7 @@ def schedule_projects(projects):
                     project['start_date'],
                     project.get('priority'),
                     project['id'],
+                    project.get('of_number', project['name']),
                 )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -169,7 +171,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, of_number):
     day = start_day
     while day.weekday() in WEEKEND:
         day = next_workday(day)
@@ -189,6 +191,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
             tasks.append({
                 'project': project_name,
                 'client': client,
+                'of': of_number,
                 'phase': phase,
                 'hours': allocate,
                 'late': late,
@@ -206,7 +209,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
     return next_workday(last_day), last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
+def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid, of_number):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
     while day.weekday() in WEEKEND:
@@ -222,6 +225,7 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
         tasks.append({
             'project': project_name,
             'client': client,
+            'of': of_number,
             'phase': 'pedidos',
             'hours': 0,
             'late': late,
