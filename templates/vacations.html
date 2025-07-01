@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Vacaciones</h2>
+<form method="post">
+    <label>Trabajador:
+        <select name="worker">
+            {% for w in workers %}
+            <option value="{{ w }}">{{ w }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Inicio:<input type="date" name="start" required></label>
+    <label>Fin:<input type="date" name="end" required></label>
+    <button type="submit">Añadir</button>
+</form>
+<table>
+    <tr><th>Trabajador</th><th>Inicio</th><th>Fin</th><th></th></tr>
+    {% for v in vacations %}
+    <tr>
+        <td>{{ v.worker }}</td>
+        <td>{{ v.start }}</td>
+        <td>{{ v.end }}</td>
+        <td>
+            <form method="post" action="{{ url_for('delete_vacation', vid=v.id) }}">
+                <button class="delete-btn" type="submit">&#10060;</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

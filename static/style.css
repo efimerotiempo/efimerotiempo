@@ -61,6 +61,11 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     cursor: pointer;
 }
 
+.vacation {
+    background: #ff9999;
+    font-weight: bold;
+}
+
 .milestone-day {
     border-left: 2px solid red;
 }

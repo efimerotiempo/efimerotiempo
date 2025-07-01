@@ -49,6 +49,9 @@
         <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
+            {% if t.phase == 'vacaciones' %}
+            <div class="task vacation">VACACIONES</div>
+            {% else %}
             <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
@@ -57,6 +60,7 @@
                 {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
+            {% endif %}
             {% endfor %}
         </td>
         {% endfor %}

@@ -8,6 +8,7 @@ PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
+VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -97,6 +98,19 @@ def save_milestones(data):
         json.dump(data, f)
 
 
+def load_vacations():
+    if os.path.exists(VACATIONS_FILE):
+        with open(VACATIONS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_vacations(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(VACATIONS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
 def next_workday(d):
     d += timedelta(days=1)
     while d.weekday() in WEEKEND:
@@ -108,6 +122,27 @@ def schedule_projects(projects):
     # sort by priority and start date
     projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
     worker_schedule = {w: {} for w in WORKERS}
+    vacations = load_vacations()
+    for vac in vacations:
+        worker = vac['worker']
+        day = date.fromisoformat(vac['start'])
+        end = date.fromisoformat(vac['end'])
+        while day <= end:
+            if day.weekday() not in WEEKEND and worker in worker_schedule:
+                ds = worker_schedule[worker].setdefault(day.isoformat(), [])
+                ds.append({
+                    'project': 'Vacaciones',
+                    'client': '',
+                    'phase': 'vacaciones',
+                    'hours': HOURS_PER_DAY,
+                    'late': False,
+                    'color': '#ff9999',
+                    'due_date': '',
+                    'start_date': '',
+                    'priority': '',
+                    'pid': f"vac-{vac.get('id', '')}"
+                })
+            day += timedelta(days=1)
     conflicts = []
     for project in projects:
         current = date.fromisoformat(project['start_date'])
@@ -172,12 +207,12 @@ def schedule_projects(projects):
 
 def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
     day = start_day
-    while day.weekday() in WEEKEND:
+    while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
         day = next_workday(day)
     remaining = hours
     last_day = day
     while remaining > 0:
-        if day.weekday() in WEEKEND:
+        if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
             day = next_workday(day)
             continue
         day_str = day.isoformat()
@@ -210,11 +245,11 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
 def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
-    while day.weekday() in WEEKEND:
+    while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
         day = next_workday(day)
     last_day = day
     while day <= end_day:
-        if day.weekday() in WEEKEND:
+        if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
             day += timedelta(days=1)
             continue
         day_str = day.isoformat()

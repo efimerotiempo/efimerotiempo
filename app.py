@@ -14,6 +14,8 @@ from schedule import (
     save_extra_conflicts,
     load_milestones,
     save_milestones,
+    load_vacations,
+    save_vacations,
     PRIORITY_ORDER,
     PHASE_ORDER,
     WORKERS,
@@ -244,6 +246,29 @@ def delete_milestone(mid):
     save_milestones(milestones)
     next_url = request.form.get('next') or url_for('milestone_list')
     return redirect(next_url)
+
+
+@app.route('/vacations', methods=['GET', 'POST'])
+def vacation_list():
+    vacations = load_vacations()
+    if request.method == 'POST':
+        vacations.append({
+            'id': str(uuid.uuid4()),
+            'worker': request.form['worker'],
+            'start': request.form['start'],
+            'end': request.form['end'],
+        })
+        save_vacations(vacations)
+        return redirect(url_for('vacation_list'))
+    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()))
+
+
+@app.route('/delete_vacation/<vid>', methods=['POST'])
+def delete_vacation(vid):
+    vacations = load_vacations()
+    vacations = [v for v in vacations if v.get('id') != vid]
+    save_vacations(vacations)
+    return redirect(url_for('vacation_list'))
 
 
 @app.route('/complete', methods=['GET', 'POST'])

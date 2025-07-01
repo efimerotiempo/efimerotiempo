@@ -83,3 +83,10 @@ de proyectos incluye los mismos cuadros de búsqueda por proyecto y cliente que
 el calendario, para filtrar rápidamente la información mostrada.
 La sección de proyectos en la vista **Completo** puede plegarse o desplegarse
 completamente pulsando el botón que aparece junto a su título.
+
+### Vacaciones
+
+Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
+cualquier trabajador seleccionándolo en la lista y especificando las fechas de
+inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo en
+el calendario y no admiten asignaciones de tareas.
