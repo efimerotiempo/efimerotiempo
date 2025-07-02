@@ -302,6 +302,7 @@
   document.querySelectorAll('.conflict-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const proj = link.dataset.project;
       const t = Array.from(tasks).find(o => o.dataset.project === proj);
       if (t) {
