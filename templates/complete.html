@@ -304,7 +304,13 @@
       e.preventDefault();
       const proj = link.dataset.project;
       const t = Array.from(tasks).find(o => o.dataset.project === proj);
-      if (t) t.dispatchEvent(new Event('click'));
+      if (t) {
+        t.dispatchEvent(new Event('click'));
+        const rect = t.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
+        t.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
     });
   });
   const projToggle = document.getElementById('projects-toggle');
