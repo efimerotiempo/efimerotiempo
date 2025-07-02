@@ -3,7 +3,7 @@ import json
 import os
 import copy
 
-DATA_DIR = 'data'
+DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')

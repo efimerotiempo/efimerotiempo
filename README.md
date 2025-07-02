@@ -19,9 +19,12 @@ vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
 ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
-Todos los proyectos se guardan en `data/projects.json`. La aplicación lee este
-archivo cada vez que se carga la página principal (la vista **Completo**), de modo que si añades
-manualmente proyectos ahí también formarán parte de la planificación.
+Todos los proyectos se guardan por defecto en `data/projects.json`. La
+aplicación lee este archivo cada vez que se carga la página principal (la vista
+**Completo**), de modo que si añades manualmente proyectos ahí también formarán
+parte de la planificación. Si quieres conservar los datos en otra ubicación,
+define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
+de iniciar la aplicación.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparecerá una línea roja en la fecha del hito y la
