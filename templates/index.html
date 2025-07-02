@@ -43,7 +43,7 @@
     </thead>
     <tbody>
 {% for worker, days_data in schedule.items() %}
-    <tr>
+    <tr data-worker="{{ worker }}">
         <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
         {% for d in days %}
         <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
@@ -115,6 +115,16 @@
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
+  const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
+
+  document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
+    const worker = tr.dataset.worker;
+    const btn = tr.querySelector('.worker-toggle');
+    if (collapsedSet.has(worker)) {
+      tr.classList.add('collapsed');
+      if (btn) btn.textContent = '+';
+    }
+  });
   wrapper.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();
@@ -184,8 +194,16 @@
   document.querySelectorAll('.worker-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const tr = btn.closest('tr');
+      const worker = tr.dataset.worker;
       tr.classList.toggle('collapsed');
-      btn.textContent = tr.classList.contains('collapsed') ? '+' : '−';
+      if (tr.classList.contains('collapsed')) {
+        collapsedSet.add(worker);
+        btn.textContent = '+';
+      } else {
+        collapsedSet.delete(worker);
+        btn.textContent = '−';
+      }
+      localStorage.setItem('collapsedWorkers', JSON.stringify(Array.from(collapsedSet)));
     });
   });
   function showTask(t) {
