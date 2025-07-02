@@ -45,7 +45,7 @@
         </form>
         <ul>
         {% for c in conflicts %}
-            <li>{{ c.project }}: {{ c.message }}
+            <li><a href="#" class="conflict-link" data-project="{{ c.project }}">{{ c.project }}</a>: {{ c.message }}
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
@@ -297,6 +297,14 @@
       const tr = btn.closest('tr');
       tr.classList.toggle('collapsed');
       btn.textContent = tr.classList.contains('collapsed') ? '+' : '−';
+    });
+  });
+  document.querySelectorAll('.conflict-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const proj = link.dataset.project;
+      const t = Array.from(tasks).find(o => o.dataset.project === proj);
+      if (t) t.dispatchEvent(new Event('click'));
     });
   });
   const projToggle = document.getElementById('projects-toggle');
