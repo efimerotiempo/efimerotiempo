@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Jira</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container-fluid mt-3">
+    <h1>Tablero Kanban</h1>
+    <div class="row" id="board">
+        {% for column in columns %}
+        <div class="col kanban-column" data-col-id="{{ column.id }}">
+            <h4 class="text-center">{{ column.name }}</h4>
+            <div class="kanban-cards" ondrop="drop_handler(event)" ondragover="dragover_handler(event)">
+                {% for card in column.cards %}
+                <div class="card kanban-card" draggable="true" ondragstart="dragstart_handler(event)" data-card-id="{{ card[0] }}">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ card[1] }}</h5>
+                        <p class="card-text">{{ card[2] }}</p>
+                        {% if card[3] %}
+                        <small class="text-muted">Padre: {{ card[3] }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <hr>
+    <h3>Añadir tarjeta</h3>
+    <form method="post" action="{{ url_for('add_card') }}" class="row g-3">
+        <div class="col-md-3">
+            <input type="text" name="title" class="form-control" placeholder="Título" required>
+        </div>
+        <div class="col-md-3">
+            <input type="text" name="description" class="form-control" placeholder="Descripción">
+        </div>
+        <div class="col-md-2">
+            <select name="column_id" class="form-select">
+                {% for column in columns %}
+                <option value="{{ column.id }}">{{ column.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="parent_id" class="form-select">
+                <option value="">Sin padre</option>
+                {% for c in cards %}
+                <option value="{{ c[0] }}">{{ c[1] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary">Crear</button>
+        </div>
+    </form>
+</div>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+.kanban-column {
+    border: 1px solid #ccc;
+    min-height: 300px;
+    background-color: #f8f9fa;
+    margin-bottom: 1rem;
+}
+.kanban-cards {
+    min-height: 200px;
+}
+.kanban-card {
+    margin-bottom: 10px;
+    cursor: grab;
+}
