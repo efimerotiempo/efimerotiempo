@@ -45,11 +45,11 @@
         </form>
         <ul>
         {% for c in conflicts %}
-            <li><a href="#" class="conflict-link" data-project="{{ c.project }}">{{ c.project }}</a>: {{ c.message }}
+            <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
-                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}">{{ ch.name }}</a> - {{ ch.client }}
+                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}" {% if ch.offset is not none %}data-offset="{{ ch.offset }}"{% endif %}>{{ ch.name }}</a> - {{ ch.client }}
                         {% if ch.met %}
                             <span class="ok">&#10004;</span>
                         {% else %}
@@ -299,18 +299,41 @@
       btn.textContent = tr.classList.contains('collapsed') ? '+' : '−';
     });
   });
+  function showTask(t) {
+    t.dispatchEvent(new Event('click'));
+    const rect = t.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
+    t.scrollIntoView({behavior: 'smooth', block: 'center'});
+  }
+
+  const stored = sessionStorage.getItem('highlightPid');
+  if (stored) {
+    const t = Array.from(tasks).find(o => o.dataset.pid === stored);
+    if (t) {
+      showTask(t);
+    }
+    sessionStorage.removeItem('highlightPid');
+  }
+
   document.querySelectorAll('.conflict-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const pid = link.dataset.pid;
       const proj = link.dataset.project;
-      const t = Array.from(tasks).find(o => o.dataset.project === proj);
+      let t = null;
+      if (pid) {
+        t = Array.from(tasks).find(o => o.dataset.pid === pid);
+      } else {
+        t = Array.from(tasks).find(o => o.dataset.project === proj);
+      }
       if (t) {
-        t.dispatchEvent(new Event('click'));
-        const rect = t.getBoundingClientRect();
-        const wrapperRect = wrapper.getBoundingClientRect();
-        wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
-        t.scrollIntoView({behavior: 'smooth', block: 'center'});
+        showTask(t);
+      } else if (link.dataset.offset) {
+        sessionStorage.setItem('highlightPid', pid);
+        slider.value = link.dataset.offset;
+        update();
       }
     });
   });
@@ -319,13 +342,13 @@
       e.preventDefault();
       e.stopPropagation();
       const pid = link.dataset.pid;
-      const t = Array.from(tasks).find(o => o.dataset.pid === pid);
+      let t = Array.from(tasks).find(o => o.dataset.pid === pid);
       if (t) {
-        t.dispatchEvent(new Event('click'));
-        const rect = t.getBoundingClientRect();
-        const wrapperRect = wrapper.getBoundingClientRect();
-        wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
-        t.scrollIntoView({behavior: 'smooth', block: 'center'});
+        showTask(t);
+      } else if (link.dataset.offset) {
+        sessionStorage.setItem('highlightPid', pid);
+        slider.value = link.dataset.offset;
+        update();
       }
     });
   });

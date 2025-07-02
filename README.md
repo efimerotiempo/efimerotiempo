@@ -56,7 +56,8 @@ de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
 proyecto afectado junto con un ✔ verde si ahora llega a su límite o una ❌
 roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
-que el calendario lo resalte igual que si hubieras hecho clic en su tarea.
+que el calendario salte hasta sus tareas y las resalte igual que si hubieras
+hecho clic en ellas, incluso aunque estén fuera del rango visible.
 
 Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
 disponible con menos carga, de modo que fases idénticas en proyectos

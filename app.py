@@ -423,13 +423,26 @@ def update_priority(pid):
 
     if changed_proj and changed_ids:
         projects_copy = copy.deepcopy(projects)
-        schedule_projects(projects_copy)
+        sched, _ = schedule_projects(projects_copy)
         end_dates = {p['id']: p['end_date'] for p in projects_copy}
+        start_dates = {}
+        for worker, days in sched.items():
+            for day, tasks in days.items():
+                for t in tasks:
+                    d = day
+                    pid2 = t['pid']
+                    if pid2 not in start_dates or d < start_dates[pid2]:
+                        start_dates[pid2] = d
         details = []
         for cid in changed_ids:
             pr = next(p for p in projects if p['id'] == cid)
             met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
-            details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met})
+            start_offset = (date.fromisoformat(start_dates[cid]) - MIN_DATE).days if cid in start_dates else 0
+            details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
+        if pid in start_dates:
+            changed_start = (date.fromisoformat(start_dates[pid]) - MIN_DATE).days
+        else:
+            changed_start = (date.fromisoformat(changed_proj['start_date']) - MIN_DATE).days
 
         extras = load_extra_conflicts()
         msg = (
@@ -442,6 +455,8 @@ def update_priority(pid):
             'message': msg,
             'changes': details,
             'key': f'prio-{pid}-{len(extras)}',
+            'pid': changed_proj['id'],
+            'offset': changed_start,
         })
         save_extra_conflicts(extras)
 
