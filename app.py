@@ -404,9 +404,11 @@ def update_priority(pid):
     projects = get_projects()
     old_map = compute_schedule_map(projects)
     changed_proj = None
+    old_priority = None
     for p in projects:
         if p['id'] == pid:
             changed_proj = p
+            old_priority = p['priority']
             p['priority'] = request.form['priority']
             break
     save_projects(projects)
@@ -427,11 +429,12 @@ def update_priority(pid):
         for cid in changed_ids:
             pr = next(p for p in projects if p['id'] == cid)
             met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
-            details.append({'name': pr['name'], 'client': pr['client'], 'met': met})
+            details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met})
 
         extras = load_extra_conflicts()
         msg = (
-            f"Prioridad de {changed_proj['name']} cambiada a {changed_proj['priority']}"
+            f"Prioridad de {changed_proj['name']} (cliente {changed_proj['client']}) "
+            f"cambiada de {old_priority} a {changed_proj['priority']}"
         )
         extras.append({
             'id': str(uuid.uuid4()),

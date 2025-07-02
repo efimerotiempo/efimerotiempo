@@ -49,7 +49,7 @@
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
-                    <li>{{ ch.name }} - {{ ch.client }}
+                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}">{{ ch.name }}</a> - {{ ch.client }}
                         {% if ch.met %}
                             <span class="ok">&#10004;</span>
                         {% else %}
@@ -305,6 +305,21 @@
       e.stopPropagation();
       const proj = link.dataset.project;
       const t = Array.from(tasks).find(o => o.dataset.project === proj);
+      if (t) {
+        t.dispatchEvent(new Event('click'));
+        const rect = t.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
+        t.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    });
+  });
+  document.querySelectorAll('.affected-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = link.dataset.pid;
+      const t = Array.from(tasks).find(o => o.dataset.pid === pid);
       if (t) {
         t.dispatchEvent(new Event('click'));
         const rect = t.getBoundingClientRect();
