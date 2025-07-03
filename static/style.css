@@ -11,3 +11,9 @@
     margin-bottom: 10px;
     cursor: grab;
 }
+
+.kanban-column[data-state="Todo"] { background-color: #e3f2fd; }
+.kanban-column[data-state="Doing"] { background-color: #fff3cd; }
+.kanban-column[data-state="Blocked"] { background-color: #f8d7da; }
+.kanban-column[data-state="Done"] { background-color: #d4edda; }
+

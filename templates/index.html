@@ -7,58 +7,86 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<div class="container-fluid mt-3">
-    <h1>Tablero Kanban</h1>
-    <div class="row" id="board">
-        {% for column in columns %}
-        <div class="col kanban-column" data-col-id="{{ column.id }}">
-            <h4 class="text-center">{{ column.name }}</h4>
-            <div class="kanban-cards" ondrop="drop_handler(event)" ondragover="dragover_handler(event)">
-                {% for card in column.cards %}
-                <div class="card kanban-card" draggable="true" ondragstart="dragstart_handler(event)" data-card-id="{{ card[0] }}">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ card[1] }}</h5>
-                        <p class="card-text">{{ card[2] }}</p>
-                        {% if card[3] %}
-                        <small class="text-muted">Padre: {{ card[3] }}</small>
-                        {% endif %}
+    <div class="container-fluid mt-3">
+        <h1>Tablero Kanban</h1>
+        <button class="btn btn-primary mb-3" id="newCardBtn" onclick="openNewModal()">Nueva tarjeta</button>
+        <div class="row" id="board">
+            {% for column in columns %}
+            <div class="col kanban-column" data-col-id="{{ column.id }}" data-state="{{ column.name }}" style="background-color: {{ column.color }}">
+                <h4 class="text-center">{{ column.name }}</h4>
+                <div class="kanban-cards" ondrop="drop_handler(event)" ondragover="dragover_handler(event)">
+                    {% for card in column.cards %}
+                    <div class="card kanban-card" draggable="true" ondragstart="dragstart_handler(event)" data-card-id="{{ card.id }}" onclick="openEditModal({{ card.id }})">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ card.title }}</h5>
+                            <p class="card-text">{{ card.description }}</p>
+                            {% if card.assignee %}<small class="text-muted">{{ card.assignee }}</small><br>{% endif %}
+                            {% if card.due_date %}<small class="text-muted">Vence: {{ card.due_date }}</small><br>{% endif %}
+                            {% if card.parent_id %}<small class="text-muted">Padre: {{ card.parent_id }}</small>{% endif %}
+                            <div class="mt-2"><button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openNewModal({{ card.id }})">+ Hija</button></div>
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Modal -->
+        <div class="modal fade" id="cardModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form id="cardForm" method="post" action="">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="cardModalLabel"></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Título</label>
+                                <input type="text" class="form-control" name="title" id="title" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descripción</label>
+                                <textarea class="form-control" name="description" id="description"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Responsable</label>
+                                <input type="text" class="form-control" name="assignee" id="assignee">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Fecha límite</label>
+                                <input type="date" class="form-control" name="due_date" id="due_date">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Columna</label>
+                                <select class="form-select" name="column_id" id="column_id">
+                                    {% for column in columns %}
+                                    <option value="{{ column.id }}">{{ column.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Padre</label>
+                                <select class="form-select" name="parent_id" id="parent_id">
+                                    <option value="">Sin padre</option>
+                                    {% for c in cards %}
+                                    <option value="{{ c.id }}">{{ c.title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-        {% endfor %}
     </div>
-
-    <hr>
-    <h3>Añadir tarjeta</h3>
-    <form method="post" action="{{ url_for('add_card') }}" class="row g-3">
-        <div class="col-md-3">
-            <input type="text" name="title" class="form-control" placeholder="Título" required>
-        </div>
-        <div class="col-md-3">
-            <input type="text" name="description" class="form-control" placeholder="Descripción">
-        </div>
-        <div class="col-md-2">
-            <select name="column_id" class="form-select">
-                {% for column in columns %}
-                <option value="{{ column.id }}">{{ column.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <select name="parent_id" class="form-select">
-                <option value="">Sin padre</option>
-                {% for c in cards %}
-                <option value="{{ c[0] }}">{{ c[1] }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary">Crear</button>
-        </div>
-    </form>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
+

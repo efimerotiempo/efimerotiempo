@@ -31,3 +31,6 @@ Este proyecto contiene una pequeña aplicación de ejemplo que implementa un tab
 3. Abre `http://localhost:5000` en tu navegador para ver el tablero.
 
 Puedes arrastrar las tarjetas entre columnas y crear nuevas especificando relaciones de padre e hija.
+Al hacer clic sobre una tarjeta se abre un formulario emergente para editar sus datos.
+Cada columna está coloreada según su estado por defecto: **Todo**, **Doing**, **Blocked** y **Done**.
+

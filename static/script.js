@@ -29,3 +29,30 @@ function updatePosition(cardId, columnId) {
         });
     });
 }
+
+function openNewModal(parentId = null) {
+    const form = document.getElementById('cardForm');
+    form.action = '/add_card';
+    document.getElementById('cardModalLabel').textContent = 'Nueva tarjeta';
+    form.reset();
+    document.getElementById('parent_id').value = parentId || '';
+    var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('cardModal'));
+    modal.show();
+}
+
+function openEditModal(id) {
+    fetch(`/card/${id}`).then(r => r.json()).then(data => {
+        const form = document.getElementById('cardForm');
+        form.action = `/card/${id}`;
+        document.getElementById('cardModalLabel').textContent = 'Editar tarjeta';
+        document.getElementById('title').value = data.title;
+        document.getElementById('description').value = data.description || '';
+        document.getElementById('assignee').value = data.assignee || '';
+        document.getElementById('due_date').value = data.due_date || '';
+        document.getElementById('column_id').value = data.column_id;
+        document.getElementById('parent_id').value = data.parent_id || '';
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('cardModal'));
+        modal.show();
+    });
+}
+
