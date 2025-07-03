@@ -38,6 +38,41 @@ UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+def parse_input_date(value):
+    """Parse a date string that may omit the year.
+
+    Accepts formats like 'dd-mm', 'dd/mm' or full ISO 'YYYY-MM-DD'.
+    If the year is missing, the current year is used.
+    Returns a ``date`` instance.
+    """
+    if not value:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        parts = value.replace('/', '-').split('-')
+        if len(parts) >= 2:
+            try:
+                day = int(parts[0])
+                month = int(parts[1])
+            except ValueError:
+                return None
+            year = date.today().year
+            if len(parts) == 3:
+                try:
+                    year = int(parts[2])
+                except ValueError:
+                    pass
+            try:
+                return date(year, month, day)
+            except ValueError:
+                return None
+    return None
+
+
 def get_projects():
     projects = load_projects()
     changed = False
@@ -185,12 +220,13 @@ def add_project():
         projects = get_projects()
         schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
+        due = parse_input_date(data['due_date'])
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
-            'due_date': data['due_date'],
+            'due_date': due.isoformat() if due else '',
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
@@ -202,8 +238,12 @@ def add_project():
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
                 if not value_h:
-                    value_h = (date.today() + timedelta(days=14)).isoformat()
-                project['phases'][phase] = value_h
+                    val = date.today() + timedelta(days=14)
+                else:
+                    val = parse_input_date(value_h)
+                    if not val:
+                        val = date.today() + timedelta(days=14)
+                project['phases'][phase] = val.isoformat()
                 project['assigned'][phase] = find_worker_for_phase(
                     phase, schedule, project['priority']
                 )
@@ -234,10 +274,11 @@ def add_project():
 def add_milestone():
     """Add a milestone with a unique id."""
     milestones = load_milestones()
+    mdate = parse_input_date(request.form['date'])
     milestones.append({
         'id': str(uuid.uuid4()),
         'description': request.form['description'],
-        'date': request.form['date'],
+        'date': mdate.isoformat() if mdate else '',
     })
     save_milestones(milestones)
     next_url = request.form.get('next') or url_for('complete')
@@ -263,11 +304,13 @@ def delete_milestone(mid):
 def vacation_list():
     vacations = load_vacations()
     if request.method == 'POST':
+        start = parse_input_date(request.form['start'])
+        end = parse_input_date(request.form['end'])
         vacations.append({
             'id': str(uuid.uuid4()),
             'worker': request.form['worker'],
-            'start': request.form['start'],
-            'end': request.form['end'],
+            'start': start.isoformat() if start else '',
+            'end': end.isoformat() if end else '',
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
@@ -297,12 +340,13 @@ def complete():
             image_path = f"uploads/{fname}"
         schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
+        due = parse_input_date(data['due_date'])
         project = {
             'id': str(uuid.uuid4()),
             'name': data['name'],
             'client': data['client'],
             'start_date': date.today().isoformat(),
-            'due_date': data['due_date'],
+            'due_date': due.isoformat() if due else '',
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
@@ -314,8 +358,12 @@ def complete():
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
                 if not value_h:
-                    value_h = (date.today() + timedelta(days=14)).isoformat()
-                project['phases'][phase] = value_h
+                    val = date.today() + timedelta(days=14)
+                else:
+                    val = parse_input_date(value_h)
+                    if not val:
+                        val = date.today() + timedelta(days=14)
+                project['phases'][phase] = val.isoformat()
                 project['assigned'][phase] = find_worker_for_phase(
                     phase, schedule, project['priority']
                 )

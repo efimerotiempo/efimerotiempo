@@ -19,6 +19,10 @@ vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
 ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
+Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
+Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,
+se tomará automáticamente el año en curso.
+
 Todos los proyectos se guardan por defecto en `data/projects.json`. La
 aplicación lee este archivo cada vez que se carga la página principal (la vista
 **Completo**), de modo que si añades manualmente proyectos ahí también formarán
