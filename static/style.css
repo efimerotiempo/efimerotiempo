@@ -103,5 +103,12 @@ tr.collapsed td:not(:first-child) { display: none; }
     position: sticky;
     top: 0;
     background: #fff;
-    z-index: 2;
+    z-index: 10;
+}
+
+.projects-table thead {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 10;
 }
