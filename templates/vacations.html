@@ -9,8 +9,8 @@
             {% endfor %}
         </select>
     </label>
-    <label>Inicio:<input type="date" name="start" required></label>
-    <label>Fin:<input type="date" name="end" required></label>
+    <label>Inicio:<input type="date" name="start" value="{{ today }}" required></label>
+    <label>Fin:<input type="date" name="end" value="{{ today }}" required></label>
     <button type="submit">Añadir</button>
 </form>
 <table>

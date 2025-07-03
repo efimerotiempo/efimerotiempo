@@ -21,6 +21,7 @@ from schedule import (
     WORKERS,
     find_worker_for_phase,
     compute_schedule_map,
+    HOURS_PER_DAY,
 )
 
 app = Flask(__name__)
@@ -197,26 +198,36 @@ def add_project():
             'image': image_path,
         }
         for phase in PHASE_ORDER:
-            value = data.get(phase)
+            value_h = data.get(phase)
+            value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value:
-                    value = (date.today() + timedelta(days=14)).isoformat()
-                project['phases'][phase] = value
+                if not value_h:
+                    value_h = (date.today() + timedelta(days=14)).isoformat()
+                project['phases'][phase] = value_h
                 project['assigned'][phase] = find_worker_for_phase(
                     phase, schedule, project['priority']
                 )
-            elif value:
-                try:
-                    project['phases'][phase] = int(value)
+            else:
+                hours = 0
+                if value_h:
+                    try:
+                        hours += int(value_h)
+                    except ValueError:
+                        pass
+                if value_d:
+                    try:
+                        hours += int(value_d) * HOURS_PER_DAY
+                    except ValueError:
+                        pass
+                if hours:
+                    project['phases'][phase] = hours
                     project['assigned'][phase] = find_worker_for_phase(
                         phase, schedule, project['priority']
                     )
-                except ValueError:
-                    pass
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('project_list'))
-    return render_template('add_project.html', phases=PHASE_ORDER)
+    return render_template('add_project.html', phases=PHASE_ORDER, today=date.today().isoformat())
 
 
 @app.route('/add_milestone', methods=['POST'])
@@ -260,7 +271,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()))
+    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()), today=date.today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -299,22 +310,32 @@ def complete():
             'image': image_path,
         }
         for phase in PHASE_ORDER:
-            value = data.get(phase)
+            value_h = data.get(phase)
+            value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value:
-                    value = (date.today() + timedelta(days=14)).isoformat()
-                project['phases'][phase] = value
+                if not value_h:
+                    value_h = (date.today() + timedelta(days=14)).isoformat()
+                project['phases'][phase] = value_h
                 project['assigned'][phase] = find_worker_for_phase(
                     phase, schedule, project['priority']
                 )
-            elif value:
-                try:
-                    project['phases'][phase] = int(value)
+            else:
+                hours = 0
+                if value_h:
+                    try:
+                        hours += int(value_h)
+                    except ValueError:
+                        pass
+                if value_d:
+                    try:
+                        hours += int(value_d) * HOURS_PER_DAY
+                    except ValueError:
+                        pass
+                if hours:
+                    project['phases'][phase] = hours
                     project['assigned'][phase] = find_worker_for_phase(
                         phase, schedule, project['priority']
                     )
-                except ValueError:
-                    pass
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('complete'))
@@ -526,6 +547,13 @@ def clear_conflicts():
             dismissed.append(k)
     save_dismissed(dismissed)
     save_extra_conflicts([])
+    return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/show_conflicts', methods=['POST'])
+def show_conflicts():
+    """Restore all dismissed conflicts so they appear again."""
+    save_dismissed([])
     return redirect(request.referrer or url_for('calendar_view'))
 
 

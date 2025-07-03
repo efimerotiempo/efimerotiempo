@@ -7,7 +7,7 @@
         <form method="post" enctype="multipart/form-data">
             <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
             <label>Cliente:<input type="text" name="client" required></label><br>
-            <label>Fecha límite:<input type="date" name="due_date" required></label><br>
+            <label>Fecha límite:<input type="date" name="due_date" value="{{ today.isoformat() }}" required></label><br>
             <label>Prioridad:
                 <select name="priority">
                     <option value="Alta">Alta</option>
@@ -18,10 +18,11 @@
             </label><br>
             {% for phase in phases %}
                 {% if phase == 'pedidos' %}
-                    <label>Plazo acopio:<input type="date" name="pedidos"></label><br>
+                    <label>Plazo acopio:<input type="date" name="pedidos" value="{{ today.isoformat() }}"></label><br>
                 {% else %}
                     <label>{{ phase }} (horas):
                         <input type="number" name="{{ phase }}">
+                        <input type="number" name="{{ phase }}_days" placeholder="días">
                     </label><br>
                 {% endif %}
             {% endfor %}
@@ -34,7 +35,7 @@
         <form method="post" action="{{ url_for('add_milestone') }}">
             <input type="hidden" name="next" value="{{ url_for('complete') }}">
             <label>Descripción:<input type="text" name="description" required></label><br>
-            <label>Fecha:<input type="date" name="date" required></label><br>
+            <label>Fecha:<input type="date" name="date" value="{{ today.isoformat() }}" required></label><br>
             <button type="submit">Añadir</button>
         </form>
     </div>
@@ -42,6 +43,9 @@
         <h3>Conflictos</h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
             <button type="submit">Borrar todos</button>
+        </form>
+        <form method="post" action="{{ url_for('show_conflicts') }}">
+            <button type="submit">Mostrar todos</button>
         </form>
         <ul>
         {% for c in conflicts %}

@@ -75,6 +75,9 @@
 <form method="post" action="{{ url_for('clear_conflicts') }}">
     <button type="submit">Borrar todos</button>
 </form>
+<form method="post" action="{{ url_for('show_conflicts') }}">
+    <button type="submit">Mostrar todos</button>
+</form>
 <ul>
 {% for c in conflicts %}
     <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
