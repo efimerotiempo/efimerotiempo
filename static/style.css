@@ -97,3 +97,11 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 
 .complete-projects.collapsed table, .complete-projects.collapsed .controls {display:none;}
+
+/* keep calendar header visible when scrolling */
+.schedule thead {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 2;
+}
