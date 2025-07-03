@@ -152,6 +152,7 @@
             <button type="submit">Filtrar</button>
         </form>
         <table class="projects-table">
+            <thead>
             <tr>
                 <th>Nombre</th>
                 <th>Cliente</th>
@@ -168,6 +169,8 @@
                 <th>Cambiar</th>
                 <th></th>
             </tr>
+            </thead>
+            <tbody>
             {% for p in projects %}
             <tr style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
@@ -213,6 +216,7 @@
                 </td>
             </tr>
             {% endfor %}
+            </tbody>
         </table>
     </div>
 </div>
