@@ -101,10 +101,12 @@ tr.collapsed td:not(:first-child) { display: none; }
 /* keep calendar header visible when scrolling */
 .schedule thead th {
     position: sticky;
-    top: 0;
     background: #fff;
     z-index: 10;
 }
+.schedule thead tr:nth-child(1) th { top: 0; }
+.schedule thead tr:nth-child(2) th { top: 30px; }
+.schedule thead tr:nth-child(3) th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
