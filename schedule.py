@@ -43,6 +43,8 @@ WORKERS = {
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
+HOURS_LIMITS['Mecanizar'] = float('inf')
+HOURS_LIMITS['Tratamiento'] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
 
@@ -219,8 +221,15 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
         tasks = schedule.get(day_str, [])
         used = sum(t['hours'] for t in tasks)
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-        if used < limit:
-            allocate = min(remaining, limit - used)
+        if limit != float('inf'):
+            if used >= limit:
+                day = next_workday(day)
+                continue
+            available = min(limit - used, HOURS_PER_DAY)
+        else:
+            available = HOURS_PER_DAY
+        if available > 0:
+            allocate = min(remaining, available)
             late = day > date.fromisoformat(due_date)
             tasks.append({
                 'project': project_name,
