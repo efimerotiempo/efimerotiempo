@@ -99,14 +99,14 @@ tr.collapsed td:not(:first-child) { display: none; }
 .complete-projects.collapsed table, .complete-projects.collapsed .controls {display:none;}
 
 /* keep calendar header visible when scrolling */
-.schedule thead {
+.schedule thead th {
     position: sticky;
     top: 0;
     background: #fff;
     z-index: 10;
 }
 
-.projects-table thead {
+.projects-table thead th {
     position: sticky;
     top: 0;
     background: #fff;
