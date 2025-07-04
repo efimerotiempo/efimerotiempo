@@ -1,8 +1,11 @@
 body { font-family: Arial, sans-serif; }
+:root {
+    --day-col-width: 12ch; /* twice the weekday label width */
+}
 table.schedule {
     border-collapse: collapse;
-    width: auto; /* fit content so columns match cells */
-    table-layout: auto;
+    table-layout: fixed; /* ensure equal column widths */
+    width: auto;
 }
 .calendar-container { position: relative; }
 .schedule-wrapper { overflow-x: auto; margin: 0 30px; }
@@ -20,7 +23,12 @@ table.schedule {
 }
 #left-arrow { left: 0; }
 #right-arrow { right: 0; }
-table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
+table.schedule th, table.schedule td {
+    border: 1px solid #ccc;
+    padding: 4px;
+    vertical-align: top;
+    width: var(--day-col-width);
+}
 .ok { color: green; }
 .late { color: red; }
 .task { margin-bottom: 2px; }
@@ -73,6 +81,7 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
     left: 0;
     background: #fff;
     z-index: 15;
+    width: auto;
 }
 
 /* keep projects table width */
