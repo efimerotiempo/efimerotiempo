@@ -22,6 +22,7 @@ from schedule import (
     find_worker_for_phase,
     compute_schedule_map,
     HOURS_PER_DAY,
+    filter_schedule,
 )
 
 app = Flask(__name__)
@@ -146,7 +147,11 @@ def calendar_view():
                 ]
 
     start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
+    range_start = max(MIN_DATE, start - timedelta(days=60))
+    range_end = min(MAX_DATE, start + timedelta(days=73))
+    days = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
+    view_offset = (start - range_start).days
+    max_range_offset = len(days) - 14
 
     week_spans = []
     current_week = days[0].isocalendar().week
@@ -161,23 +166,26 @@ def calendar_view():
             span += 1
     week_spans.append({'week': current_week, 'span': span})
 
-    today_offset = (date.today() - MIN_DATE).days
+    today_offset = (date.today() - range_start).days
 
     milestone_map = {}
     for m in milestones:
-        milestone_map.setdefault(m['date'], []).append(m['description'])
+        if m['date']:
+            d = date.fromisoformat(m['date'])
+            if range_start <= d <= range_end:
+                milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
 
     return render_template(
         'index.html',
-        schedule=schedule,
+        schedule=filter_schedule(schedule, range_start, range_end),
         days=days,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
+        offset=view_offset,
+        max_offset=max_range_offset,
         today_offset=today_offset,
         today=date.today(),
         project_filter=project_filter,
@@ -441,7 +449,11 @@ def complete():
         filtered_projects = projects
 
     start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
+    range_start = max(MIN_DATE, start - timedelta(days=60))
+    range_end = min(MAX_DATE, start + timedelta(days=73))
+    days = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
+    view_offset = (start - range_start).days
+    max_range_offset = len(days) - 14
     week_spans = []
     current_week = days[0].isocalendar().week
     span = 0
@@ -454,23 +466,26 @@ def complete():
         else:
             span += 1
     week_spans.append({'week': current_week, 'span': span})
-    today_offset = (date.today() - MIN_DATE).days
+    today_offset = (date.today() - range_start).days
 
     milestone_map = {}
     for m in milestones:
-        milestone_map.setdefault(m['date'], []).append(m['description'])
+        if m['date']:
+            d = date.fromisoformat(m['date'])
+            if range_start <= d <= range_end:
+                milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
 
     return render_template(
         'complete.html',
-        schedule=schedule,
+        schedule=filter_schedule(schedule, range_start, range_end),
         days=days,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
+        offset=view_offset,
+        max_offset=max_range_offset,
         today_offset=today_offset,
         project_filter=project_filter,
         client_filter=client_filter,

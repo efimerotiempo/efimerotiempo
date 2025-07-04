@@ -18,6 +18,9 @@ vista al día actual. Dos grandes flechas a cada lado del calendario permiten
 avanzar o retroceder un día y abarcan todo el alto de la tabla. La barra
 deslizante se actualiza en tiempo real al moverla. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
+El calendario mantiene en memoria dos meses por delante y por detrás de la
+vista actual, de modo que al usar las flechas no se recarga la página y la
+posición del scroll se conserva.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,

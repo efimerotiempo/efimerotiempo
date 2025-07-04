@@ -329,3 +329,17 @@ def compute_schedule_map(projects):
     for lst in mapping.values():
         lst.sort()
     return mapping
+
+
+def filter_schedule(schedule, start, end):
+    """Return a new schedule containing only tasks between start and end dates."""
+    result = {}
+    for worker, days in schedule.items():
+        new_days = {}
+        for day, tasks in days.items():
+            d = date.fromisoformat(day)
+            if start <= d <= end:
+                new_days[day] = tasks
+        result[worker] = new_days
+    return result
+

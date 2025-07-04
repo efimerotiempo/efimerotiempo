@@ -109,17 +109,32 @@
   const slider = document.getElementById('day-range');
   const filterForm = document.getElementById('filter-form');
   const offsetInput = filterForm.querySelector('input[name="offset"]');
+  const wrapper = document.querySelector('.schedule-wrapper');
+  let offset = {{ offset }};
+  const maxOffset = {{ max_offset }};
+
+  function colWidth() {
+    const ths = document.querySelectorAll('.schedule th');
+    if (ths.length > 2) {
+      return ths[2].getBoundingClientRect().left - ths[1].getBoundingClientRect().left;
+    }
+    return 100;
+  }
+
+  function scrollPos() {
+    wrapper.scrollLeft = offset * colWidth();
+  }
 
   function update() {
-    offsetInput.value = slider.value;
-    filterForm.submit();
+    offset = parseInt(slider.value);
+    offsetInput.value = offset;
+    scrollPos();
   }
 
   slider.addEventListener('input', update);
 
 
   // allow horizontal scrolling with Shift + wheel over the schedule
-  const wrapper = document.querySelector('.schedule-wrapper');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
   document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
@@ -138,17 +153,27 @@
 
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    offsetInput.value = {{ today_offset }};
-    filterForm.submit();
+    offset = {{ today_offset }};
+    slider.value = offset;
+    offsetInput.value = offset;
+    scrollPos();
   });
 
   document.getElementById('left-arrow').addEventListener('click', () => {
-    slider.stepDown();
-    update();
+    if (offset > 0) {
+      offset--;
+      slider.value = offset;
+      offsetInput.value = offset;
+      scrollPos();
+    }
   });
   document.getElementById('right-arrow').addEventListener('click', () => {
-    slider.stepUp();
-    update();
+    if (offset < maxOffset) {
+      offset++;
+      slider.value = offset;
+      offsetInput.value = offset;
+      scrollPos();
+    }
   });
 
   const tasks = document.querySelectorAll('.task');
@@ -264,5 +289,6 @@
       }
     });
   });
+  window.addEventListener('load', scrollPos);
 </script>
 {% endblock %}
