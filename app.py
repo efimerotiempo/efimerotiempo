@@ -757,7 +757,7 @@ def apply_dates(pid):
             'offset': offset,
         })
         save_extra_conflicts(extras)
-    return redirect(url_for('calendar_view'))
+    return ('', 204)
 
 
 @app.route('/check_phase_dates/<pid>/<phase>', methods=['POST'])
@@ -792,7 +792,7 @@ def apply_phase_dates(pid, phase):
             'offset': offset,
         })
         save_extra_conflicts(extras)
-    return redirect(url_for('calendar_view'))
+    return ('', 204)
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])
