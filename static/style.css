@@ -1,0 +1,26 @@
+.kanban-column {
+    border: 1px solid #ccc;
+    min-height: 300px;
+    background-color: #f8f9fa;
+    margin-bottom: 1rem;
+}
+.kanban-cards {
+    min-height: 200px;
+}
+.kanban-card {
+    margin-bottom: 10px;
+    cursor: grab;
+}
+
+.child-card {
+    margin-left: 1rem;
+    margin-bottom: 5px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.kanban-column[data-state="Todo"] { background-color: #e3f2fd; }
+.kanban-column[data-state="Doing"] { background-color: #fff3cd; }
+.kanban-column[data-state="Blocked"] { background-color: #f8d7da; }
+.kanban-column[data-state="Done"] { background-color: #d4edda; }
+
