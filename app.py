@@ -587,7 +587,13 @@ def update_worker(pid, phase):
 
 
 def _preview_date_change(projects, pid, start, due):
-    old_map = compute_schedule_map(projects)
+    """Return a list of projects affected by a date change."""
+    # compute original end dates
+    before = copy.deepcopy(projects)
+    schedule_projects(before)
+    old_end = {p['id']: p.get('end_date') for p in before}
+
+    # apply tentative change
     proj_copy = copy.deepcopy(projects)
     target = None
     for p in proj_copy:
@@ -598,9 +604,12 @@ def _preview_date_change(projects, pid, start, due):
             if due:
                 p['due_date'] = due
             break
+
+    old_map = compute_schedule_map(projects)
     new_map = compute_schedule_map(proj_copy)
     changed_ids = [pr['id'] for pr in proj_copy
                    if old_map.get(pr['id']) != new_map.get(pr['id'])]
+
     sched, _ = schedule_projects(proj_copy)
     end_dates = {p['id']: p['end_date'] for p in proj_copy}
     start_dates = {}
@@ -616,11 +625,19 @@ def _preview_date_change(projects, pid, start, due):
         if cid == pid:
             continue
         pr = next(p for p in proj_copy if p['id'] == cid)
+        delay = 0
+        if cid in old_end and cid in end_dates:
+            old_d = date.fromisoformat(old_end[cid])
+            new_d = date.fromisoformat(end_dates[cid])
+            if new_d > old_d:
+                delay = (new_d - old_d).days
+        if delay <= 0:
+            continue
         met = True
         if pr.get('due_date') and cid in end_dates:
             met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
         start_offset = (start_dates[cid] - MIN_DATE).days if cid in start_dates else 0
-        details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
+        details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset, 'delay': delay})
     changed_start = (start_dates[pid] - MIN_DATE).days if pid in start_dates else 0
     return details, changed_start
 

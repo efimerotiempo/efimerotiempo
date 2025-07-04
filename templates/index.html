@@ -251,7 +251,7 @@
         }).then(r => r.json()).then(data => {
           let txt = '<p>Afecta a:</p><ul>';
           data.changes.forEach(ch => {
-            txt += `<li>${ch.name} - ${ch.client} `;
+            txt += `<li>${ch.name} - ${ch.client} (+${ch.delay} días) `;
             txt += ch.met ? '<span class="ok">&#10004;</span>' : '<span class="late">&#10060;</span>';
             txt += '</li>';
           });

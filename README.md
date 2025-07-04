@@ -92,8 +92,10 @@ una tarea en el calendario.
 
 Desde ese mismo recuadro puedes modificar las fechas de inicio y de entrega del
 proyecto. Tras introducir las nuevas fechas pulsa **Revisar** para ver en una
-ventana emergente qué otros proyectos se verían alterados. Si aceptas los
-cambios se aplicarán y quedarán registrados como un conflicto adicional.
+ventana emergente qué otros proyectos se verían alterados. La lista muestra el
+nombre y cliente de cada proyecto cuya finalización se aplazaría y cuántos días
+de retraso supondría. Si aceptas los cambios se aplicarán y quedarán
+registrados como un conflicto adicional.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
