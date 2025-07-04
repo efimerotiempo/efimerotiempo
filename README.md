@@ -18,7 +18,7 @@ vista al día actual. Dos grandes flechas a cada lado del calendario permiten
 avanzar o retroceder un día y abarcan todo el alto de la tabla. La barra
 deslizante se actualiza en tiempo real al moverla. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
-El calendario mantiene en memoria dos meses por delante y por detrás de la
+El calendario mantiene en memoria seis meses por delante y por detrás de la
 vista actual, de modo que al usar las flechas no se recarga la página y la
 posición del scroll se conserva.
 
@@ -48,8 +48,8 @@ la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana una sola vez por semana, en negrita y
 color violeta. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
-sobre la tabla. Las columnas del calendario se ajustan automáticamente al
-contenido para que no haya saltos.
+sobre la tabla. Todas las columnas del calendario mantienen el mismo ancho
+para que no haya saltos.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda

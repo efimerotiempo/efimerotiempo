@@ -147,8 +147,9 @@ def calendar_view():
                 ]
 
     start = MIN_DATE + timedelta(days=offset)
-    range_start = max(MIN_DATE, start - timedelta(days=60))
-    range_end = min(MAX_DATE, start + timedelta(days=73))
+    # keep six months of data on either side of the current view
+    range_start = max(MIN_DATE, start - timedelta(days=183))
+    range_end = min(MAX_DATE, start + timedelta(days=196))
     days = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
     view_offset = (start - range_start).days
     max_range_offset = len(days) - 14
@@ -187,6 +188,7 @@ def calendar_view():
         offset=view_offset,
         max_offset=max_range_offset,
         today_offset=today_offset,
+        default_offset=default_offset,
         today=date.today(),
         project_filter=project_filter,
         client_filter=client_filter,
@@ -449,8 +451,9 @@ def complete():
         filtered_projects = projects
 
     start = MIN_DATE + timedelta(days=offset)
-    range_start = max(MIN_DATE, start - timedelta(days=60))
-    range_end = min(MAX_DATE, start + timedelta(days=73))
+    # keep six months of data on either side of the current view
+    range_start = max(MIN_DATE, start - timedelta(days=183))
+    range_end = min(MAX_DATE, start + timedelta(days=196))
     days = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
     view_offset = (start - range_start).days
     max_range_offset = len(days) - 14
@@ -493,6 +496,7 @@ def complete():
         offset=view_offset,
         max_offset=max_range_offset,
         today_offset=today_offset,
+        default_offset=default_offset,
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,

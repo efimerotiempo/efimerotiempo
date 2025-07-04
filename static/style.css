@@ -7,6 +7,7 @@ table.schedule {
     table-layout: fixed; /* ensure equal column widths */
     width: auto;
 }
+.schedule col.day-col { width: var(--day-col-width); }
 .calendar-container { position: relative; }
 .schedule-wrapper { overflow-x: auto; margin: 0 30px; }
 .cal-arrow {

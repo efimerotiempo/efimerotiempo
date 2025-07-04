@@ -89,6 +89,12 @@
           <div id="left-arrow" class="cal-arrow">&lt;</div>
           <div class="schedule-wrapper">
 <table class="schedule">
+    <colgroup>
+        <col class="resource-col">
+        {% for d in days %}
+        <col class="day-col">
+        {% endfor %}
+    </colgroup>
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
     <tr class="weeknums">
@@ -279,10 +285,17 @@
   });
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    offset = {{ today_offset }};
-    slider.value = offset;
-    offsetInput.value = offset;
-    scrollPos();
+    const todayOff = {{ today_offset }};
+    const defOff = {{ default_offset }};
+    if (todayOff >= 0 && todayOff <= maxOffset) {
+      offset = todayOff;
+      slider.value = offset;
+      offsetInput.value = offset;
+      scrollPos();
+    } else {
+      offsetInput.value = defOff;
+      filterForm.submit();
+    }
   });
   document.getElementById('left-arrow').addEventListener('click', () => {
     if (offset > 0) {
