@@ -110,25 +110,8 @@
   const filterForm = document.getElementById('filter-form');
   const offsetInput = filterForm.querySelector('input[name="offset"]');
 
-  function saveScroll() {
-    sessionStorage.setItem('calScrollLeft', wrapper.scrollLeft);
-    sessionStorage.setItem('pageScrollTop', window.scrollY);
-  }
-
-  window.addEventListener('beforeunload', saveScroll);
-
-  const savedLeft = sessionStorage.getItem('calScrollLeft');
-  if (savedLeft !== null) {
-    wrapper.scrollLeft = parseInt(savedLeft);
-  }
-  const savedTop = sessionStorage.getItem('pageScrollTop');
-  if (savedTop !== null) {
-    window.scrollTo(0, parseInt(savedTop));
-  }
-
   function update() {
     offsetInput.value = slider.value;
-    saveScroll();
     filterForm.submit();
   }
 
@@ -156,7 +139,6 @@
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
     offsetInput.value = {{ today_offset }};
-    saveScroll();
     filterForm.submit();
   });
 
