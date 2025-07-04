@@ -67,6 +67,13 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 
 /* make first column fit contents */
 .resource-col { white-space: nowrap; width: 1%; }
+.schedule th.resource-col,
+.schedule td.resource-col {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 15;
+}
 
 /* keep projects table width */
 .complete-projects table { width: 100%; }

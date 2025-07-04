@@ -474,6 +474,12 @@ def complete():
             d = date.fromisoformat(m['date'])
             if range_start <= d <= range_end:
                 milestone_map.setdefault(m['date'], []).append(m['description'])
+    for p in projects:
+        if p.get("due_date") and p.get("end_date"):
+            p["met_deadline"] = date.fromisoformat(p["end_date"]) <= date.fromisoformat(p["due_date"])
+        else:
+            p["met_deadline"] = True
+
 
     project_map = {p['id']: p for p in projects}
 
