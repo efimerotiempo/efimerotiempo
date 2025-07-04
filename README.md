@@ -14,9 +14,9 @@ Visita `http://localhost:5000` en tu navegador para ir directamente a la vista
 **Completo**, que combina el calendario, los proyectos y el formulario de alta.
 Desde el calendario puedes utilizar la barra deslizante situada bajo los filtros para
 cambiar la ventana de 14 días entre 2024 y 2026. El botón **HOY** devuelve la
-vista al día actual. Junto a él hay dos flechas **<** y **>** para mover la
-vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
-ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
+vista al día actual. Dos grandes flechas a cada lado del calendario permiten
+avanzar o retroceder un día y abarcan todo el alto de la tabla. La barra
+deslizante se actualiza en tiempo real al moverla. Puedes filtrar por nombre de
 proyecto y cliente desde los dos cuadros de búsqueda.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
@@ -53,7 +53,8 @@ persona asignada desde un desplegable. Cualquier cambio se guarda
 automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
 eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
 lista de conflictos aparece un aviso indicando la eliminación y los cambios que
-ha producido.
+ha producido. Una columna adicional muestra con un ✔ verde o una ❌ roja si el
+proyecto llega a su fecha límite.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
 de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada

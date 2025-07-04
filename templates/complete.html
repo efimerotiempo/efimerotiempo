@@ -81,13 +81,13 @@
                 <button type="submit">Filtrar</button>
             </form>
             <button id="today-btn">HOY</button>
-            <button id="left-btn">&lt;</button>
-            <button id="right-btn">&gt;</button>
         </div>
         <div class="slider">
             <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
         </div>
-        <div class="schedule-wrapper">
+        <div class="calendar-container">
+          <div id="left-arrow" class="cal-arrow">&lt;</div>
+          <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
@@ -140,6 +140,8 @@
     {% endfor %}
     </tbody>
 </table>
+          </div>
+          <div id="right-arrow" class="cal-arrow">&gt;</div>
         </div>
         <div id="info-popup" class="info-popup"></div>
     </div>
@@ -158,6 +160,7 @@
                 <th>Cliente</th>
                 <th>Fecha inicio</th>
                 <th>Fecha límite</th>
+                <th>Estado</th>
                 <th>Prioridad</th>
                 {% for ph in phases %}
                     {% if ph == 'pedidos' %}
@@ -177,6 +180,13 @@
                 <td>{{ p.client }}</td>
                 <td>{{ p.start_date }}</td>
                 <td>{{ p.due_date }}</td>
+                <td>
+                    {% if p.met_deadline %}
+                        <span class="ok">&#10004;</span>
+                    {% else %}
+                        <span class="late">&#10060;</span>
+                    {% endif %}
+                </td>
                 <td>{{ p.priority }}</td>
                 {% for ph in phases %}
                     <td>
@@ -257,11 +267,11 @@
     offsetInput.value = {{ today_offset }};
     filterForm.submit();
   });
-  document.getElementById('left-btn').addEventListener('click', () => {
+  document.getElementById('left-arrow').addEventListener('click', () => {
     slider.stepDown();
     update();
   });
-  document.getElementById('right-btn').addEventListener('click', () => {
+  document.getElementById('right-arrow').addEventListener('click', () => {
     slider.stepUp();
     update();
   });

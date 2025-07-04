@@ -4,7 +4,22 @@ table.schedule {
     width: auto; /* fit content so columns match cells */
     table-layout: auto;
 }
-.schedule-wrapper { overflow-x: auto; }
+.calendar-container { position: relative; }
+.schedule-wrapper { overflow-x: auto; margin: 0 30px; }
+.cal-arrow {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 30px;
+    background: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+}
+#left-arrow { left: 0; }
+#right-arrow { right: 0; }
 table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
 .ok { color: green; }
 .late { color: red; }

@@ -111,6 +111,11 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    for p in projects:
+        if p.get('due_date') and p.get('end_date'):
+            p['met_deadline'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+        else:
+            p['met_deadline'] = True
     milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
@@ -186,6 +191,17 @@ def calendar_view():
 @app.route('/projects')
 def project_list():
     projects = get_projects()
+    # compute if each project meets its deadline
+    temp = copy.deepcopy(projects)
+    schedule_projects(temp)
+    end_map = {p['id']: p.get('end_date') for p in temp}
+    for p in projects:
+        end = end_map.get(p['id'])
+        if end and p.get('due_date'):
+            p['met_deadline'] = date.fromisoformat(end) <= date.fromisoformat(p['due_date'])
+        else:
+            p['met_deadline'] = True
+
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
     if project_filter or client_filter:

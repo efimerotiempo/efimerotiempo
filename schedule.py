@@ -197,7 +197,7 @@ def schedule_projects(projects):
                 )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
-            msg = 'No se cumple la fecha de entrega'
+            msg = f"No se cumple la fecha de entrega (cliente {project['client']})"
             conflicts.append({
                 'id': len(conflicts) + 1,
                 'project': project['name'],
