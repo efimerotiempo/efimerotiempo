@@ -179,7 +179,6 @@ def calendar_view():
 
     project_map = {p['id']: p for p in projects}
     phase_ranges = compute_phase_ranges(projects)
-    phase_ranges = compute_phase_ranges(projects)
 
     return render_template(
         'index.html',
@@ -489,6 +488,7 @@ def complete():
 
 
     project_map = {p['id']: p for p in projects}
+    phase_ranges = compute_phase_ranges(projects)
 
     return render_template(
         'complete.html',
