@@ -16,5 +16,19 @@
     </nav>
     <hr/>
     {% block content %}{% endblock %}
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const saved = sessionStorage.getItem('scrollY');
+        if (saved) {
+          window.scrollTo(0, parseInt(saved));
+          sessionStorage.removeItem('scrollY');
+        }
+        document.querySelectorAll('form').forEach(f => {
+          f.addEventListener('submit', () => {
+            sessionStorage.setItem('scrollY', window.scrollY);
+          });
+        });
+      });
+    </script>
 </body>
 </html>
