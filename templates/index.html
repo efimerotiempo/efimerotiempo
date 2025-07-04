@@ -31,7 +31,7 @@
         <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
         {% endfor %}
     </tr>
-    <tr>
+    <tr class="days-row">
         <th class="resource-col">Recurso</th>
         {% for d in days %}
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>

@@ -130,19 +130,13 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 .complete-projects.collapsed table, .complete-projects.collapsed .controls {display:none;}
 
-/* keep calendar header visible when scrolling */
-.schedule thead th,
-.schedule thead td {
+/* keep the day header visible when scrolling */
+.schedule thead tr.days-row th {
     position: sticky;
+    top: 0;
     background: #fff;
     z-index: 10;
 }
-.schedule thead tr:nth-child(1) th,
-.schedule thead tr:nth-child(1) td { top: 0; }
-.schedule thead tr:nth-child(2) th,
-.schedule thead tr:nth-child(2) td { top: 30px; }
-.schedule thead tr:nth-child(3) th,
-.schedule thead tr:nth-child(3) td { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
