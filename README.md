@@ -76,6 +76,11 @@ El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
 lista de proyectos. El planificador automático lo ignora al repartir
 fases por defecto.
 
+Cada trabajador termina primero la fase que tenga asignada antes de
+empezar otra de montaje para el mismo recurso. Así se evita intercalar
+proyectos a mitad de jornada salvo que un trabajo de mayor prioridad
+deba adelantarse.
+
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha
 de acopio indicada y no se reparte por horas. Irene puede acumular tantos

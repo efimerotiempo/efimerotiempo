@@ -124,6 +124,7 @@ def schedule_projects(projects):
     # sort by priority and start date
     projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
     worker_schedule = {w: {} for w in WORKERS}
+    worker_next = {w: date.min for w in WORKERS}
     vacations = load_vacations()
     for vac in vacations:
         worker = vac['worker']
@@ -166,10 +167,11 @@ def schedule_projects(projects):
                     'key': f"{project['name']}|{msg}",
                 })
                 continue
+            start_at = max(current, worker_next.get(worker, current))
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
                 current, end_date = assign_pedidos(
                     worker_schedule[worker],
-                    current,
+                    start_at,
                     date.fromisoformat(val),
                     project['name'],
                     project['client'],
@@ -183,7 +185,7 @@ def schedule_projects(projects):
                 hours = int(val)
                 current, end_date = assign_phase(
                     worker_schedule[worker],
-                    current,
+                    start_at,
                     phase,
                     project['name'],
                     project['client'],
@@ -195,6 +197,7 @@ def schedule_projects(projects):
                     project.get('priority'),
                     project['id'],
                 )
+            worker_next[worker] = current
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = f"No se cumple la fecha de entrega (cliente {project['client']})"
