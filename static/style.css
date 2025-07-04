@@ -99,14 +99,18 @@ tr.collapsed td:not(:first-child) { display: none; }
 .complete-projects.collapsed table, .complete-projects.collapsed .controls {display:none;}
 
 /* keep calendar header visible when scrolling */
-.schedule thead th {
+.schedule thead th,
+.schedule thead td {
     position: sticky;
     background: #fff;
     z-index: 10;
 }
-.schedule thead tr:nth-child(1) th { top: 0; }
-.schedule thead tr:nth-child(2) th { top: 30px; }
-.schedule thead tr:nth-child(3) th { top: 60px; }
+.schedule thead tr:nth-child(1) th,
+.schedule thead tr:nth-child(1) td { top: 0; }
+.schedule thead tr:nth-child(2) th,
+.schedule thead tr:nth-child(2) td { top: 30px; }
+.schedule thead tr:nth-child(3) th,
+.schedule thead tr:nth-child(3) td { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
