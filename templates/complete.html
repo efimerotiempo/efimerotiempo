@@ -255,9 +255,14 @@
   let offset = {{ offset }};
   const maxOffset = {{ max_offset }};
 
+  const rows = document.querySelectorAll('tbody tr[data-worker]');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
+  if (collapsedSet.size >= rows.length) {
+    collapsedSet.clear();
+    localStorage.removeItem('collapsedWorkers');
+  }
 
-  document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
+  rows.forEach(tr => {
     const worker = tr.dataset.worker;
     const btn = tr.querySelector('.worker-toggle');
     if (collapsedSet.has(worker)) {
