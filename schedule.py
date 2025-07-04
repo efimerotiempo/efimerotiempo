@@ -343,3 +343,27 @@ def filter_schedule(schedule, start, end):
         result[worker] = new_days
     return result
 
+
+def compute_phase_ranges(projects):
+    """Return phase start and end dates for each project."""
+    temp = copy.deepcopy(projects)
+    sched, _ = schedule_projects(temp)
+    ranges = {p['id']: {} for p in temp}
+    for worker, days in sched.items():
+        for day, tasks in days.items():
+            d = date.fromisoformat(day)
+            for t in tasks:
+                pid = t['pid']
+                phase = t['phase']
+                if phase == 'vacaciones':
+                    continue
+                r = ranges[pid].setdefault(phase, {'start': d, 'end': d})
+                if d < r['start']:
+                    r['start'] = d
+                if d > r['end']:
+                    r['end'] = d
+    # convert dates to iso strings
+    for pid, phases in ranges.items():
+        for ph, rng in phases.items():
+            phases[ph] = {'start': rng['start'].isoformat(), 'end': rng['end'].isoformat()}
+    return ranges

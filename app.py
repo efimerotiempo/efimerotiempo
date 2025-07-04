@@ -23,6 +23,7 @@ from schedule import (
     compute_schedule_map,
     HOURS_PER_DAY,
     filter_schedule,
+    compute_phase_ranges,
 )
 
 app = Flask(__name__)
@@ -177,6 +178,8 @@ def calendar_view():
                 milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
+    phase_ranges = compute_phase_ranges(projects)
+    phase_ranges = compute_phase_ranges(projects)
 
     return render_template(
         'index.html',
@@ -194,6 +197,7 @@ def calendar_view():
         client_filter=client_filter,
         milestones=milestone_map,
         project_data=project_map,
+        phase_data=phase_ranges,
         phases=PHASE_ORDER,
     )
 
@@ -506,6 +510,7 @@ def complete():
         all_workers=list(WORKERS.keys()),
         milestones=milestone_map,
         project_data=project_map,
+        phase_data=phase_ranges,
     )
 
 
@@ -642,6 +647,71 @@ def _preview_date_change(projects, pid, start, due):
     return details, changed_start
 
 
+def _adjust_project_for_phase(projects, pid, phase, start, end):
+    """Return copy of projects with given phase shifted to new start/end dates."""
+    proj_copy = copy.deepcopy(projects)
+    target = next(p for p in proj_copy if p['id'] == pid)
+    ranges = compute_phase_ranges(projects)
+    rng = ranges.get(pid, {}).get(phase)
+    if not rng:
+        return proj_copy
+    project_start = date.fromisoformat(target['start_date'])
+    original_start = date.fromisoformat(rng['start'])
+    if start:
+        delta = start - original_start
+        target['start_date'] = (project_start + delta).isoformat()
+    if end:
+        due = date.fromisoformat(target['due_date'])
+        original_end = date.fromisoformat(rng['end'])
+        delta = end - original_end
+        target['due_date'] = (due + delta).isoformat()
+    return proj_copy
+
+
+def _preview_phase_change(projects, pid, phase, start, end):
+    proj_copy = _adjust_project_for_phase(projects, pid, phase, start, end)
+    old_map = compute_schedule_map(projects)
+    new_map = compute_schedule_map(proj_copy)
+    changed_ids = [pr['id'] for pr in proj_copy
+                   if old_map.get(pr['id']) != new_map.get(pr['id'])]
+
+    before = copy.deepcopy(projects)
+    schedule_projects(before)
+    old_end = {p['id']: p.get('end_date') for p in before}
+
+    sched, _ = schedule_projects(proj_copy)
+    end_dates = {p['id']: p['end_date'] for p in proj_copy}
+    start_dates = {}
+    for worker, days in sched.items():
+        for day, tasks in days.items():
+            d = date.fromisoformat(day)
+            for t in tasks:
+                pid2 = t['pid']
+                if pid2 not in start_dates or d < start_dates[pid2]:
+                    start_dates[pid2] = d
+
+    details = []
+    for cid in changed_ids:
+        if cid == pid:
+            continue
+        pr = next(p for p in proj_copy if p['id'] == cid)
+        delay = 0
+        if cid in old_end and cid in end_dates:
+            old_d = date.fromisoformat(old_end[cid])
+            new_d = date.fromisoformat(end_dates[cid])
+            if new_d > old_d:
+                delay = (new_d - old_d).days
+        if delay <= 0:
+            continue
+        met = True
+        if pr.get('due_date') and cid in end_dates:
+            met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+        start_offset = (start_dates[cid] - MIN_DATE).days if cid in start_dates else 0
+        details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset, 'delay': delay})
+    changed_start = (start_dates[pid] - MIN_DATE).days if pid in start_dates else 0
+    return details, changed_start, proj_copy
+
+
 @app.route('/check_dates/<pid>', methods=['POST'])
 def check_dates(pid):
     start = parse_input_date(request.form.get('start_date'))
@@ -683,6 +753,41 @@ def apply_dates(pid):
             'message': msg,
             'changes': details,
             'key': f'date-{pid}-{len(extras)}',
+            'pid': changed_proj['id'],
+            'offset': offset,
+        })
+        save_extra_conflicts(extras)
+    return redirect(url_for('calendar_view'))
+
+
+@app.route('/check_phase_dates/<pid>/<phase>', methods=['POST'])
+def check_phase_dates(pid, phase):
+    start = parse_input_date(request.form.get('start'))
+    end = parse_input_date(request.form.get('end'))
+    projects = get_projects()
+    details, offset, _ = _preview_phase_change(projects, pid, phase, start, end)
+    return {'changes': details, 'offset': offset}
+
+
+@app.route('/apply_phase_dates/<pid>/<phase>', methods=['POST'])
+def apply_phase_dates(pid, phase):
+    start = parse_input_date(request.form.get('start'))
+    end = parse_input_date(request.form.get('end'))
+    projects = get_projects()
+    details, offset, proj_copy = _preview_phase_change(projects, pid, phase, start, end)
+    # update actual projects using _adjust_project_for_phase
+    projects = _adjust_project_for_phase(projects, pid, phase, start, end)
+    save_projects(projects)
+    changed_proj = next(p for p in projects if p['id'] == pid)
+    if details:
+        extras = load_extra_conflicts()
+        msg = f"Fechas de {changed_proj['name']} - fase {phase} modificadas"
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': changed_proj['name'],
+            'message': msg,
+            'changes': details,
+            'key': f'phase-{pid}-{phase}-{len(extras)}',
             'pid': changed_proj['id'],
             'offset': offset,
         })

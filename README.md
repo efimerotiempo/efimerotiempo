@@ -97,6 +97,11 @@ nombre y cliente de cada proyecto cuya finalización se aplazaría y cuántos d�
 de retraso supondría. Si aceptas los cambios se aplicarán y quedarán
 registrados como un conflicto adicional.
 
+Si pulsas sobre una fase concreta se muestran también su fecha de inicio y de
+finalización. Puedes modificarlas y pulsar **Revisar fase** para comprobar si el
+cambio retrasa otros proyectos. En la ventana emergente se indica el proyecto,
+su cliente y los días de retraso antes de confirmar.
+
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
 cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista

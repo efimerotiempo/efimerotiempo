@@ -117,6 +117,7 @@
 </ul>
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
+  const PHASE_DATA = {{ phase_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const slider = document.getElementById('day-range');
@@ -218,6 +219,7 @@
       });
       const info = PROJECT_DATA[t.dataset.pid];
       currentPid = t.dataset.pid;
+      const phRange = PHASE_DATA[currentPid][t.dataset.phase];
       let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
       html += `Inicio: <input type="date" id="start-input" value="${info.start_date}"><br>`;
       html += `Límite: <input type="date" id="due-input" value="${info.due_date}"><br>`;
@@ -234,6 +236,11 @@
       });
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
+      }
+      if (phRange) {
+        html += `Inicio fase: <input type="date" id="phase-start" value="${phRange.start}"><br>`;
+        html += `Fin fase: <input type="date" id="phase-end" value="${phRange.end}"><br>`;
+        html += `<button id="review-phase-btn">Revisar fase</button> `;
       }
       html += `<button id="review-btn">Revisar</button>`;
       popup.innerHTML = html;
@@ -270,6 +277,37 @@
           };
         });
       });
+      if (phRange) {
+        document.getElementById('review-phase-btn').addEventListener('click', () => {
+          const ps = document.getElementById('phase-start').value;
+          const pe = document.getElementById('phase-end').value;
+          fetch(`{{ url_for('check_phase_dates', pid='PID', phase='PH') }}`.replace('PID', currentPid).replace('PH', t.dataset.phase), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({start: ps, end: pe})
+          }).then(r => r.json()).then(data => {
+            let txt = '<p>Afecta a:</p><ul>';
+            data.changes.forEach(ch => {
+              txt += `<li>${ch.name} - ${ch.client} (+${ch.delay} días) `;
+              txt += ch.met ? '<span class="ok">&#10004;</span>' : '<span class="late">&#10060;</span>';
+              txt += '</li>';
+            });
+            txt += '</ul>';
+            modalInfo.innerHTML = txt;
+            modal.style.display = 'flex';
+            document.getElementById('accept-change').onclick = () => {
+              fetch(`{{ url_for('apply_phase_dates', pid='PID', phase='PH') }}`.replace('PID', currentPid).replace('PH', t.dataset.phase), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({start: ps, end: pe})
+              }).then(() => { window.location.reload(); });
+            };
+            document.getElementById('cancel-change').onclick = () => {
+              modal.style.display = 'none';
+            };
+          });
+        });
+      }
     });
   });
   document.addEventListener('click', () => {
