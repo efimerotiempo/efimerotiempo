@@ -12,6 +12,13 @@
     cursor: grab;
 }
 
+.child-card {
+    margin-left: 1rem;
+    margin-bottom: 5px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
 .kanban-column[data-state="Todo"] { background-color: #e3f2fd; }
 .kanban-column[data-state="Doing"] { background-color: #fff3cd; }
 .kanban-column[data-state="Blocked"] { background-color: #f8d7da; }

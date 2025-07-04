@@ -102,9 +102,15 @@ def index():
     cols = query_db('SELECT id, name, color FROM columns ORDER BY position')
     columns = []
     for col in cols:
-        cards = query_db('''SELECT id, title, description, assignee, due_date, parent_id
-                            FROM cards WHERE column_id=? ORDER BY position''', (col['id'],))
-        columns.append({'id': col['id'], 'name': col['name'], 'color': col['color'], 'cards': cards})
+        cards = query_db('''SELECT id, title, description, assignee, due_date
+                            FROM cards WHERE column_id=? AND parent_id IS NULL
+                            ORDER BY position''', (col['id'],))
+        for card in cards:
+            children = query_db('SELECT id, title FROM cards WHERE parent_id=? ORDER BY position',
+                               (card['id'],))
+            card['children'] = children
+        columns.append({'id': col['id'], 'name': col['name'],
+                        'color': col['color'], 'cards': cards})
     all_cards = query_db('SELECT id, title FROM cards')
     return render_template('index.html', columns=columns, cards=all_cards)
 

@@ -19,10 +19,17 @@
                     <div class="card kanban-card" draggable="true" ondragstart="dragstart_handler(event)" data-card-id="{{ card.id }}" onclick="openEditModal({{ card.id }})">
                         <div class="card-body">
                             <h5 class="card-title">{{ card.title }}</h5>
-                            <p class="card-text">{{ card.description }}</p>
                             {% if card.assignee %}<small class="text-muted">{{ card.assignee }}</small><br>{% endif %}
                             {% if card.due_date %}<small class="text-muted">Vence: {{ card.due_date }}</small><br>{% endif %}
-                            {% if card.parent_id %}<small class="text-muted">Padre: {{ card.parent_id }}</small>{% endif %}
+                            <div class="child-cards">
+                                {% for ch in card.children %}
+                                <div class="card child-card" data-card-id="{{ ch.id }}" onclick="event.stopPropagation(); openEditModal({{ ch.id }})">
+                                    <div class="card-body py-1">
+                                        <small>{{ ch.title }}</small>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             <div class="mt-2"><button type="button" class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openNewModal({{ card.id }})">+ Hija</button></div>
                         </div>
                     </div>
