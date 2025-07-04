@@ -78,6 +78,13 @@
   <div id="right-arrow" class="cal-arrow">&gt;</div>
 </div>
 <div id="info-popup" class="info-popup"></div>
+<div id="review-modal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <div id="review-info"></div>
+    <button id="accept-change">Aceptar</button>
+    <button id="cancel-change">Cancelar</button>
+  </div>
+</div>
 
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -191,6 +198,11 @@
 
   const tasks = document.querySelectorAll('.task');
   const popup = document.getElementById('info-popup');
+  const modal = document.getElementById('review-modal');
+  const modalInfo = document.getElementById('review-info');
+  let currentPid = null;
+  let currentStart = null;
+  let currentDue = null;
   tasks.forEach(t => {
     t.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -205,9 +217,10 @@
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
+      currentPid = t.dataset.pid;
       let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
-      html += `Inicio: ${info.start_date}<br>`;
-      html += `Límite: ${info.due_date}<br>`;
+      html += `Inicio: <input type="date" id="start-input" value="${info.start_date}"><br>`;
+      html += `Límite: <input type="date" id="due-input" value="${info.due_date}"><br>`;
       html += `Prioridad: ${info.priority}<br>`;
       PHASES.forEach(ph => {
         const val = info.phases[ph];
@@ -222,11 +235,41 @@
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
+      html += `<button id="review-btn">Revisar</button>`;
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
+      document.getElementById('review-btn').addEventListener('click', () => {
+        currentStart = document.getElementById('start-input').value;
+        currentDue = document.getElementById('due-input').value;
+        fetch(`{{ url_for('check_dates', pid='PID') }}`.replace('PID', currentPid), {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({start_date: currentStart, due_date: currentDue})
+        }).then(r => r.json()).then(data => {
+          let txt = '<p>Afecta a:</p><ul>';
+          data.changes.forEach(ch => {
+            txt += `<li>${ch.name} - ${ch.client} `;
+            txt += ch.met ? '<span class="ok">&#10004;</span>' : '<span class="late">&#10060;</span>';
+            txt += '</li>';
+          });
+          txt += '</ul>';
+          modalInfo.innerHTML = txt;
+          modal.style.display = 'flex';
+          document.getElementById('accept-change').onclick = () => {
+            fetch(`{{ url_for('apply_dates', pid='PID') }}`.replace('PID', currentPid), {
+              method: 'POST',
+              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: new URLSearchParams({start_date: currentStart, due_date: currentDue})
+            }).then(() => { window.location.reload(); });
+          };
+          document.getElementById('cancel-change').onclick = () => {
+            modal.style.display = 'none';
+          };
+        });
+      });
     });
   });
   document.addEventListener('click', () => {

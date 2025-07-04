@@ -586,6 +586,93 @@ def update_worker(pid, phase):
     return redirect(next_url)
 
 
+def _preview_date_change(projects, pid, start, due):
+    old_map = compute_schedule_map(projects)
+    proj_copy = copy.deepcopy(projects)
+    target = None
+    for p in proj_copy:
+        if p['id'] == pid:
+            target = p
+            if start:
+                p['start_date'] = start
+            if due:
+                p['due_date'] = due
+            break
+    new_map = compute_schedule_map(proj_copy)
+    changed_ids = [pr['id'] for pr in proj_copy
+                   if old_map.get(pr['id']) != new_map.get(pr['id'])]
+    sched, _ = schedule_projects(proj_copy)
+    end_dates = {p['id']: p['end_date'] for p in proj_copy}
+    start_dates = {}
+    for worker, days in sched.items():
+        for day, tasks in days.items():
+            d = date.fromisoformat(day)
+            for t in tasks:
+                pid2 = t['pid']
+                if pid2 not in start_dates or d < start_dates[pid2]:
+                    start_dates[pid2] = d
+    details = []
+    for cid in changed_ids:
+        if cid == pid:
+            continue
+        pr = next(p for p in proj_copy if p['id'] == cid)
+        met = True
+        if pr.get('due_date') and cid in end_dates:
+            met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+        start_offset = (start_dates[cid] - MIN_DATE).days if cid in start_dates else 0
+        details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
+    changed_start = (start_dates[pid] - MIN_DATE).days if pid in start_dates else 0
+    return details, changed_start
+
+
+@app.route('/check_dates/<pid>', methods=['POST'])
+def check_dates(pid):
+    start = parse_input_date(request.form.get('start_date'))
+    due = parse_input_date(request.form.get('due_date'))
+    projects = get_projects()
+    details, offset = _preview_date_change(projects, pid,
+                                           start.isoformat() if start else None,
+                                           due.isoformat() if due else None)
+    return {
+        'changes': details,
+        'offset': offset
+    }
+
+
+@app.route('/apply_dates/<pid>', methods=['POST'])
+def apply_dates(pid):
+    start = parse_input_date(request.form.get('start_date'))
+    due = parse_input_date(request.form.get('due_date'))
+    projects = get_projects()
+    details, offset = _preview_date_change(projects, pid,
+                                           start.isoformat() if start else None,
+                                           due.isoformat() if due else None)
+    changed_proj = None
+    for p in projects:
+        if p['id'] == pid:
+            changed_proj = p
+            if start:
+                p['start_date'] = start.isoformat()
+            if due:
+                p['due_date'] = due.isoformat()
+            break
+    save_projects(projects)
+    if changed_proj and details:
+        extras = load_extra_conflicts()
+        msg = f"Fechas de {changed_proj['name']} modificadas"
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': changed_proj['name'],
+            'message': msg,
+            'changes': details,
+            'key': f'date-{pid}-{len(extras)}',
+            'pid': changed_proj['id'],
+            'offset': offset,
+        })
+        save_extra_conflicts(extras)
+    return redirect(url_for('calendar_view'))
+
+
 @app.route('/delete_project/<pid>', methods=['POST'])
 def delete_project(pid):
     projects = get_projects()

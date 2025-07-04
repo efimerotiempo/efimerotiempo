@@ -90,6 +90,11 @@ Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar
 una tarea en el calendario.
 
+Desde ese mismo recuadro puedes modificar las fechas de inicio y de entrega del
+proyecto. Tras introducir las nuevas fechas pulsa **Revisar** para ver en una
+ventana emergente qué otros proyectos se verían alterados. Si aceptas los
+cambios se aplicarán y quedarán registrados como un conflicto adicional.
+
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
 cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista

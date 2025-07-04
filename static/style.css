@@ -150,3 +150,21 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+.modal-content {
+    background: #fff;
+    border: 1px solid #000;
+    padding: 10px;
+}
