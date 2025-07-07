@@ -208,6 +208,13 @@ def schedule_projects(projects):
 
 
 def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
+    # When scheduling 'montar', enqueue the new work after any existing
+    # mounting tasks for this worker so that projects are not interleaved.
+    if phase == 'montar':
+        last = _last_phase_day(schedule, 'montar')
+        if last and start_day <= last:
+            start_day = next_workday(last)
+
     day = start_day
     while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
         day = next_workday(day)
@@ -280,6 +287,18 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
         last_day = day
         day += timedelta(days=1)
     return next_workday(last_day), last_day
+
+
+def _last_phase_day(schedule, phase):
+    """Return the last day a specific phase was scheduled for a worker."""
+    last = None
+    for d, tasks in schedule.items():
+        for t in tasks:
+            if t['phase'] == phase:
+                dt = date.fromisoformat(d)
+                if not last or dt > last:
+                    last = dt
+    return last
 
 
 def _worker_load(schedule, worker):
