@@ -111,4 +111,9 @@ límite o con una ❌ roja en caso contrario.
 Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo en
-el calendario y no admiten asignaciones de tareas.
+el calendario y no admiten asignaciones de tareas. Si un trabajador tenía
+proyectos planificados en esas fechas, la planificación se recalcula y esas
+fases se reasignan automáticamente al trabajador disponible con menor carga. En
+la lista de conflictos se añade una nota indicando los días de vacaciones, a qué
+persona se han movido las tareas y si el proyecto sigue cumpliendo su fecha
+límite tras el cambio.

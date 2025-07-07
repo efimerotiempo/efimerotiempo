@@ -120,17 +120,55 @@ def next_workday(d):
     return d
 
 
-def schedule_projects(projects):
-    # sort by priority and start date
-    projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
-    worker_schedule = {w: {} for w in WORKERS}
+def _build_vacation_map():
+    """Return a mapping of worker to set of vacation days."""
+    vac_map = {}
     vacations = load_vacations()
     for vac in vacations:
         worker = vac['worker']
         day = date.fromisoformat(vac['start'])
         end = date.fromisoformat(vac['end'])
         while day <= end:
-            if day.weekday() not in WEEKEND and worker in worker_schedule:
+            if day.weekday() not in WEEKEND:
+                vac_map.setdefault(worker, set()).add(day)
+            day += timedelta(days=1)
+    return vac_map
+
+
+def _worker_on_vacation(worker, start_day, days_needed, vac_map):
+    """Return True if worker has vacation within ``days_needed`` workdays after ``start_day``."""
+    d = start_day
+    remaining = days_needed
+    while remaining > 0:
+        if d.weekday() not in WEEKEND:
+            if d in vac_map.get(worker, set()):
+                return True
+            remaining -= 1
+        d += timedelta(days=1)
+    return False
+
+
+def _vacation_days_in_range(worker, start_day, days_needed, vac_map):
+    days = []
+    d = start_day
+    remaining = days_needed
+    while remaining > 0:
+        if d.weekday() not in WEEKEND:
+            if d in vac_map.get(worker, set()):
+                days.append(d)
+            remaining -= 1
+        d += timedelta(days=1)
+    return days
+
+
+def schedule_projects(projects):
+    # sort by priority and start date
+    projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
+    worker_schedule = {w: {} for w in WORKERS}
+    vac_map = _build_vacation_map()
+    for worker, days in vac_map.items():
+        for day in days:
+            if worker in worker_schedule:
                 ds = worker_schedule[worker].setdefault(day.isoformat(), [])
                 ds.append({
                     'project': 'Vacaciones',
@@ -142,10 +180,10 @@ def schedule_projects(projects):
                     'due_date': '',
                     'start_date': '',
                     'priority': '',
-                    'pid': f"vac-{vac.get('id', '')}"
+                    'pid': f"vac-{worker}-{day.isoformat()}"
                 })
-            day += timedelta(days=1)
     conflicts = []
+    reassignments = []
     for project in projects:
         current = date.fromisoformat(project['start_date'])
         end_date = current
@@ -154,9 +192,44 @@ def schedule_projects(projects):
             val = project['phases'].get(phase)
             if not val:
                 continue
-            worker = assigned.get(phase) or find_worker_for_phase(
-                phase, worker_schedule, project.get('priority')
-            )
+            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                days_needed = sum(
+                    1
+                    for i in range((date.fromisoformat(val) - current).days + 1)
+                    if (current + timedelta(days=i)).weekday() not in WEEKEND
+                )
+            else:
+                hours = int(val)
+                days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+
+            worker = assigned.get(phase)
+            if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
+                worker = None
+
+            if not worker:
+                worker = find_worker_for_phase(
+                    phase,
+                    worker_schedule,
+                    project.get('priority'),
+                    start_day=current,
+                    days=days_needed,
+                    vacations=vac_map,
+                )
+                if worker and assigned.get(phase) and worker != assigned.get(phase):
+                    vac_days = _vacation_days_in_range(
+                        assigned.get(phase), current, days_needed, vac_map
+                    )
+                    reassignments.append({
+                        'project': project['name'],
+                        'client': project['client'],
+                        'old': assigned.get(phase),
+                        'new': worker,
+                        'phase': phase,
+                        'dates': [d.isoformat() for d in vac_days],
+                        'pid': project['id'],
+                    })
+                    assigned[phase] = worker
+
             if not worker or phase not in WORKERS.get(worker, []):
                 msg = f'Sin recurso para fase {phase}'
                 conflicts.append({
@@ -204,6 +277,23 @@ def schedule_projects(projects):
                 'message': msg,
                 'key': f"{project['name']}|{msg}",
             })
+    for r in reassignments:
+        proj = next((p for p in projects if p['id'] == r['pid']), None)
+        if not proj:
+            continue
+        met = date.fromisoformat(proj['end_date']) <= date.fromisoformat(proj['due_date'])
+        days = ', '.join(r['dates'])
+        msg = (
+            f"Vacaciones de {r['old']} ({days}); fase {r['phase']} reasignada a {r['new']}. "
+            f"{'Cumple' if met else 'No cumple'} la fecha límite"
+        )
+        conflicts.append({
+            'id': len(conflicts) + 1,
+            'project': r['project'],
+            'message': msg,
+            'key': f"vac-{r['pid']}-{r['phase']}-{days}",
+            'pid': r['pid'],
+        })
     return worker_schedule, conflicts
 
 
@@ -320,7 +410,16 @@ def _worker_load(schedule, worker):
     )
 
 
-def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False):
+def find_worker_for_phase(
+    phase,
+    schedule,
+    priority=None,
+    *,
+    include_unai=False,
+    start_day=None,
+    days=0,
+    vacations=None,
+):
     """Choose the least busy worker that can perform the phase.
 
     By default Unai is excluded from automatic assignments so that he can
@@ -331,6 +430,8 @@ def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False)
         if not include_unai and worker == 'Unai':
             continue
         if phase in skills:
+            if vacations and start_day and _worker_on_vacation(worker, start_day, days, vacations):
+                continue
             load = _worker_load(schedule, worker)
             candidates.append((skills.index(phase), load, worker))
     if not candidates:
