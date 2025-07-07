@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Planificador</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav>
+        <a href="{{ url_for('complete') }}">Completo</a> |
+        <a href="{{ url_for('calendar_view') }}">Calendario</a> |
+        <a href="{{ url_for('project_list') }}">Proyectos</a> |
+        <a href="{{ url_for('milestone_list') }}">Hitos</a> |
+        <a href="{{ url_for('vacation_list') }}">Vacaciones</a> |
+        <a href="{{ url_for('add_project') }}">Añadir proyecto</a>
+    </nav>
+    <hr/>
+    {% block content %}{% endblock %}
+</body>
+</html>

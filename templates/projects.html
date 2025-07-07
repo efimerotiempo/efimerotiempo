@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Proyectos</h2>
+<form method="get" class="controls">
+    <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+    <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+    <button type="submit">Filtrar</button>
+</form>
+<table class="projects-table">
+    <thead>
+    <tr>
+        <th>Nombre</th>
+        <th>Cliente</th>
+        <th>Fecha inicio</th>
+        <th>Fecha límite</th>
+        <th>Prioridad</th>
+        {% for ph in phases %}
+            {% if ph == 'pedidos' %}
+                <th>Plazo acopio</th>
+            {% else %}
+                <th>{{ ph }}</th>
+            {% endif %}
+        {% endfor %}
+        <th>Cambiar</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for p in projects %}
+    <tr style="background-color: {{ p.color }};">
+        <td>{{ p.name }}</td>
+        <td>{{ p.client }}</td>
+        <td>{{ p.start_date }}</td>
+        <td>{{ p.due_date }}</td>
+        <td>{{ p.priority }}</td>
+        {% for ph in phases %}
+            <td>
+            {% if p.phases.get(ph) %}
+                {% if ph == 'pedidos' %}
+                    {{ p.phases[ph] }}<br>
+                {% else %}
+                    {{ p.phases[ph] }}h<br>
+                {% endif %}
+                <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                    <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    <select name="worker">
+                        {% for w in all_workers %}
+                            <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">Guardar</button>
+                </form>
+            {% endif %}
+            </td>
+        {% endfor %}
+        <td>
+            <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                <select name="priority">
+                    {% for pr in priorities %}
+                        <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Actualizar</button>
+            </form>
+        </td>
+        <td>
+            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}">
+                <button class="delete-btn" type="submit">&#10060;</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
