@@ -13,6 +13,7 @@
         <th>Cliente</th>
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
+        <th>En plazo</th>
         <th>Prioridad</th>
         {% for ph in phases %}
             {% if ph == 'pedidos' %}
@@ -32,6 +33,13 @@
         <td>{{ p.client }}</td>
         <td>{{ p.start_date }}</td>
         <td>{{ p.due_date }}</td>
+        <td>
+            {% if p.met %}
+                <span class="ok">&#10004;</span>
+            {% else %}
+                <span class="late">&#10060;</span>
+            {% endif %}
+        </td>
         <td>{{ p.priority }}</td>
         {% for ph in phases %}
             <td>

@@ -111,6 +111,11 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    for p in projects:
+        try:
+            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+        except Exception:
+            p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
@@ -186,6 +191,19 @@ def calendar_view():
 @app.route('/projects')
 def project_list():
     projects = get_projects()
+    # Compute deadlines to show whether each project meets its due date
+    proj_copy = copy.deepcopy(projects)
+    schedule_projects(proj_copy)
+    end_dates = {p['id']: p['end_date'] for p in proj_copy}
+    for p in projects:
+        if p['id'] in end_dates:
+            p['end_date'] = end_dates[p['id']]
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except Exception:
+                p['met'] = False
+        else:
+            p['met'] = False
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
     if project_filter or client_filter:
@@ -389,6 +407,11 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    for p in projects:
+        try:
+            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+        except Exception:
+            p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)

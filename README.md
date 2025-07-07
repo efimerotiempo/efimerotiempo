@@ -100,6 +100,10 @@ el calendario, para filtrar rápidamente la información mostrada.
 La sección de proyectos en la vista **Completo** puede plegarse o desplegarse
 completamente pulsando el botón que aparece junto a su título.
 
+Tanto en la pestaña **Proyectos** como en la vista **Completo** se muestra una
+columna adicional que indica con un ✔ verde si cada proyecto llega a su fecha
+límite o con una ❌ roja en caso contrario.
+
 ### Vacaciones
 
 Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
