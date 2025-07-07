@@ -44,11 +44,11 @@ la información cómodamente sin necesidad de reducir el zoom. El
 calendario muestra el número de semana una sola vez por semana, en negrita y
 color violeta. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
-sobre la tabla. Las columnas del calendario tienen una anchura mínima para
-evitar que el texto se comprima y cada tarea se muestra como mucho en dos
-líneas, con el exceso recortado.
+sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
+facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
+exceso recortado.
 
-Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Dicha franja es mucho más estrecha que las columnas normales (alrededor de una quinta parte de su ancho) para que ocupe menos espacio en la tabla.
+Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Esa franja ocupa solamente una quinta parte del ancho que tenía anteriormente, de modo que queda como una línea muy estrecha.
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
