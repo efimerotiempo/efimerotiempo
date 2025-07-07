@@ -83,6 +83,13 @@ después del último montaje programado para ese trabajador y aprovecha las
 horas libres de ese mismo día hasta completar su jornada, salvo que la
 prioridad del nuevo proyecto sea mayor y deba adelantarse en la cola.
 
+De la misma forma, la fase de **soldar** puede empezar el mismo día que
+termina el montaje si quedan horas disponibles. El planificador calcula las
+horas libres que restan en la jornada y encadena la soldadura a continuación
+sin sobrepasar nunca las ocho horas diarias. Las tareas de un mismo día se
+ordenan según el momento en que se ejecutan, de modo que si otro trabajo de
+dos horas cabe antes de soldar, se colocará en las primeras horas del día.
+
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha
 de acopio indicada y no se reparte por horas. Irene puede acumular tantos

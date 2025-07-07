@@ -162,7 +162,7 @@ def _vacation_days_in_range(worker, start_day, days_needed, vac_map):
 
 
 def schedule_projects(projects):
-    # sort by priority and start date
+    """Return schedule and conflicts after assigning all phases."""
     projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
     worker_schedule = {w: {} for w in WORKERS}
     vac_map = _build_vacation_map()
@@ -186,6 +186,7 @@ def schedule_projects(projects):
     reassignments = []
     for project in projects:
         current = date.fromisoformat(project['start_date'])
+        hour = 0
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
@@ -240,7 +241,7 @@ def schedule_projects(projects):
                 })
                 continue
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
-                current, end_date = assign_pedidos(
+                current, hour, end_date = assign_pedidos(
                     worker_schedule[worker],
                     current,
                     date.fromisoformat(val),
@@ -254,9 +255,10 @@ def schedule_projects(projects):
                 )
             else:
                 hours = int(val)
-                current, end_date = assign_phase(
+                current, hour, end_date = assign_phase(
                     worker_schedule[worker],
                     current,
+                    hour,
                     phase,
                     project['name'],
                     project['client'],
@@ -297,22 +299,26 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
+def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project. If there are free hours left
     # that day, reuse them before moving on to the next workday.
     if phase == 'montar':
-        last, used = _last_phase_info(schedule, 'montar')
+        last, end_hour = _last_phase_info(schedule, 'montar')
         if last and start_day <= last:
             limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-            if used < limit:
+            if end_hour < limit:
                 start_day = last
+                start_hour = max(start_hour, end_hour)
             else:
                 start_day = next_workday(last)
+                start_hour = 0
 
     day = start_day
+    hour = start_hour
     while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
         day = next_workday(day)
+        hour = 0
     remaining = hours
     last_day = day
     while remaining > 0:
@@ -321,15 +327,15 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
             continue
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
-        used = sum(t['hours'] for t in tasks)
+        tasks.sort(key=lambda t: t.get('start', 0))
+        used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
+        start = max(hour, used)
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-        if limit != float('inf'):
-            if used >= limit:
-                day = next_workday(day)
-                continue
-            available = min(limit - used, HOURS_PER_DAY)
-        else:
-            available = HOURS_PER_DAY
+        if limit != float('inf') and start >= limit:
+            day = next_workday(day)
+            hour = 0
+            continue
+        available = limit - start if limit != float('inf') else HOURS_PER_DAY
         if available > 0:
             allocate = min(remaining, available)
             late = day > date.fromisoformat(due_date)
@@ -338,6 +344,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
+                'start': start,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
@@ -345,15 +352,20 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
                 'priority': priority,
                 'pid': pid,
             })
+            tasks.sort(key=lambda t: t['start'])
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day
-        if remaining > 0:
+            hour = start + allocate
+            if hour >= limit and limit != float('inf'):
+                day = next_workday(day)
+                hour = 0
+        else:
             day = next_workday(day)
-    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    used = sum(t['hours'] for t in schedule.get(last_day.isoformat(), []))
-    next_day = last_day if used < limit else next_workday(last_day)
-    return next_day, last_day
+            hour = 0
+    next_day = day
+    next_hour = hour
+    return next_day, next_hour, last_day
 
 
 def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
@@ -384,22 +396,24 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
         schedule[day_str] = tasks
         last_day = day
         day += timedelta(days=1)
-    return next_workday(last_day), last_day
+    return next_workday(last_day), 0, last_day
 
 
 def _last_phase_info(schedule, phase):
-    """Return the last day a phase was scheduled and used hours that day."""
-    last = None
+    """Return the day and hour when the last ``phase`` finished."""
+    last_day = None
+    end_hour = 0
     for d, tasks in schedule.items():
         for t in tasks:
             if t['phase'] == phase:
                 dt = date.fromisoformat(d)
-                if not last or dt > last:
-                    last = dt
-    if not last:
+                finish = t.get('start', 0) + t['hours']
+                if not last_day or dt > last_day or (dt == last_day and finish > end_hour):
+                    last_day = dt
+                    end_hour = finish
+    if not last_day:
         return None, 0
-    used = sum(t['hours'] for t in schedule.get(last.isoformat(), []))
-    return last, used
+    return last_day, end_hour
 
 
 def _worker_load(schedule, worker):
