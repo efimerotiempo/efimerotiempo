@@ -240,7 +240,7 @@
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const REORG_URL = "{{ url_for('reorganize') }}";
+  const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
