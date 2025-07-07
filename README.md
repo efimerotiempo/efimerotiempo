@@ -73,8 +73,9 @@ lista de proyectos. El planificador automático lo ignora al repartir
 fases por defecto.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
-su proyecto anterior. Un nuevo montaje se coloca justo después del último día
-que tenga programado ese trabajador, salvo que la prioridad del nuevo proyecto
+su proyecto anterior. Un nuevo montaje se coloca justo después del último
+montaje programado para ese trabajador y aprovecha las horas libres de ese
+mismo día hasta completar su jornada, salvo que la prioridad del nuevo proyecto
 sea mayor y deba adelantarse en la cola.
 
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo

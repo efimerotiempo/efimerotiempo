@@ -208,12 +208,16 @@ def schedule_projects(projects):
 
 
 def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
-    # When scheduling 'montar', enqueue the new work after any existing
-    # mounting tasks for this worker so that projects are not interleaved.
+    # When scheduling 'montar', queue work after the previous mounting tasks
+    # for this worker. If there is free time that same day, reuse it.
     if phase == 'montar':
-        last = _last_phase_day(schedule, 'montar')
+        last, used = _last_phase_info(schedule, 'montar')
         if last and start_day <= last:
-            start_day = next_workday(last)
+            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+            if used < limit:
+                start_day = last
+            else:
+                start_day = next_workday(last)
 
     day = start_day
     while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
@@ -255,7 +259,10 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
             last_day = day
         if remaining > 0:
             day = next_workday(day)
-    return next_workday(last_day), last_day
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    used = sum(t['hours'] for t in schedule.get(last_day.isoformat(), []))
+    next_day = last_day if used < limit else next_workday(last_day)
+    return next_day, last_day
 
 
 def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
@@ -289,8 +296,8 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
     return next_workday(last_day), last_day
 
 
-def _last_phase_day(schedule, phase):
-    """Return the last day a specific phase was scheduled for a worker."""
+def _last_phase_info(schedule, phase):
+    """Return the last day a phase was scheduled and used hours that day."""
     last = None
     for d, tasks in schedule.items():
         for t in tasks:
@@ -298,7 +305,10 @@ def _last_phase_day(schedule, phase):
                 dt = date.fromisoformat(d)
                 if not last or dt > last:
                     last = dt
-    return last
+    if not last:
+        return None, 0
+    used = sum(t['hours'] for t in schedule.get(last.isoformat(), []))
+    return last, used
 
 
 def _worker_load(schedule, worker):
