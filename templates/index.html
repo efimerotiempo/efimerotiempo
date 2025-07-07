@@ -119,6 +119,17 @@
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
+  const SCROLL_KEY = 'calendarScroll';
+  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+  if (savedScroll !== null) {
+    wrapper.scrollLeft = parseFloat(savedScroll);
+  } else {
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+  }
+  wrapper.addEventListener('scroll', () => {
+    sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+  });
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
   document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {

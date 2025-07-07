@@ -256,6 +256,17 @@
 
 
   const wrapper = document.querySelector('.schedule-wrapper');
+  const SCROLL_KEY = 'completeScroll';
+  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+  if (savedScroll !== null) {
+    wrapper.scrollLeft = parseFloat(savedScroll);
+  } else {
+    const cell = document.querySelector('th.today');
+    if (cell) cell.scrollIntoView({behavior: 'auto', inline: 'center'});
+  }
+  wrapper.addEventListener('scroll', () => {
+    sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+  });
   wrapper.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();

@@ -15,7 +15,9 @@ Visita `http://localhost:5000` en tu navegador para ir directamente a la vista
 El calendario precarga desde tres meses antes hasta seis meses después de la fecha
 actual para que puedas desplazarte por todo ese periodo manteniendo pulsada la
 tecla **Shift** mientras giras la rueda del ratón. El botón **HOY** centra la
-tabla en el día actual. Puedes filtrar por nombre de proyecto y cliente desde
+tabla en el día actual. La primera vez que entras en cada vista el calendario se
+coloca automáticamente en el día actual y, si recargas la página, recuerda la
+posición en la que estabas. Puedes filtrar por nombre de proyecto y cliente desde
 los dos cuadros de búsqueda.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
