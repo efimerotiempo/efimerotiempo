@@ -65,10 +65,11 @@ Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
 
-Al crear nuevos proyectos, el planificador reparte cada fase al trabajador
-disponible con menos carga, de modo que fases idénticas en proyectos
-distintos se asignan a personas diferentes para poder avanzar en paralelo
-si hay recursos libres.
+Al crear nuevos proyectos, el planificador asigna cada fase a la persona
+que pueda comenzarla antes. Si varias pueden empezar el mismo día, se
+escoge a quien tenga menos horas pendientes. De este modo, fases idénticas
+en proyectos distintos se reparten y se adelantan lo máximo posible
+aprovechando los huecos libres.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
 lista de proyectos. El planificador automático lo ignora al repartir

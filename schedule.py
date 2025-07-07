@@ -410,6 +410,21 @@ def _worker_load(schedule, worker):
     )
 
 
+def _next_free_day(schedule, worker, day, vacations=None):
+    """Return the first workday after ``day`` with available hours."""
+    vac = vacations.get(worker, set()) if vacations else set()
+    sched = schedule.get(worker, {})
+    while True:
+        if day.weekday() in WEEKEND or day in vac:
+            day = next_workday(day)
+            continue
+        used = sum(t['hours'] for t in sched.get(day.isoformat(), []))
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        if used < limit:
+            return day
+        day = next_workday(day)
+
+
 def find_worker_for_phase(
     phase,
     schedule,
@@ -420,7 +435,7 @@ def find_worker_for_phase(
     days=0,
     vacations=None,
 ):
-    """Choose the least busy worker that can perform the phase.
+    """Choose the worker that can start the phase as soon as posible.
 
     By default Unai is excluded from automatic assignments so that he can
     only be seleccionado manualmente desde la vista de proyectos.
@@ -429,19 +444,20 @@ def find_worker_for_phase(
     for worker, skills in WORKERS.items():
         if not include_unai and worker == 'Unai':
             continue
-        if phase in skills:
-            if vacations and start_day and _worker_on_vacation(worker, start_day, days, vacations):
-                continue
-            load = _worker_load(schedule, worker)
-            candidates.append((skills.index(phase), load, worker))
+        if phase not in skills:
+            continue
+        if vacations and start_day and _worker_on_vacation(worker, start_day, days, vacations):
+            continue
+        free = _next_free_day(schedule, worker, start_day or date.today(), vacations)
+        load = _worker_load(schedule, worker)
+        candidates.append((free, load, skills.index(phase), worker))
     if not candidates:
         return None
     if priority == 'Alta':
-        prio = [c for c in candidates if c[0] == 0]
-        if prio:
-            candidates = prio
-    candidates.sort(key=lambda c: (c[1], c[0]))
-    return candidates[0][2]
+        earliest = min(candidates, key=lambda c: (c[0], c[1], c[2]))
+        return earliest[3]
+    candidates.sort(key=lambda c: (c[0], c[1], c[2]))
+    return candidates[0][3]
 
 import copy
 
