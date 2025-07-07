@@ -93,6 +93,11 @@ cada entrada.
 Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar
 una tarea en el calendario.
+Ese mismo recuadro incluye ahora un botón **Reorganizar** que intenta
+reubicar la fase seleccionada en el primer hueco libre disponible,
+preferentemente antes de la fecha asignada. Si se encuentra un hueco
+más temprano respetando todas las restricciones, el proyecto se guarda con
+la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
