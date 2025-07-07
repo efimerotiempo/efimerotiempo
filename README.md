@@ -124,4 +124,6 @@ proyectos planificados en esas fechas, la planificación se recalcula y esas
 fases se reasignan automáticamente al trabajador disponible con menor carga. En
 la lista de conflictos se añade una nota indicando los días de vacaciones, a qué
 persona se han movido las tareas y si el proyecto sigue cumpliendo su fecha
-límite tras el cambio.
+límite tras el cambio. Aunque un trabajador tenga vacaciones cerca de la fecha
+de inicio de un proyecto, no se descarta para nuevas fases: la planificación
+simplemente saltará sus días libres y continuará al finalizar su descanso.

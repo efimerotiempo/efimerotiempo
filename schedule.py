@@ -447,8 +447,6 @@ def find_worker_for_phase(
             continue
         if phase not in skills:
             continue
-        if vacations and start_day and _worker_on_vacation(worker, start_day, days, vacations):
-            continue
         free = _next_free_day(schedule, worker, start_day or date.today(), vacations)
         load = _worker_load(schedule, worker)
         candidates.append((free, load, skills.index(phase), worker))
