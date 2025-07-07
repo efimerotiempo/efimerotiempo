@@ -12,12 +12,11 @@ python app.py
 
 Visita `http://localhost:5000` en tu navegador para ir directamente a la vista
 **Completo**, que combina el calendario, los proyectos y el formulario de alta.
-Desde el calendario puedes utilizar la barra deslizante situada bajo los filtros para
-cambiar la ventana de 14 días entre 2024 y 2026. El botón **HOY** devuelve la
-vista al día actual. Junto a él hay dos flechas **<** y **>** para mover la
-vista un día hacia la izquierda o la derecha mientras arrastras la barra, que
-ahora actualiza el calendario en tiempo real. Puedes filtrar por nombre de
-proyecto y cliente desde los dos cuadros de búsqueda.
+El calendario precarga desde tres meses antes hasta seis meses después de la fecha
+actual para que puedas desplazarte por todo ese periodo manteniendo pulsada la
+tecla **Shift** mientras giras la rueda del ratón. El botón **HOY** centra la
+tabla en el día actual. Puedes filtrar por nombre de proyecto y cliente desde
+los dos cuadros de búsqueda.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,

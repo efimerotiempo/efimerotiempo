@@ -122,16 +122,6 @@ def calendar_view():
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
 
-    default_start = date.today() - timedelta(days=date.today().weekday())
-    default_offset = (default_start - MIN_DATE).days
-    max_offset = (MAX_DATE - MIN_DATE).days - 13
-
-    try:
-        offset = int(request.args.get('offset', default_offset))
-    except ValueError:
-        offset = default_offset
-    offset = max(0, min(offset, max_offset))
-
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
 
@@ -145,8 +135,9 @@ def calendar_view():
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
 
-    start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
+    start = date.today() - timedelta(days=90)
+    end = date.today() + timedelta(days=180)
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
     week_spans = []
     current_week = days[0].isocalendar().week
@@ -161,8 +152,6 @@ def calendar_view():
             span += 1
     week_spans.append({'week': current_week, 'span': span})
 
-    today_offset = (date.today() - MIN_DATE).days
-
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
@@ -176,9 +165,6 @@ def calendar_view():
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
-        today_offset=today_offset,
         today=date.today(),
         project_filter=project_filter,
         client_filter=client_filter,
@@ -418,16 +404,6 @@ def complete():
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
 
-    default_start = date.today() - timedelta(days=date.today().weekday())
-    default_offset = (default_start - MIN_DATE).days
-    max_offset = (MAX_DATE - MIN_DATE).days - 13
-
-    try:
-        offset = int(request.args.get('offset', default_offset))
-    except ValueError:
-        offset = default_offset
-    offset = max(0, min(offset, max_offset))
-
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
 
@@ -447,8 +423,9 @@ def complete():
     else:
         filtered_projects = projects
 
-    start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
+    start = date.today() - timedelta(days=90)
+    end = date.today() + timedelta(days=180)
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     week_spans = []
     current_week = days[0].isocalendar().week
     span = 0
@@ -461,8 +438,6 @@ def complete():
         else:
             span += 1
     week_spans.append({'week': current_week, 'span': span})
-    today_offset = (date.today() - MIN_DATE).days
-
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
@@ -476,9 +451,6 @@ def complete():
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
-        today_offset=today_offset,
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,

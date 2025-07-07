@@ -1,26 +1,20 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Calendario (dos semanas)</h2>
+<h2>Calendario</h2>
 <div class="controls">
     <form id="filter-form" method="get">
-        <input type="hidden" name="offset" value="{{ offset }}">
         <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
         <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
         <button type="submit">Filtrar</button>
     </form>
     <button id="today-btn">HOY</button>
-    <button id="left-btn">&lt;</button>
-    <button id="right-btn">&gt;</button>
-</div>
-<div class="slider">
-    <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
 </div>
 <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
     <tr class="weeknums">
-        <th></th>
+        <th class="resource-col"></th>
         {% for w in week_spans %}
         <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
         {% endfor %}
@@ -32,7 +26,7 @@
         {% endfor %}
     </tr>
     <tr class="milestones-row">
-        <td></td>
+        <td class="resource-col"></td>
         {% for d in days %}
         {% set ms = milestones.get(d.isoformat()) %}
         <td class="milestone-cell{% if d == today %} today{% endif %}">
@@ -104,16 +98,7 @@
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const slider = document.getElementById('day-range');
   const filterForm = document.getElementById('filter-form');
-  const offsetInput = filterForm.querySelector('input[name="offset"]');
-
-  function update() {
-    offsetInput.value = slider.value;
-    filterForm.submit();
-  }
-
-  slider.addEventListener('input', update);
 
 
   // allow horizontal scrolling with Shift + wheel over the schedule
@@ -136,17 +121,10 @@
 
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    offsetInput.value = {{ today_offset }};
-    filterForm.submit();
-  });
-
-  document.getElementById('left-btn').addEventListener('click', () => {
-    slider.stepDown();
-    update();
-  });
-  document.getElementById('right-btn').addEventListener('click', () => {
-    slider.stepUp();
-    update();
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) {
+      todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+    }
   });
 
   const tasks = document.querySelectorAll('.task');
@@ -240,10 +218,6 @@
       }
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
     });
   });
@@ -255,10 +229,6 @@
       let t = Array.from(tasks).find(o => o.dataset.pid === pid);
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
     });
   });
