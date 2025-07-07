@@ -298,8 +298,9 @@ def schedule_projects(projects):
 
 
 def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
-    # When scheduling 'montar', queue work after the previous mounting tasks
-    # for this worker. If there is free time that same day, reuse it.
+    # When scheduling 'montar', queue the task right after the worker finishes
+    # the mounting phase of their previous project. If there are free hours left
+    # that day, reuse them before moving on to the next workday.
     if phase == 'montar':
         last, used = _last_phase_info(schedule, 'montar')
         if last and start_day <= last:
