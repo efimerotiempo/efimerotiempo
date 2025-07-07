@@ -48,6 +48,8 @@ sobre la tabla. Las columnas del calendario tienen una anchura mínima para
 evitar que el texto se comprima y cada tarea se muestra como mucho en dos
 líneas, con el exceso recortado.
 
+Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas.
+
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
 automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para

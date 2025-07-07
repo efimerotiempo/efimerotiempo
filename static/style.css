@@ -110,6 +110,10 @@ table.schedule th, table.schedule td {
 }
 
 .today { border: 3px solid red !important; }
+.weekend, .weekend-cell {
+    background: #000;
+}
+
 .worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
 

@@ -73,6 +73,37 @@ def parse_input_date(value):
     return None
 
 
+def build_calendar(start, end):
+    """Return full days list, collapsed columns and week spans."""
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    cols = []
+    i = 0
+    while i < len(days):
+        d = days[i]
+        if d.weekday() == 5:
+            wk = [d]
+            if i + 1 < len(days) and days[i+1].weekday() == 6:
+                wk.append(days[i+1])
+            cols.append({"type": "weekend", "dates": wk})
+            i += len(wk)
+        else:
+            cols.append({"type": "day", "dates": [d]})
+            i += 1
+    week_spans = []
+    current_week = cols[0]["dates"][0].isocalendar().week
+    span = 0
+    for c in cols:
+        week = c["dates"][0].isocalendar().week
+        if week != current_week:
+            week_spans.append({"week": current_week, "span": span})
+            current_week = week
+            span = 1
+        else:
+            span += 1
+    week_spans.append({"week": current_week, "span": span})
+    return days, cols, week_spans
+
+
 def get_projects():
     projects = load_projects()
     changed = False
@@ -137,20 +168,7 @@ def calendar_view():
 
     start = date.today() - timedelta(days=90)
     end = date.today() + timedelta(days=180)
-    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-
-    week_spans = []
-    current_week = days[0].isocalendar().week
-    span = 0
-    for d in days:
-        week = d.isocalendar().week
-        if week != current_week:
-            week_spans.append({'week': current_week, 'span': span})
-            current_week = week
-            span = 1
-        else:
-            span += 1
-    week_spans.append({'week': current_week, 'span': span})
+    days, cols, week_spans = build_calendar(start, end)
 
     milestone_map = {}
     for m in milestones:
@@ -161,7 +179,7 @@ def calendar_view():
     return render_template(
         'index.html',
         schedule=schedule,
-        days=days,
+        cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
@@ -425,19 +443,7 @@ def complete():
 
     start = date.today() - timedelta(days=90)
     end = date.today() + timedelta(days=180)
-    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    week_spans = []
-    current_week = days[0].isocalendar().week
-    span = 0
-    for d in days:
-        week = d.isocalendar().week
-        if week != current_week:
-            week_spans.append({'week': current_week, 'span': span})
-            current_week = week
-            span = 1
-        else:
-            span += 1
-    week_spans.append({'week': current_week, 'span': span})
+    days, cols, week_spans = build_calendar(start, end)
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
@@ -447,7 +453,7 @@ def complete():
     return render_template(
         'complete.html',
         schedule=schedule,
-        days=days,
+        cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
