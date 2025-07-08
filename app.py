@@ -24,6 +24,8 @@ from schedule import (
     WORKERS,
     find_worker_for_phase,
     compute_schedule_map,
+    phase_start_map,
+    WEEKEND,
     HOURS_PER_DAY,
 )
 
@@ -281,6 +283,7 @@ def calendar_view():
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
+    start_map = phase_start_map(projects)
 
     return render_template(
         'index.html',
@@ -294,6 +297,7 @@ def calendar_view():
         client_filter=client_filter,
         milestones=milestone_map,
         project_data=project_map,
+        start_map=start_map,
         phases=PHASE_ORDER,
     )
 
@@ -322,6 +326,7 @@ def project_list():
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
+    start_map = phase_start_map(projects)
     return render_template(
         'projects.html',
         projects=projects,
@@ -330,6 +335,7 @@ def project_list():
         all_workers=list(WORKERS.keys()),
         project_filter=project_filter,
         client_filter=client_filter,
+        start_map=start_map,
     )
 
 
@@ -555,6 +561,7 @@ def complete():
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
+    start_map = phase_start_map(projects)
 
     return render_template(
         'complete.html',
@@ -572,6 +579,7 @@ def complete():
         all_workers=list(WORKERS.keys()),
         milestones=milestone_map,
         project_data=project_map,
+        start_map=start_map,
     )
 
 
@@ -649,6 +657,42 @@ def update_worker(pid, phase):
             break
     save_projects(projects)
     next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
+    return redirect(next_url)
+
+
+@app.route('/update_phase_start', methods=['POST'])
+def update_phase_start():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not phase or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date.weekday() in WEEKEND:
+        return jsonify({'error': 'No se puede iniciar en fin de semana'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+    proj = next((p for p in projects if p['id'] == pid), None)
+    base = date.fromisoformat(proj['start_date'])
+    offset = (date.fromisoformat(tasks[0][1]) - base).days
+    proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    temp = copy.deepcopy(projects)
+    new_map = compute_schedule_map(temp)
+    new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
+    if not new_tasks or date.fromisoformat(new_tasks[0][1]) != new_date:
+        return jsonify({'error': 'No se puede asignar esa fecha'}), 400
+    save_projects(temp)
+    if request.is_json:
+        return '', 204
     return redirect(next_url)
 
 

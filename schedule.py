@@ -488,3 +488,13 @@ def compute_schedule_map(projects):
     for lst in mapping.values():
         lst.sort()
     return mapping
+
+
+def phase_start_map(projects):
+    """Return mapping of pid -> {phase: first_day}"""
+    mapping = compute_schedule_map(projects)
+    result = {}
+    for pid, items in mapping.items():
+        for worker, day, phase, hours in items:
+            result.setdefault(pid, {}).setdefault(phase, day)
+    return result

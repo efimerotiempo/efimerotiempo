@@ -58,6 +58,13 @@
                     </select>
                     <button type="submit">Guardar</button>
                 </form>
+                <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
+                    <input type="hidden" name="pid" value="{{ p.id }}">
+                    <input type="hidden" name="phase" value="{{ ph }}">
+                    <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
+                    <button type="submit">Cambiar</button>
+                </form>
             {% endif %}
             </td>
         {% endfor %}
@@ -81,4 +88,21 @@
     {% endfor %}
     </tbody>
 </table>
+<script>
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  document.querySelectorAll('.start-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) {
+            location.reload();
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+    });
+  });
+</script>
 {% endblock %}

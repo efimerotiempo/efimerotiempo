@@ -191,3 +191,13 @@ tr.collapsed td:not(:first-child) { display: none; }
     margin: 10% auto;
     max-width: 400px;
 }
+
+.start-form input[type=date] {
+    max-width: 130px;
+}
+
+#start-input {
+    max-width: 130px;
+    margin-left: 4px;
+}
+#start-btn { margin-left: 2px; }

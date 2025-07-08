@@ -124,6 +124,9 @@ la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 Si la fase mostrada es **Pedidos**, también se ofrece un botón rojo
 **Borrar fase** que elimina ese tramo de la planificación tras una
 confirmación. Las demás fases de ese proyecto permanecen en su sitio.
+Junto a estos controles aparece un campo de fecha para cambiar el inicio de la
+fase seleccionada. Si la fecha elegida no es válida se muestra un mensaje
+explicando el motivo.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
@@ -144,6 +147,10 @@ completamente pulsando el botón que aparece junto a su título.
 Tanto en la pestaña **Proyectos** como en la vista **Completo** se muestra una
 columna adicional que indica con un ✔ verde si cada proyecto llega a su fecha
 límite o con una ❌ roja en caso contrario.
+Desde esas mismas tablas puedes cambiar manualmente la fecha de inicio de
+cualquier fase mediante los campos de fecha que aparecen junto a cada
+trabajador asignado. Si la fecha introducida no es válida, la página mostrará
+una alerta explicando el motivo.
 
 ### Vacaciones
 

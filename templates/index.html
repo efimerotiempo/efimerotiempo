@@ -116,6 +116,8 @@
   const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  const START_DATA = {{ start_map|tojson }};
   const filterForm = document.getElementById('filter-form');
 
 
@@ -200,7 +202,9 @@
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
+      html += ` <input type="date" id="start-input" value="${startVal}"><button id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>`;
       if (t.dataset.phase === 'pedidos') {
         html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
       }
@@ -231,6 +235,20 @@
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
+        });
+      }
+      const startBtn = document.getElementById('start-btn');
+      if (startBtn) {
+        startBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const val = document.getElementById('start-input').value;
+          fetch(START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: startBtn.dataset.pid, phase: startBtn.dataset.phase, date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
         });
       }
     });
