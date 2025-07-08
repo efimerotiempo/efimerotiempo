@@ -109,12 +109,18 @@ def send_bug_report(bug):
     port = int(os.environ.get('BUG_SMTP_PORT', 25))
     user = os.environ.get('BUG_SMTP_USER')
     password = os.environ.get('BUG_SMTP_PASS')
+    use_ssl = os.environ.get('BUG_SMTP_SSL') == '1'
     try:
-        with smtplib.SMTP(host, port) as s:
-            if user and password:
-                s.starttls()
-                s.login(user, password)
-            s.send_message(msg)
+        if use_ssl:
+            server = smtplib.SMTP_SSL(host, port)
+        else:
+            server = smtplib.SMTP(host, port)
+        if user and password:
+            if not use_ssl:
+                server.starttls()
+            server.login(user, password)
+        server.send_message(msg)
+        server.quit()
     except Exception as e:
         print('Error sending bug report:', e)
 

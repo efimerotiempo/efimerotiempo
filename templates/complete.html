@@ -39,8 +39,11 @@
             <button type="submit">Añadir</button>
         </form>
     </div>
+    <div class="bug-btn-container">
+        <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
+    </div>
     <div class="complete-conflicts">
-        <h3>Conflictos <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button></h3>
+        <h3>Conflictos</h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
             <button type="submit">Borrar todos</button>
         </form>

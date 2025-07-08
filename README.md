@@ -66,8 +66,15 @@ roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
-Junto al título de **Conflictos** en la vista **Completo** hay un botón **Reportar bug**. Al pulsarlo se abre un formulario donde debes indicar quién registra la incidencia, en qué pestaña ocurrió, con qué frecuencia sucede y una descripción detallada del problema. Todos los campos son obligatorios.
-Al enviar el formulario se asigna un número de BUG y se remite un correo con un resumen a `irodriguez@caldereria-cpk.es`.
+Por encima de la lista de **Conflictos** aparece un gran botón amarillo
+**Reportar bug**. Es unas diez veces más grande que un botón normal para que
+resulte muy visible. Al pulsarlo se abre un formulario donde debes indicar quién
+registra la incidencia, en qué pestaña ocurrió, con qué frecuencia sucede y una
+descripción detallada del problema. Todos los campos son obligatorios. Al
+enviar el formulario se asigna un número de BUG y se intenta enviar un correo
+con un resumen a `irodriguez@caldereria-cpk.es`. Puedes configurar el servidor
+SMTP mediante las variables de entorno `BUG_SMTP_HOST`, `BUG_SMTP_PORT`,
+`BUG_SMTP_USER`, `BUG_SMTP_PASS` y `BUG_SMTP_SSL` cuando sea necesario.
 
 Al crear nuevos proyectos, el planificador asigna cada fase a la persona
 que pueda comenzarla antes. Si varias pueden empezar el mismo día, se
