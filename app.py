@@ -10,37 +10,49 @@ from werkzeug.utils import secure_filename
 import sys
 import importlib.util
 
-# Ensure the repo's ``schedule.py`` is loaded regardless of ``sys.path`` or any
-# third-party ``schedule`` package installed in the environment. This uses
-# ``importlib`` to import the file directly from the same directory as this
-# ``app.py`` module.
-_schedule_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                              "schedule.py")
+# Always load this repository's ``schedule.py`` regardless of the working
+# directory or any installed package named ``schedule``.  After importing, pull
+# the required symbols from the loaded module.  This approach prevents
+# ``ImportError`` even if an unexpected third-party module shadows the local
+# file.
+_schedule_dir = os.path.dirname(os.path.abspath(__file__))
+_schedule_path = os.path.join(_schedule_dir, "schedule.py")
+if _schedule_dir not in sys.path:
+    sys.path.insert(0, _schedule_dir)
 _spec = importlib.util.spec_from_file_location("schedule", _schedule_path)
-schedule = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(schedule)
-sys.modules['schedule'] = schedule
-from schedule import (
-    load_projects,
-    save_projects,
-    schedule_projects,
-    load_dismissed,
-    save_dismissed,
-    load_extra_conflicts,
-    save_extra_conflicts,
-    load_milestones,
-    save_milestones,
-    load_vacations,
-    save_vacations,
-    PRIORITY_ORDER,
-    PHASE_ORDER,
-    WORKERS,
-    find_worker_for_phase,
-    compute_schedule_map,
-    phase_start_map,
-    WEEKEND,
-    HOURS_PER_DAY,
-)
+_schedule_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_schedule_mod)
+sys.modules['schedule'] = _schedule_mod
+
+# Expose schedule helpers as module-level names
+load_projects = _schedule_mod.load_projects
+save_projects = _schedule_mod.save_projects
+schedule_projects = _schedule_mod.schedule_projects
+load_dismissed = _schedule_mod.load_dismissed
+save_dismissed = _schedule_mod.save_dismissed
+load_extra_conflicts = _schedule_mod.load_extra_conflicts
+save_extra_conflicts = _schedule_mod.save_extra_conflicts
+load_milestones = _schedule_mod.load_milestones
+save_milestones = _schedule_mod.save_milestones
+load_vacations = _schedule_mod.load_vacations
+save_vacations = _schedule_mod.save_vacations
+PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
+PHASE_ORDER = _schedule_mod.PHASE_ORDER
+WORKERS = _schedule_mod.WORKERS
+find_worker_for_phase = _schedule_mod.find_worker_for_phase
+compute_schedule_map = _schedule_mod.compute_schedule_map
+if hasattr(_schedule_mod, "phase_start_map"):
+    phase_start_map = _schedule_mod.phase_start_map
+else:
+    def phase_start_map(projects):
+        mapping = compute_schedule_map(projects)
+        result = {}
+        for pid, items in mapping.items():
+            for worker, day, phase, hours in items:
+                result.setdefault(pid, {}).setdefault(phase, day)
+        return result
+WEEKEND = _schedule_mod.WEEKEND
+HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 
 app = Flask(__name__)
 
