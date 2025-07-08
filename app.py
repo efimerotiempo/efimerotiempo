@@ -8,11 +8,18 @@ import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 import sys
+import importlib.util
 
-# Ensure local schedule module is used even if a third-party package named
-# ``schedule`` is installed. This avoids ``ImportError`` when running the app
-# from outside the repository directory.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure the repo's ``schedule.py`` is loaded regardless of ``sys.path`` or any
+# third-party ``schedule`` package installed in the environment. This uses
+# ``importlib`` to import the file directly from the same directory as this
+# ``app.py`` module.
+_schedule_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "schedule.py")
+_spec = importlib.util.spec_from_file_location("schedule", _schedule_path)
+schedule = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(schedule)
+sys.modules['schedule'] = schedule
 from schedule import (
     load_projects,
     save_projects,
