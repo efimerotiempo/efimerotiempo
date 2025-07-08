@@ -192,6 +192,8 @@ tr.collapsed td:not(:first-child) { display: none; }
     max-width: 400px;
 }
 
+
+.start-form { display: inline; }
 .start-form input[type=date] {
     max-width: 130px;
 }

@@ -374,7 +374,10 @@
       }
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
-      html += ` <input type="date" id="start-input" value="${startVal}"><button id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>`;
+      html += ` <form id="start-form" style="display:inline">` +
+               `<input type="date" id="start-input" value="${startVal}" required>` +
+               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
+               `</form>`;
       if (t.dataset.phase === 'pedidos') {
         html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
       }
@@ -407,15 +410,17 @@
           }
         });
       }
-      const startBtn = document.getElementById('start-btn');
-      if (startBtn) {
-        startBtn.addEventListener('click', ev => {
+      const startForm = document.getElementById('start-form');
+      if (startForm) {
+        startForm.addEventListener('submit', ev => {
+          ev.preventDefault();
           ev.stopPropagation();
+          const btn = document.getElementById('start-btn');
           const val = document.getElementById('start-input').value;
           fetch(START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pid: startBtn.dataset.pid, phase: startBtn.dataset.phase, date: val })
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });

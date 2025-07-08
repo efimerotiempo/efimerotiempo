@@ -124,9 +124,9 @@ la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 Si la fase mostrada es **Pedidos**, también se ofrece un botón rojo
 **Borrar fase** que elimina ese tramo de la planificación tras una
 confirmación. Las demás fases de ese proyecto permanecen en su sitio.
-Junto a estos controles aparece un campo de fecha para cambiar el inicio de la
-fase seleccionada. Si la fecha elegida no es válida se muestra un mensaje
-explicando el motivo.
+Además se muestra un pequeño formulario con un campo de fecha y un botón
+**Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
+introducida no es válida se despliega una alerta explicando el motivo.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
