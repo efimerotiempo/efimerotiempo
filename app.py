@@ -1,8 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import uuid
 import os
 import copy
+import json
+import smtplib
+from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from schedule import (
     load_projects,
@@ -36,6 +39,8 @@ MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
+BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 
 
 def parse_input_date(value):
@@ -71,6 +76,47 @@ def parse_input_date(value):
             except ValueError:
                 return None
     return None
+
+
+def load_bugs():
+    if os.path.exists(BUGS_FILE):
+        with open(BUGS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_bugs(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(BUGS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def send_bug_report(bug):
+    msg = EmailMessage()
+    msg['Subject'] = f"BUG {bug['id']} - {bug['tab']}"
+    sender = os.environ.get('BUG_SENDER', 'planificador@example.com')
+    msg['From'] = sender
+    msg['To'] = 'irodriguez@caldereria-cpk.es'
+    body = (
+        f"Registrado por: {bug['user']}\n"
+        f"Pesta\u00f1a: {bug['tab']}\n"
+        f"Frecuencia: {bug['freq']}\n\n"
+        f"{bug['detail']}\n"
+        f"Fecha: {bug['date']}"
+    )
+    msg.set_content(body)
+    host = os.environ.get('BUG_SMTP_HOST', 'localhost')
+    port = int(os.environ.get('BUG_SMTP_PORT', 25))
+    user = os.environ.get('BUG_SMTP_USER')
+    password = os.environ.get('BUG_SMTP_PASS')
+    try:
+        with smtplib.SMTP(host, port) as s:
+            if user and password:
+                s.starttls()
+                s.login(user, password)
+            s.send_message(msg)
+    except Exception as e:
+        print('Error sending bug report:', e)
 
 
 def build_calendar(start, end):
@@ -688,6 +734,30 @@ def show_conflicts():
     """Restore all dismissed conflicts so they appear again."""
     save_dismissed([])
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/report_bug', methods=['POST'])
+def report_bug():
+    user = request.form.get('user')
+    tab = request.form.get('tab')
+    freq = request.form.get('freq')
+    detail = request.form.get('detail', '').strip()
+    if not all([user, tab, freq, detail]):
+        return redirect(request.referrer or url_for('complete'))
+    bugs = load_bugs()
+    bug_id = len(bugs) + 1
+    bug = {
+        'id': bug_id,
+        'user': user,
+        'tab': tab,
+        'freq': freq,
+        'detail': detail,
+        'date': datetime.now().isoformat(timespec='seconds'),
+    }
+    bugs.append(bug)
+    save_bugs(bugs)
+    send_bug_report(bug)
+    return redirect(request.referrer or url_for('complete'))
 
 
 if __name__ == '__main__':

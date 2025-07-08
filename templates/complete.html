@@ -40,7 +40,7 @@
         </form>
     </div>
     <div class="complete-conflicts">
-        <h3>Conflictos</h3>
+        <h3>Conflictos <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button></h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
             <button type="submit">Borrar todos</button>
         </form>
@@ -151,6 +151,42 @@
 </table>
         </div>
         <div id="info-popup" class="info-popup"></div>
+        <div id="bug-modal" class="modal">
+            <div class="modal-content">
+                <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
+                    <label>Quién lo registra:
+                        <select name="user" required>
+                            <option value="Unai">Unai</option>
+                            <option value="Pilar">Pilar</option>
+                            <option value="Ane">Ane</option>
+                            <option value="Irene">Irene</option>
+                        </select>
+                    </label><br>
+                    <label>Pestaña:
+                        <select name="tab" required>
+                            <option value="Completo">Completo</option>
+                            <option value="Calendario">Calendario</option>
+                            <option value="Proyectos">Proyectos</option>
+                            <option value="Hitos">Hitos</option>
+                            <option value="Vacaciones">Vacaciones</option>
+                        </select>
+                    </label><br>
+                    <label>Frecuencia:
+                        <select name="freq" required>
+                            <option>Primera vez</option>
+                            <option>Un par</option>
+                            <option>Bastante a menudo</option>
+                            <option>Siempre. Estoy hasta los cojones.</option>
+                        </select>
+                    </label><br>
+                    <label>Detalle:<br>
+                        <textarea name="detail" rows="4" required></textarea>
+                    </label><br>
+                    <button type="submit">Enviar</button>
+                </form>
+                <button type="button" id="bug-cancel">Cerrar</button>
+            </div>
+        </div>
     </div>
     <div class="complete-projects">
         <h2>Proyectos <button id="projects-toggle" type="button">&#8722;</button></h2>
@@ -459,6 +495,14 @@
       projDiv.classList.toggle('collapsed');
       projToggle.innerHTML = projDiv.classList.contains('collapsed') ? '&#43;' : '&#8722;';
     });
+  }
+  const bugBtn = document.getElementById('bug-btn');
+  const bugModal = document.getElementById('bug-modal');
+  const bugCancel = document.getElementById('bug-cancel');
+  if (bugBtn && bugModal) {
+    bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
+    bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
+    bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
   }
 </script>
 {% endblock %}

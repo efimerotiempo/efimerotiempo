@@ -146,3 +146,27 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
+
+.bug-btn {
+    margin-left: 10px;
+    padding: 4px 8px;
+    font-size: 1em;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    z-index: 2000;
+}
+
+.modal-content {
+    background: #fff;
+    padding: 20px;
+    margin: 10% auto;
+    max-width: 400px;
+}
