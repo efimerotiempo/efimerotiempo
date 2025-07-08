@@ -121,6 +121,9 @@ reubicar la fase seleccionada en el primer hueco libre disponible,
 preferentemente antes de la fecha asignada. Si se encuentra un hueco
 más temprano respetando todas las restricciones, el proyecto se guarda con
 la nueva fecha de inicio y el calendario se actualiza al recargar la página.
+Si la fase mostrada es **Pedidos**, también se ofrece un botón rojo
+**Borrar fase** que elimina ese tramo de la planificación tras una
+confirmación. Las demás fases de ese proyecto permanecen en su sitio.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador

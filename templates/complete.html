@@ -281,6 +281,7 @@
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
+  const DELETE_URL = "{{ url_for('delete_phase') }}";
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
@@ -363,6 +364,9 @@
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
       html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
+      if (t.dataset.phase === 'pedidos') {
+        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+      }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
@@ -377,6 +381,19 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
           }).then(() => location.reload());
+        });
+      }
+      const del = document.getElementById('del-btn');
+      if (del) {
+        del.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Borrar fase?')) {
+            fetch(DELETE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+            }).then(() => location.reload());
+          }
         });
       }
     });

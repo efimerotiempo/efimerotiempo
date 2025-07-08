@@ -664,6 +664,25 @@ def reorganize_phase():
     return '', 204
 
 
+@app.route('/delete_phase', methods=['POST'])
+def delete_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    if not pid or not phase:
+        return '', 400
+    projects = get_projects()
+    for p in projects:
+        if p['id'] == pid:
+            if phase in p.get('phases', {}):
+                p['phases'].pop(phase, None)
+                if p.get('assigned'):
+                    p['assigned'].pop(phase, None)
+                save_projects(projects)
+            break
+    return '', 204
+
+
 @app.route('/move', methods=['POST'])
 def move_phase():
     data = request.get_json() or request.form
