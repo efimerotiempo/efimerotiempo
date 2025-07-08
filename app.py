@@ -766,5 +766,12 @@ def report_bug():
     return redirect(request.referrer or url_for('complete'))
 
 
+@app.route('/bugs')
+def bug_list():
+    """Show table with all recorded bugs."""
+    bugs = load_bugs()
+    return render_template('bugs.html', bugs=bugs)
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -76,6 +76,10 @@ con un resumen a `irodriguez@caldereria-cpk.es`. Puedes configurar el servidor
 SMTP mediante las variables de entorno `BUG_SMTP_HOST`, `BUG_SMTP_PORT`,
 `BUG_SMTP_USER`, `BUG_SMTP_PASS` y `BUG_SMTP_SSL` cuando sea necesario.
 
+Todas las incidencias se almacenan también en un archivo y pueden consultarse
+desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
+usuario, pestaña y detalle.
+
 Al crear nuevos proyectos, el planificador asigna cada fase a la persona
 que pueda comenzarla antes. Si varias pueden empezar el mismo día, se
 escoge a quien tenga menos horas pendientes. De este modo, fases idénticas
