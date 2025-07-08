@@ -24,6 +24,7 @@ table.schedule td.weekend-cell {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    cursor: grab;
 }
 .task.dim { opacity: 0.3; }
 .task.highlight {

@@ -109,6 +109,11 @@ preferentemente antes de la fecha asignada. Si se encuentra un hueco
 más temprano respetando todas las restricciones, el proyecto se guarda con
 la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 
+También puedes arrastrar cualquier fase directamente sobre otra celda del
+calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
+seleccionados, ajustando la fecha de inicio del proyecto para que la fase
+comience en la nueva posición.
+
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
 cada trabajador pulsando el símbolo situado junto a su nombre. Además, la lista

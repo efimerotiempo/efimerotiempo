@@ -108,7 +108,7 @@
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
         {% set ms = milestones.get(d.isoformat()) %}
-        <td class="milestone-cell{% if d == today %} today{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
             {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
         </td>
         {% else %}
@@ -124,13 +124,13 @@
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
-        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -241,6 +241,7 @@
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const REORG_URL = "{{ url_for('reorganize_phase') }}";
+  const MOVE_URL = "{{ url_for('move_phase') }}";
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
@@ -281,6 +282,10 @@
   const tasks = document.querySelectorAll('.task');
   const popup = document.getElementById('info-popup');
   tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      popup.style.display = 'none';
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
+    });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -393,6 +398,22 @@
       if (t) {
         showTask(t);
       }
+    });
+  });
+  document.querySelectorAll('tbody td[data-date]').forEach(cell => {
+    cell.addEventListener('dragover', e => {
+      e.preventDefault();
+    });
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const date = cell.dataset.date;
+      const worker = cell.closest('tr').dataset.worker;
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
+      }).then(() => location.reload());
     });
   });
   const projToggle = document.getElementById('projects-toggle');

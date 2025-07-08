@@ -139,6 +139,25 @@ def attempt_reorganize(projects, pid, phase, days=30):
     return False
 
 
+def move_phase_date(projects, pid, phase, new_date, worker=None):
+    """Move ``phase`` of project ``pid`` so it starts on ``new_date``."""
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return False
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return False
+    old_start = date.fromisoformat(tasks[0][1])
+    base = date.fromisoformat(proj['start_date'])
+    offset = (old_start - base).days
+    proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    if worker:
+        proj.setdefault('assigned', {})[phase] = worker
+    save_projects(projects)
+    return True
+
+
 def get_projects():
     projects = load_projects()
     changed = False
@@ -590,6 +609,24 @@ def reorganize_phase():
         return '', 400
     projects = get_projects()
     attempt_reorganize(projects, pid, phase)
+    return '', 204
+
+
+@app.route('/move', methods=['POST'])
+def move_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    worker = data.get('worker')
+    if not pid or not phase or not date_str:
+        return '', 400
+    try:
+        day = date.fromisoformat(date_str)
+    except Exception:
+        return '', 400
+    projects = get_projects()
+    move_phase_date(projects, pid, phase, day, worker)
     return '', 204
 
 
