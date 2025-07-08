@@ -130,7 +130,7 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -281,9 +281,16 @@
 
   const tasks = document.querySelectorAll('.task');
   const popup = document.getElementById('info-popup');
+  let lastDrag = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
+      lastDrag = {
+        pid: t.dataset.pid,
+        phase: t.dataset.phase,
+        date: t.dataset.day,
+        worker: t.closest('tr').dataset.worker
+      };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
     });
     t.addEventListener('click', (e) => {
@@ -372,6 +379,31 @@
     sessionStorage.removeItem('highlightPid');
   }
 
+  const moved = sessionStorage.getItem('movedInfo');
+  if (moved) {
+    const m = JSON.parse(moved);
+    tasks.forEach(t => {
+      if (t.dataset.pid === m.pid && t.dataset.phase === m.phase) {
+        t.classList.add('moved');
+      }
+    });
+    sessionStorage.removeItem('movedInfo');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      const info = sessionStorage.getItem('undoMove');
+      if (info) {
+        const data = JSON.parse(info);
+        fetch(MOVE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+      }
+    }
+  });
+
   document.querySelectorAll('.conflict-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -409,6 +441,10 @@
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+        sessionStorage.setItem('movedInfo', JSON.stringify({pid: data.pid, phase: data.phase}));
+      }
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
