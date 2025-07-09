@@ -1,28 +1,58 @@
-from flask import Flask, render_template, request, redirect, url_for
-from datetime import date, timedelta
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+from datetime import date, timedelta, datetime
 import uuid
 import os
 import copy
+import json
+import smtplib
+from email.message import EmailMessage
 from werkzeug.utils import secure_filename
-from schedule import (
-    load_projects,
-    save_projects,
-    schedule_projects,
-    load_dismissed,
-    save_dismissed,
-    load_extra_conflicts,
-    save_extra_conflicts,
-    load_milestones,
-    save_milestones,
-    load_vacations,
-    save_vacations,
-    PRIORITY_ORDER,
-    PHASE_ORDER,
-    WORKERS,
-    find_worker_for_phase,
-    compute_schedule_map,
-    HOURS_PER_DAY,
-)
+import sys
+import importlib.util
+
+# Always load this repository's ``schedule.py`` regardless of the working
+# directory or any installed package named ``schedule``.  After importing, pull
+# the required symbols from the loaded module.  This approach prevents
+# ``ImportError`` even if an unexpected third-party module shadows the local
+# file.
+_schedule_dir = os.path.dirname(os.path.abspath(__file__))
+_schedule_path = os.path.join(_schedule_dir, "schedule.py")
+if _schedule_dir not in sys.path:
+    sys.path.insert(0, _schedule_dir)
+_spec = importlib.util.spec_from_file_location("schedule", _schedule_path)
+_schedule_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_schedule_mod)
+sys.modules['schedule'] = _schedule_mod
+
+# Expose schedule helpers as module-level names
+load_projects = _schedule_mod.load_projects
+save_projects = _schedule_mod.save_projects
+schedule_projects = _schedule_mod.schedule_projects
+load_dismissed = _schedule_mod.load_dismissed
+save_dismissed = _schedule_mod.save_dismissed
+load_extra_conflicts = _schedule_mod.load_extra_conflicts
+save_extra_conflicts = _schedule_mod.save_extra_conflicts
+load_milestones = _schedule_mod.load_milestones
+save_milestones = _schedule_mod.save_milestones
+load_vacations = _schedule_mod.load_vacations
+save_vacations = _schedule_mod.save_vacations
+PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
+PHASE_ORDER = _schedule_mod.PHASE_ORDER
+WORKERS = _schedule_mod.WORKERS
+find_worker_for_phase = _schedule_mod.find_worker_for_phase
+compute_schedule_map = _schedule_mod.compute_schedule_map
+if hasattr(_schedule_mod, "phase_start_map"):
+    phase_start_map = _schedule_mod.phase_start_map
+else:
+    def phase_start_map(projects):
+        mapping = compute_schedule_map(projects)
+        result = {}
+        for pid, items in mapping.items():
+            for worker, day, phase, hours in items:
+                result.setdefault(pid, {}).setdefault(phase, day)
+        return result
+WEEKEND = _schedule_mod.WEEKEND
+HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 
 app = Flask(__name__)
 
@@ -36,6 +66,8 @@ MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
+BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 
 
 def parse_input_date(value):
@@ -71,6 +103,138 @@ def parse_input_date(value):
             except ValueError:
                 return None
     return None
+
+
+def load_bugs():
+    if os.path.exists(BUGS_FILE):
+        with open(BUGS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_bugs(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(BUGS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def send_bug_report(bug):
+    msg = EmailMessage()
+    msg['Subject'] = f"BUG {bug['id']} - {bug['tab']}"
+    sender = os.environ.get('BUG_SENDER', 'planificador@example.com')
+    msg['From'] = sender
+    msg['To'] = 'irodriguez@caldereria-cpk.es'
+    body = (
+        f"Registrado por: {bug['user']}\n"
+        f"Pesta\u00f1a: {bug['tab']}\n"
+        f"Frecuencia: {bug['freq']}\n\n"
+        f"{bug['detail']}\n"
+        f"Fecha: {bug['date']}"
+    )
+    msg.set_content(body)
+    host = os.environ.get('BUG_SMTP_HOST', 'localhost')
+    port = int(os.environ.get('BUG_SMTP_PORT', 25))
+    user = os.environ.get('BUG_SMTP_USER')
+    password = os.environ.get('BUG_SMTP_PASS')
+    use_ssl = os.environ.get('BUG_SMTP_SSL') == '1'
+    try:
+        if use_ssl:
+            server = smtplib.SMTP_SSL(host, port)
+        else:
+            server = smtplib.SMTP(host, port)
+        if user and password:
+            if not use_ssl:
+                server.starttls()
+            server.login(user, password)
+        server.send_message(msg)
+        server.quit()
+    except Exception as e:
+        print('Error sending bug report:', e)
+
+
+def build_calendar(start, end):
+    """Return full days list, collapsed columns and week spans."""
+    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    cols = []
+    i = 0
+    while i < len(days):
+        d = days[i]
+        if d.weekday() == 5:
+            wk = [d]
+            if i + 1 < len(days) and days[i+1].weekday() == 6:
+                wk.append(days[i+1])
+            cols.append({"type": "weekend", "dates": wk})
+            i += len(wk)
+        else:
+            cols.append({"type": "day", "dates": [d]})
+            i += 1
+    week_spans = []
+    current_week = cols[0]["dates"][0].isocalendar().week
+    span = 0
+    for c in cols:
+        week = c["dates"][0].isocalendar().week
+        if week != current_week:
+            week_spans.append({"week": current_week, "span": span})
+            current_week = week
+            span = 1
+        else:
+            span += 1
+    week_spans.append({"week": current_week, "span": span})
+    return days, cols, week_spans
+
+
+def attempt_reorganize(projects, pid, phase, days=30):
+    """Try to move ``phase`` of project ``pid`` to an earlier slot."""
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return False
+    orig_start = date.fromisoformat(tasks[0][1])
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return False
+    base = date.fromisoformat(proj['start_date'])
+    best = orig_start
+    best_date = base
+    for delta in range(1, days + 1):
+        cand = base - timedelta(days=delta)
+        temp = copy.deepcopy(projects)
+        for tp in temp:
+            if tp['id'] == pid:
+                tp['start_date'] = cand.isoformat()
+                break
+        new_map = compute_schedule_map(temp)
+        new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
+        if not new_tasks:
+            continue
+        start2 = date.fromisoformat(new_tasks[0][1])
+        if start2 < best:
+            best = start2
+            best_date = cand
+    if best < orig_start:
+        proj['start_date'] = best_date.isoformat()
+        save_projects(projects)
+        return True
+    return False
+
+
+def move_phase_date(projects, pid, phase, new_date, worker=None):
+    """Move ``phase`` of project ``pid`` so it starts on ``new_date``."""
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return False
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return False
+    old_start = date.fromisoformat(tasks[0][1])
+    base = date.fromisoformat(proj['start_date'])
+    offset = (old_start - base).days
+    proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    if worker:
+        proj.setdefault('assigned', {})[phase] = worker
+    save_projects(projects)
+    return True
 
 
 def get_projects():
@@ -111,21 +275,16 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    for p in projects:
+        try:
+            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+        except Exception:
+            p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
-
-    default_start = date.today() - timedelta(days=date.today().weekday())
-    default_offset = (default_start - MIN_DATE).days
-    max_offset = (MAX_DATE - MIN_DATE).days - 13
-
-    try:
-        offset = int(request.args.get('offset', default_offset))
-    except ValueError:
-        offset = default_offset
-    offset = max(0, min(offset, max_offset))
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
@@ -140,45 +299,30 @@ def calendar_view():
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
 
-    start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
-
-    week_spans = []
-    current_week = days[0].isocalendar().week
-    span = 0
-    for d in days:
-        week = d.isocalendar().week
-        if week != current_week:
-            week_spans.append({'week': current_week, 'span': span})
-            current_week = week
-            span = 1
-        else:
-            span += 1
-    week_spans.append({'week': current_week, 'span': span})
-
-    today_offset = (date.today() - MIN_DATE).days
+    start = date.today() - timedelta(days=90)
+    end = date.today() + timedelta(days=180)
+    days, cols, week_spans = build_calendar(start, end)
 
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
+    start_map = phase_start_map(projects)
 
     return render_template(
         'index.html',
         schedule=schedule,
-        days=days,
+        cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
-        today_offset=today_offset,
         today=date.today(),
         project_filter=project_filter,
         client_filter=client_filter,
         milestones=milestone_map,
         project_data=project_map,
+        start_map=start_map,
         phases=PHASE_ORDER,
     )
 
@@ -186,6 +330,19 @@ def calendar_view():
 @app.route('/projects')
 def project_list():
     projects = get_projects()
+    # Compute deadlines to show whether each project meets its due date
+    proj_copy = copy.deepcopy(projects)
+    schedule_projects(proj_copy)
+    end_dates = {p['id']: p['end_date'] for p in proj_copy}
+    for p in projects:
+        if p['id'] in end_dates:
+            p['end_date'] = end_dates[p['id']]
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except Exception:
+                p['met'] = False
+        else:
+            p['met'] = False
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
     if project_filter or client_filter:
@@ -194,6 +351,7 @@ def project_list():
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
+    start_map = phase_start_map(projects)
     return render_template(
         'projects.html',
         projects=projects,
@@ -202,6 +360,7 @@ def project_list():
         all_workers=list(WORKERS.keys()),
         project_filter=project_filter,
         client_filter=client_filter,
+        start_map=start_map,
     )
 
 
@@ -237,16 +396,13 @@ def add_project():
             value_h = data.get(phase)
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value_h:
-                    val = date.today() + timedelta(days=14)
-                else:
+                if value_h:
                     val = parse_input_date(value_h)
-                    if not val:
-                        val = date.today() + timedelta(days=14)
-                project['phases'][phase] = val.isoformat()
-                project['assigned'][phase] = find_worker_for_phase(
-                    phase, schedule, project['priority']
-                )
+                    if val:
+                        project['phases'][phase] = val.isoformat()
+                        project['assigned'][phase] = find_worker_for_phase(
+                            phase, schedule, project['priority']
+                        )
             else:
                 hours = 0
                 if value_h:
@@ -357,16 +513,13 @@ def complete():
             value_h = data.get(phase)
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value_h:
-                    val = date.today() + timedelta(days=14)
-                else:
+                if value_h:
                     val = parse_input_date(value_h)
-                    if not val:
-                        val = date.today() + timedelta(days=14)
-                project['phases'][phase] = val.isoformat()
-                project['assigned'][phase] = find_worker_for_phase(
-                    phase, schedule, project['priority']
-                )
+                    if val:
+                        project['phases'][phase] = val.isoformat()
+                        project['assigned'][phase] = find_worker_for_phase(
+                            phase, schedule, project['priority']
+                        )
             else:
                 hours = 0
                 if value_h:
@@ -389,21 +542,16 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    for p in projects:
+        try:
+            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+        except Exception:
+            p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
-
-    default_start = date.today() - timedelta(days=date.today().weekday())
-    default_offset = (default_start - MIN_DATE).days
-    max_offset = (MAX_DATE - MIN_DATE).days - 13
-
-    try:
-        offset = int(request.args.get('offset', default_offset))
-    except ValueError:
-        offset = default_offset
-    offset = max(0, min(offset, max_offset))
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
@@ -424,38 +572,23 @@ def complete():
     else:
         filtered_projects = projects
 
-    start = MIN_DATE + timedelta(days=offset)
-    days = [start + timedelta(days=i) for i in range(14)]
-    week_spans = []
-    current_week = days[0].isocalendar().week
-    span = 0
-    for d in days:
-        week = d.isocalendar().week
-        if week != current_week:
-            week_spans.append({'week': current_week, 'span': span})
-            current_week = week
-            span = 1
-        else:
-            span += 1
-    week_spans.append({'week': current_week, 'span': span})
-    today_offset = (date.today() - MIN_DATE).days
-
+    start = date.today() - timedelta(days=90)
+    end = date.today() + timedelta(days=180)
+    days, cols, week_spans = build_calendar(start, end)
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
 
     project_map = {p['id']: p for p in projects}
+    start_map = phase_start_map(projects)
 
     return render_template(
         'complete.html',
         schedule=schedule,
-        days=days,
+        cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
         workers=WORKERS,
-        offset=offset,
-        max_offset=max_offset,
-        today_offset=today_offset,
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,
@@ -465,6 +598,7 @@ def complete():
         all_workers=list(WORKERS.keys()),
         milestones=milestone_map,
         project_data=project_map,
+        start_map=start_map,
     )
 
 
@@ -545,6 +679,116 @@ def update_worker(pid, phase):
     return redirect(next_url)
 
 
+@app.route('/update_phase_start', methods=['POST'])
+def update_phase_start():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not phase or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date.weekday() in WEEKEND:
+        return jsonify({'error': 'No se puede iniciar en fin de semana'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+    proj = next((p for p in projects if p['id'] == pid), None)
+    base = date.fromisoformat(proj['start_date'])
+    offset = (date.fromisoformat(tasks[0][1]) - base).days
+    proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    temp = copy.deepcopy(projects)
+    new_map = compute_schedule_map(temp)
+    new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
+    if not new_tasks or date.fromisoformat(new_tasks[0][1]) != new_date:
+        return jsonify({'error': 'No se puede asignar esa fecha'}), 400
+    save_projects(temp)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
+@app.route('/update_due_date', methods=['POST'])
+def update_due_date():
+    """Modify a project's deadline."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    date_str = data.get('due_date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    proj['due_date'] = new_date.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
+@app.route('/reorganize', methods=['POST'])
+def reorganize_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    if not pid or not phase:
+        return '', 400
+    projects = get_projects()
+    attempt_reorganize(projects, pid, phase)
+    return '', 204
+
+
+@app.route('/delete_phase', methods=['POST'])
+def delete_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    if not pid or not phase:
+        return '', 400
+    projects = get_projects()
+    for p in projects:
+        if p['id'] == pid:
+            if phase in p.get('phases', {}):
+                p['phases'].pop(phase, None)
+                if p.get('assigned'):
+                    p['assigned'].pop(phase, None)
+                save_projects(projects)
+            break
+    return '', 204
+
+
+@app.route('/move', methods=['POST'])
+def move_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    worker = data.get('worker')
+    if not pid or not phase or not date_str:
+        return '', 400
+    try:
+        day = date.fromisoformat(date_str)
+    except Exception:
+        return '', 400
+    projects = get_projects()
+    move_phase_date(projects, pid, phase, day, worker)
+    return '', 204
+
+
 @app.route('/delete_project/<pid>', methods=['POST'])
 def delete_project(pid):
     projects = get_projects()
@@ -579,7 +823,10 @@ def delete_conflict(key):
     new_extras = [e for e in extras if e['key'] != key]
     if len(new_extras) != len(extras):
         save_extra_conflicts(new_extras)
-    return redirect(url_for('calendar_view'))
+    # Return to the page that issued the request so the user stays on the
+    # same tab (e.g. "Completo") instead of always jumping back to the
+    # calendar view.
+    return redirect(request.referrer or url_for('complete'))
 
 
 @app.route('/clear_conflicts', methods=['POST'])
@@ -603,6 +850,37 @@ def show_conflicts():
     """Restore all dismissed conflicts so they appear again."""
     save_dismissed([])
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/report_bug', methods=['POST'])
+def report_bug():
+    user = request.form.get('user')
+    tab = request.form.get('tab')
+    freq = request.form.get('freq')
+    detail = request.form.get('detail', '').strip()
+    if not all([user, tab, freq, detail]):
+        return redirect(request.referrer or url_for('complete'))
+    bugs = load_bugs()
+    bug_id = len(bugs) + 1
+    bug = {
+        'id': bug_id,
+        'user': user,
+        'tab': tab,
+        'freq': freq,
+        'detail': detail,
+        'date': datetime.now().isoformat(timespec='seconds'),
+    }
+    bugs.append(bug)
+    save_bugs(bugs)
+    send_bug_report(bug)
+    return redirect(request.referrer or url_for('complete'))
+
+
+@app.route('/bugs')
+def bug_list():
+    """Show table with all recorded bugs."""
+    bugs = load_bugs()
+    return render_template('bugs.html', bugs=bugs)
 
 
 if __name__ == '__main__':
