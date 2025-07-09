@@ -804,7 +804,10 @@ def delete_conflict(key):
     new_extras = [e for e in extras if e['key'] != key]
     if len(new_extras) != len(extras):
         save_extra_conflicts(new_extras)
-    return redirect(url_for('calendar_view'))
+    # Return to the page that issued the request so the user stays on the
+    # same tab (e.g. "Completo") instead of always jumping back to the
+    # calendar view.
+    return redirect(request.referrer or url_for('complete'))
 
 
 @app.route('/clear_conflicts', methods=['POST'])
