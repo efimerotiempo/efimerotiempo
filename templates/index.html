@@ -1,43 +1,47 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Calendario (dos semanas)</h2>
+<h2>Calendario</h2>
 <div class="controls">
     <form id="filter-form" method="get">
-        <input type="hidden" name="offset" value="{{ offset }}">
         <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
         <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
         <button type="submit">Filtrar</button>
     </form>
     <button id="today-btn">HOY</button>
-    <button id="left-btn">&lt;</button>
-    <button id="right-btn">&gt;</button>
-</div>
-<div class="slider">
-    <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
 </div>
 <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
     <tr class="weeknums">
-        <th></th>
+        <th class="resource-col"></th>
         {% for w in week_spans %}
         <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
         {% endfor %}
     </tr>
     <tr>
         <th class="resource-col">Recurso</th>
-        {% for d in days %}
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        {% else %}
+        <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
         {% endfor %}
     </tr>
     <tr class="milestones-row">
-        <td></td>
-        {% for d in days %}
+        <td class="resource-col"></td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
         {% set ms = milestones.get(d.isoformat()) %}
-        <td class="milestone-cell{% if d == today %} today{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
             {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
         </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
         {% endfor %}
     </tr>
     </thead>
@@ -45,14 +49,16 @@
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
         <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
-        {% for d in days %}
-        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <td data-date="{{ d.isoformat() }}" class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -63,6 +69,9 @@
             {% endif %}
             {% endfor %}
         </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
         {% endfor %}
     </tr>
     {% endfor %}
@@ -104,20 +113,28 @@
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const slider = document.getElementById('day-range');
+  const REORG_URL = "{{ url_for('reorganize_phase') }}";
+  const MOVE_URL = "{{ url_for('move_phase') }}";
+  const DELETE_URL = "{{ url_for('delete_phase') }}";
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  const DUE_URL = "{{ url_for('update_due_date') }}";
+  const START_DATA = {{ start_map|tojson }};
   const filterForm = document.getElementById('filter-form');
-  const offsetInput = filterForm.querySelector('input[name="offset"]');
-
-  function update() {
-    offsetInput.value = slider.value;
-    filterForm.submit();
-  }
-
-  slider.addEventListener('input', update);
 
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
+  const SCROLL_KEY = 'calendarScroll';
+  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+  if (savedScroll !== null) {
+    wrapper.scrollLeft = parseFloat(savedScroll);
+  } else {
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+  }
+  wrapper.addEventListener('scroll', () => {
+    sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+  });
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
 
   document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
@@ -136,22 +153,26 @@
 
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    offsetInput.value = {{ today_offset }};
-    filterForm.submit();
-  });
-
-  document.getElementById('left-btn').addEventListener('click', () => {
-    slider.stepDown();
-    update();
-  });
-  document.getElementById('right-btn').addEventListener('click', () => {
-    slider.stepUp();
-    update();
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) {
+      todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+    }
   });
 
   const tasks = document.querySelectorAll('.task');
   const popup = document.getElementById('info-popup');
+  let lastDrag = null;
   tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      popup.style.display = 'none';
+      lastDrag = {
+        pid: t.dataset.pid,
+        phase: t.dataset.phase,
+        date: t.dataset.day,
+        worker: t.closest('tr').dataset.worker
+      };
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
+    });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -182,11 +203,80 @@
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
+      html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
+      html += ` <form id="start-form" style="display:inline">` +
+               `<input type="date" id="start-input" value="${startVal}" required>` +
+               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
+               `</form>`;
+      html += ` <form id="due-form" style="display:inline">` +
+               `<input type="date" id="due-input" value="${info.due_date}" required>` +
+               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
+               `</form>`;
+      if (t.dataset.phase === 'pedidos') {
+        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+      }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
+      const btn = document.getElementById('reorg-btn');
+      if (btn) {
+        btn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch(REORG_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
+          }).then(() => location.reload());
+        });
+      }
+      const del = document.getElementById('del-btn');
+      if (del) {
+        del.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Borrar fase?')) {
+            fetch(DELETE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+            }).then(() => location.reload());
+          }
+        });
+      }
+      const startForm = document.getElementById('start-form');
+      if (startForm) {
+        startForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('start-btn');
+          const val = document.getElementById('start-input').value;
+          fetch(START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
+      const dueForm = document.getElementById('due-form');
+      if (dueForm) {
+        dueForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('due-btn');
+          const val = document.getElementById('due-input').value;
+          fetch(DUE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
     });
   });
   document.addEventListener('click', () => {
@@ -226,6 +316,31 @@
     sessionStorage.removeItem('highlightPid');
   }
 
+  const moved = sessionStorage.getItem('movedInfo');
+  if (moved) {
+    const m = JSON.parse(moved);
+    tasks.forEach(t => {
+      if (t.dataset.pid === m.pid && t.dataset.phase === m.phase) {
+        t.classList.add('moved');
+      }
+    });
+    sessionStorage.removeItem('movedInfo');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      const info = sessionStorage.getItem('undoMove');
+      if (info) {
+        const data = JSON.parse(info);
+        fetch(MOVE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+      }
+    }
+  });
+
   document.querySelectorAll('.conflict-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -240,10 +355,6 @@
       }
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
     });
   });
@@ -255,11 +366,27 @@
       let t = Array.from(tasks).find(o => o.dataset.pid === pid);
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
+    });
+  });
+  document.querySelectorAll('tbody td[data-date]').forEach(cell => {
+    cell.addEventListener('dragover', e => {
+      e.preventDefault();
+    });
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const date = cell.dataset.date;
+      const worker = cell.closest('tr').dataset.worker;
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+        sessionStorage.setItem('movedInfo', JSON.stringify({pid: data.pid, phase: data.phase}));
+      }
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
+      }).then(() => location.reload());
     });
   });
 </script>
