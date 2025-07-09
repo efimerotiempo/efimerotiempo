@@ -104,9 +104,10 @@ horas libres que restan en la jornada y encadena la soldadura a continuación
 sin sobrepasar nunca las ocho horas diarias. Las tareas de un mismo día se
 ordenan según el momento en que se ejecutan, de modo que si otro trabajo de
 dos horas cabe antes de soldar, se colocará en las primeras horas del día.
-Cada fase se programa en jornadas laborables consecutivas, de forma que si un
-trabajador no dispone de todos los días seguidos se buscará otro que sí los
-tenga libres antes de fragmentar la tarea.
+Cada fase se programa en jornadas laborables consecutivas. Si un trabajador no
+tiene libres esos días seguidos —incluyendo las jornadas posteriores a sus
+montajes anteriores— se buscará otro que sí disponga de ese hueco antes de
+dividir la tarea en intervalos separados.
 
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha

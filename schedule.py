@@ -515,19 +515,25 @@ def find_worker_for_phase(
             continue
         if phase not in skills:
             continue
+        start = start_day or date.today()
+        if phase == 'montar':
+            last, end = _last_phase_info(schedule.get(worker, {}), 'montar')
+            if last and start <= last:
+                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+                start = last if end < limit else next_workday(last)
         free = _continuous_free_start(
             schedule,
             worker,
-            start_day or date.today(),
+            start,
             days or 1,
             vacations,
         )
         load = _worker_load(schedule, worker)
-        candidates.append((skills.index(phase), free, load, worker))
+        candidates.append((free, load, skills.index(phase), worker))
     if not candidates:
         return None
     if priority == 'Alta':
-        earliest = min(candidates, key=lambda c: (c[1], c[2], c[0]))
+        earliest = min(candidates, key=lambda c: (c[0], c[1], c[2]))
         return earliest[3]
     candidates.sort(key=lambda c: (c[0], c[1], c[2]))
     return candidates[0][3]
