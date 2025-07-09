@@ -39,6 +39,7 @@ save_vacations = _schedule_mod.save_vacations
 PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
+IGOR_END = _schedule_mod.IGOR_END
 find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
 if hasattr(_schedule_mod, "phase_start_map"):
@@ -68,6 +69,16 @@ UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
+
+
+def active_workers(today=None):
+    """Return the list of workers shown in the calendar."""
+    if today is None:
+        today = date.today()
+    workers = list(WORKERS.keys())
+    if today >= IGOR_END and 'Igor' in workers:
+        workers.remove('Igor')
+    return workers
 
 
 def parse_input_date(value):
@@ -275,6 +286,8 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    if date.today() >= IGOR_END:
+        schedule.pop('Igor', None)
     for p in projects:
         try:
             p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
@@ -299,8 +312,9 @@ def calendar_view():
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
 
-    start = date.today() - timedelta(days=90)
-    end = date.today() + timedelta(days=180)
+    today = date.today()
+    start = today - timedelta(days=90)
+    end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
 
     milestone_map = {}
@@ -316,8 +330,8 @@ def calendar_view():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        workers=WORKERS,
-        today=date.today(),
+        workers=active_workers(today),
+        today=today,
         project_filter=project_filter,
         client_filter=client_filter,
         milestones=milestone_map,
@@ -357,7 +371,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=active_workers(),
         project_filter=project_filter,
         client_filter=client_filter,
         start_map=start_map,
@@ -470,7 +484,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=date.today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -542,6 +556,8 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    if date.today() >= IGOR_END:
+        schedule.pop('Igor', None)
     for p in projects:
         try:
             p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
@@ -572,8 +588,9 @@ def complete():
     else:
         filtered_projects = projects
 
-    start = date.today() - timedelta(days=90)
-    end = date.today() + timedelta(days=180)
+    today = date.today()
+    start = today - timedelta(days=90)
+    end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     milestone_map = {}
     for m in milestones:
@@ -588,14 +605,14 @@ def complete():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        workers=WORKERS,
+        workers=active_workers(today),
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,
-        today=date.today(),
+        today=today,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=active_workers(today),
         milestones=milestone_map,
         project_data=project_map,
         start_map=start_map,

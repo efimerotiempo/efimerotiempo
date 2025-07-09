@@ -26,9 +26,9 @@ WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Joseba 2': ['montar', 'soldar'],
     'Mikel': ['montar', 'soldar'],
     'Iban': ['montar', 'soldar'],
+    'Joseba 2': ['montar', 'soldar'],
     'Naparra': ['montar', 'soldar'],
     'Unai': ['montar', 'soldar'],
     'Fabio': ['soldar', 'montar'],
@@ -39,6 +39,9 @@ WORKERS = {
     'Mecanizar': ['mecanizar'],
     'Tratamiento': ['tratamiento'],
 }
+
+# Igor deja de aparecer en el calendario a partir del 21 de julio
+IGOR_END = date(2025, 7, 21)
 
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
@@ -524,6 +527,8 @@ def find_worker_for_phase(
         if phase not in skills:
             continue
         start = start_day or date.today()
+        if worker == 'Igor' and start >= IGOR_END:
+            continue
         if phase == 'montar':
             last, end = _last_phase_info(schedule.get(worker, {}), 'montar')
             if last and start <= last:

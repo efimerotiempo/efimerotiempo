@@ -49,6 +49,8 @@ mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
 sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
+El 9 de julio corresponde a la **semana 28**, por lo que la fila de números de
+semana se actualiza automáticamente partiendo de esa numeración.
 
 Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Esa franja ocupa solamente una quinta parte del ancho que tenía anteriormente, de modo que queda como una línea muy estrecha.
 
@@ -91,6 +93,11 @@ reparten y se adelantan lo máximo posible aprovechando los huecos libres.
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
 lista de proyectos. El planificador automático lo ignora al repartir
 fases por defecto.
+
+Las filas del calendario muestran a las personas siempre en este orden:
+Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,
+Igor, Albi y Eneko. A partir del 21 de julio Igor deja de aparecer en el
+calendario y ya no se le asignan nuevas fases.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
