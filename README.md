@@ -111,8 +111,9 @@ dividir la tarea en intervalos separados.
 
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha
-de acopio indicada y no se reparte por horas. Irene puede acumular tantos
-proyectos como sea necesario dentro de ese margen sin limitación diaria.
+de acopio indicada y no se reparte por horas. Si no se especifica un plazo, la
+fase simplemente no se planifica. Irene puede acumular tantos proyectos como
+sea necesario dentro de ese margen sin limitación diaria.
 
 Las fases **mecanizar** y **tratamiento** funcionan de manera similar en
 cuanto a capacidad: no existe un tope diario de proyectos asignados, pero cada
@@ -139,6 +140,9 @@ confirmación. Las demás fases de ese proyecto permanecen en su sitio.
 Además se muestra un pequeño formulario con un campo de fecha y un botón
 **Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
 introducida no es válida se despliega una alerta explicando el motivo.
+Otro formulario permite editar la **fecha límite** del proyecto desde esa misma
+ventana emergente o desde las tablas de proyectos, mostrando igualmente un
+aviso si la nueva fecha no es correcta.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
@@ -176,4 +180,6 @@ la lista de conflictos se añade una nota indicando los días de vacaciones, a q
 persona se han movido las tareas y si el proyecto sigue cumpliendo su fecha
 límite tras el cambio. Aunque un trabajador tenga vacaciones cerca de la fecha
 de inicio de un proyecto, no se descarta para nuevas fases: la planificación
-simplemente saltará sus días libres y continuará al finalizar su descanso.
+simplemente salta sus días libres y continúa al finalizar su descanso. Si el
+periodo de la fase solo incluye un día de vacaciones, se sigue asignando a ese
+trabajador y la tarea se retoma tras su ausencia.

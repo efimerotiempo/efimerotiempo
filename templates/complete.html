@@ -224,7 +224,14 @@
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>{{ p.start_date }}</td>
-                <td>{{ p.due_date }}</td>
+                <td>{{ p.due_date }}
+                    <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
+                        <input type="hidden" name="pid" value="{{ p.id }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <input type="date" name="due_date" value="{{ p.due_date }}">
+                        <button type="submit">Cambiar</button>
+                    </form>
+                </td>
                 <td>
                     {% if p.met %}
                         <span class="ok">&#10004;</span>
@@ -290,6 +297,7 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
+  const DUE_URL = "{{ url_for('update_due_date') }}";
   const START_DATA = {{ start_map|tojson }};
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
@@ -378,6 +386,10 @@
                `<input type="date" id="start-input" value="${startVal}" required>` +
                `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
                `</form>`;
+      html += ` <form id="due-form" style="display:inline">` +
+               `<input type="date" id="due-input" value="${info.due_date}" required>` +
+               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
+               `</form>`;
       if (t.dataset.phase === 'pedidos') {
         html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
       }
@@ -421,6 +433,22 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
+      const dueForm = document.getElementById('due-form');
+      if (dueForm) {
+        dueForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('due-btn');
+          const val = document.getElementById('due-input').value;
+          fetch(DUE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });
@@ -559,6 +587,16 @@
       ev.preventDefault();
       const data = new FormData(f);
       fetch(START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+        });
+    });
+  });
+  document.querySelectorAll('.due-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(DUE_URL, { method: 'POST', body: data })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });

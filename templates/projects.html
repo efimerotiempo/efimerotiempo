@@ -32,7 +32,14 @@
         <td>{{ p.name }}</td>
         <td>{{ p.client }}</td>
         <td>{{ p.start_date }}</td>
-        <td>{{ p.due_date }}</td>
+        <td>{{ p.due_date }}
+            <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
+                <input type="hidden" name="pid" value="{{ p.id }}">
+                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                <input type="date" name="due_date" value="{{ p.due_date }}">
+                <button type="submit">Cambiar</button>
+            </form>
+        </td>
         <td>
             {% if p.met %}
                 <span class="ok">&#10004;</span>
@@ -90,11 +97,26 @@
 </table>
 <script>
   const START_URL = "{{ url_for('update_phase_start') }}";
+  const DUE_URL = "{{ url_for('update_due_date') }}";
   document.querySelectorAll('.start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
       fetch(START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) {
+            location.reload();
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+    });
+  });
+  document.querySelectorAll('.due-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(DUE_URL, { method: 'POST', body: data })
         .then(resp => {
           if (resp.ok) {
             location.reload();

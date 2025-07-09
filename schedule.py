@@ -136,13 +136,21 @@ def _build_vacation_map():
 
 
 def _worker_on_vacation(worker, start_day, days_needed, vac_map):
-    """Return True if worker has vacation within ``days_needed`` workdays after ``start_day``."""
+    """Return True only if ``worker`` has two or more vacation days within
+    ``days_needed`` workdays starting at ``start_day``.
+
+    A single vacation day is allowed so that phases can continue once the
+    absence ends.
+    """
     d = start_day
     remaining = days_needed
+    count = 0
     while remaining > 0:
         if d.weekday() not in WEEKEND:
             if d in vac_map.get(worker, set()):
-                return True
+                count += 1
+                if count >= 2:
+                    return True
             remaining -= 1
         d += timedelta(days=1)
     return False

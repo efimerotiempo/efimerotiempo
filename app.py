@@ -396,16 +396,13 @@ def add_project():
             value_h = data.get(phase)
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value_h:
-                    val = date.today() + timedelta(days=14)
-                else:
+                if value_h:
                     val = parse_input_date(value_h)
-                    if not val:
-                        val = date.today() + timedelta(days=14)
-                project['phases'][phase] = val.isoformat()
-                project['assigned'][phase] = find_worker_for_phase(
-                    phase, schedule, project['priority']
-                )
+                    if val:
+                        project['phases'][phase] = val.isoformat()
+                        project['assigned'][phase] = find_worker_for_phase(
+                            phase, schedule, project['priority']
+                        )
             else:
                 hours = 0
                 if value_h:
@@ -516,16 +513,13 @@ def complete():
             value_h = data.get(phase)
             value_d = data.get(f"{phase}_days")
             if phase == 'pedidos':
-                if not value_h:
-                    val = date.today() + timedelta(days=14)
-                else:
+                if value_h:
                     val = parse_input_date(value_h)
-                    if not val:
-                        val = date.today() + timedelta(days=14)
-                project['phases'][phase] = val.isoformat()
-                project['assigned'][phase] = find_worker_for_phase(
-                    phase, schedule, project['priority']
-                )
+                    if val:
+                        project['phases'][phase] = val.isoformat()
+                        project['assigned'][phase] = find_worker_for_phase(
+                            phase, schedule, project['priority']
+                        )
             else:
                 hours = 0
                 if value_h:
@@ -716,6 +710,31 @@ def update_phase_start():
     if not new_tasks or date.fromisoformat(new_tasks[0][1]) != new_date:
         return jsonify({'error': 'No se puede asignar esa fecha'}), 400
     save_projects(temp)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
+@app.route('/update_due_date', methods=['POST'])
+def update_due_date():
+    """Modify a project's deadline."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    date_str = data.get('due_date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    proj['due_date'] = new_date.isoformat()
+    save_projects(projects)
     if request.is_json:
         return '', 204
     return redirect(next_url)
