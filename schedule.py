@@ -467,6 +467,33 @@ def _next_free_day(schedule, worker, day, vacations=None):
         day = next_workday(day)
 
 
+def _continuous_free_start(schedule, worker, day, days_needed, vacations=None):
+    """Return the first day with ``days_needed`` consecutive free workdays."""
+    vac = vacations.get(worker, set()) if vacations else set()
+    sched = schedule.get(worker, {})
+    d = day
+    while True:
+        test = d
+        remaining = days_needed
+        ok = True
+        while remaining > 0:
+            if test.weekday() in WEEKEND:
+                test = next_workday(test)
+                continue
+            if test in vac:
+                ok = False
+                break
+            used = sum(t['hours'] for t in sched.get(test.isoformat(), []))
+            if used > 0:
+                ok = False
+                break
+            remaining -= 1
+            test = next_workday(test)
+        if ok:
+            return d
+        d = next_workday(d)
+
+
 def find_worker_for_phase(
     phase,
     schedule,
@@ -488,13 +515,19 @@ def find_worker_for_phase(
             continue
         if phase not in skills:
             continue
-        free = _next_free_day(schedule, worker, start_day or date.today(), vacations)
+        free = _continuous_free_start(
+            schedule,
+            worker,
+            start_day or date.today(),
+            days or 1,
+            vacations,
+        )
         load = _worker_load(schedule, worker)
-        candidates.append((free, load, skills.index(phase), worker))
+        candidates.append((skills.index(phase), free, load, worker))
     if not candidates:
         return None
     if priority == 'Alta':
-        earliest = min(candidates, key=lambda c: (c[0], c[1], c[2]))
+        earliest = min(candidates, key=lambda c: (c[1], c[2], c[0]))
         return earliest[3]
     candidates.sort(key=lambda c: (c[0], c[1], c[2]))
     return candidates[0][3]

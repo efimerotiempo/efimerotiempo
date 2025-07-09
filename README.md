@@ -81,10 +81,12 @@ desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
 usuario, pestaña y detalle.
 
 Al crear nuevos proyectos, el planificador asigna cada fase a la persona
-que pueda comenzarla antes. Si varias pueden empezar el mismo día, se
-escoge a quien tenga menos horas pendientes. De este modo, fases idénticas
-en proyectos distintos se reparten y se adelantan lo máximo posible
-aprovechando los huecos libres.
+especializada en dicha tarea que pueda comenzarla antes. Los trabajadores
+con esa fase en primer lugar tienen preferencia frente a quienes la
+tienen en segundo o tercer puesto. Si varias personas con la misma
+prioridad están libres el mismo día, se escoge a quien tenga menos horas
+pendientes. De este modo, fases idénticas en proyectos distintos se
+reparten y se adelantan lo máximo posible aprovechando los huecos libres.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
 lista de proyectos. El planificador automático lo ignora al repartir
@@ -102,6 +104,9 @@ horas libres que restan en la jornada y encadena la soldadura a continuación
 sin sobrepasar nunca las ocho horas diarias. Las tareas de un mismo día se
 ordenan según el momento en que se ejecutan, de modo que si otro trabajo de
 dos horas cabe antes de soldar, se colocará en las primeras horas del día.
+Cada fase se programa en jornadas laborables consecutivas, de forma que si un
+trabajador no dispone de todos los días seguidos se buscará otro que sí los
+tenga libres antes de fragmentar la tarea.
 
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha
