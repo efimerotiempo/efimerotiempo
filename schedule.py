@@ -331,6 +331,33 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
         used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
         start = max(hour, used)
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        if phase in ('tratamiento', 'mecanizar'):
+            # These phases can accumulate unlimited projects per day but
+            # each project aporta como mucho ocho horas diarias. Tras asignar
+            # un bloque de trabajo se pasa al siguiente día.
+            allocate = min(remaining, HOURS_PER_DAY)
+            late = day > date.fromisoformat(due_date)
+            tasks.append({
+                'project': project_name,
+                'client': client,
+                'phase': phase,
+                'hours': allocate,
+                'start': used,
+                'late': late,
+                'color': color,
+                'due_date': due_date,
+                'start_date': start_date,
+                'priority': priority,
+                'pid': pid,
+            })
+            tasks.sort(key=lambda t: t['start'])
+            schedule[day_str] = tasks
+            remaining -= allocate
+            last_day = day
+            day = next_workday(day)
+            hour = 0
+            continue
+
         if limit != float('inf') and start >= limit:
             day = next_workday(day)
             hour = 0

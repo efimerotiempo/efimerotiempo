@@ -108,6 +108,12 @@ La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 de acopio indicada y no se reparte por horas. Irene puede acumular tantos
 proyectos como sea necesario dentro de ese margen sin limitación diaria.
 
+Las fases **mecanizar** y **tratamiento** funcionan de manera similar en
+cuanto a capacidad: no existe un tope diario de proyectos asignados, pero cada
+uno se planifica en bloques de ocho horas al día. Si una fase de tratamiento o
+mecanizado dura más de ocho horas, se dividirá en jornadas consecutivas de
+ocho horas hasta completarla.
+
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas. Las tareas en el calendario muestran primero
 el nombre del proyecto seguido del cliente y la fase para identificar mejor
