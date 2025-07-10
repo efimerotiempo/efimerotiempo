@@ -102,6 +102,14 @@ table.schedule td.weekend-cell {
 .vacation {
     background: #ff9999;
     font-weight: bold;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: -4px;
+    padding: 4px;
 }
 
 
@@ -147,7 +155,6 @@ tr.collapsed td:not(:first-child) { display: none; }
 }
 .schedule thead tr:nth-child(1) th { top: 0; }
 .schedule thead tr:nth-child(2) th { top: 30px; }
-.schedule thead tr:nth-child(3) th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;

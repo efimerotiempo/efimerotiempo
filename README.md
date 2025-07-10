@@ -41,19 +41,12 @@ La pestaña **Completo** reúne todas las vistas en una sola página. En la
 parte superior se muestran, de izquierda a derecha, el formulario de alta, el
 de hitos y la lista de conflictos. Debajo aparecen el calendario y, al final,
 la lista de proyectos. Cada sección se expande por
-completo y la página ofrece una barra de desplazamiento vertical para consultar
-la información cómodamente sin necesidad de reducir el zoom. El
-calendario muestra el número de semana una sola vez por semana, en negrita y
-color violeta. Puedes desplazarte horizontalmente por el calendario
+mpleto y la página ofrece una barra de desplazamiento vertical para consultar
+la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
 sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
-El 9 de julio corresponde siempre a la **semana 28**. A partir de esa fecha
-los números de semana se calculan restando la semana ISO en la que cae el
-9 de julio de ese mismo año y sumando 28. De este modo cada nuevo año
-comienza de nuevo en 1 pero la semana del 9 de julio vuelve a mostrarse como
-28.
 
 Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Esa franja ocupa solamente una quinta parte del ancho que tenía anteriormente, de modo que queda como una línea muy estrecha.
 
@@ -184,8 +177,9 @@ una alerta explicando el motivo.
 
 Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
-inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo en
-el calendario y no admiten asignaciones de tareas. Si un trabajador tenía
+inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
+bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
+asignaciones de tareas. Si un trabajador tenía
 proyectos planificados en esas fechas, la planificación se recalcula y esas
 fases se reasignan automáticamente al trabajador disponible con menor carga. En
 la lista de conflictos se añade una nota indicando los días de vacaciones, a qué

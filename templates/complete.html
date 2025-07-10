@@ -88,12 +88,6 @@
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
-    <tr class="weeknums">
-        <th class="resource-col"></th>
-        {% for w in week_spans %}
-        <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
-        {% endfor %}
-    </tr>
     <tr>
         <th class="resource-col">Recurso</th>
         {% for c in cols %}
