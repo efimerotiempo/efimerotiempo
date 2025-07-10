@@ -180,11 +180,22 @@ def build_calendar(start, end):
             cols.append({"type": "day", "dates": [d]})
             i += 1
 
-    ref = date(date.today().year, 7, 9)
-    ref_monday = ref - timedelta(days=ref.weekday())
+    def weeks_in_year(year: int) -> int:
+        """Return the number of ISO weeks in ``year``."""
+        return date(year, 12, 28).isocalendar().week
 
     def wnum(day: date) -> int:
-        return 28 + (day - ref_monday).days // 7
+        """Return custom week number so 9 July is always week 28."""
+        ref = date(day.year, 7, 9)
+        ref_week = ref.isocalendar().week
+        iso_year, iso_week, _ = day.isocalendar()
+        if iso_year > day.year:
+            diff = iso_week + weeks_in_year(day.year) - ref_week
+        elif iso_year < day.year:
+            diff = iso_week - weeks_in_year(day.year - 1) - ref_week
+        else:
+            diff = iso_week - ref_week
+        return 28 + diff
 
     week_spans = []
     current_week = wnum(cols[0]["dates"][0])

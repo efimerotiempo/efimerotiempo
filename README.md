@@ -49,9 +49,11 @@ mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
 sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
-El 9 de julio corresponde a la **semana 28**, por lo que la fila de números de
-semana se muestra desde ese valor y se incrementa de forma continua las
-semanas siguientes, independientemente de los cambios de año.
+El 9 de julio corresponde siempre a la **semana 28**. A partir de esa fecha
+los números de semana se calculan restando la semana ISO en la que cae el
+9 de julio de ese mismo año y sumando 28. De este modo cada nuevo año
+comienza de nuevo en 1 pero la semana del 9 de julio vuelve a mostrarse como
+28.
 
 Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Esa franja ocupa solamente una quinta parte del ancho que tenía anteriormente, de modo que queda como una línea muy estrecha.
 
