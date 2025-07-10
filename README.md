@@ -32,10 +32,10 @@ define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
 de iniciar la aplicación.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
- vistas de calendario aparecerá una línea roja en la fecha del hito y la
- descripción se muestra en horizontal dentro de su celda en color rojo. Existe
- una pestaña **Hitos** que muestra la lista completa y permite eliminarlos con
- una **X** roja.
+ vistas de calendario aparece una gruesa línea roja a la derecha del día del
+ hito y la descripción se muestra en rojo, en negrita y con un tamaño de letra
+ el doble de grande dentro de su celda. Existe una pestaña **Hitos** que
+ muestra la lista completa y permite eliminarlos con una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
 parte superior se muestran, de izquierda a derecha, el formulario de alta, el
@@ -98,6 +98,8 @@ Las filas del calendario muestran a las personas siempre en este orden:
 Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,
 Igor, Albi y Eneko. A partir del 21 de julio Igor deja de aparecer en el
 calendario y ya no se le asignan nuevas fases.
+Junto a cada nombre se indican entre paréntesis las fases que puede realizar en
+su orden de prioridad para consultarlo de un vistazo.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo

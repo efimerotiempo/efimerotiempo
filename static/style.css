@@ -104,18 +104,20 @@ table.schedule td.weekend-cell {
     font-weight: bold;
 }
 
+
 .milestone-day {
-    border-left: 2px solid red;
+    border-right: 2px solid red;
 }
 
 .milestone-cell {
-    border-left: 2px solid red;
+    border-right: 2px solid red;
     height: 30px;
     position: relative;
 }
 
 .milestone-label {
-    font-size: 0.8em;
+    font-size: 1.6em;
+    font-weight: bold;
     color: red;
     position: absolute;
     bottom: 0;
