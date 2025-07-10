@@ -172,18 +172,25 @@ def build_calendar(start, end):
         d = days[i]
         if d.weekday() == 5:
             wk = [d]
-            if i + 1 < len(days) and days[i+1].weekday() == 6:
-                wk.append(days[i+1])
+            if i + 1 < len(days) and days[i + 1].weekday() == 6:
+                wk.append(days[i + 1])
             cols.append({"type": "weekend", "dates": wk})
             i += len(wk)
         else:
             cols.append({"type": "day", "dates": [d]})
             i += 1
+
+    ref = date(date.today().year, 7, 9)
+    ref_monday = ref - timedelta(days=ref.weekday())
+
+    def wnum(day: date) -> int:
+        return 28 + (day - ref_monday).days // 7
+
     week_spans = []
-    current_week = cols[0]["dates"][0].isocalendar().week
+    current_week = wnum(cols[0]["dates"][0])
     span = 0
     for c in cols:
-        week = c["dates"][0].isocalendar().week
+        week = wnum(c["dates"][0])
         if week != current_week:
             week_spans.append({"week": current_week, "span": span})
             current_week = week

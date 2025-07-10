@@ -50,7 +50,8 @@ sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
 El 9 de julio corresponde a la **semana 28**, por lo que la fila de números de
-semana se actualiza automáticamente partiendo de esa numeración.
+semana se muestra desde ese valor y se incrementa de forma continua las
+semanas siguientes, independientemente de los cambios de año.
 
 Los fines de semana se representan con una franja negra que agrupa el sábado y el domingo en lugar de mostrar ambas columnas. Esa franja ocupa solamente una quinta parte del ancho que tenía anteriormente, de modo que queda como una línea muy estrecha.
 
