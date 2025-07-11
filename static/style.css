@@ -219,3 +219,4 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 .hours-row select { width: 60px; }
 .schedule thead #hours-toggle { cursor: pointer; }
+.schedule thead #hours-label { cursor: pointer; margin-left: 4px; }
