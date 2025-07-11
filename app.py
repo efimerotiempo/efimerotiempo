@@ -382,7 +382,6 @@ def calendar_view():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
-    hours_map = load_daily_hours()
 
     milestone_map = {}
     for m in milestones:
@@ -433,6 +432,7 @@ def project_list():
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
+    hours_map = load_daily_hours()
     start_map = phase_start_map(projects)
     projects = expand_for_display(projects)
     return render_template(
