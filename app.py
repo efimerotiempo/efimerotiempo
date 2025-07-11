@@ -650,6 +650,7 @@ def complete():
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
+    hours_map = load_daily_hours()
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
@@ -674,6 +675,7 @@ def complete():
         milestones=milestone_map,
         project_data=project_map,
         start_map=start_map,
+        hours=hours_map,
     )
 
 
