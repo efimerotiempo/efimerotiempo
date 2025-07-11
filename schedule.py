@@ -9,6 +9,7 @@ DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
+DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -116,6 +117,20 @@ def save_vacations(data):
         json.dump(data, f)
 
 
+def load_daily_hours():
+    """Return mapping of day -> hours (1-9)."""
+    if os.path.exists(DAILY_HOURS_FILE):
+        with open(DAILY_HOURS_FILE, 'r') as f:
+            return {k: int(v) for k, v in json.load(f).items()}
+    return {}
+
+
+def save_daily_hours(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DAILY_HOURS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
 def next_workday(d):
     d += timedelta(days=1)
     while d.weekday() in WEEKEND:
@@ -176,6 +191,7 @@ def schedule_projects(projects):
     """Return schedule and conflicts after assigning all phases."""
     projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
     worker_schedule = {w: {} for w in WORKERS}
+    hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
     for worker, days in vac_map.items():
         for day in days:
@@ -228,6 +244,7 @@ def schedule_projects(projects):
                     start_day=current,
                     days=days_needed,
                     vacations=vac_map,
+                    hours_map=hours_map,
                 )
                 if worker and assigned.get(phase) and worker != assigned.get(phase):
                     vac_days = _vacation_days_in_range(
@@ -272,19 +289,20 @@ def schedule_projects(projects):
                     hours = int(seg)
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
-                        current,
-                        hour,
-                        phase,
-                        project['name'],
-                        project['client'],
-                        hours,
-                        project['due_date'],
-                        project.get('color', '#ddd'),
-                        worker,
-                        project['start_date'],
-                        project.get('priority'),
-                        project['id'],
-                    )
+                    current,
+                    hour,
+                    phase,
+                    project['name'],
+                    project['client'],
+                    hours,
+                    project['due_date'],
+                    project.get('color', '#ddd'),
+                    worker,
+                    project['start_date'],
+                    project.get('priority'),
+                    project['id'],
+                    hours_map,
+                )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'
@@ -314,7 +332,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
+def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, hours_map):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project. If there are free hours left
     # that day, reuse them before moving on to the next workday.
@@ -346,6 +364,9 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
         used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
         start = max(hour, used)
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento') and phase not in ('mecanizar', 'tratamiento'):
+            day_limit = hours_map.get(day_str, HOURS_PER_DAY)
+            limit = min(limit, day_limit)
         if phase in ('tratamiento', 'mecanizar'):
             # These phases can accumulate unlimited projects per day but
             # each project aporta como mucho ocho horas diarias. Tras asignar
@@ -467,7 +488,7 @@ def _worker_load(schedule, worker):
     )
 
 
-def _next_free_day(schedule, worker, day, vacations=None):
+def _next_free_day(schedule, worker, day, vacations=None, hours_map=None):
     """Return the first workday after ``day`` with available hours."""
     vac = vacations.get(worker, set()) if vacations else set()
     sched = schedule.get(worker, {})
@@ -477,12 +498,15 @@ def _next_free_day(schedule, worker, day, vacations=None):
             continue
         used = sum(t['hours'] for t in sched.get(day.isoformat(), []))
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
+            day_limit = (hours_map or {}).get(day.isoformat(), HOURS_PER_DAY)
+            limit = min(limit, day_limit)
         if used < limit:
             return day
         day = next_workday(day)
 
 
-def _continuous_free_start(schedule, worker, day, days_needed, vacations=None):
+def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, hours_map=None):
     """Return the first day with ``days_needed`` consecutive free workdays."""
     vac = vacations.get(worker, set()) if vacations else set()
     sched = schedule.get(worker, {})
@@ -499,7 +523,11 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None):
                 ok = False
                 break
             used = sum(t['hours'] for t in sched.get(test.isoformat(), []))
-            if used > 0:
+            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+            if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
+                day_limit = (hours_map or {}).get(test.isoformat(), HOURS_PER_DAY)
+                limit = min(limit, day_limit)
+            if used >= limit:
                 ok = False
                 break
             remaining -= 1
@@ -518,6 +546,7 @@ def find_worker_for_phase(
     start_day=None,
     days=0,
     vacations=None,
+    hours_map=None,
 ):
     """Choose the worker that can start the phase as soon as posible.
 
@@ -544,6 +573,7 @@ def find_worker_for_phase(
             start,
             days or 1,
             vacations,
+            hours_map,
         )
         load = _worker_load(schedule, worker)
         candidates.append((free, load, skills.index(phase), worker))

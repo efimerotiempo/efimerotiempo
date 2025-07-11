@@ -154,8 +154,11 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
-.schedule thead tr:nth-child(1) th { top: 0; }
-.schedule thead tr:nth-child(2) th { top: 30px; }
+.schedule thead .day-row th { top: 0; }
+.schedule thead .milestones-row th { top: 30px; }
+.schedule thead .hours-row th { top: 0; }
+.schedule thead.open .day-row th { top: 30px; }
+.schedule thead.open .milestones-row th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
@@ -213,3 +216,6 @@ tr.collapsed td:not(:first-child) { display: none; }
     margin-left: 4px;
 }
 #start-btn { margin-left: 2px; }
+
+.hours-row select { width: 60px; }
+.schedule thead #hours-toggle { cursor: pointer; }

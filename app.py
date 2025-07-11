@@ -36,6 +36,8 @@ load_milestones = _schedule_mod.load_milestones
 save_milestones = _schedule_mod.save_milestones
 load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
+load_daily_hours = _schedule_mod.load_daily_hours
+save_daily_hours = _schedule_mod.save_daily_hours
 PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
@@ -365,6 +367,8 @@ def calendar_view():
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
+    hours_map = load_daily_hours()
+    hours_map = load_daily_hours()
 
     milestone_map = {}
     for m in milestones:
@@ -387,6 +391,7 @@ def calendar_view():
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        hours=hours_map,
     )
 
 
@@ -425,6 +430,7 @@ def project_list():
         project_filter=project_filter,
         client_filter=client_filter,
         start_map=start_map,
+        hours=hours_map,
     )
 
 
@@ -807,6 +813,29 @@ def update_due_date():
     if request.is_json:
         return '', 204
     return redirect(next_url)
+
+
+@app.route('/update_hours', methods=['POST'])
+def update_hours():
+    """Set working hours for a specific day (1-9)."""
+    data = request.get_json() or request.form
+    day = data.get('date')
+    val = data.get('hours')
+    try:
+        hours = int(val)
+    except Exception:
+        return jsonify({'error': 'Horas invalidas'}), 400
+    if not day or hours < 1 or hours > 9:
+        return jsonify({'error': 'Datos invalidos'}), 400
+    hours_map = load_daily_hours()
+    if hours == HOURS_PER_DAY:
+        hours_map.pop(day, None)
+    else:
+        hours_map[day] = hours
+    save_daily_hours(hours_map)
+    if request.is_json:
+        return '', 204
+    return redirect(request.referrer or url_for('calendar_view'))
 
 
 @app.route('/reorganize', methods=['POST'])

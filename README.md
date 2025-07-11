@@ -20,6 +20,11 @@ coloca automáticamente en el día actual y, si recargas la página, recuerda la
 posición en la que estabas. Puedes filtrar por nombre de proyecto y cliente desde
 los dos cuadros de búsqueda.
 
+Encima de las fechas hay una fila plegable con un desplegable por día. Puedes
+escoger entre 1 y 9 horas de jornada (8 por defecto). Al reducirlas, las horas
+que no quepan se trasladan al siguiente día libre sin afectar a Irene ni a las
+fases de **mecanizar** y **tratamiento**.
+
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,
 se tomará automáticamente el año en curso.

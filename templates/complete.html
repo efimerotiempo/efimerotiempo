@@ -88,7 +88,33 @@
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
-    <tr>
+    <tr id="hours-toggle-row">
+        <th class="resource-col"><span id="hours-toggle" class="worker-toggle">&#43;</span> Horas</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        <th></th>
+        {% else %}
+        <th colspan="2" class="weekend"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    <tr id="hours-row" class="hours-row" style="display:none;">
+        <th class="resource-col">Horas</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set h = hours.get(d.isoformat(), 8) %}
+        <th><form class="hours-form" data-date="{{ d.isoformat() }}"><select>
+            {% for n in range(1,10) %}
+            <option value="{{n}}" {% if n==h %}selected{% endif %}>{{n}}h</option>
+            {% endfor %}
+        </select></form></th>
+        {% else %}
+        <th colspan="2" class="weekend-cell"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    <tr class="day-row">
         <th class="resource-col">Recurso</th>
         {% for c in cols %}
         {% if c.type == 'day' %}
@@ -298,11 +324,33 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const HOURS_URL = "{{ url_for('update_hours') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
+  const hoursToggle = document.getElementById('hours-toggle');
+  const hoursRow = document.getElementById('hours-row');
+  const thead = document.querySelector('.schedule thead');
+  if (hoursToggle) {
+    hoursToggle.addEventListener('click', () => {
+      const open = hoursRow.style.display !== 'none';
+      hoursRow.style.display = open ? 'none' : 'table-row';
+      thead.classList.toggle('open', !open);
+      hoursToggle.textContent = open ? '+' : '−';
+    });
+  }
+  document.querySelectorAll('.hours-form').forEach(f => {
+    f.addEventListener('change', () => {
+      const val = f.querySelector('select').value;
+      fetch(HOURS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: f.dataset.date, hours: val })
+      }).then(() => location.reload());
+    });
+  });
 
   document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
     const worker = tr.dataset.worker;
