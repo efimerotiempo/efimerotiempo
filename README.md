@@ -20,11 +20,13 @@ coloca automáticamente en el día actual y, si recargas la página, recuerda la
 posición en la que estabas. Puedes filtrar por nombre de proyecto y cliente desde
 los dos cuadros de búsqueda.
 
-Encima de las fechas hay una fila plegable con un desplegable por día. Por
-defecto aparece oculta y la cabecera muestra el botón **Editar jornada
-laboral**. Puedes elegir entre 1 y 9 horas de jornada (8 por defecto). Al
+Debajo del botón **Reportar bug** aparece otro llamado **Editar jornada laboral**.
+Al pulsarlo se despliega una fila con un desplegable por día. Por defecto la fila
+está oculta. Puedes elegir entre 1 y 9 horas de jornada (8 por defecto). Al
 reducirlas, las horas que no quepan se trasladan al siguiente día libre sin
 afectar a Irene ni a las fases de **mecanizar** y **tratamiento**.
+Cuando cambias alguna jornada y la página se recarga, el calendario recuerda la
+posición en la que estabas.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,

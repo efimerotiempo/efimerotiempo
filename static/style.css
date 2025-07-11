@@ -218,5 +218,8 @@ tr.collapsed td:not(:first-child) { display: none; }
 #start-btn { margin-left: 2px; }
 
 .hours-row select { width: 60px; }
-.schedule thead #hours-toggle { cursor: pointer; }
-.schedule thead #hours-label { cursor: pointer; margin-left: 4px; }
+.hours-btn-container {
+    text-align: center;
+    margin-bottom: 5px;
+}
+#hours-btn { cursor: pointer; }

@@ -42,6 +42,9 @@
     <div class="bug-btn-container">
         <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
     </div>
+    <div class="hours-btn-container">
+        <button id="hours-btn" type="button">Editar jornada laboral</button>
+    </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -88,16 +91,6 @@
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
-    <tr id="hours-toggle-row">
-        <th class="resource-col"><span id="hours-toggle" class="worker-toggle">&#43;</span> <span id="hours-label">Editar jornada laboral</span></th>
-        {% for c in cols %}
-        {% if c.type == 'day' %}
-        <th></th>
-        {% else %}
-        <th colspan="2" class="weekend"></th>
-        {% endif %}
-        {% endfor %}
-    </tr>
     <tr id="hours-row" class="hours-row" style="display:none;">
         <th class="resource-col">Horas</th>
         {% for c in cols %}
@@ -330,26 +323,21 @@
   const SCROLL_KEY2 = 'scrollDate';
   const filterForm = document.getElementById('filter-form');
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
-  const hoursToggle = document.getElementById('hours-toggle');
-  const hoursLabel = document.getElementById('hours-label');
+  const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
   function toggleHours() {
     const open = hoursRow.style.display !== 'none';
     hoursRow.style.display = open ? 'none' : 'table-row';
     thead.classList.toggle('open', !open);
-    hoursToggle.textContent = open ? '+' : '−';
-    if (hoursLabel) hoursLabel.textContent = open ? 'Editar jornada laboral' : 'Cerrar jornada laboral';
   }
-  if (hoursToggle) {
-    hoursToggle.addEventListener('click', toggleHours);
-  }
-  if (hoursLabel) {
-    hoursLabel.addEventListener('click', toggleHours);
+  if (hoursBtn) {
+    hoursBtn.addEventListener('click', toggleHours);
   }
   document.querySelectorAll('.hours-form').forEach(f => {
     f.addEventListener('change', () => {
       const val = f.querySelector('select').value;
+      sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
       fetch(HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
