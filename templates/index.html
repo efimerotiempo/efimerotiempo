@@ -77,6 +77,13 @@
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
+                {% if t.priority == 'Alta' %}
+                    <span class="priority priority-alta">&#9650;</span>
+                {% elif t.priority == 'Media' %}
+                    <span class="priority priority-media">&#9650;</span>
+                {% elif t.priority == 'Baja' %}
+                    <span class="priority priority-baja">&#9650;</span>
+                {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}

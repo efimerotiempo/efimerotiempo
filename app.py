@@ -1033,6 +1033,16 @@ def report_bug():
     return redirect(request.referrer or url_for('complete'))
 
 
+@app.route('/delete_bug/<int:bug_id>', methods=['POST'])
+def delete_bug(bug_id):
+    """Remove a bug from the list."""
+    bugs = load_bugs()
+    new_bugs = [b for b in bugs if b['id'] != bug_id]
+    if len(new_bugs) != len(bugs):
+        save_bugs(new_bugs)
+    return redirect(request.referrer or url_for('bug_list'))
+
+
 @app.route('/print_complete')
 def print_complete():
     """Return a PDF with the same content as the Complete tab."""

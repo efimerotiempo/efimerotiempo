@@ -19,6 +19,10 @@ table.schedule td.weekend-cell {
 }
 .ok { color: green; }
 .late { color: red; }
+.priority { font-weight: bold; margin-right: 2px; }
+.priority-alta { color: red; }
+.priority-media { color: orange; }
+.priority-baja { color: #d4b000; }
 .task {
     margin-bottom: 2px;
     display: -webkit-box;
@@ -186,6 +190,9 @@ tr.collapsed td:not(:first-child) { display: none; }
     top: 0;
     background: #fff;
     z-index: 10;
+}
+.bugs-table .delete-btn {
+    font-size: 1em;
 }
 
 .modal {
