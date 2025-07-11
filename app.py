@@ -6,6 +6,7 @@ from flask import (
     url_for,
     jsonify,
     send_file,
+    abort,
 )
 from datetime import date, timedelta, datetime
 import uuid
@@ -14,7 +15,10 @@ import copy
 import json
 import smtplib
 import io
-from weasyprint import HTML
+try:
+    from weasyprint import HTML
+except Exception:
+    HTML = None
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 import sys
@@ -441,6 +445,7 @@ def project_list():
         client_filter=client_filter,
         start_map=start_map,
         hours=hours_map,
+        can_print=False,
     )
 
 
@@ -686,6 +691,7 @@ def complete():
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
+        can_print=HTML is not None,
     )
 
 
@@ -1095,6 +1101,8 @@ def print_complete():
         start_map=start_map,
         hours=hours_map,
     )
+    if HTML is None:
+        abort(503, description='WeasyPrint no está instalado')
     pdf = HTML(string=html, base_url=request.url_root).write_pdf()
     return send_file(io.BytesIO(pdf), as_attachment=True,
                      download_name='completo.pdf', mimetype='application/pdf')
