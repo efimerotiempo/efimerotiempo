@@ -142,9 +142,12 @@ la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 Si la fase mostrada es **Pedidos**, también se ofrece un botón rojo
 **Borrar fase** que elimina ese tramo de la planificación tras una
 confirmación. Las demás fases de ese proyecto permanecen en su sitio.
-Del mismo modo, el recuadro incluye **Dividir fase aquí**, que parte la
-fase en dos a partir del día seleccionado. La segunda mitad comienza justo
-en esa fecha sin alterar el resto de fases del proyecto.
+Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
+la aplicación divide la duración de esa fase en dos mitades aunque la fecha
+elegida no coincida exactamente con su mitad. La segunda parte se mantiene
+como un tramo independiente y en las tablas de **Proyectos** aparece una
+línea adicional con el mismo nombre, cliente y fecha límite mostrando las
+horas restantes de esa fase.
 Además se muestra un pequeño formulario con un campo de fecha y un botón
 **Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
 introducida no es válida se despliega una alerta explicando el motivo.

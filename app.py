@@ -294,6 +294,28 @@ def get_projects():
     return projects
 
 
+def expand_for_display(projects):
+    """Return a list of project rows including extra ones for split phases."""
+    rows = []
+    for p in projects:
+        base = copy.deepcopy(p)
+        extras = []
+        for ph, val in p.get('phases', {}).items():
+            if isinstance(val, list) and len(val) > 1:
+                base['phases'][ph] = val[0]
+                for seg in val[1:]:
+                    extra = copy.deepcopy(p)
+                    extra['phases'] = {ph: seg}
+                    if p.get('assigned'):
+                        extra['assigned'] = {ph: p['assigned'].get(ph)}
+                    else:
+                        extra['assigned'] = {}
+                    extras.append(extra)
+        rows.append(base)
+        rows.extend(extras)
+    return rows
+
+
 @app.route('/')
 def home():
     """Redirect to the combined view by default."""
@@ -384,6 +406,7 @@ def project_list():
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
     start_map = phase_start_map(projects)
+    projects = expand_for_display(projects)
     return render_template(
         'projects.html',
         projects=projects,
@@ -606,6 +629,8 @@ def complete():
     else:
         filtered_projects = projects
 
+    filtered_projects = expand_for_display(filtered_projects)
+
     today = date.today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
@@ -819,17 +844,25 @@ def split_phase_route():
     except Exception:
         return '', 400
     projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in proj.get('phases', {}):
+        return '', 400
+
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    if not tasks:
-        return '', 400
-    part1 = sum(h for _, d, _, h in tasks if date.fromisoformat(d) < cut)
-    part2 = sum(h for _, d, _, h in tasks if date.fromisoformat(d) >= cut)
+    part1 = sum(
+        h for _, d, _, h in tasks if date.fromisoformat(d) < cut
+    ) if tasks else 0
+    part2 = sum(
+        h for _, d, _, h in tasks if date.fromisoformat(d) >= cut
+    ) if tasks else 0
+
     if part1 == 0 or part2 == 0:
-        return jsonify({'error': 'No se puede dividir en esa fecha'}), 400
-    proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj:
-        return '', 404
+        val = proj['phases'][phase]
+        total = sum(int(v) for v in val) if isinstance(val, list) else int(val)
+        part1 = total // 2
+        part2 = total - part1
+
     proj['phases'][phase] = [part1, part2]
     save_projects(projects)
     return '', 204
