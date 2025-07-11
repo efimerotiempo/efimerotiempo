@@ -210,9 +210,11 @@ def schedule_projects(projects):
                     for i in range((date.fromisoformat(val) - current).days + 1)
                     if (current + timedelta(days=i)).weekday() not in WEEKEND
                 )
+                total_hours = 0
             else:
-                hours = int(val)
-                days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+                segs = val if isinstance(val, list) else [val]
+                total_hours = sum(int(v) for v in segs)
+                days_needed = (total_hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
 
             worker = assigned.get(phase)
             if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
@@ -265,22 +267,24 @@ def schedule_projects(projects):
                     project['id'],
                 )
             else:
-                hours = int(val)
-                current, hour, end_date = assign_phase(
-                    worker_schedule[worker],
-                    current,
-                    hour,
-                    phase,
-                    project['name'],
-                    project['client'],
-                    hours,
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    worker,
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
-                )
+                segs = val if isinstance(val, list) else [val]
+                for seg in segs:
+                    hours = int(seg)
+                    current, hour, end_date = assign_phase(
+                        worker_schedule[worker],
+                        current,
+                        hour,
+                        phase,
+                        project['name'],
+                        project['client'],
+                        hours,
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        worker,
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                    )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'

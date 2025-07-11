@@ -806,6 +806,35 @@ def delete_phase():
     return '', 204
 
 
+@app.route('/split_phase', methods=['POST'])
+def split_phase_route():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    if not pid or not phase or not date_str:
+        return '', 400
+    try:
+        cut = date.fromisoformat(date_str)
+    except Exception:
+        return '', 400
+    projects = get_projects()
+    mapping = compute_schedule_map(projects)
+    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    if not tasks:
+        return '', 400
+    part1 = sum(h for _, d, _, h in tasks if date.fromisoformat(d) < cut)
+    part2 = sum(h for _, d, _, h in tasks if date.fromisoformat(d) >= cut)
+    if part1 == 0 or part2 == 0:
+        return jsonify({'error': 'No se puede dividir en esa fecha'}), 400
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return '', 404
+    proj['phases'][phase] = [part1, part2]
+    save_projects(projects)
+    return '', 204
+
+
 @app.route('/move', methods=['POST'])
 def move_phase():
     data = request.get_json() or request.form
