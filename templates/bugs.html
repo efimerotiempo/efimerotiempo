@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Bugs</h2>
+<table class="bugs-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Fecha</th>
+      <th>Usuario</th>
+      <th>Pestaña</th>
+      <th>Frecuencia</th>
+      <th>Detalle</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for b in bugs %}
+    <tr>
+      <td>{{ b.id }}</td>
+      <td>{{ b.date[:10] }}</td>
+      <td>{{ b.user }}</td>
+      <td>{{ b.tab }}</td>
+      <td>{{ b.freq }}</td>
+      <td>{{ b.detail }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
