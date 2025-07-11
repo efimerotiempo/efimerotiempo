@@ -27,6 +27,8 @@ reducirlas, las horas que no quepan se trasladan al siguiente día libre sin
 afectar a Irene ni a las fases de **mecanizar** y **tratamiento**.
 Cuando cambias alguna jornada y la página se recarga, el calendario recuerda la
 posición en la que estabas.
+Justo debajo encontrarás el botón **Imprimir**, que descarga un PDF con la
+vista **Completo** exactamente como se muestra en pantalla.
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,

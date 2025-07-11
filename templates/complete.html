@@ -45,6 +45,11 @@
     <div class="hours-btn-container">
         <button id="hours-btn" type="button">Editar jornada laboral</button>
     </div>
+    <div class="print-btn-container">
+        <form method="get" action="{{ url_for('print_complete') }}">
+            <button id="print-btn" type="submit">Imprimir</button>
+        </form>
+    </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
