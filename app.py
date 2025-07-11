@@ -213,7 +213,10 @@ def build_calendar(start, end):
 
 
 def attempt_reorganize(projects, pid, phase, days=30):
-    """Try to move ``phase`` of project ``pid`` to an earlier slot."""
+    """Try to move ``phase`` of project ``pid`` to an earlier slot.
+
+    Return the new first day of the phase if it changes, otherwise ``None``.
+    """
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
@@ -243,19 +246,23 @@ def attempt_reorganize(projects, pid, phase, days=30):
     if best < orig_start:
         proj['start_date'] = best_date.isoformat()
         save_projects(projects)
-        return True
-    return False
+        return best.isoformat()
+    return None
 
 
 def move_phase_date(projects, pid, phase, new_date, worker=None):
-    """Move ``phase`` of project ``pid`` so it starts on ``new_date``."""
+    """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
+
+    Return the actual first day of the phase after rescheduling or ``None`` if
+    the phase was not found.
+    """
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
-        return False
+        return None
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
-        return False
+        return None
     old_start = date.fromisoformat(tasks[0][1])
     base = date.fromisoformat(proj['start_date'])
     offset = (old_start - base).days
@@ -263,7 +270,9 @@ def move_phase_date(projects, pid, phase, new_date, worker=None):
     if worker:
         proj.setdefault('assigned', {})[phase] = worker
     save_projects(projects)
-    return True
+    mapping = compute_schedule_map(projects)
+    new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    return new_tasks[0][1] if new_tasks else None
 
 
 def get_projects():
@@ -771,7 +780,7 @@ def update_phase_start():
         return jsonify({'error': 'No se puede asignar esa fecha'}), 400
     save_projects(temp)
     if request.is_json:
-        return '', 204
+        return jsonify({'date': new_tasks[0][1], 'pid': pid, 'phase': phase})
     return redirect(next_url)
 
 
@@ -808,7 +817,9 @@ def reorganize_phase():
     if not pid or not phase:
         return '', 400
     projects = get_projects()
-    attempt_reorganize(projects, pid, phase)
+    new_day = attempt_reorganize(projects, pid, phase)
+    if new_day:
+        return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
     return '', 204
 
 
@@ -882,7 +893,9 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    move_phase_date(projects, pid, phase, day, worker)
+    new_day = move_phase_date(projects, pid, phase, day, worker)
+    if new_day:
+        return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
     return '', 204
 
 

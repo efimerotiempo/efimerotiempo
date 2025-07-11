@@ -114,6 +114,8 @@
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const START_DATA = {{ start_map|tojson }};
+  const LAST_KEY = 'lastMoved';
+  const SCROLL_KEY2 = 'scrollDate';
   const filterForm = document.getElementById('filter-form');
 
 
@@ -228,7 +230,14 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
-          }).then(() => location.reload());
+          }).then(resp => resp.ok ? resp.json() : null)
+            .then(d => {
+              if (d) {
+                localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+                localStorage.setItem(SCROLL_KEY2, d.date);
+              }
+              location.reload();
+            });
         });
       }
       const del = document.getElementById('del-btn');
@@ -269,7 +278,16 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
-            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+            if (!resp.ok) {
+              return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+            }
+            return resp.json();
+          }).then(d => {
+            if (d) {
+              localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+              if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+            }
+            location.reload();
           });
         });
       }
@@ -328,7 +346,7 @@
     sessionStorage.removeItem('highlightPid');
   }
 
-  const moved = sessionStorage.getItem('movedInfo');
+  const moved = localStorage.getItem(LAST_KEY);
   if (moved) {
     const m = JSON.parse(moved);
     tasks.forEach(t => {
@@ -336,7 +354,12 @@
         t.classList.add('moved');
       }
     });
-    sessionStorage.removeItem('movedInfo');
+    const sd = localStorage.getItem(SCROLL_KEY2);
+    if (sd) {
+      const cell = document.querySelector(`td[data-date='${sd}']`);
+      if (cell) cell.scrollIntoView({behavior:'auto', inline:'center'});
+      localStorage.removeItem(SCROLL_KEY2);
+    }
   }
 
   document.addEventListener('keydown', e => {
@@ -392,13 +415,19 @@
       const worker = cell.closest('tr').dataset.worker;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
-        sessionStorage.setItem('movedInfo', JSON.stringify({pid: data.pid, phase: data.phase}));
       }
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
-      }).then(() => location.reload());
+      }).then(resp => resp.ok ? resp.json() : null)
+        .then(d => {
+          if (d) {
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, date: d.date}));
+            if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);
+          }
+          location.reload();
+        });
     });
   });
 </script>

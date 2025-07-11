@@ -159,9 +159,13 @@ También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
 seleccionados, ajustando la fecha de inicio del proyecto para que la fase
 comience en la nueva posición.
-La fase movida aparece resaltada con un borde amarillo al recargar la página y
+La fase movida aparece resaltada con un grueso borde negro al recargar la página y
 puedes deshacer el último movimiento pulsando **Ctrl+Z**, que la devolverá a su
 fecha y trabajador anteriores.
+Si la fase acaba programándose en una fecha distinta a la elegida al soltarla,
+el calendario se desplazará automáticamente a ese nuevo día para que sea fácil
+encontrarla.
+El resaltado negro permanece hasta que se mueva otra fase.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
 vistas de **Calendario** y **Completo** permiten plegar o desplegar las filas de
