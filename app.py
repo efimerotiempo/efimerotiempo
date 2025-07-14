@@ -301,6 +301,8 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
+        if not p.get('planned', True):
+            p['start_date'] = date.today().isoformat()
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
@@ -507,6 +509,7 @@ def add_project():
             'phases': {},
             'assigned': {},
             'image': image_path,
+            'planned': 'planned' in data,
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)
@@ -624,6 +627,7 @@ def complete():
             'phases': {},
             'assigned': {},
             'image': image_path,
+            'planned': 'planned' in data,
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)

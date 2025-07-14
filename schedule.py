@@ -39,10 +39,12 @@ WORKERS = {
     'Eneko': ['pintar', 'montar', 'soldar'],
     'Mecanizar': ['mecanizar'],
     'Tratamiento': ['tratamiento'],
+    'Sin planificar': PHASE_ORDER,
 }
 
 # Igor deja de aparecer en el calendario a partir del 21 de julio
 IGOR_END = date(2025, 7, 21)
+UNPLANNED = 'Sin planificar'
 
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
@@ -212,7 +214,8 @@ def schedule_projects(projects):
     conflicts = []
     reassignments = []
     for project in projects:
-        current = date.fromisoformat(project['start_date'])
+        planned = project.get('planned', True)
+        current = date.today() if not planned else date.fromisoformat(project['start_date'])
         hour = 0
         end_date = current
         assigned = project.get('assigned', {})
@@ -232,34 +235,37 @@ def schedule_projects(projects):
                 total_hours = sum(int(v) for v in segs)
                 days_needed = (total_hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
 
-            worker = assigned.get(phase)
-            if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
-                worker = None
+            if planned:
+                worker = assigned.get(phase)
+                if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
+                    worker = None
 
-            if not worker:
-                worker = find_worker_for_phase(
-                    phase,
-                    worker_schedule,
-                    project.get('priority'),
-                    start_day=current,
-                    days=days_needed,
-                    vacations=vac_map,
-                    hours_map=hours_map,
-                )
-                if worker and assigned.get(phase) and worker != assigned.get(phase):
-                    vac_days = _vacation_days_in_range(
-                        assigned.get(phase), current, days_needed, vac_map
+                if not worker:
+                    worker = find_worker_for_phase(
+                        phase,
+                        worker_schedule,
+                        project.get('priority'),
+                        start_day=current,
+                        days=days_needed,
+                        vacations=vac_map,
+                        hours_map=hours_map,
                     )
-                    reassignments.append({
-                        'project': project['name'],
-                        'client': project['client'],
-                        'old': assigned.get(phase),
-                        'new': worker,
-                        'phase': phase,
-                        'dates': [d.isoformat() for d in vac_days],
-                        'pid': project['id'],
-                    })
-                    assigned[phase] = worker
+                    if worker and assigned.get(phase) and worker != assigned.get(phase):
+                        vac_days = _vacation_days_in_range(
+                            assigned.get(phase), current, days_needed, vac_map
+                        )
+                        reassignments.append({
+                            'project': project['name'],
+                            'client': project['client'],
+                            'old': assigned.get(phase),
+                            'new': worker,
+                            'phase': phase,
+                            'dates': [d.isoformat() for d in vac_days],
+                            'pid': project['id'],
+                        })
+                        assigned[phase] = worker
+            else:
+                worker = UNPLANNED
 
             if not worker or phase not in WORKERS.get(worker, []):
                 msg = f'Sin recurso para fase {phase}'
@@ -285,7 +291,7 @@ def schedule_projects(projects):
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
-                start_overrides = project.get('segment_starts', {}).get(phase)
+                start_overrides = project.get('segment_starts', {}).get(phase) if planned else None
                 for idx, seg in enumerate(segs):
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         current = date.fromisoformat(start_overrides[idx])

@@ -105,6 +105,17 @@ calendario y ya no se le asignan nuevas fases.
 Junto a cada nombre se indican entre paréntesis las fases que puede realizar en
 su orden de prioridad para consultarlo de un vistazo.
 
+Además existe una fila adicional llamada **Sin planificar** donde se acumulan
+las fases de los proyectos que no se quieran programar todavía. Estas tareas
+se asignan siempre a partir del día de hoy y respetan las ocho horas diarias,
+de modo que pueden coexistir varios proyectos en esa fila sin superar la
+jornada.
+En el formulario de alta aparece una casilla **Planificar** marcada por
+defecto. Si se desmarca, el nuevo proyecto se coloca en la fila *Sin
+planificar* hasta que se decida moverlo manualmente. La tabla de proyectos
+muestra una columna indicando con un ✔ verde si está planificado o una ❌ si
+permanece sin planificar.
+
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
 después del último montaje programado para ese trabajador y aprovecha las
