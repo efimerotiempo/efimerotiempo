@@ -303,6 +303,15 @@ def get_projects():
             changed = True
 
         p.setdefault('assigned', {})
+        # Ensure assigned list length matches split segments
+        for ph, val in list(p['phases'].items()):
+            if isinstance(val, list):
+                workers = p['assigned'].get(ph)
+                if not isinstance(workers, list):
+                    workers = [workers] * len(val)
+                while len(workers) < len(val):
+                    workers.append(None)
+                p['assigned'][ph] = workers
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
         if missing:
             schedule, _ = schedule_projects(assigned_projects)
@@ -324,18 +333,25 @@ def expand_for_display(projects):
     rows = []
     for p in projects:
         base = copy.deepcopy(p)
+        base['seg_index'] = {}
         extras = []
         for ph, val in p.get('phases', {}).items():
             if isinstance(val, list) and len(val) > 1:
+                workers = p.get('assigned', {}).get(ph)
+                if not isinstance(workers, list):
+                    workers = [workers] * len(val)
                 base['phases'][ph] = val[0]
-                for seg in val[1:]:
+                base['seg_index'][ph] = 0
+                if workers:
+                    base.setdefault('assigned', {})[ph] = workers[0]
+                for idx, seg in enumerate(val[1:], 1):
                     extra = copy.deepcopy(p)
                     extra['phases'] = {ph: seg}
-                    if p.get('assigned'):
-                        extra['assigned'] = {ph: p['assigned'].get(ph)}
-                    else:
-                        extra['assigned'] = {}
+                    extra['seg_index'] = {ph: idx}
+                    extra['assigned'] = {ph: workers[idx] if idx < len(workers) else None}
                     extras.append(extra)
+            else:
+                base['seg_index'][ph] = 0
         rows.append(base)
         rows.extend(extras)
     return rows
@@ -762,10 +778,21 @@ def update_priority(pid):
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
 def update_worker(pid, phase):
+    seg = int(request.form.get('seg', 0))
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            p.setdefault('assigned', {})[phase] = request.form['worker']
+            p.setdefault('assigned', {})
+            if isinstance(p['phases'].get(phase), list):
+                workers = p['assigned'].get(phase)
+                if not isinstance(workers, list):
+                    workers = [workers] * len(p['phases'][phase])
+                while len(workers) < len(p['phases'][phase]):
+                    workers.append(None)
+                workers[seg] = request.form['worker']
+                p['assigned'][phase] = workers
+            else:
+                p['assigned'][phase] = request.form['worker']
             break
     save_projects(projects)
     next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
@@ -922,6 +949,12 @@ def split_phase_route():
         part2 = total - part1
 
     proj['phases'][phase] = [part1, part2]
+    workers = proj.setdefault('assigned', {}).get(phase)
+    if not isinstance(workers, list):
+        workers = [workers, workers]
+    elif len(workers) < 2:
+        workers.append(workers[0] if workers else None)
+    proj['assigned'][phase] = workers
     save_projects(projects)
     return '', 204
 

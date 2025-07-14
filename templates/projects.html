@@ -63,6 +63,7 @@
                 {% endif %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    <input type="hidden" name="seg" value="{{ p.seg_index.get(ph, 0) }}">
                     <select name="worker">
                         {% for w in all_workers %}
                             <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>

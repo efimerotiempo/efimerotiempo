@@ -232,77 +232,85 @@ def schedule_projects(projects):
                 total_hours = sum(int(v) for v in segs)
                 days_needed = (total_hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
 
-            worker = assigned.get(phase)
-            if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
-                worker = None
+            workers = assigned.get(phase)
+            if not isinstance(workers, list):
+                workers = [workers] * len(segs)
+            while len(workers) < len(segs):
+                workers.append(None)
 
-            if not worker:
-                worker = find_worker_for_phase(
-                    phase,
-                    worker_schedule,
-                    project.get('priority'),
-                    start_day=current,
-                    days=days_needed,
-                    vacations=vac_map,
-                    hours_map=hours_map,
-                )
-                if worker and assigned.get(phase) and worker != assigned.get(phase):
-                    vac_days = _vacation_days_in_range(
-                        assigned.get(phase), current, days_needed, vac_map
+            for idx, seg in enumerate(segs):
+                days_seg = (int(seg) + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+                worker = workers[idx]
+                if worker and _worker_on_vacation(worker, current, days_seg, vac_map):
+                    worker = None
+
+                if not worker:
+                    worker = find_worker_for_phase(
+                        phase,
+                        worker_schedule,
+                        project.get('priority'),
+                        start_day=current,
+                        days=days_seg,
+                        vacations=vac_map,
+                        hours_map=hours_map,
                     )
-                    reassignments.append({
-                        'project': project['name'],
-                        'client': project['client'],
-                        'old': assigned.get(phase),
-                        'new': worker,
-                        'phase': phase,
-                        'dates': [d.isoformat() for d in vac_days],
-                        'pid': project['id'],
-                    })
-                    assigned[phase] = worker
+                    if worker and workers[idx] and worker != workers[idx]:
+                        vac_days = _vacation_days_in_range(
+                            workers[idx], current, days_seg, vac_map
+                        )
+                        reassignments.append({
+                            'project': project['name'],
+                            'client': project['client'],
+                            'old': workers[idx],
+                            'new': worker,
+                            'phase': phase,
+                            'dates': [d.isoformat() for d in vac_days],
+                            'pid': project['id'],
+                        })
+                    workers[idx] = worker
 
-            if not worker or phase not in WORKERS.get(worker, []):
-                msg = f'Sin recurso para fase {phase}'
-                conflicts.append({
-                    'id': len(conflicts) + 1,
-                    'project': project['name'],
-                    'message': msg,
-                    'key': f"{project['name']}|{msg}",
-                })
-                continue
-            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
-                current, hour, end_date = assign_pedidos(
-                    worker_schedule[worker],
-                    current,
-                    date.fromisoformat(val),
-                    project['name'],
-                    project['client'],
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
-                )
-            else:
-                segs = val if isinstance(val, list) else [val]
-                for seg in segs:
+                if not worker or phase not in WORKERS.get(worker, []):
+                    msg = f'Sin recurso para fase {phase}'
+                    conflicts.append({
+                        'id': len(conflicts) + 1,
+                        'project': project['name'],
+                        'message': msg,
+                        'key': f"{project['name']}|{msg}",
+                    })
+                    continue
+                if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                    # Only happens when segs has length 1
+                    current, hour, end_date = assign_pedidos(
+                        worker_schedule[worker],
+                        current,
+                        date.fromisoformat(val),
+                        project['name'],
+                        project['client'],
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                    )
+                else:
                     hours = int(seg)
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
-                    current,
-                    hour,
-                    phase,
-                    project['name'],
-                    project['client'],
-                    hours,
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    worker,
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
-                    hours_map,
-                )
+                        current,
+                        hour,
+                        phase,
+                        project['name'],
+                        project['client'],
+                        hours,
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        worker,
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                        hours_map,
+                    )
+            assigned[phase] = workers if len(segs) > 1 else workers[0]
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'
