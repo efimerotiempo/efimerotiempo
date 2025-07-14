@@ -165,8 +165,9 @@ aviso si la nueva fecha no es correcta.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
-seleccionados, ajustando la fecha de inicio del proyecto para que la fase
-comience en la nueva posición.
+seleccionados y guarda esa fecha como inicio manual de la fase. El resto del
+proyecto no se recoloca automáticamente, de modo que pueden quedar días vacíos
+entre una fase y la siguiente si así se desea.
 La fase movida aparece resaltada con un grueso borde negro al recargar la página y
 puedes deshacer el último movimiento pulsando **Ctrl+Z**, que la devolverá a su
 fecha y trabajador anteriores.

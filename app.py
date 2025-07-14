@@ -236,6 +236,8 @@ def attempt_reorganize(projects, pid, phase, days=30):
         for tp in temp:
             if tp['id'] == pid:
                 tp['start_date'] = cand.isoformat()
+                if tp.get('segment_starts'):
+                    tp['segment_starts'].pop(phase, None)
                 break
         new_map = compute_schedule_map(temp)
         new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
@@ -247,6 +249,8 @@ def attempt_reorganize(projects, pid, phase, days=30):
             best_date = cand
     if best < orig_start:
         proj['start_date'] = best_date.isoformat()
+        if proj.get('segment_starts'):
+            proj['segment_starts'].pop(phase, None)
         save_projects(projects)
         return best.isoformat()
     return None
@@ -269,16 +273,18 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return None
-    old_start = date.fromisoformat(tasks[0][1])
-    base = date.fromisoformat(proj['start_date'])
-    offset = (old_start - base).days
-    if part is None or not isinstance(proj['phases'].get(phase), list):
-        proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    if part is None and not isinstance(proj['phases'].get(phase), list):
+        seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
+        seg_starts[0] = new_date.isoformat()
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     else:
-        seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None]*len(proj['phases'][phase]))
-        seg_starts[int(part)] = new_date.isoformat()
+        seg_starts = proj.setdefault('segment_starts', {}).setdefault(
+            phase, [None] * len(proj['phases'][phase])
+        )
+        idx = int(part) if part is not None else 0
+        if idx < len(seg_starts):
+            seg_starts[idx] = new_date.isoformat()
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     save_projects(projects)
@@ -824,6 +830,8 @@ def update_phase_start():
     base = date.fromisoformat(proj['start_date'])
     offset = (date.fromisoformat(tasks[0][1]) - base).days
     proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    if proj.get('segment_starts'):
+        proj['segment_starts'].pop(phase, None)
     temp = copy.deepcopy(projects)
     new_map = compute_schedule_map(temp)
     new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
