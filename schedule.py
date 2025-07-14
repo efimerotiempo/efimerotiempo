@@ -398,7 +398,7 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'pid': pid,
                 'part': part,
             })
-            tasks.sort(key=lambda t: t['start'])
+            tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day
@@ -428,7 +428,7 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'pid': pid,
                 'part': part,
             })
-            tasks.sort(key=lambda t: t['start'])
+            tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day
