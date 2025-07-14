@@ -27,9 +27,9 @@ WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Joseba 2': ['montar', 'soldar'],
     'Mikel': ['montar', 'soldar'],
     'Iban': ['montar', 'soldar'],
+    'Joseba 2': ['montar', 'soldar'],
     'Naparra': ['montar', 'soldar'],
     'Unai': ['montar', 'soldar'],
     'Fabio': ['soldar', 'montar'],
@@ -41,12 +41,25 @@ WORKERS = {
     'Tratamiento': ['tratamiento'],
 }
 
+# Igor disappears from the schedule after this date
+IGOR_END = date(2024, 7, 21)
+
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
 HOURS_LIMITS['Mecanizar'] = float('inf')
 HOURS_LIMITS['Tratamiento'] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
+
+
+def active_workers(day=None):
+    """Return the list of workers active for the given day."""
+    if day is None:
+        day = date.today()
+    workers = list(WORKERS.keys())
+    if day >= IGOR_END and 'Igor' in workers:
+        workers.remove('Igor')
+    return workers
 
 
 def load_projects():
@@ -195,7 +208,7 @@ def schedule_projects(projects):
             new_workers = []
             for idx, seg_val in enumerate(segs):
                 w = wlist[idx] or find_worker_for_phase(
-                    phase, worker_schedule, project.get('priority')
+                    phase, worker_schedule, project.get('priority'), start_day=current
                 )
                 if not w or phase not in WORKERS.get(w, []):
                     msg = f'Sin recurso para fase {phase}'
@@ -336,7 +349,7 @@ def _worker_load(schedule, worker):
     )
 
 
-def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False):
+def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False, start_day=None):
     """Choose the least busy worker that can perform the phase.
 
     By default Unai is excluded from automatic assignments so that he can
@@ -345,6 +358,8 @@ def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False)
     candidates = []
     for worker, skills in WORKERS.items():
         if not include_unai and worker == 'Unai':
+            continue
+        if worker == 'Igor' and start_day and start_day >= IGOR_END:
             continue
         if phase in skills:
             load = _worker_load(schedule, worker)

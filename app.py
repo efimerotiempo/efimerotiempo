@@ -23,6 +23,8 @@ from schedule import (
     compute_schedule_map,
     load_bugs,
     save_bugs,
+    active_workers,
+    IGOR_END,
     HOURS_PER_DAY,
 )
 
@@ -94,9 +96,13 @@ def get_projects():
                 val = p['phases'][ph]
                 segs = val if isinstance(val, list) else [val]
                 workers = []
+                start_day = date.fromisoformat(p['start_date'])
                 for _ in segs:
                     worker = find_worker_for_phase(
-                        ph, {w: schedule.get(w, {}) for w in WORKERS}, p.get('priority')
+                        ph,
+                        {w: schedule.get(w, {}) for w in WORKERS},
+                        p.get('priority'),
+                        start_day=start_day,
                     )
                     workers.append(worker)
                 p['assigned'][ph] = workers if len(workers) > 1 else workers[0]
@@ -170,6 +176,8 @@ def calendar_view():
 
     project_map = {p['id']: p for p in projects}
 
+    workers_list = active_workers(date.today())
+    schedule = {w: schedule.get(w, {}) for w in workers_list}
     return render_template(
         'index.html',
         schedule=schedule,
@@ -205,7 +213,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=active_workers(date.today()),
         project_filter=project_filter,
         client_filter=client_filter,
     )
@@ -320,7 +328,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(date.today()), today=date.today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -452,6 +460,8 @@ def complete():
 
     project_map = {p['id']: p for p in projects}
 
+    workers_list = active_workers(date.today())
+    schedule = {w: schedule.get(w, {}) for w in workers_list}
     return render_template(
         'complete.html',
         schedule=schedule,
@@ -468,7 +478,7 @@ def complete():
         today=date.today(),
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=workers_list,
         milestones=milestone_map,
         project_data=project_map,
     )
