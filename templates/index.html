@@ -110,6 +110,7 @@
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
+  const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const slider = document.getElementById('day-range');
   const filterForm = document.getElementById('filter-form');
@@ -189,6 +190,11 @@
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
+      html += `<form class="popup-form" method="post" action="${REORG_URL}">` +
+               `<input type="hidden" name="pid" value="${t.dataset.pid}">` +
+               `<input type="hidden" name="phase" value="${t.dataset.phase}">` +
+               `<button type="submit" class="reorg-btn">Reorganizar</button>` +
+               `</form>`;
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';

@@ -4,6 +4,7 @@ import uuid
 import os
 import copy
 from werkzeug.utils import secure_filename
+import schedule
 from schedule import (
     load_projects,
     save_projects,
@@ -600,6 +601,18 @@ def split_phase():
         proj.setdefault('assigned', {})[phase] = [worker, worker]
     save_projects(projects)
     return redirect(request.form.get('next') or url_for('calendar_view'))
+
+
+@app.route('/reorganize_phase', methods=['POST'])
+def reorganize_phase():
+    pid = request.form['pid']
+    phase = request.form['phase']
+    projects = get_projects()
+    changed = schedule.attempt_reorganize(projects, pid, phase)
+    if changed:
+        save_projects(projects)
+    next_url = request.form.get('next') or url_for('calendar_view')
+    return redirect(next_url)
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])

@@ -105,6 +105,9 @@ indicar su prioridad: rojo para **Alta**, naranja para **Media** y amarillo para
 Existe una pestaña **Bugs** donde se listan todas las incidencias registradas y
 pueden eliminarse mediante una **X** roja al final de cada fila.
 
+En la ventana que aparece al pulsar una tarea hay un botón **Reorganizar** que
+intenta mover esa fase a una fecha anterior si existe hueco disponible.
+
 ### Vacaciones
 
 Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para

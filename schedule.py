@@ -389,3 +389,18 @@ def compute_schedule_map(projects):
     for lst in mapping.values():
         lst.sort()
     return mapping
+
+
+def attempt_reorganize(projects, pid, phase):
+    """Try moving ``phase`` of project ``pid`` earlier by one day."""
+    proj = next((p for p in projects if p.get('id') == pid), None)
+    if not proj:
+        return False
+    try:
+        current = date.fromisoformat(proj['start_date'])
+    except Exception:
+        return False
+    if current <= date(2024, 1, 1):
+        return False
+    proj['start_date'] = (current - timedelta(days=1)).isoformat()
+    return True
