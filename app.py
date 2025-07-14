@@ -459,6 +459,7 @@ def project_list():
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
     start_map = phase_start_map(projects)
+    hours_map = load_daily_hours()
     projects = expand_for_display(projects)
     return render_template(
         'projects.html',
