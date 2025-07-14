@@ -45,13 +45,6 @@
     <div class="hours-btn-container">
         <button id="hours-btn" type="button">Editar jornada laboral</button>
     </div>
-    {% if can_print %}
-    <div class="print-btn-container">
-        <form method="get" action="{{ url_for('print_complete') }}">
-            <button id="print-btn" type="submit">Imprimir</button>
-        </form>
-    </div>
-    {% endif %}
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
         <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -158,13 +151,6 @@
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
-                {% endif %}
-                {% if t.priority == 'Alta' %}
-                    <span class="priority priority-alta">&#9650;</span>
-                {% elif t.priority == 'Media' %}
-                    <span class="priority priority-media">&#9650;</span>
-                {% elif t.priority == 'Baja' %}
-                    <span class="priority priority-baja">&#9650;</span>
                 {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>

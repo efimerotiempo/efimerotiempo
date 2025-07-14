@@ -27,9 +27,6 @@ reducirlas, las horas que no quepan se trasladan al siguiente día libre sin
 afectar a Irene ni a las fases de **mecanizar** y **tratamiento**.
 Cuando cambias alguna jornada y la página se recarga, el calendario recuerda la
 posición en la que estabas.
-Justo debajo encontrarás el botón **Imprimir**, que descarga un PDF con la
-vista **Completo** exactamente como se muestra en pantalla. Este botón solo
-aparece si la librería `weasyprint` está instalada (`pip install weasyprint`).
 
 Los campos de fecha de los distintos formularios aparecen vacíos por defecto.
 Puedes introducir las fechas como `dd-mm` o `dd/mm`; si no incluyes el año,
@@ -87,8 +84,7 @@ SMTP mediante las variables de entorno `BUG_SMTP_HOST`, `BUG_SMTP_PORT`,
 
 Todas las incidencias se almacenan también en un archivo y pueden consultarse
 desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
-usuario, pestaña y detalle. A la derecha de cada fila hay una **X** roja para
-eliminar el bug del registro.
+usuario, pestaña y detalle.
 
 Al crear nuevos proyectos, el planificador asigna cada fase a la persona
 especializada en dicha tarea que pueda comenzarla antes. Los trabajadores
@@ -141,8 +137,7 @@ ocho horas hasta completarla.
 Cada proyecto se colorea automáticamente con tonos claros para que el texto
 sea legible en todas las vistas. Las tareas en el calendario muestran primero
 el nombre del proyecto seguido del cliente y la fase para identificar mejor
-cada entrada. Delante del nombre se muestra un triángulo rojo, naranja o
-amarillo que indica la prioridad **Alta**, **Media** o **Baja** respectivamente.
+cada entrada.
 
 Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar

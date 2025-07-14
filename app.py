@@ -1,24 +1,10 @@
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    jsonify,
-    send_file,
-    abort,
-)
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from datetime import date, timedelta, datetime
 import uuid
 import os
 import copy
 import json
 import smtplib
-import io
-try:
-    from weasyprint import HTML
-except Exception:
-    HTML = None
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 import sys
@@ -382,6 +368,7 @@ def calendar_view():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+    hours_map = load_daily_hours()
 
     milestone_map = {}
     for m in milestones:
@@ -432,7 +419,6 @@ def project_list():
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
-    hours_map = load_daily_hours()
     start_map = phase_start_map(projects)
     projects = expand_for_display(projects)
     return render_template(
@@ -445,7 +431,6 @@ def project_list():
         client_filter=client_filter,
         start_map=start_map,
         hours=hours_map,
-        can_print=False,
     )
 
 
@@ -691,7 +676,6 @@ def complete():
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
-        can_print=HTML is not None,
     )
 
 
@@ -1031,91 +1015,6 @@ def report_bug():
     save_bugs(bugs)
     send_bug_report(bug)
     return redirect(request.referrer or url_for('complete'))
-
-
-@app.route('/delete_bug/<int:bug_id>', methods=['POST'])
-def delete_bug(bug_id):
-    """Remove a bug from the list."""
-    bugs = load_bugs()
-    new_bugs = [b for b in bugs if b['id'] != bug_id]
-    if len(new_bugs) != len(bugs):
-        save_bugs(new_bugs)
-    return redirect(request.referrer or url_for('bug_list'))
-
-
-@app.route('/print_complete')
-def print_complete():
-    """Return a PDF with the same content as the Complete tab."""
-    projects = get_projects()
-    schedule, conflicts = schedule_projects(projects)
-    if date.today() >= IGOR_END:
-        schedule.pop('Igor', None)
-    for p in projects:
-        try:
-            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-        except Exception:
-            p['met'] = False
-    milestones = load_milestones()
-    extra = load_extra_conflicts()
-    conflicts.extend(extra)
-    dismissed = load_dismissed()
-    conflicts = [c for c in conflicts if c['key'] not in dismissed]
-
-    project_filter = request.args.get('project', '').strip()
-    client_filter = request.args.get('client', '').strip()
-
-    if project_filter or client_filter:
-        for worker, days_data in schedule.items():
-            for day, tasks in days_data.items():
-                schedule[worker][day] = [
-                    t for t in tasks
-                    if (not project_filter or project_filter.lower() in t['project'].lower())
-                    and (not client_filter or client_filter.lower() in t['client'].lower())
-                ]
-        filtered_projects = [
-            p for p in projects
-            if (not project_filter or project_filter.lower() in p['name'].lower())
-            and (not client_filter or client_filter.lower() in p['client'].lower())
-        ]
-    else:
-        filtered_projects = projects
-
-    filtered_projects = expand_for_display(filtered_projects)
-    today = date.today()
-    start = today - timedelta(days=90)
-    end = today + timedelta(days=180)
-    days, cols, week_spans = build_calendar(start, end)
-    hours_map = load_daily_hours()
-    milestone_map = {}
-    for m in milestones:
-        milestone_map.setdefault(m['date'], []).append(m['description'])
-    project_map = {p['id']: p for p in projects}
-    start_map = phase_start_map(projects)
-
-    html = render_template(
-        'complete.html',
-        schedule=schedule,
-        cols=cols,
-        week_spans=week_spans,
-        conflicts=conflicts,
-        workers=active_workers(today),
-        project_filter=project_filter,
-        client_filter=client_filter,
-        projects=filtered_projects,
-        today=today,
-        priorities=list(PRIORITY_ORDER.keys()),
-        phases=PHASE_ORDER,
-        all_workers=active_workers(today),
-        milestones=milestone_map,
-        project_data=project_map,
-        start_map=start_map,
-        hours=hours_map,
-    )
-    if HTML is None:
-        abort(503, description='WeasyPrint no está instalado')
-    pdf = HTML(string=html, base_url=request.url_root).write_pdf()
-    return send_file(io.BytesIO(pdf), as_attachment=True,
-                     download_name='completo.pdf', mimetype='application/pdf')
 
 
 @app.route('/bugs')
