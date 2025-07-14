@@ -465,8 +465,12 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
-      }).then(resp => resp.ok ? resp.json() : null)
-        .then(d => {
+      }).then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+        }
+        return resp.json();
+      }).then(d => {
           if (d) {
             localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: d.date}));
             if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);

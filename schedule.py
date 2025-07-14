@@ -294,8 +294,10 @@ def schedule_projects(projects):
                 start_overrides = project.get('segment_starts', {}).get(phase) if planned else None
                 for idx, seg in enumerate(segs):
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
-                        current = date.fromisoformat(start_overrides[idx])
-                        hour = 0
+                        override = date.fromisoformat(start_overrides[idx])
+                        if override > current:
+                            current = override
+                            hour = 0
                     hours = int(seg)
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
@@ -603,3 +605,22 @@ def phase_start_map(projects):
         for worker, day, phase, hours, _ in items:
             result.setdefault(pid, {}).setdefault(phase, day)
     return result
+
+
+def previous_phase_end(projects, pid, phase, part=None):
+    """Return the last scheduled day of the phase immediately before ``phase``."""
+    mapping = compute_schedule_map(projects)
+    tasks = mapping.get(pid, [])
+    if not tasks:
+        return None
+    idx = PHASE_ORDER.index(phase)
+    last = None
+    for worker, day, ph, hours, prt in tasks:
+        dt = date.fromisoformat(day)
+        if ph == phase and part is not None and prt is not None and prt < int(part):
+            if not last or dt > last:
+                last = dt
+        elif ph in PHASE_ORDER[:idx]:
+            if not last or dt > last:
+                last = dt
+    return last

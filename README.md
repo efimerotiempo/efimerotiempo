@@ -185,6 +185,9 @@ fecha y trabajador anteriores.
 Si la fase acaba programándose en una fecha distinta a la elegida al soltarla,
 el calendario se desplazará automáticamente a ese nuevo día para que sea fácil
 encontrarla.
+Durante este proceso se validan tres aspectos: el trabajador debe tener esa
+fase entre sus habilidades, el día escogido no puede coincidir con sus
+vacaciones y la fase no se puede adelantar a la inmediatamente anterior.
 El resaltado negro permanece hasta que se mueva otra fase.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las

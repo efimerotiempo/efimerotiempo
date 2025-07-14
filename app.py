@@ -44,6 +44,7 @@ WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
 find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
+previous_phase_end = _schedule_mod.previous_phase_end
 if hasattr(_schedule_mod, "phase_start_map"):
     phase_start_map = _schedule_mod.phase_start_map
 else:
@@ -259,20 +260,30 @@ def attempt_reorganize(projects, pid, phase, days=30):
 def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
-    Return the actual first day of the phase after rescheduling or ``None`` if
-    the phase was not found.
+    Return tuple ``(day, error)`` where ``day`` is the first day of the phase
+    after rescheduling, or ``None`` if it could not be moved. ``error`` provides
+    a message explaining the failure when applicable.
     """
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
-        return None
+        return None, 'Fase no encontrada'
     if part is not None:
         tasks = [t for t in tasks if t[4] == int(part)]
         if not tasks:
-            return None
+            return None, 'Fase no encontrada'
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
-        return None
+        return None, 'Proyecto no encontrado'
+
+    if worker and phase not in WORKERS.get(worker, []):
+        return None, 'Trabajador sin esa fase'
+    vac_map = _schedule_mod._build_vacation_map()
+    if worker and new_date in vac_map.get(worker, set()):
+        return None, 'Vacaciones en esa fecha'
+    prev_end = previous_phase_end(projects, pid, phase, part)
+    if prev_end and new_date <= prev_end:
+        return None, 'No puede adelantarse a la fase previa'
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
         seg_starts[0] = new_date.isoformat()
@@ -292,7 +303,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if part is not None:
         new_tasks = [t for t in new_tasks if t[4] == int(part)]
-    return new_tasks[0][1] if new_tasks else None
+    return (new_tasks[0][1], None) if new_tasks else (None, 'No se pudo mover')
 
 
 def get_projects():
@@ -985,7 +996,9 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day = move_phase_date(projects, pid, phase, day, worker, part)
+    new_day, err = move_phase_date(projects, pid, phase, day, worker, part)
+    if err:
+        return jsonify({'error': err}), 400
     if new_day:
         return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
     return '', 204
