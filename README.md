@@ -72,6 +72,11 @@ El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
 lista de proyectos. El planificador automático lo ignora al repartir
 fases por defecto.
 
+Igor deja de mostrarse en el calendario a partir del 21 de julio. Los
+trabajadores se listan en este orden de prioridad:
+Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio,
+Beltxa, Igor, Albi y Eneko.
+
 La fase **Pedidos**, realizada por Irene, se indica ahora mediante el campo
 **Plazo acopio**. Esta fase abarca desde que termina el dibujo hasta la fecha
 de acopio indicada y no se reparte por horas. Irene puede acumular tantos
@@ -94,9 +99,16 @@ el calendario, para filtrar rápidamente la información mostrada.
 La sección de proyectos en la vista **Completo** puede plegarse o desplegarse
 completamente pulsando el botón que aparece junto a su título.
 
+Cada tarea muestra un triángulo coloreado antes del nombre del proyecto para
+indicar su prioridad: rojo para **Alta**, naranja para **Media** y amarillo para
+**Baja**.
+Existe una pestaña **Bugs** donde se listan todas las incidencias registradas y
+pueden eliminarse mediante una **X** roja al final de cada fila.
+
 ### Vacaciones
 
 Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo en
 el calendario y no admiten asignaciones de tareas.
+\nLas fases se pueden dividir manualmente con el bot\xC3\xB3n 'Dividir fase aqu\xC3\xAD'. Cada parte puede asignarse a trabajadores distintos desde la lista de proyectos.

@@ -21,6 +21,10 @@ from schedule import (
     WORKERS,
     find_worker_for_phase,
     compute_schedule_map,
+    load_bugs,
+    save_bugs,
+    active_workers,
+    IGOR_END,
     HOURS_PER_DAY,
 )
 
@@ -89,12 +93,20 @@ def get_projects():
         if missing:
             schedule, _ = schedule_projects(assigned_projects)
             for ph in missing:
-                worker = find_worker_for_phase(
-                    ph, {w: schedule.get(w, {}) for w in WORKERS}, p.get('priority')
-                )
-                if worker:
-                    p['assigned'][ph] = worker
-                    changed = True
+                val = p['phases'][ph]
+                segs = val if isinstance(val, list) else [val]
+                workers = []
+                start_day = date.fromisoformat(p['start_date'])
+                for _ in segs:
+                    worker = find_worker_for_phase(
+                        ph,
+                        {w: schedule.get(w, {}) for w in WORKERS},
+                        p.get('priority'),
+                        start_day=start_day,
+                    )
+                    workers.append(worker)
+                p['assigned'][ph] = workers if len(workers) > 1 else workers[0]
+                changed = True
         assigned_projects.append(p)
     if changed:
         save_projects(projects)
@@ -164,6 +176,8 @@ def calendar_view():
 
     project_map = {p['id']: p for p in projects}
 
+    workers_list = active_workers(date.today())
+    schedule = {w: schedule.get(w, {}) for w in workers_list}
     return render_template(
         'index.html',
         schedule=schedule,
@@ -199,7 +213,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=active_workers(date.today()),
         project_filter=project_filter,
         client_filter=client_filter,
     )
@@ -314,7 +328,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=list(WORKERS.keys()), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(date.today()), today=date.today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -446,6 +460,8 @@ def complete():
 
     project_map = {p['id']: p for p in projects}
 
+    workers_list = active_workers(date.today())
+    schedule = {w: schedule.get(w, {}) for w in workers_list}
     return render_template(
         'complete.html',
         schedule=schedule,
@@ -462,7 +478,7 @@ def complete():
         today=date.today(),
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=list(WORKERS.keys()),
+        all_workers=workers_list,
         milestones=milestone_map,
         project_data=project_map,
     )
@@ -535,14 +551,55 @@ def update_priority(pid):
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
 def update_worker(pid, phase):
+    seg = request.form.get('seg')
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            p.setdefault('assigned', {})[phase] = request.form['worker']
+            p.setdefault('assigned', {})
+            if seg is None:
+                p['assigned'][phase] = request.form['worker']
+            else:
+                seg = int(seg)
+                workers = p['assigned'].get(phase)
+                if not isinstance(workers, list):
+                    workers = [workers] * len(p['phases'].get(phase, []))
+                while len(workers) <= seg:
+                    workers.append(None)
+                workers[seg] = request.form['worker']
+                p['assigned'][phase] = workers
             break
     save_projects(projects)
     next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
     return redirect(next_url)
+
+
+@app.route('/split_phase', methods=['POST'])
+def split_phase():
+    pid = request.form['pid']
+    phase = request.form['phase']
+    day = request.form.get('day')
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return {'error': 'Proyecto no encontrado'}, 404
+    hours = proj['phases'].get(phase)
+    if isinstance(hours, list):
+        return redirect(request.form.get('next') or url_for('calendar_view'))
+    total = int(hours)
+    before = 0
+    if day:
+        mapping = compute_schedule_map(projects)
+        for w, d, ph, h, _ in mapping.get(pid, []):
+            if ph == phase and d < day:
+                before += h
+    if before <= 0 or before >= total:
+        before = total // 2
+    proj['phases'][phase] = [before, total - before]
+    worker = proj.get('assigned', {}).get(phase)
+    if worker:
+        proj.setdefault('assigned', {})[phase] = [worker, worker]
+    save_projects(projects)
+    return redirect(request.form.get('next') or url_for('calendar_view'))
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])
@@ -603,6 +660,20 @@ def show_conflicts():
     """Restore all dismissed conflicts so they appear again."""
     save_dismissed([])
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/bugs')
+def bug_list():
+    bugs = load_bugs()
+    return render_template('bugs.html', bugs=bugs)
+
+
+@app.route('/delete_bug/<int:bug_id>', methods=['POST'])
+def delete_bug(bug_id):
+    bugs = load_bugs()
+    bugs = [b for b in bugs if b.get('id') != bug_id]
+    save_bugs(bugs)
+    return redirect(url_for('bug_list'))
 
 
 if __name__ == '__main__':

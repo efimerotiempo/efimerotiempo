@@ -36,20 +36,36 @@
         {% for ph in phases %}
             <td>
             {% if p.phases.get(ph) %}
+                {% set val = p.phases[ph] %}
                 {% if ph == 'pedidos' %}
-                    {{ p.phases[ph] }}<br>
+                    {{ val }}<br>
+                    {% set segs = [val] %}
                 {% else %}
-                    {{ p.phases[ph] }}h<br>
+                    {% if val is sequence %}
+                        {% set segs = val %}
+                        {{ val|sum }}h<br>
+                    {% else %}
+                        {% set segs = [val] %}
+                        {{ val }}h<br>
+                    {% endif %}
                 {% endif %}
+                {% for idx in range(segs|length) %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    <input type="hidden" name="seg" value="{{ idx }}">
                     <select name="worker">
                         {% for w in all_workers %}
-                            <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                            {% if p.assigned.get(ph) is sequence %}
+                                {% set sel = p.assigned.get(ph)[idx] %}
+                            {% else %}
+                                {% set sel = p.assigned.get(ph) %}
+                            {% endif %}
+                            <option value="{{ w }}" {% if sel == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
                     </select>
                     <button type="submit">Guardar</button>
                 </form>
+                {% endfor %}
             {% endif %}
             </td>
         {% endfor %}

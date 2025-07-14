@@ -9,6 +9,7 @@ DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
+DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -26,9 +27,9 @@ WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Joseba 2': ['montar', 'soldar'],
     'Mikel': ['montar', 'soldar'],
     'Iban': ['montar', 'soldar'],
+    'Joseba 2': ['montar', 'soldar'],
     'Naparra': ['montar', 'soldar'],
     'Unai': ['montar', 'soldar'],
     'Fabio': ['soldar', 'montar'],
@@ -40,12 +41,25 @@ WORKERS = {
     'Tratamiento': ['tratamiento'],
 }
 
+# Igor disappears from the schedule after this date
+IGOR_END = date(2024, 7, 21)
+
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
 HOURS_LIMITS['Mecanizar'] = float('inf')
 HOURS_LIMITS['Tratamiento'] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
+
+
+def active_workers(day=None):
+    """Return the list of workers active for the given day."""
+    if day is None:
+        day = date.today()
+    workers = list(WORKERS.keys())
+    if day >= IGOR_END and 'Igor' in workers:
+        workers.remove('Igor')
+    return workers
 
 
 def load_projects():
@@ -113,6 +127,37 @@ def save_vacations(data):
         json.dump(data, f)
 
 
+def load_daily_hours():
+    """Return a mapping of ISO date strings to workday hours."""
+    if os.path.exists(DAILY_HOURS_FILE):
+        with open(DAILY_HOURS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_daily_hours(hours):
+    """Persist the per-day hours map."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DAILY_HOURS_FILE, 'w') as f:
+        json.dump(hours, f)
+
+
+BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
+
+
+def load_bugs():
+    if os.path.exists(BUGS_FILE):
+        with open(BUGS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_bugs(bugs):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(BUGS_FILE, 'w') as f:
+        json.dump(bugs, f)
+
+
 def next_workday(d):
     d += timedelta(days=1)
     while d.weekday() in WEEKEND:
@@ -154,47 +199,59 @@ def schedule_projects(projects):
             val = project['phases'].get(phase)
             if not val:
                 continue
-            worker = assigned.get(phase) or find_worker_for_phase(
-                phase, worker_schedule, project.get('priority')
-            )
-            if not worker or phase not in WORKERS.get(worker, []):
-                msg = f'Sin recurso para fase {phase}'
-                conflicts.append({
-                    'id': len(conflicts) + 1,
-                    'project': project['name'],
-                    'message': msg,
-                    'key': f"{project['name']}|{msg}",
-                })
-                continue
-            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
-                current, end_date = assign_pedidos(
-                    worker_schedule[worker],
-                    current,
-                    date.fromisoformat(val),
-                    project['name'],
-                    project['client'],
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
-                )
+            segs = val if isinstance(val, list) else [val]
+            workers = assigned.get(phase)
+            if isinstance(workers, list):
+                wlist = workers + [None] * (len(segs) - len(workers))
             else:
-                hours = int(val)
-                current, end_date = assign_phase(
-                    worker_schedule[worker],
-                    current,
-                    phase,
-                    project['name'],
-                    project['client'],
-                    hours,
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    worker,
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
+                wlist = [workers] * len(segs)
+            new_workers = []
+            for idx, seg_val in enumerate(segs):
+                w = wlist[idx] or find_worker_for_phase(
+                    phase, worker_schedule, project.get('priority'), start_day=current
                 )
+                if not w or phase not in WORKERS.get(w, []):
+                    msg = f'Sin recurso para fase {phase}'
+                    conflicts.append({
+                        'id': len(conflicts) + 1,
+                        'project': project['name'],
+                        'message': msg,
+                        'key': f"{project['name']}|{msg}",
+                    })
+                    new_workers.append(None)
+                    continue
+                if phase == 'pedidos' and isinstance(seg_val, str) and '-' in seg_val:
+                    current, end_date = assign_pedidos(
+                        worker_schedule[w],
+                        current,
+                        date.fromisoformat(seg_val),
+                        project['name'],
+                        project['client'],
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                    )
+                else:
+                    hours = int(seg_val)
+                    current, end_date = assign_phase(
+                        worker_schedule[w],
+                        current,
+                        phase,
+                        project['name'],
+                        project['client'],
+                        hours,
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        w,
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                        seg=idx,
+                    )
+                new_workers.append(w)
+            assigned[phase] = new_workers if len(new_workers) > 1 else new_workers[0]
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'
@@ -207,7 +264,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid):
+def assign_phase(schedule, start_day, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, seg=0):
     day = start_day
     while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
         day = next_workday(day)
@@ -242,6 +299,7 @@ def assign_phase(schedule, start_day, phase, project_name, client, hours, due_da
                 'start_date': start_date,
                 'priority': priority,
                 'pid': pid,
+                'seg': seg,
             })
             schedule[day_str] = tasks
             remaining -= allocate
@@ -291,7 +349,7 @@ def _worker_load(schedule, worker):
     )
 
 
-def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False):
+def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False, start_day=None):
     """Choose the least busy worker that can perform the phase.
 
     By default Unai is excluded from automatic assignments so that he can
@@ -300,6 +358,8 @@ def find_worker_for_phase(phase, schedule, priority=None, *, include_unai=False)
     candidates = []
     for worker, skills in WORKERS.items():
         if not include_unai and worker == 'Unai':
+            continue
+        if worker == 'Igor' and start_day and start_day >= IGOR_END:
             continue
         if phase in skills:
             load = _worker_load(schedule, worker)
@@ -325,7 +385,7 @@ def compute_schedule_map(projects):
         for day, tasks in days.items():
             for t in tasks:
                 pid = t['pid']
-                mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours']))
+                mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours'], t.get('seg', 0)))
     for lst in mapping.values():
         lst.sort()
     return mapping

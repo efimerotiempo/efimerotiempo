@@ -9,6 +9,18 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .ok { color: green; }
 .late { color: red; }
 .task { margin-bottom: 2px; }
+.triangle {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 8px solid currentColor;
+    margin-right: 2px;
+}
+.tri-high { color: red; }
+.tri-med { color: orange; }
+.tri-low { color: #d4b000; }
 .task.dim { opacity: 0.3; }
 .task.highlight {
     font-weight: bold;
@@ -28,6 +40,18 @@ table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; ver
 .weeknum {
     color: purple;
     font-weight: bold;
+}
+
+.bugs-table th {
+    position: sticky;
+    top: 0;
+    background: #eee;
+}
+.delete-btn {
+    background: none;
+    border: none;
+    color: red;
+    cursor: pointer;
 }
 
 .complete-container {
