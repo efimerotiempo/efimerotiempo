@@ -10,7 +10,6 @@
       <th>Pestaña</th>
       <th>Frecuencia</th>
       <th>Detalle</th>
-      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -22,11 +21,6 @@
       <td>{{ b.tab }}</td>
       <td>{{ b.freq }}</td>
       <td>{{ b.detail }}</td>
-      <td>
-        <form method="post" action="{{ url_for('delete_bug', bug_id=b.id) }}" onsubmit="return confirm('¿Borrar bug?');">
-          <button class="delete-btn" type="submit">&#10060;</button>
-        </form>
-      </td>
     </tr>
   {% endfor %}
   </tbody>
