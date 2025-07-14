@@ -9,6 +9,7 @@ DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
+DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -111,6 +112,21 @@ def save_vacations(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(VACATIONS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def load_daily_hours():
+    """Return a mapping of ISO date strings to workday hours."""
+    if os.path.exists(DAILY_HOURS_FILE):
+        with open(DAILY_HOURS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_daily_hours(hours):
+    """Persist the per-day hours map."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(DAILY_HOURS_FILE, 'w') as f:
+        json.dump(hours, f)
 
 
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
