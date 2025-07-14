@@ -609,6 +609,15 @@ def phase_start_map(projects):
 
 def previous_phase_end(projects, pid, phase, part=None):
     """Return the last scheduled day of the phase immediately before ``phase``."""
+    if isinstance(part, str):
+        if part in ('', 'None'):
+            part = None
+        else:
+            try:
+                part = int(part)
+            except Exception:
+                part = None
+
     mapping = compute_schedule_map(projects)
     tasks = mapping.get(pid, [])
     if not tasks:
@@ -617,7 +626,7 @@ def previous_phase_end(projects, pid, phase, part=None):
     last = None
     for worker, day, ph, hours, prt in tasks:
         dt = date.fromisoformat(day)
-        if ph == phase and part is not None and prt is not None and prt < int(part):
+        if ph == phase and part is not None and prt is not None and prt < part:
             if not last or dt > last:
                 last = dt
         elif ph in PHASE_ORDER[:idx]:

@@ -264,12 +264,20 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     after rescheduling, or ``None`` if it could not be moved. ``error`` provides
     a message explaining the failure when applicable.
     """
+    if part in (None, '', 'None'):
+        part = None
+    else:
+        try:
+            part = int(part)
+        except Exception:
+            part = None
+
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
         return None, 'Fase no encontrada'
     if part is not None:
-        tasks = [t for t in tasks if t[4] == int(part)]
+        tasks = [t for t in tasks if t[4] == part]
         if not tasks:
             return None, 'Fase no encontrada'
     proj = next((p for p in projects if p['id'] == pid), None)
@@ -293,7 +301,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(
             phase, [None] * len(proj['phases'][phase])
         )
-        idx = int(part) if part is not None else 0
+        idx = part if part is not None else 0
         if idx < len(seg_starts):
             seg_starts[idx] = new_date.isoformat()
         if worker:
@@ -302,7 +310,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     mapping = compute_schedule_map(projects)
     new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if part is not None:
-        new_tasks = [t for t in new_tasks if t[4] == int(part)]
+        new_tasks = [t for t in new_tasks if t[4] == part]
     return (new_tasks[0][1], None) if new_tasks else (None, 'No se pudo mover')
 
 
