@@ -13,7 +13,6 @@
         <th>Cliente</th>
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
-        <th>En plazo</th>
         <th>Prioridad</th>
         {% for ph in phases %}
             {% if ph == 'pedidos' %}
@@ -32,21 +31,7 @@
         <td>{{ p.name }}</td>
         <td>{{ p.client }}</td>
         <td>{{ p.start_date }}</td>
-        <td>{{ p.due_date }}
-            <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
-                <input type="hidden" name="pid" value="{{ p.id }}">
-                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                <input type="date" name="due_date" value="{{ p.due_date }}">
-                <button type="submit">Cambiar</button>
-            </form>
-        </td>
-        <td>
-            {% if p.met %}
-                <span class="ok">&#10004;</span>
-            {% else %}
-                <span class="late">&#10060;</span>
-            {% endif %}
-        </td>
+        <td>{{ p.due_date }}</td>
         <td>{{ p.priority }}</td>
         {% for ph in phases %}
             <td>
@@ -54,30 +39,33 @@
                 {% set val = p.phases[ph] %}
                 {% if ph == 'pedidos' %}
                     {{ val }}<br>
+                    {% set segs = [val] %}
                 {% else %}
                     {% if val is sequence %}
+                        {% set segs = val %}
                         {{ val|sum }}h<br>
                     {% else %}
+                        {% set segs = [val] %}
                         {{ val }}h<br>
                     {% endif %}
                 {% endif %}
+                {% for idx in range(segs|length) %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                    <input type="hidden" name="seg" value="{{ p.seg_index.get(ph, 0) }}">
+                    <input type="hidden" name="seg" value="{{ idx }}">
                     <select name="worker">
                         {% for w in all_workers %}
-                            <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                            {% if p.assigned.get(ph) is sequence %}
+                                {% set sel = p.assigned.get(ph)[idx] %}
+                            {% else %}
+                                {% set sel = p.assigned.get(ph) %}
+                            {% endif %}
+                            <option value="{{ w }}" {% if sel == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
                     </select>
                     <button type="submit">Guardar</button>
                 </form>
-                <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
-                    <input type="hidden" name="pid" value="{{ p.id }}">
-                    <input type="hidden" name="phase" value="{{ ph }}">
-                    <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                    <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
-                    <button type="submit">Cambiar</button>
-                </form>
+                {% endfor %}
             {% endif %}
             </td>
         {% endfor %}
@@ -101,36 +89,4 @@
     {% endfor %}
     </tbody>
 </table>
-<script>
-  const START_URL = "{{ url_for('update_phase_start') }}";
-  const DUE_URL = "{{ url_for('update_due_date') }}";
-  document.querySelectorAll('.start-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(START_URL, { method: 'POST', body: data })
-        .then(resp => {
-          if (resp.ok) {
-            location.reload();
-          } else {
-            resp.json().then(d => alert(d.error || 'Error'));
-          }
-        });
-    });
-  });
-  document.querySelectorAll('.due-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(DUE_URL, { method: 'POST', body: data })
-        .then(resp => {
-          if (resp.ok) {
-            location.reload();
-          } else {
-            resp.json().then(d => alert(d.error || 'Error'));
-          }
-        });
-    });
-  });
-</script>
 {% endblock %}

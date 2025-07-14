@@ -5,50 +5,28 @@ table.schedule {
     table-layout: auto;
 }
 .schedule-wrapper { overflow-x: auto; }
-table.schedule th, table.schedule td {
-    border: 1px solid #ccc;
-    padding: 4px;
-    vertical-align: top;
-    min-width: 300px;
-}
-table.schedule th.weekend,
-table.schedule th.weekend-cell,
-table.schedule td.weekend-cell {
-    min-width: 12px;
-    width: 12px;
-}
+table.schedule th, table.schedule td { border: 1px solid #ccc; padding: 4px; vertical-align: top; }
 .ok { color: green; }
 .late { color: red; }
-.priority { font-weight: bold; margin-right: 2px; }
-.priority-alta { color: red; }
-.priority-media { color: orange; }
-.priority-baja { color: #d4b000; }
-.task {
-    margin-bottom: 2px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    cursor: grab;
+.task { margin-bottom: 2px; }
+.triangle {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 8px solid currentColor;
+    margin-right: 2px;
 }
+.tri-high { color: red; }
+.tri-med { color: orange; }
+.tri-low { color: #d4b000; }
 .task.dim { opacity: 0.3; }
 .task.highlight {
     font-weight: bold;
     outline: 2px solid #000;
 }
-.task.moved {
-    border: 3px solid #000;
-}
 #info-popup { position: absolute; background: #fff; border: 1px solid #000; padding: 4px; display: none; z-index: 1000; }
-#reorg-btn { margin-top: 4px; }
-#split-btn { margin-top: 4px; }
-.phase-delete-btn {
-    background: red;
-    color: #fff;
-    border: none;
-    margin-top: 4px;
-    cursor: pointer;
-}
 .slider { margin: 10px 0; }
 .slider input[type=range] {
     width: 100%;
@@ -62,6 +40,18 @@ table.schedule td.weekend-cell {
 .weeknum {
     color: purple;
     font-weight: bold;
+}
+
+.bugs-table th {
+    position: sticky;
+    top: 0;
+    background: #eee;
+}
+.delete-btn {
+    background: none;
+    border: none;
+    color: red;
+    cursor: pointer;
 }
 
 .complete-container {
@@ -85,14 +75,7 @@ table.schedule td.weekend-cell {
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 /* make first column fit contents */
-.resource-col {
-    white-space: nowrap;
-    width: 1%;
-    position: sticky;
-    left: 0;
-    background: #fff;
-    z-index: 5;
-}
+.resource-col { white-space: nowrap; width: 1%; }
 
 /* keep projects table width */
 .complete-projects table { width: 100%; }
@@ -108,30 +91,20 @@ table.schedule td.weekend-cell {
 .vacation {
     background: #ff9999;
     font-weight: bold;
-    height: 100%;
-    width: 100%;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: -4px;
-    padding: 4px;
 }
 
-
 .milestone-day {
-    border-right: 2px solid red;
+    border-left: 2px solid red;
 }
 
 .milestone-cell {
-    border-right: 2px solid red;
+    border-left: 2px solid red;
     height: 30px;
     position: relative;
 }
 
 .milestone-label {
-    font-size: 1.6em;
-    font-weight: bold;
+    font-size: 0.8em;
     color: red;
     position: absolute;
     bottom: 0;
@@ -143,10 +116,6 @@ table.schedule td.weekend-cell {
 }
 
 .today { border: 3px solid red !important; }
-.weekend, .weekend-cell {
-    background: #000;
-}
-
 .worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
 
@@ -159,11 +128,9 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
-.schedule thead .day-row th { top: 0; }
-.schedule thead .milestones-row th { top: 30px; }
-.schedule thead .hours-row th { top: 0; }
-.schedule thead.open .day-row th { top: 30px; }
-.schedule thead.open .milestones-row th { top: 60px; }
+.schedule thead tr:nth-child(1) th { top: 0; }
+.schedule thead tr:nth-child(2) th { top: 30px; }
+.schedule thead tr:nth-child(3) th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
@@ -171,68 +138,3 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
-
-.bug-btn-container {
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.bug-btn {
-    font-size: 3em;
-    padding: 20px 40px;
-    background: yellow;
-    border: 2px solid #333;
-    cursor: pointer;
-}
-
-.bugs-table thead th {
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 10;
-}
-.bugs-table .delete-btn {
-    font-size: 1em;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.4);
-    z-index: 2000;
-}
-
-.modal-content {
-    background: #fff;
-    padding: 20px;
-    margin: 10% auto;
-    max-width: 400px;
-}
-
-
-.start-form { display: inline; }
-.start-form input[type=date] {
-    max-width: 130px;
-}
-
-#start-input {
-    max-width: 130px;
-    margin-left: 4px;
-}
-#start-btn { margin-left: 2px; }
-
-.hours-row select { width: 60px; }
-.hours-btn-container {
-    text-align: center;
-    margin-bottom: 5px;
-}
-#hours-btn { cursor: pointer; }
-.print-btn-container {
-    text-align: center;
-    margin-bottom: 10px;
-}
-#print-btn { cursor: pointer; }
