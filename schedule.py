@@ -495,23 +495,6 @@ def _worker_load(schedule, worker):
     )
 
 
-def _next_free_day(schedule, worker, day, vacations=None, hours_map=None):
-    """Return the first workday after ``day`` with available hours."""
-    vac = vacations.get(worker, set()) if vacations else set()
-    sched = schedule.get(worker, {})
-    while True:
-        if day.weekday() in WEEKEND or day in vac:
-            day = next_workday(day)
-            continue
-        used = sum(t['hours'] for t in sched.get(day.isoformat(), []))
-        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-        if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
-            day_limit = (hours_map or {}).get(day.isoformat(), HOURS_PER_DAY)
-            limit = min(limit, day_limit)
-        if used < limit:
-            return day
-        day = next_workday(day)
-
 
 def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, hours_map=None):
     """Return the first day with ``days_needed`` consecutive free workdays."""
@@ -549,7 +532,6 @@ def find_worker_for_phase(
     schedule,
     priority=None,
     *,
-    include_unai=False,
     start_day=None,
     days=0,
     vacations=None,
@@ -557,12 +539,12 @@ def find_worker_for_phase(
 ):
     """Choose the worker that can start the phase as soon as posible.
 
-    By default Unai is excluded from automatic assignments so that he can
-    only be seleccionado manualmente desde la vista de proyectos.
+    Unai is always excluded from automatic assignments so that he can only
+    be seleccionado manualmente desde la vista de proyectos.
     """
     candidates = []
     for worker, skills in WORKERS.items():
-        if not include_unai and worker == 'Unai':
+        if worker == 'Unai':
             continue
         if phase not in skills:
             continue
@@ -591,9 +573,6 @@ def find_worker_for_phase(
         return earliest[3]
     candidates.sort(key=lambda c: (c[0], c[1], c[2]))
     return candidates[0][3]
-
-import copy
-
 
 def compute_schedule_map(projects):
     """Return a mapping of project id to scheduled tasks."""

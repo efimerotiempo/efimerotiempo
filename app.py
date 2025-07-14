@@ -348,7 +348,7 @@ def split_markers(schedule):
                 if t.get('part') is None:
                     continue
                 key = (t['pid'], t['phase'], t['part'])
-                parts.setdefault(key, []).append(day)
+                parts.setdefault(key, []).append(date.fromisoformat(day))
     starts = set()
     ends = set()
     grouped = {}
@@ -356,11 +356,11 @@ def split_markers(schedule):
         days.sort()
         grouped.setdefault((pid, phase), {})[part] = days
     for (pid, phase), segs in grouped.items():
-        for idx, days in segs.items():
-            if idx > 0 and days:
-                starts.add(f"{pid}|{phase}|{days[0].isoformat()}")
-            if days:
-                ends.add(f"{pid}|{phase}|{days[-1].isoformat()}")
+        for idx, lst in segs.items():
+            if idx > 0 and lst:
+                starts.add(f"{pid}|{phase}|{lst[0].isoformat()}")
+            if lst:
+                ends.add(f"{pid}|{phase}|{lst[-1].isoformat()}")
     return starts.union(ends)
 
 
@@ -406,7 +406,6 @@ def calendar_view():
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
-    hours_map = load_daily_hours()
     hours_map = load_daily_hours()
 
     milestone_map = {}
