@@ -285,7 +285,11 @@ def schedule_projects(projects):
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
-                for seg in segs:
+                start_overrides = project.get('segment_starts', {}).get(phase)
+                for idx, seg in enumerate(segs):
+                    if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
+                        current = date.fromisoformat(start_overrides[idx])
+                        hour = 0
                     hours = int(seg)
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
@@ -302,6 +306,7 @@ def schedule_projects(projects):
                     project.get('priority'),
                     project['id'],
                     hours_map,
+                    part=idx if isinstance(val, list) else None,
                 )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -332,7 +337,7 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, hours_map):
+def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, hours_map, part=None):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project. If there are free hours left
     # that day, reuse them before moving on to the next workday.
@@ -385,6 +390,7 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'start_date': start_date,
                 'priority': priority,
                 'pid': pid,
+                'part': part,
             })
             tasks.sort(key=lambda t: t['start'])
             schedule[day_str] = tasks
@@ -414,6 +420,7 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'start_date': start_date,
                 'priority': priority,
                 'pid': pid,
+                'part': part,
             })
             tasks.sort(key=lambda t: t['start'])
             schedule[day_str] = tasks
@@ -597,7 +604,7 @@ def compute_schedule_map(projects):
         for day, tasks in days.items():
             for t in tasks:
                 pid = t['pid']
-                mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours']))
+                mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours'], t.get('part')))
     for lst in mapping.values():
         lst.sort()
     return mapping
@@ -608,6 +615,6 @@ def phase_start_map(projects):
     mapping = compute_schedule_map(projects)
     result = {}
     for pid, items in mapping.items():
-        for worker, day, phase, hours in items:
+        for worker, day, phase, hours, _ in items:
             result.setdefault(pid, {}).setdefault(phase, day)
     return result

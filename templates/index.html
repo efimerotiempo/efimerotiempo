@@ -71,12 +71,14 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
+                {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
+                {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}
@@ -208,9 +210,10 @@
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
-        worker: t.closest('tr').dataset.worker
+        worker: t.closest('tr').dataset.worker,
+        part: t.dataset.part
       };
-      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -461,11 +464,11 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
       }).then(resp => resp.ok ? resp.json() : null)
         .then(d => {
           if (d) {
-            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, date: d.date}));
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: d.date}));
             if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);
           }
           location.reload();
