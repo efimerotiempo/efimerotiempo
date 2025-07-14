@@ -934,12 +934,16 @@ def split_phase_route():
 
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    part1 = sum(
-        h for _, d, _, h in tasks if date.fromisoformat(d) < cut
-    ) if tasks else 0
-    part2 = sum(
-        h for _, d, _, h in tasks if date.fromisoformat(d) >= cut
-    ) if tasks else 0
+    part1 = (
+        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) < cut)
+        if tasks
+        else 0
+    )
+    part2 = (
+        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) >= cut)
+        if tasks
+        else 0
+    )
 
     if part1 == 0 or part2 == 0:
         val = proj['phases'][phase]
