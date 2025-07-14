@@ -699,6 +699,7 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
