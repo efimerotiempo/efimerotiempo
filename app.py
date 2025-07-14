@@ -45,6 +45,7 @@ IGOR_END = _schedule_mod.IGOR_END
 find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
 previous_phase_end = _schedule_mod.previous_phase_end
+UNPLANNED = _schedule_mod.UNPLANNED
 if hasattr(_schedule_mod, "phase_start_map"):
     phase_start_map = _schedule_mod.phase_start_map
 else:
@@ -117,6 +118,22 @@ def parse_input_date(value):
             except ValueError:
                 return None
     return None
+
+
+def planning_status(schedule):
+    """Return mapping pid -> True if fully scheduled."""
+    status = {}
+    unplanned = schedule.get(UNPLANNED, {})
+    for tasks in unplanned.values():
+        for t in tasks:
+            status[t['pid']] = False
+    for worker, days in schedule.items():
+        if worker == UNPLANNED:
+            continue
+        for tasks in days.values():
+            for t in tasks:
+                status.setdefault(t['pid'], True)
+    return status
 
 
 def load_bugs():
@@ -401,6 +418,7 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
@@ -747,6 +765,7 @@ def complete():
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
+        plan_map=plan_map,
         split_points=points,
     )
 

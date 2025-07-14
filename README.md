@@ -115,6 +115,8 @@ defecto. Si se desmarca, el nuevo proyecto se coloca en la fila *Sin
 planificar* hasta que se decida moverlo manualmente. La tabla de proyectos
 muestra una columna indicando con un ✔ verde si está planificado o una ❌ si
 permanece sin planificar.
+La vista **Completo** incorpora la misma columna y verifica realmente si
+quedan fases en la fila *Sin planificar* para mostrar el estado correcto.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
