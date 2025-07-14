@@ -189,6 +189,7 @@ def schedule_projects(projects):
                         'message': msg,
                         'key': f"{project['name']}|{msg}",
                     })
+                    new_workers.append(None)
                     continue
                 if phase == 'pedidos' and isinstance(seg_val, str) and '-' in seg_val:
                     current, end_date = assign_pedidos(
