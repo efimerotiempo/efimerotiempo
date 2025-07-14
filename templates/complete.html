@@ -1,0 +1,709 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="complete-container">
+    <div class="complete-top">
+    <div class="complete-add">
+        <h2>Añadir proyecto</h2>
+        <form method="post" enctype="multipart/form-data">
+            <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
+            <label>Cliente:<input type="text" name="client" required></label><br>
+            <label>Fecha límite:<input type="text" name="due_date" placeholder="dd-mm" required></label><br>
+            <label>Prioridad:
+                <select name="priority">
+                    <option value="Alta">Alta</option>
+                    <option value="Media">Media</option>
+                    <option value="Baja">Baja</option>
+                    <option value="Sin prioridad" selected>Sin prioridad</option>
+                </select>
+            </label><br>
+            {% for phase in phases %}
+                {% if phase == 'pedidos' %}
+                    <label>Plazo acopio:<input type="text" name="pedidos" placeholder="dd-mm"></label><br>
+                {% else %}
+                    <label>{{ phase }} (horas):
+                        <input type="number" name="{{ phase }}">
+                        <input type="number" name="{{ phase }}_days" placeholder="días">
+                    </label><br>
+                {% endif %}
+            {% endfor %}
+            <label>Imagen:<input type="file" name="image" accept="image/*"></label><br>
+            <button type="submit">Guardar</button>
+        </form>
+    </div>
+    <div class="complete-milestones">
+        <h2>Hitos</h2>
+        <form method="post" action="{{ url_for('add_milestone') }}">
+            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+            <label>Descripción:<input type="text" name="description" required></label><br>
+            <label>Fecha:<input type="text" name="date" placeholder="dd-mm" required></label><br>
+            <button type="submit">Añadir</button>
+        </form>
+    </div>
+    <div class="bug-btn-container">
+        <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
+    </div>
+    <div class="hours-btn-container">
+        <button id="hours-btn" type="button">Editar jornada laboral</button>
+    </div>
+    {% if can_print %}
+    <div class="print-btn-container">
+        <form method="get" action="{{ url_for('print_complete') }}">
+            <button id="print-btn" type="submit">Imprimir</button>
+        </form>
+    </div>
+    {% endif %}
+    <div class="complete-conflicts">
+        <h3>Conflictos</h3>
+        <form method="post" action="{{ url_for('clear_conflicts') }}">
+            <button type="submit">Borrar todos</button>
+        </form>
+        <form method="post" action="{{ url_for('show_conflicts') }}">
+            <button type="submit">Mostrar todos</button>
+        </form>
+        <ul>
+        {% for c in conflicts %}
+            <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
+                {% if c.changes %}
+                <ul>
+                {% for ch in c.changes %}
+                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}" {% if ch.offset is not none %}data-offset="{{ ch.offset }}"{% endif %}>{{ ch.name }}</a> - {{ ch.client }}
+                        {% if ch.met %}
+                            <span class="ok">&#10004;</span>
+                        {% else %}
+                            <span class="late">&#10060;</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+                {% endif %}
+                <form method="post" action="{{ url_for('delete_conflict', key=c.key) }}" style="display:inline;">
+                    <button type="submit">Borrar</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    </div> <!-- end complete-top -->
+    <div class="complete-calendar">
+        <h2>Calendario</h2>
+        <div class="controls">
+            <form id="filter-form" method="get">
+                <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+                <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+                <button type="submit">Filtrar</button>
+            </form>
+            <button id="today-btn">HOY</button>
+        </div>
+        <div class="schedule-wrapper">
+<table class="schedule">
+    <thead>
+    {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
+    <tr id="hours-row" class="hours-row" style="display:none;">
+        <th class="resource-col">Horas</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set h = hours.get(d.isoformat(), 8) %}
+        <th><form class="hours-form" data-date="{{ d.isoformat() }}"><select>
+            {% for n in range(1,10) %}
+            <option value="{{n}}" {% if n==h %}selected{% endif %}>{{n}}h</option>
+            {% endfor %}
+        </select></form></th>
+        {% else %}
+        <th colspan="2" class="weekend-cell"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    <tr class="day-row">
+        <th class="resource-col">Recurso</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        {% else %}
+        <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    <tr class="milestones-row">
+        <td class="resource-col"></td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
+            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
+        </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+{% for worker, days_data in schedule.items() %}
+    <tr data-worker="{{ worker }}">
+        <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <td data-date="{{ d.isoformat() }}" class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
+            {% set tasks = days_data.get(d.isoformat(), []) %}
+            {% for t in tasks %}
+            {% if t.phase == 'vacaciones' %}
+            <div class="task vacation">VACACIONES</div>
+            {% else %}
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {% if t.priority == 'Alta' %}
+                    <span class="priority priority-alta">&#9650;</span>
+                {% elif t.priority == 'Media' %}
+                    <span class="priority priority-media">&#9650;</span>
+                {% elif t.priority == 'Baja' %}
+                    <span class="priority priority-baja">&#9650;</span>
+                {% endif %}
+                {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+        </div>
+        <div id="info-popup" class="info-popup"></div>
+        <div id="bug-modal" class="modal">
+            <div class="modal-content">
+                <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
+                    <label>Quién lo registra:
+                        <select name="user" required>
+                            <option value="Unai">Unai</option>
+                            <option value="Pilar">Pilar</option>
+                            <option value="Ane">Ane</option>
+                            <option value="Irene">Irene</option>
+                        </select>
+                    </label><br>
+                    <label>Pestaña:
+                        <select name="tab" required>
+                            <option value="Completo">Completo</option>
+                            <option value="Calendario">Calendario</option>
+                            <option value="Proyectos">Proyectos</option>
+                            <option value="Hitos">Hitos</option>
+                            <option value="Vacaciones">Vacaciones</option>
+                        </select>
+                    </label><br>
+                    <label>Frecuencia:
+                        <select name="freq" required>
+                            <option>Primera vez</option>
+                            <option>Un par</option>
+                            <option>Bastante a menudo</option>
+                            <option>Siempre. Estoy hasta los cojones.</option>
+                        </select>
+                    </label><br>
+                    <label>Detalle:<br>
+                        <textarea name="detail" rows="4" required></textarea>
+                    </label><br>
+                    <button type="submit">Enviar</button>
+                </form>
+                <button type="button" id="bug-cancel">Cerrar</button>
+            </div>
+        </div>
+    </div>
+    <div class="complete-projects">
+        <h2>Proyectos <button id="projects-toggle" type="button">&#8722;</button></h2>
+        <form method="get" class="controls">
+            <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
+            <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+            <button type="submit">Filtrar</button>
+        </form>
+        <table class="projects-table">
+            <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Cliente</th>
+                <th>Fecha inicio</th>
+                <th>Fecha límite</th>
+                <th>En plazo</th>
+                <th>Prioridad</th>
+                {% for ph in phases %}
+                    {% if ph == 'pedidos' %}
+                        <th>Plazo acopio</th>
+                    {% else %}
+                        <th>{{ ph }}</th>
+                    {% endif %}
+                {% endfor %}
+                <th>Cambiar</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for p in projects %}
+            <tr style="background-color: {{ p.color }};">
+                <td>{{ p.name }}</td>
+                <td>{{ p.client }}</td>
+                <td>{{ p.start_date }}</td>
+                <td>{{ p.due_date }}
+                    <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
+                        <input type="hidden" name="pid" value="{{ p.id }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <input type="date" name="due_date" value="{{ p.due_date }}">
+                        <button type="submit">Cambiar</button>
+                    </form>
+                </td>
+                <td>
+                    {% if p.met %}
+                        <span class="ok">&#10004;</span>
+                    {% else %}
+                        <span class="late">&#10060;</span>
+                    {% endif %}
+                </td>
+                <td>{{ p.priority }}</td>
+                {% for ph in phases %}
+                    <td>
+                    {% if p.phases.get(ph) %}
+                        {% set val = p.phases[ph] %}
+                        {% if ph == 'pedidos' %}
+                            {{ val }}<br>
+                        {% else %}
+                            {% if val is sequence %}
+                                {{ val|sum }}h<br>
+                            {% else %}
+                                {{ val }}h<br>
+                            {% endif %}
+                        {% endif %}
+                        <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <select name="worker">
+                                {% for w in all_workers %}
+                                    <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit">Guardar</button>
+                        </form>
+                        <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
+                            <input type="hidden" name="pid" value="{{ p.id }}">
+                            <input type="hidden" name="phase" value="{{ ph }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
+                            <button type="submit">Cambiar</button>
+                        </form>
+                    {% endif %}
+                    </td>
+                {% endfor %}
+                <td>
+                    <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <select name="priority">
+                            {% for pr in priorities %}
+                                <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Actualizar</button>
+                    </form>
+                </td>
+                <td>
+                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}">
+                        <button class="delete-btn" type="submit">&#10060;</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+  const PROJECT_DATA = {{ project_data|tojson }};
+  const PHASES = {{ phases|tojson }};
+  const STATIC_URL = "{{ url_for('static', filename='') }}";
+  const REORG_URL = "{{ url_for('reorganize_phase') }}";
+  const MOVE_URL = "{{ url_for('move_phase') }}";
+  const DELETE_URL = "{{ url_for('delete_phase') }}";
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  const DUE_URL = "{{ url_for('update_due_date') }}";
+  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const HOURS_URL = "{{ url_for('update_hours') }}";
+  const START_DATA = {{ start_map|tojson }};
+  const LAST_KEY = 'lastMoved';
+  const SCROLL_KEY2 = 'scrollDate';
+  const filterForm = document.getElementById('filter-form');
+  const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
+  const hoursBtn = document.getElementById('hours-btn');
+  const hoursRow = document.getElementById('hours-row');
+  const thead = document.querySelector('.schedule thead');
+  function toggleHours() {
+    const open = hoursRow.style.display !== 'none';
+    hoursRow.style.display = open ? 'none' : 'table-row';
+    thead.classList.toggle('open', !open);
+  }
+  if (hoursBtn) {
+    hoursBtn.addEventListener('click', toggleHours);
+  }
+  document.querySelectorAll('.hours-form').forEach(f => {
+    f.addEventListener('change', () => {
+      const val = f.querySelector('select').value;
+      sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+      fetch(HOURS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: f.dataset.date, hours: val })
+      }).then(() => location.reload());
+    });
+  });
+
+  document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
+    const worker = tr.dataset.worker;
+    const btn = tr.querySelector('.worker-toggle');
+    if (collapsedSet.has(worker)) {
+      tr.classList.add('collapsed');
+      if (btn) btn.textContent = '+';
+    }
+  });
+
+
+
+  const wrapper = document.querySelector('.schedule-wrapper');
+  const SCROLL_KEY = 'completeScroll';
+  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+  if (savedScroll !== null) {
+    wrapper.scrollLeft = parseFloat(savedScroll);
+  } else {
+    const cell = document.querySelector('th.today');
+    if (cell) cell.scrollIntoView({behavior: 'auto', inline: 'center'});
+  }
+  wrapper.addEventListener('scroll', () => {
+    sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+  });
+  wrapper.addEventListener('wheel', (e) => {
+    if (!e.shiftKey) return;
+    e.preventDefault();
+    wrapper.scrollLeft += e.deltaY;
+  });
+  const todayBtn = document.getElementById('today-btn');
+  todayBtn.addEventListener('click', () => {
+    const cell = document.querySelector('th.today');
+    if (cell) cell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+  });
+
+  const tasks = document.querySelectorAll('.task');
+  const popup = document.getElementById('info-popup');
+  let lastDrag = null;
+  tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      popup.style.display = 'none';
+      lastDrag = {
+        pid: t.dataset.pid,
+        phase: t.dataset.phase,
+        date: t.dataset.day,
+        worker: t.closest('tr').dataset.worker
+      };
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
+    });
+    t.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const proj = t.dataset.project;
+      tasks.forEach(o => {
+        if (o.dataset.project === proj) {
+          o.classList.add('highlight');
+          o.classList.remove('dim');
+        } else {
+          o.classList.add('dim');
+          o.classList.remove('highlight');
+        }
+      });
+        const info = PROJECT_DATA[t.dataset.pid];
+        let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
+        html += `Inicio: ${info.start_date}<br>`;
+        html += `Límite: ${info.due_date}<br>`;
+        html += `Prioridad: ${info.priority}<br>`;
+      PHASES.forEach(ph => {
+        const val = info.phases[ph];
+        if (val) {
+          if (ph === 'pedidos') {
+            html += `Plazo acopio: ${val}<br>`;
+          } else if (Array.isArray(val)) {
+            const total = val.reduce((a,b) => a + parseInt(b), 0);
+            html += `${ph}: ${total}h<br>`;
+          } else if (parseInt(val)) {
+            html += `${ph}: ${val}h<br>`;
+          }
+        }
+      });
+      if (info.image) {
+        html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
+      }
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
+      html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
+      html += ` <button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aqu\u00ed</button>`;
+      html += ` <form id="start-form" style="display:inline">` +
+               `<input type="date" id="start-input" value="${startVal}" required>` +
+               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
+               `</form>`;
+      html += ` <form id="due-form" style="display:inline">` +
+               `<input type="date" id="due-input" value="${info.due_date}" required>` +
+               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
+               `</form>`;
+      if (t.dataset.phase === 'pedidos') {
+        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+      }
+      popup.innerHTML = html;
+      const rect = t.getBoundingClientRect();
+      popup.style.left = (rect.left + window.scrollX + 5) + 'px';
+      popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+      popup.style.display = 'block';
+      const btn = document.getElementById('reorg-btn');
+      if (btn) {
+        btn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch(REORG_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
+          }).then(resp => resp.ok ? resp.json() : null)
+            .then(d => {
+              if (d) {
+                localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+                localStorage.setItem(SCROLL_KEY2, d.date);
+              }
+              location.reload();
+            });
+        });
+      }
+      const del = document.getElementById('del-btn');
+      if (del) {
+        del.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Borrar fase?')) {
+            fetch(DELETE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+            }).then(() => location.reload());
+          }
+        });
+      }
+      const split = document.getElementById('split-btn');
+      if (split) {
+        split.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Dividir fase a partir de este d\u00eda?')) {
+            fetch(SPLIT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
+            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }
+        });
+      }
+      const startForm = document.getElementById('start-form');
+      if (startForm) {
+        startForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('start-btn');
+          const val = document.getElementById('start-input').value;
+          fetch(START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
+      const dueForm = document.getElementById('due-form');
+      if (dueForm) {
+        dueForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('due-btn');
+          const val = document.getElementById('due-input').value;
+          fetch(DUE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
+    });
+  });
+  document.addEventListener('click', () => {
+    tasks.forEach(o => o.classList.remove('highlight', 'dim'));
+    popup.style.display = 'none';
+  });
+  popup.addEventListener('click', (e) => e.stopPropagation());
+  document.querySelectorAll('.worker-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tr = btn.closest('tr');
+      const worker = tr.dataset.worker;
+      tr.classList.toggle('collapsed');
+      if (tr.classList.contains('collapsed')) {
+        collapsedSet.add(worker);
+        btn.textContent = '+';
+      } else {
+        collapsedSet.delete(worker);
+        btn.textContent = '−';
+      }
+      localStorage.setItem('collapsedWorkers', JSON.stringify(Array.from(collapsedSet)));
+    });
+  });
+  function showTask(t) {
+    t.dispatchEvent(new Event('click'));
+    const rect = t.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    wrapper.scrollLeft += rect.left - wrapperRect.left - wrapper.clientWidth / 2;
+    t.scrollIntoView({behavior: 'smooth', block: 'center'});
+  }
+
+  const stored = sessionStorage.getItem('highlightPid');
+  if (stored) {
+    const t = Array.from(tasks).find(o => o.dataset.pid === stored);
+    if (t) {
+      showTask(t);
+    }
+    sessionStorage.removeItem('highlightPid');
+  }
+
+  const moved = localStorage.getItem(LAST_KEY);
+  if (moved) {
+    const m = JSON.parse(moved);
+    tasks.forEach(t => {
+      if (t.dataset.pid === m.pid && t.dataset.phase === m.phase) {
+        t.classList.add('moved');
+      }
+    });
+    const sd = localStorage.getItem(SCROLL_KEY2);
+    if (sd) {
+      const cell = document.querySelector(`td[data-date='${sd}']`);
+      if (cell) cell.scrollIntoView({behavior:'auto', inline:'center'});
+      localStorage.removeItem(SCROLL_KEY2);
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      const info = sessionStorage.getItem('undoMove');
+      if (info) {
+        const data = JSON.parse(info);
+        fetch(MOVE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+      }
+    }
+  });
+
+  document.querySelectorAll('.conflict-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = link.dataset.pid;
+      const proj = link.dataset.project;
+      let t = null;
+      if (pid) {
+        t = Array.from(tasks).find(o => o.dataset.pid === pid);
+      } else {
+        t = Array.from(tasks).find(o => o.dataset.project === proj);
+      }
+      if (t) {
+        showTask(t);
+      }
+    });
+  });
+  document.querySelectorAll('.affected-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = link.dataset.pid;
+      let t = Array.from(tasks).find(o => o.dataset.pid === pid);
+      if (t) {
+        showTask(t);
+      }
+    });
+  });
+  document.querySelectorAll('tbody td[data-date]').forEach(cell => {
+    cell.addEventListener('dragover', e => {
+      e.preventDefault();
+    });
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const date = cell.dataset.date;
+      const worker = cell.closest('tr').dataset.worker;
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
+      }).then(resp => resp.ok ? resp.json() : null)
+        .then(d => {
+          if (d) {
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, date: d.date}));
+            if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);
+          }
+          location.reload();
+        });
+    });
+  });
+  const projToggle = document.getElementById('projects-toggle');
+  if (projToggle) {
+    const projDiv = document.querySelector('.complete-projects');
+    projToggle.addEventListener('click', () => {
+      projDiv.classList.toggle('collapsed');
+      projToggle.innerHTML = projDiv.classList.contains('collapsed') ? '&#43;' : '&#8722;';
+    });
+  }
+  const bugBtn = document.getElementById('bug-btn');
+  const bugModal = document.getElementById('bug-modal');
+  const bugCancel = document.getElementById('bug-cancel');
+  if (bugBtn && bugModal) {
+    bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
+    bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
+    bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
+  }
+  document.querySelectorAll('.start-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (!resp.ok) {
+            return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+          }
+          return resp.json();
+        })
+        .then(d => {
+          if (d) {
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.get('pid'), phase: data.get('phase'), date: d.date}));
+            if (d.date !== data.get('date')) localStorage.setItem(SCROLL_KEY2, d.date);
+          }
+          location.reload();
+        });
+    });
+  });
+  document.querySelectorAll('.due-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(DUE_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+        });
+    });
+  });
+</script>
+{% endblock %}
