@@ -328,7 +328,13 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if part is not None:
         new_tasks = [t for t in new_tasks if t[4] == part]
-    return (new_tasks[0][1], None) if new_tasks else (None, 'No se pudo mover')
+    if not new_tasks:
+        return None, 'No se pudo mover'
+    day_str = new_tasks[0][1]
+    msg = None
+    if day_str != new_date.isoformat():
+        msg = 'El d\u00eda seleccionado no estaba disponible'
+    return day_str, msg
 
 
 def get_projects():
@@ -1024,12 +1030,13 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day, err = move_phase_date(projects, pid, phase, day, worker, part)
-    if err:
-        return jsonify({'error': err}), 400
-    if new_day:
-        return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
-    return '', 204
+    new_day, msg = move_phase_date(projects, pid, phase, day, worker, part)
+    if new_day is None:
+        return jsonify({'error': msg or 'No se pudo mover'}), 400
+    response = {'date': new_day, 'pid': pid, 'phase': phase}
+    if msg:
+        response['message'] = msg
+    return jsonify(response)
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])

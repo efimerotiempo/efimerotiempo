@@ -192,7 +192,8 @@ puedes deshacer el último movimiento pulsando **Ctrl+Z**, que la devolverá a s
 fecha y trabajador anteriores.
 Si la fase acaba programándose en una fecha distinta a la elegida al soltarla,
 el calendario se desplazará automáticamente a ese nuevo día para que sea fácil
-encontrarla.
+encontrarla y se mostrará una alerta indicando por qué no pudo quedarse en la
+celda seleccionada.
 Durante este proceso se validan tres aspectos: el trabajador debe tener esa
 fase entre sus habilidades, el día escogido no puede coincidir con sus
 vacaciones y la fase no se puede adelantar a la inmediatamente anterior.

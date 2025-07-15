@@ -647,18 +647,18 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
-      }).then(resp => {
-        if (!resp.ok) {
-          return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+      })
+      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+      .then(({ok, data}) => {
+        if (!ok) {
+          alert(data.error || 'Error');
+          return;
         }
-        return resp.json();
-      }).then(d => {
-          if (d) {
-            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: d.date}));
-            if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);
-          }
-          location.reload();
-        });
+        if (data.message) alert(data.message);
+        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+        location.reload();
+      });
     });
   });
   const projToggle = document.getElementById('projects-toggle');
