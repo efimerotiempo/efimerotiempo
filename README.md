@@ -105,6 +105,12 @@ calendario y ya no se le asignan nuevas fases.
 Junto a cada nombre se indican entre paréntesis las fases que puede realizar en
 su orden de prioridad para consultarlo de un vistazo.
 
+Fabio se dedica exclusivamente a soldar, de modo que no puede recibir fases de
+montaje.
+
+La fila **Sin planificar** cuenta con todas las habilidades pero las trata por
+igual sin prioridad entre ellas.
+
 Además existe una fila adicional llamada **Sin planificar** donde se acumulan
 las fases de los proyectos que no se quieran programar todavía. Estas tareas
 se asignan siempre a partir del día de hoy y respetan las ocho horas diarias,

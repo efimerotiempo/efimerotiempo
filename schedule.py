@@ -32,7 +32,7 @@ WORKERS = {
     'Joseba 2': ['montar', 'soldar'],
     'Naparra': ['montar', 'soldar'],
     'Unai': ['montar', 'soldar'],
-    'Fabio': ['soldar', 'montar'],
+    'Fabio': ['soldar'],
     'Beltxa': ['soldar', 'montar'],
     'Igor': ['soldar'],
     'Albi': ['recepcionar material', 'soldar', 'montar'],
@@ -573,7 +573,8 @@ def find_worker_for_phase(
             hours_map,
         )
         load = _worker_load(schedule, worker)
-        candidates.append((free, load, skills.index(phase), worker))
+        index = 0 if worker == UNPLANNED else skills.index(phase)
+        candidates.append((free, load, index, worker))
     if not candidates:
         return None
     if priority == 'Alta':
