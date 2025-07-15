@@ -246,3 +246,8 @@ tr.collapsed td:not(:first-child) { display: none; }
     border: 1px solid #000;
     text-align: center;
 }
+.projects-table tr.proj-dim { opacity: 0.4; }
+.projects-table tr.proj-highlight {
+    font-weight: bold;
+    outline: 2px solid #000;
+}

@@ -238,7 +238,7 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr style="background-color: {{ p.color }};">
+            <tr data-pid="{{ p.id }}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>{{ p.start_date }}</td>
@@ -419,6 +419,15 @@
           o.classList.remove('highlight');
         }
       });
+      document.querySelectorAll('.projects-table tbody tr[data-pid]').forEach(row => {
+        if (row.dataset.pid === t.dataset.pid) {
+          row.classList.add('proj-highlight');
+          row.classList.remove('proj-dim');
+        } else {
+          row.classList.add('proj-dim');
+          row.classList.remove('proj-highlight');
+        }
+      });
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
         html += `Inicio: ${info.start_date}<br>`;
@@ -539,6 +548,9 @@
   });
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
+    document.querySelectorAll('.projects-table tbody tr').forEach(r => {
+      r.classList.remove('proj-highlight', 'proj-dim');
+    });
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
