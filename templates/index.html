@@ -94,6 +94,7 @@
 </table>
 </div>
 <div id="info-popup" class="info-popup"></div>
+<div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -478,6 +479,28 @@
         location.reload();
       });
     });
+const CONFLICTS = {{ conflicts|tojson }};
+const conflictModal = document.getElementById("conflict-modal");
+const conflictText = document.getElementById("conflict-text");
+const conflictClose = document.getElementById("conflict-close");
+let conflictIndex = 0;
+function showNextConflict() {
+  if (conflictIndex < CONFLICTS.length) {
+    const c = CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + ": " + c.message;
+    conflictModal.style.display = "block";
+  } else {
+    conflictModal.style.display = "none";
+  }
+}
+if (CONFLICTS.length) {
+  showNextConflict();
+  conflictClose.addEventListener("click", () => {
+    conflictIndex++;
+    showNextConflict();
+  });
+}
+
   });
 </script>
 {% endblock %}

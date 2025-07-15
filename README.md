@@ -72,6 +72,7 @@ roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
+Además, cada conflicto que aparece en la lista muestra su texto en un cuadro centrado hasta que se cierre.
 Por encima de la lista de **Conflictos** aparece un gran botón amarillo
 **Reportar bug**. Es unas diez veces más grande que un botón normal para que
 resulte muy visible. Al pulsarlo se abre un formulario donde debes indicar quién

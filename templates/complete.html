@@ -170,6 +170,7 @@
 </table>
         </div>
         <div id="info-popup" class="info-popup"></div>
+<div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -706,6 +707,28 @@
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
     });
+const CONFLICTS = {{ conflicts|tojson }};
+const conflictModal = document.getElementById("conflict-modal");
+const conflictText = document.getElementById("conflict-text");
+const conflictClose = document.getElementById("conflict-close");
+let conflictIndex = 0;
+function showNextConflict() {
+  if (conflictIndex < CONFLICTS.length) {
+    const c = CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + ": " + c.message;
+    conflictModal.style.display = "block";
+  } else {
+    conflictModal.style.display = "none";
+  }
+}
+if (CONFLICTS.length) {
+  showNextConflict();
+  conflictClose.addEventListener("click", () => {
+    conflictIndex++;
+    showNextConflict();
+  });
+}
+
   });
 </script>
 {% endblock %}
