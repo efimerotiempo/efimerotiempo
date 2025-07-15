@@ -227,7 +227,8 @@ cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
 asignaciones de tareas, excepto en el caso de **Irene**, que puede recibir
-trabajo esos días mientras no caigan en fin de semana. Si un trabajador tenía
+trabajo esos días mientras no caigan en fin de semana. Sus vacaciones siguen
+mostrándose en el calendario aunque no influyan en la planificación. Si un trabajador tenía
 proyectos planificados en esas fechas, la planificación se recalcula y esas
 fases se reasignan automáticamente al trabajador disponible con menor carga. En
 la lista de conflictos se añade una nota indicando los días de vacaciones, a qué

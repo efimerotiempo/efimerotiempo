@@ -151,8 +151,7 @@ def _build_vacation_map():
         end = date.fromisoformat(vac['end'])
         while day <= end:
             if day.weekday() not in WEEKEND:
-                if worker != 'Irene':
-                    vac_map.setdefault(worker, set()).add(day)
+                vac_map.setdefault(worker, set()).add(day)
             day += timedelta(days=1)
     return vac_map
 
@@ -202,8 +201,6 @@ def schedule_projects(projects):
     hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
     for worker, days in vac_map.items():
-        if worker == 'Irene':
-            continue
         for day in days:
             if worker in worker_schedule:
                 ds = worker_schedule[worker].setdefault(day.isoformat(), [])
@@ -211,7 +208,7 @@ def schedule_projects(projects):
                     'project': 'Vacaciones',
                     'client': '',
                     'phase': 'vacaciones',
-                    'hours': HOURS_PER_DAY,
+                    'hours': 0 if worker == 'Irene' else HOURS_PER_DAY,
                     'late': False,
                     'color': '#ff9999',
                     'due_date': '',

@@ -304,7 +304,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     if worker and phase not in WORKERS.get(worker, []):
         return None, 'Trabajador sin esa fase'
     vac_map = _schedule_mod._build_vacation_map()
-    if worker and new_date in vac_map.get(worker, set()):
+    if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
         return None, 'Vacaciones en esa fecha'
     prev_end = previous_phase_end(projects, pid, phase, part)
     if prev_end and new_date <= prev_end:
