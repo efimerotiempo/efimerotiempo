@@ -51,6 +51,7 @@ HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
 HOURS_LIMITS['Mecanizar'] = float('inf')
 HOURS_LIMITS['Tratamiento'] = float('inf')
+HOURS_LIMITS[UNPLANNED] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
 
@@ -367,6 +368,39 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
         hour = 0
     remaining = hours
     last_day = day
+    # Unplanned tasks ignore the daily limit but still split into 8h blocks.
+    if worker == UNPLANNED:
+        while remaining > 0:
+            if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
+                day = next_workday(day)
+                continue
+            day_str = day.isoformat()
+            tasks = schedule.get(day_str, [])
+            used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
+            allocate = min(remaining, HOURS_PER_DAY)
+            late = day > date.fromisoformat(due_date)
+            tasks.append({
+                'project': project_name,
+                'client': client,
+                'phase': phase,
+                'hours': allocate,
+                'start': used,
+                'late': late,
+                'color': color,
+                'due_date': due_date,
+                'start_date': start_date,
+                'priority': priority,
+                'pid': pid,
+                'part': part,
+            })
+            tasks.sort(key=lambda t: t.get('start', 0))
+            schedule[day_str] = tasks
+            remaining -= allocate
+            last_day = day
+            day = next_workday(day)
+            hour = 0
+        return day, hour, last_day
+
     while remaining > 0:
         if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
             day = next_workday(day)

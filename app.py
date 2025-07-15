@@ -323,6 +323,8 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
             seg_starts[idx] = new_date.isoformat()
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
+    if worker:
+        proj['planned'] = worker != UNPLANNED
     save_projects(projects)
     mapping = compute_schedule_map(projects)
     new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
