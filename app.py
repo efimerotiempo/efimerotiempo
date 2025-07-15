@@ -1017,6 +1017,43 @@ def split_phase_route():
     return '', 204
 
 
+@app.route('/unsplit_phase', methods=['POST'])
+def unsplit_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    if not pid or not phase:
+        return '', 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in proj.get('phases', {}):
+        return '', 400
+    val = proj['phases'][phase]
+    if not isinstance(val, list) or len(val) <= 1:
+        return '', 400
+    total = sum(int(v) for v in val)
+    mapping = compute_schedule_map(projects)
+    part_hours = {}
+    part_workers = {}
+    for worker, day, ph, hrs, prt in mapping.get(pid, []):
+        if ph == phase and prt is not None and prt < len(val):
+            part_hours[prt] = part_hours.get(prt, 0) + hrs
+            part_workers.setdefault(prt, worker)
+    if part_hours:
+        largest = max(part_hours.items(), key=lambda x: x[1])[0]
+        worker = part_workers.get(largest)
+        if worker:
+            proj.setdefault('assigned', {})[phase] = worker
+    proj['phases'][phase] = total
+    segs = proj.get('segment_starts', {}).get(phase)
+    if segs:
+        proj['segment_starts'][phase] = [segs[0]]
+        if not segs[0]:
+            proj['segment_starts'].pop(phase)
+    save_projects(projects)
+    return '', 204
+
+
 @app.route('/move', methods=['POST'])
 def move_phase():
     data = request.get_json() or request.form

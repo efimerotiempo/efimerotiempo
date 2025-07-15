@@ -183,6 +183,9 @@ elegida no coincida exactamente con su mitad. La segunda parte se mantiene
 como un tramo independiente y en las tablas de **Proyectos** aparece una
 línea adicional con el mismo nombre, cliente y fecha límite mostrando las
 horas restantes de esa fase.
+Si posteriormente quieres revertir la operación, el mismo recuadro muestra
+un botón **Deshacer división** que vuelve a unir ambas mitades sumando sus
+horas. Se conserva el trabajador asignado a la parte mayor.
 Además se muestra un pequeño formulario con un campo de fecha y un botón
 **Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
 introducida no es válida se despliega una alerta explicando el motivo.
