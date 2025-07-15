@@ -151,7 +151,8 @@ def _build_vacation_map():
         end = date.fromisoformat(vac['end'])
         while day <= end:
             if day.weekday() not in WEEKEND:
-                vac_map.setdefault(worker, set()).add(day)
+                if worker != 'Irene':
+                    vac_map.setdefault(worker, set()).add(day)
             day += timedelta(days=1)
     return vac_map
 
@@ -163,6 +164,8 @@ def _worker_on_vacation(worker, start_day, days_needed, vac_map):
     A single vacation day is allowed so that phases can continue once the
     absence ends.
     """
+    if worker == 'Irene':
+        return False
     d = start_day
     remaining = days_needed
     count = 0
@@ -178,6 +181,8 @@ def _worker_on_vacation(worker, start_day, days_needed, vac_map):
 
 
 def _vacation_days_in_range(worker, start_day, days_needed, vac_map):
+    if worker == 'Irene':
+        return []
     days = []
     d = start_day
     remaining = days_needed
@@ -197,6 +202,8 @@ def schedule_projects(projects):
     hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
     for worker, days in vac_map.items():
+        if worker == 'Irene':
+            continue
         for day in days:
             if worker in worker_schedule:
                 ds = worker_schedule[worker].setdefault(day.isoformat(), [])
@@ -289,6 +296,7 @@ def schedule_projects(projects):
                     project['start_date'],
                     project.get('priority'),
                     project['id'],
+                    worker,
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
@@ -363,7 +371,9 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
 
     day = start_day
     hour = start_hour
-    while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
+    while day.weekday() in WEEKEND or (
+        worker != 'Irene' and any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), []))
+    ):
         day = next_workday(day)
         hour = 0
     remaining = hours
@@ -402,7 +412,9 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
         return day, hour, last_day
 
     while remaining > 0:
-        if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
+        if day.weekday() in WEEKEND or (
+            worker != 'Irene' and any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), []))
+        ):
             day = next_workday(day)
             continue
         day_str = day.isoformat()
@@ -480,14 +492,18 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
     return next_day, next_hour, last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid):
+def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid, worker=None):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
-    while day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
+    while day.weekday() in WEEKEND or (
+        worker != 'Irene' and any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), []))
+    ):
         day = next_workday(day)
     last_day = day
     while day <= end_day:
-        if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
+        if day.weekday() in WEEKEND or (
+            worker != 'Irene' and any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), []))
+        ):
             day += timedelta(days=1)
             continue
         day_str = day.isoformat()
@@ -540,7 +556,7 @@ def _worker_load(schedule, worker):
 
 def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, hours_map=None):
     """Return the first day with ``days_needed`` consecutive free workdays."""
-    vac = vacations.get(worker, set()) if vacations else set()
+    vac = set() if worker == 'Irene' else vacations.get(worker, set()) if vacations else set()
     sched = schedule.get(worker, {})
     d = day
     while True:

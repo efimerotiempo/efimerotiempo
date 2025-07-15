@@ -200,7 +200,8 @@ encontrarla y se mostrará una alerta indicando por qué no pudo quedarse en la
 celda seleccionada.
 Durante este proceso se validan tres aspectos: el trabajador debe tener esa
 fase entre sus habilidades, el día escogido no puede coincidir con sus
-vacaciones y la fase no se puede adelantar a la inmediatamente anterior.
+vacaciones (salvo en el caso de Irene, que puede trabajar igualmente de lunes a
+viernes) y la fase no se puede adelantar a la inmediatamente anterior.
 El resaltado negro permanece hasta que se mueva otra fase.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
@@ -225,7 +226,8 @@ Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
-asignaciones de tareas. Si un trabajador tenía
+asignaciones de tareas, excepto en el caso de **Irene**, que puede recibir
+trabajo esos días mientras no caigan en fin de semana. Si un trabajador tenía
 proyectos planificados en esas fechas, la planificación se recalcula y esas
 fases se reasignan automáticamente al trabajador disponible con menor carga. En
 la lista de conflictos se añade una nota indicando los días de vacaciones, a qué
