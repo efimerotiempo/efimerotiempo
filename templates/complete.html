@@ -393,13 +393,13 @@
 
 
   const wrapper = document.querySelector('.schedule-wrapper');
-  const SCROLL_KEY = 'completeScroll';
+  const SCROLL_KEY = 'calendarScroll';
   const savedScroll = sessionStorage.getItem(SCROLL_KEY);
   if (savedScroll !== null) {
     wrapper.scrollLeft = parseFloat(savedScroll);
   } else {
-    const cell = document.querySelector('th.today');
-    if (cell) cell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
   }
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
@@ -411,8 +411,8 @@
   });
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    const cell = document.querySelector('th.today');
-    if (cell) cell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+    const todayCell = document.querySelector('th.today');
+    if (todayCell) todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
   });
 
   const tasks = document.querySelectorAll('.task');
