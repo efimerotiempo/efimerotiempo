@@ -1200,6 +1200,14 @@ def report_bug():
     return redirect(request.referrer or url_for('complete'))
 
 
+@app.route('/delete_bug/<bid>', methods=['POST'])
+def delete_bug(bid):
+    bugs = load_bugs()
+    bugs = [b for b in bugs if str(b.get('id')) != bid]
+    save_bugs(bugs)
+    return redirect(url_for('bug_list'))
+
+
 @app.route('/bugs')
 def bug_list():
     """Show table with all recorded bugs."""
