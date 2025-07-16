@@ -254,7 +254,15 @@
             <tr data-pid="{{ p.id }}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
-                <td>{{ p.start_date }}</td>
+                <td>
+                    {{ p.start_date }}
+                    <form class="proj-start-form" method="post" action="{{ url_for('update_start_date') }}">
+                        <input type="hidden" name="pid" value="{{ p.id }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <input type="date" name="start_date" value="{{ p.start_date }}">
+                        <button type="submit">Cambiar</button>
+                    </form>
+                </td>
                 <td>{{ p.due_date }}
                     <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
                         <input type="hidden" name="pid" value="{{ p.id }}">
@@ -341,6 +349,7 @@
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
+  const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
@@ -469,14 +478,18 @@
       if (Array.isArray(info.phases[t.dataset.phase])) {
         html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer divisi\u00f3n</button>`;
       }
-      html += ` <form id="start-form" style="display:inline">` +
-               `<input type="date" id="start-input" value="${startVal}" required>` +
-               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
-               `</form>`;
-      html += ` <form id="due-form" style="display:inline">` +
-               `<input type="date" id="due-input" value="${info.due_date}" required>` +
-               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
-               `</form>`;
+       html += ` <form id="start-form" style="display:inline">` +
+                `<input type="date" id="start-input" value="${startVal}" required>` +
+                `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
+                `</form>`;
+       html += ` <form id="due-form" style="display:inline">` +
+                `<input type="date" id="due-input" value="${info.due_date}" required>` +
+                `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
+                `</form>`;
+       html += ` <form id="proj-start-form" style="display:inline">` +
+                `<input type="date" id="proj-start-input" value="${info.start_date}" required>` +
+                `<button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button>` +
+                `</form>`;
       if (t.dataset.phase === 'pedidos') {
         html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
       }
@@ -572,6 +585,20 @@
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });
+        });
+      }
+      const projForm = document.getElementById('proj-start-form');
+      if (projForm) {
+        projForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('proj-start-btn');
+          const val = document.getElementById('proj-start-input').value;
+          fetch(PROJ_START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
+          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
     });
@@ -749,7 +776,18 @@
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
     });
-const CONFLICTS = {{ conflicts|tojson }};
+  });
+  document.querySelectorAll('.proj-start-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(PROJ_START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+        });
+    });
+  });
+  const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");

@@ -947,6 +947,33 @@ def update_due_date():
     return redirect(next_url)
 
 
+@app.route('/update_start_date', methods=['POST'])
+def update_start_date():
+    """Modify a project's start date."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    date_str = data.get('start_date') or data.get('date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    if proj.get('due_date') and new_date > date.fromisoformat(proj['due_date']):
+        return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
+    proj['start_date'] = new_date.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
 @app.route('/update_hours', methods=['POST'])
 def update_hours():
     """Set working hours for a specific day (1-9)."""
