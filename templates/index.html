@@ -89,8 +89,21 @@
         {% endif %}
         {% endfor %}
     </tr>
-    {% endfor %}
+{% endfor %}
     </tbody>
+    <tfoot>
+    <tr class="day-row">
+        <th class="resource-col">Recurso</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        {% else %}
+        <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    </tfoot>
 </table>
 </div>
 <div id="info-popup" class="info-popup"></div>
