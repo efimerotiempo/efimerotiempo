@@ -71,12 +71,14 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
+                {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
+                {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}
@@ -92,6 +94,7 @@
 </table>
 </div>
 <div id="info-popup" class="info-popup"></div>
+<div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -132,6 +135,7 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
@@ -208,9 +212,10 @@
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
-        worker: t.closest('tr').dataset.worker
+        worker: t.closest('tr').dataset.worker,
+        part: t.dataset.part
       };
-      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase}));
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -248,6 +253,9 @@
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
       html += ` <button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aqu\u00ed</button>`;
+      if (Array.isArray(info.phases[t.dataset.phase])) {
+        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer divisi\u00f3n</button>`;
+      }
       html += ` <form id="start-form" style="display:inline">` +
                `<input type="date" id="start-input" value="${startVal}" required>` +
                `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
@@ -304,6 +312,19 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
+            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }
+        });
+      }
+      const unsplit = document.getElementById('unsplit-btn');
+      if (unsplit) {
+        unsplit.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
+            fetch(UNSPLIT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
             }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
           }
         });
@@ -461,16 +482,42 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker })
-      }).then(resp => resp.ok ? resp.json() : null)
-        .then(d => {
-          if (d) {
-            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, date: d.date}));
-            if (d.date !== date) localStorage.setItem(SCROLL_KEY2, d.date);
-          }
-          location.reload();
-        });
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
+      })
+      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+      .then(({ok, data}) => {
+        if (!ok) {
+          alert(data.error || 'Error');
+          return;
+        }
+        if (data.message) alert(data.message);
+        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+        location.reload();
+      });
     });
+const CONFLICTS = {{ conflicts|tojson }};
+const conflictModal = document.getElementById("conflict-modal");
+const conflictText = document.getElementById("conflict-text");
+const conflictClose = document.getElementById("conflict-close");
+let conflictIndex = 0;
+function showNextConflict() {
+  if (conflictIndex < CONFLICTS.length) {
+    const c = CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + ": " + c.message;
+    conflictModal.style.display = "block";
+  } else {
+    conflictModal.style.display = "none";
+  }
+}
+if (CONFLICTS.length) {
+  showNextConflict();
+  conflictClose.addEventListener("click", () => {
+    conflictIndex++;
+    showNextConflict();
+  });
+}
+
   });
 </script>
 {% endblock %}

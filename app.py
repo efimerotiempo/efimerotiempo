@@ -44,6 +44,8 @@ WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
 find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
+previous_phase_end = _schedule_mod.previous_phase_end
+UNPLANNED = _schedule_mod.UNPLANNED
 if hasattr(_schedule_mod, "phase_start_map"):
     phase_start_map = _schedule_mod.phase_start_map
 else:
@@ -51,7 +53,7 @@ else:
         mapping = compute_schedule_map(projects)
         result = {}
         for pid, items in mapping.items():
-            for worker, day, phase, hours in items:
+            for worker, day, phase, hours, _ in items:
                 result.setdefault(pid, {}).setdefault(phase, day)
         return result
 WEEKEND = _schedule_mod.WEEKEND
@@ -116,6 +118,22 @@ def parse_input_date(value):
             except ValueError:
                 return None
     return None
+
+
+def planning_status(schedule):
+    """Return mapping pid -> True if fully scheduled."""
+    status = {}
+    unplanned = schedule.get(UNPLANNED, {})
+    for tasks in unplanned.values():
+        for t in tasks:
+            status[t['pid']] = False
+    for worker, days in schedule.items():
+        if worker == UNPLANNED:
+            continue
+        for tasks in days.values():
+            for t in tasks:
+                status.setdefault(t['pid'], True)
+    return status
 
 
 def load_bugs():
@@ -236,6 +254,8 @@ def attempt_reorganize(projects, pid, phase, days=30):
         for tp in temp:
             if tp['id'] == pid:
                 tp['start_date'] = cand.isoformat()
+                if tp.get('segment_starts'):
+                    tp['segment_starts'].pop(phase, None)
                 break
         new_map = compute_schedule_map(temp)
         new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
@@ -247,34 +267,104 @@ def attempt_reorganize(projects, pid, phase, days=30):
             best_date = cand
     if best < orig_start:
         proj['start_date'] = best_date.isoformat()
+        if proj.get('segment_starts'):
+            proj['segment_starts'].pop(phase, None)
         save_projects(projects)
         return best.isoformat()
     return None
 
 
-def move_phase_date(projects, pid, phase, new_date, worker=None):
+def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
-    Return the actual first day of the phase after rescheduling or ``None`` if
-    the phase was not found.
+    Return tuple ``(day, error)`` where ``day`` is the first day of the phase
+    after rescheduling, or ``None`` if it could not be moved. ``error`` provides
+    a message explaining the failure when applicable.
     """
+    if part in (None, '', 'None'):
+        part = None
+    else:
+        try:
+            part = int(part)
+        except Exception:
+            part = None
+
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
-        return None
+        return None, 'Fase no encontrada'
+    if part is not None:
+        tasks = [t for t in tasks if t[4] == part]
+        if not tasks:
+            return None, 'Fase no encontrada'
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
-        return None
-    old_start = date.fromisoformat(tasks[0][1])
-    base = date.fromisoformat(proj['start_date'])
-    offset = (old_start - base).days
-    proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+        return None, 'Proyecto no encontrado'
+
+    if worker and phase not in WORKERS.get(worker, []):
+        return None, 'Trabajador sin esa fase'
+    vac_map = _schedule_mod._build_vacation_map()
+    if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
+        return None, 'Vacaciones en esa fecha'
+    prev_end = previous_phase_end(projects, pid, phase, part)
+    if prev_end and new_date <= prev_end:
+        return None, 'No puede adelantarse a la fase previa'
+    # Prepare a deep copy to test the new start without modifying real data yet
+    temp = copy.deepcopy(projects)
+    tproj = next((p for p in temp if p['id'] == pid), None)
+    if part is None and not isinstance(tproj['phases'].get(phase), list):
+        seg_starts = tproj.setdefault('segment_starts', {}).setdefault(phase, [None])
+        seg_starts[0] = new_date.isoformat()
+        if worker:
+            tproj.setdefault('assigned', {})[phase] = worker
+    else:
+        seg_starts = tproj.setdefault('segment_starts', {}).setdefault(
+            phase, [None] * len(tproj['phases'][phase])
+        )
+        idx = part if part is not None else 0
+        if idx < len(seg_starts):
+            seg_starts[idx] = new_date.isoformat()
+        if worker:
+            seg_workers = tproj.setdefault('segment_workers', {}).setdefault(
+                phase, [None] * len(tproj['phases'][phase])
+            )
+            if idx >= len(seg_workers):
+                seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
+            seg_workers[idx] = worker
     if worker:
-        proj.setdefault('assigned', {})[phase] = worker
+        tproj['planned'] = worker != UNPLANNED
+
+    new_map = compute_schedule_map(temp)
+    new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
+    if part is not None:
+        new_tasks = [t for t in new_tasks if t[4] == part]
+    if not new_tasks or new_tasks[0][1] != new_date.isoformat():
+        return None, 'El d\u00eda seleccionado no estaba disponible'
+
+    # Apply the change to the real project list now that we know it's valid
+    if part is None and not isinstance(proj['phases'].get(phase), list):
+        seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
+        seg_starts[0] = new_date.isoformat()
+        if worker:
+            proj.setdefault('assigned', {})[phase] = worker
+    else:
+        seg_starts = proj.setdefault('segment_starts', {}).setdefault(
+            phase, [None] * len(proj['phases'][phase])
+        )
+        idx = part if part is not None else 0
+        if idx < len(seg_starts):
+            seg_starts[idx] = new_date.isoformat()
+        if worker:
+            seg_workers = proj.setdefault('segment_workers', {}).setdefault(
+                phase, [None] * len(proj['phases'][phase])
+            )
+            if idx >= len(seg_workers):
+                seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
+            seg_workers[idx] = worker
+    if worker:
+        proj['planned'] = worker != UNPLANNED
     save_projects(projects)
-    mapping = compute_schedule_map(projects)
-    new_tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    return new_tasks[0][1] if new_tasks else None
+    return new_date.isoformat(), None
 
 
 def get_projects():
@@ -283,6 +373,8 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
+        if not p.get('planned', True):
+            p['start_date'] = date.today().isoformat()
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
@@ -327,6 +419,31 @@ def expand_for_display(projects):
     return rows
 
 
+def split_markers(schedule):
+    """Return set of tuples identifying split boundaries."""
+    parts = {}
+    for worker, days in schedule.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                if t.get('part') is None:
+                    continue
+                key = (t['pid'], t['phase'], t['part'])
+                parts.setdefault(key, []).append(date.fromisoformat(day))
+    starts = set()
+    ends = set()
+    grouped = {}
+    for (pid, phase, part), days in parts.items():
+        days.sort()
+        grouped.setdefault((pid, phase), {})[part] = days
+    for (pid, phase), segs in grouped.items():
+        for idx, lst in segs.items():
+            if idx > 0 and lst:
+                starts.add(f"{pid}|{phase}|{lst[0].isoformat()}")
+            if lst:
+                ends.add(f"{pid}|{phase}|{lst[-1].isoformat()}")
+    return starts.union(ends)
+
+
 @app.route('/')
 def home():
     """Redirect to the combined view by default."""
@@ -337,6 +454,7 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
@@ -363,11 +481,12 @@ def calendar_view():
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
 
+    points = split_markers(schedule)
+
     today = date.today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
-    hours_map = load_daily_hours()
     hours_map = load_daily_hours()
 
     milestone_map = {}
@@ -392,6 +511,7 @@ def calendar_view():
         start_map=start_map,
         phases=PHASE_ORDER,
         hours=hours_map,
+        split_points=points,
     )
 
 
@@ -420,6 +540,7 @@ def project_list():
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
     start_map = phase_start_map(projects)
+    hours_map = load_daily_hours()
     projects = expand_for_display(projects)
     return render_template(
         'projects.html',
@@ -461,6 +582,7 @@ def add_project():
             'phases': {},
             'assigned': {},
             'image': image_path,
+            'planned': 'planned' in data,
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)
@@ -578,6 +700,7 @@ def complete():
             'phases': {},
             'assigned': {},
             'image': image_path,
+            'planned': 'planned' in data,
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)
@@ -612,6 +735,7 @@ def complete():
         return redirect(url_for('complete'))
 
     schedule, conflicts = schedule_projects(projects)
+    plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
@@ -646,6 +770,8 @@ def complete():
 
     filtered_projects = expand_for_display(filtered_projects)
 
+    points = split_markers(schedule)
+
     today = date.today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
@@ -676,6 +802,8 @@ def complete():
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
+        plan_map=plan_map,
+        split_points=points,
     )
 
 
@@ -781,6 +909,8 @@ def update_phase_start():
     base = date.fromisoformat(proj['start_date'])
     offset = (date.fromisoformat(tasks[0][1]) - base).days
     proj['start_date'] = (new_date - timedelta(days=offset)).isoformat()
+    if proj.get('segment_starts'):
+        proj['segment_starts'].pop(phase, None)
     temp = copy.deepcopy(projects)
     new_map = compute_schedule_map(temp)
     new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
@@ -850,7 +980,7 @@ def reorganize_phase():
     projects = get_projects()
     new_day = attempt_reorganize(projects, pid, phase)
     if new_day:
-        return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
+        return jsonify({'date': new_day, 'pid': pid, 'phase': phase, 'part': part})
     return '', 204
 
 
@@ -892,12 +1022,16 @@ def split_phase_route():
 
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    part1 = sum(
-        h for _, d, _, h in tasks if date.fromisoformat(d) < cut
-    ) if tasks else 0
-    part2 = sum(
-        h for _, d, _, h in tasks if date.fromisoformat(d) >= cut
-    ) if tasks else 0
+    part1 = (
+        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) < cut)
+        if tasks
+        else 0
+    )
+    part2 = (
+        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) >= cut)
+        if tasks
+        else 0
+    )
 
     if part1 == 0 or part2 == 0:
         val = proj['phases'][phase]
@@ -906,6 +1040,51 @@ def split_phase_route():
         part2 = total - part1
 
     proj['phases'][phase] = [part1, part2]
+    proj.setdefault('segment_starts', {}).setdefault(phase, [None, None])
+    worker = proj.get('assigned', {}).get(phase)
+    proj.setdefault('segment_workers', {}).setdefault(phase, [worker, worker])
+    save_projects(projects)
+    return '', 204
+
+
+@app.route('/unsplit_phase', methods=['POST'])
+def unsplit_phase():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    if not pid or not phase:
+        return '', 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in proj.get('phases', {}):
+        return '', 400
+    val = proj['phases'][phase]
+    if not isinstance(val, list) or len(val) <= 1:
+        return '', 400
+    total = sum(int(v) for v in val)
+    mapping = compute_schedule_map(projects)
+    part_hours = {}
+    part_workers = {}
+    for worker, day, ph, hrs, prt in mapping.get(pid, []):
+        if ph == phase and prt is not None and prt < len(val):
+            part_hours[prt] = part_hours.get(prt, 0) + hrs
+            part_workers.setdefault(prt, worker)
+    if part_hours:
+        largest = max(part_hours.items(), key=lambda x: x[1])[0]
+        worker = part_workers.get(largest)
+        if worker:
+            proj.setdefault('assigned', {})[phase] = worker
+    proj['phases'][phase] = total
+    segs = proj.get('segment_starts', {}).get(phase)
+    if segs:
+        proj['segment_starts'][phase] = [segs[0]]
+        if not segs[0]:
+            proj['segment_starts'].pop(phase)
+    segw = proj.get('segment_workers', {}).get(phase)
+    if segw is not None:
+        proj['segment_workers'].pop(phase, None)
+        if not proj['segment_workers']:
+            proj.pop('segment_workers')
     save_projects(projects)
     return '', 204
 
@@ -917,6 +1096,7 @@ def move_phase():
     phase = data.get('phase')
     date_str = data.get('date')
     worker = data.get('worker')
+    part = data.get('part')
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -924,10 +1104,13 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day = move_phase_date(projects, pid, phase, day, worker)
-    if new_day:
-        return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
-    return '', 204
+    new_day, msg = move_phase_date(projects, pid, phase, day, worker, part)
+    if new_day is None:
+        return jsonify({'error': msg or 'No se pudo mover'}), 400
+    response = {'date': new_day, 'pid': pid, 'phase': phase}
+    if msg:
+        response['message'] = msg
+    return jsonify(response)
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])

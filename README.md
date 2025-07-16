@@ -72,6 +72,10 @@ roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
+En la vista **Completo**, al pinchar en una fase no solo se destacan en el calendario
+las tareas del mismo proyecto, sino que también se marca su fila correspondiente en la
+tabla de proyectos mientras el resto aparece atenuado.
+Además, cada conflicto que aparece en la lista muestra su texto en un cuadro centrado hasta que se cierre.
 Por encima de la lista de **Conflictos** aparece un gran botón amarillo
 **Reportar bug**. Es unas diez veces más grande que un botón normal para que
 resulte muy visible. Al pulsarlo se abre un formulario donde debes indicar quién
@@ -104,6 +108,29 @@ Igor, Albi y Eneko. A partir del 21 de julio Igor deja de aparecer en el
 calendario y ya no se le asignan nuevas fases.
 Junto a cada nombre se indican entre paréntesis las fases que puede realizar en
 su orden de prioridad para consultarlo de un vistazo.
+
+Fabio se dedica exclusivamente a soldar, de modo que no puede recibir fases de
+montaje.
+
+La fila **Sin planificar** cuenta con todas las habilidades pero las trata por
+igual sin prioridad entre ellas.
+
+Además existe una fila adicional llamada **Sin planificar** donde se acumulan
+las fases de los proyectos que no se quieran programar todavía. Estas tareas
+se asignan siempre a partir del día de hoy. Aunque cada proyecto se reparte en
+tramos de ocho horas diarias, la fila no tiene límite de jornada, por lo que
+pueden coincidir tantos proyectos como se desee en el mismo día.
+En el formulario de alta aparece una casilla **Planificar** marcada por
+defecto. Si se desmarca, el nuevo proyecto se coloca en la fila *Sin
+planificar* hasta que se decida moverlo manualmente. La tabla de proyectos
+muestra una columna indicando con un ✔ verde si está planificado o una ❌ si
+permanece sin planificar.
+La vista **Completo** incorpora la misma columna y verifica realmente si
+quedan fases en la fila *Sin planificar* para mostrar el estado correcto.
+Las fases y los proyectos pueden arrastrarse libremente desde la fila
+*Sin planificar* al calendario del resto de trabajadores y viceversa. Al
+hacerlo la aplicación cambia automáticamente su estado de planificado para
+mantener la coherencia.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
@@ -156,6 +183,13 @@ elegida no coincida exactamente con su mitad. La segunda parte se mantiene
 como un tramo independiente y en las tablas de **Proyectos** aparece una
 línea adicional con el mismo nombre, cliente y fecha límite mostrando las
 horas restantes de esa fase.
+Si posteriormente quieres revertir la operación, el mismo recuadro muestra
+un botón **Deshacer división** que vuelve a unir ambas mitades sumando sus
+horas. Se conserva el trabajador asignado a la parte mayor.
+Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
+simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
+mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
+final de la fase anterior.
 Además se muestra un pequeño formulario con un campo de fecha y un botón
 **Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
 introducida no es válida se despliega una alerta explicando el motivo.
@@ -165,14 +199,20 @@ aviso si la nueva fecha no es correcta.
 
 También puedes arrastrar cualquier fase directamente sobre otra celda del
 calendario. Al soltarla, la planificación mueve esa fase al día y trabajador
-seleccionados, ajustando la fecha de inicio del proyecto para que la fase
-comience en la nueva posición.
+seleccionados y guarda esa fecha como inicio manual de la fase. El resto del
+proyecto no se recoloca automáticamente, de modo que pueden quedar días vacíos
+entre una fase y la siguiente si así se desea.
 La fase movida aparece resaltada con un grueso borde negro al recargar la página y
 puedes deshacer el último movimiento pulsando **Ctrl+Z**, que la devolverá a su
 fecha y trabajador anteriores.
 Si la fase acaba programándose en una fecha distinta a la elegida al soltarla,
 el calendario se desplazará automáticamente a ese nuevo día para que sea fácil
-encontrarla.
+encontrarla y se mostrará una alerta indicando por qué no pudo quedarse en la
+celda seleccionada.
+Durante este proceso se validan tres aspectos: el trabajador debe tener esa
+fase entre sus habilidades, el día escogido no puede coincidir con sus
+vacaciones (salvo en el caso de Irene, que puede trabajar igualmente de lunes a
+viernes) y la fase no se puede adelantar a la inmediatamente anterior.
 El resaltado negro permanece hasta que se mueva otra fase.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
@@ -197,7 +237,9 @@ Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
-asignaciones de tareas. Si un trabajador tenía
+asignaciones de tareas, excepto en el caso de **Irene**, que puede recibir
+trabajo esos días mientras no caigan en fin de semana. Sus vacaciones siguen
+mostrándose en el calendario aunque no influyan en la planificación. Si un trabajador tenía
 proyectos planificados en esas fechas, la planificación se recalcula y esas
 fases se reasignan automáticamente al trabajador disponible con menor carga. En
 la lista de conflictos se añade una nota indicando los días de vacaciones, a qué

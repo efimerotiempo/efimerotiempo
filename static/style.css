@@ -19,6 +19,10 @@ table.schedule td.weekend-cell {
 }
 .ok { color: green; }
 .late { color: red; }
+.split-dot {
+    font-weight: bold;
+    margin-right: 2px;
+}
 .task {
     margin-bottom: 2px;
     display: -webkit-box;
@@ -224,3 +228,26 @@ tr.collapsed td:not(:first-child) { display: none; }
     margin-bottom: 5px;
 }
 #hours-btn { cursor: pointer; }
+.conflict-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    z-index: 2500;
+}
+.conflict-content {
+    background: #fff;
+    padding: 20px;
+    max-width: 400px;
+    margin: 20% auto;
+    border: 1px solid #000;
+    text-align: center;
+}
+.projects-table tr.proj-dim { opacity: 0.4; }
+.projects-table tr.proj-highlight {
+    font-weight: bold;
+    outline: 2px solid #000;
+}
