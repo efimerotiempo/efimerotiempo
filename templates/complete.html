@@ -137,7 +137,7 @@
     <tbody>
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
-        <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        <td class="resource-col"><span class="worker-toggle">&#8722;</span><strong>{{ worker.upper() }}</strong> ({{ workers[worker]|join(', ') }})</td>
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}

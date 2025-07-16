@@ -344,11 +344,13 @@ def schedule_projects(projects):
                         })
                         continue
 
+                    manual = False
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
                         if override > current:
                             current = override
                             hour = 0
+                        manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
                         current,
@@ -365,6 +367,7 @@ def schedule_projects(projects):
                         project['id'],
                         hours_map,
                         part=idx if isinstance(val, list) else None,
+                        manual=manual,
                     )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -395,11 +398,30 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, hours_map, part=None):
+def assign_phase(
+    schedule,
+    start_day,
+    start_hour,
+    phase,
+    project_name,
+    client,
+    hours,
+    due_date,
+    color,
+    worker,
+    start_date,
+    priority,
+    pid,
+    hours_map,
+    part=None,
+    *,
+    manual=False,
+):
     # When scheduling 'montar', queue the task right after the worker finishes
-    # the mounting phase of their previous project. If there are free hours left
-    # that day, reuse them before moving on to the next workday.
-    if phase == 'montar':
+    # the mounting phase of their previous project unless an explicit start was
+    # requested. If there are free hours left that day, reuse them before moving
+    # on to the next workday.
+    if phase == 'montar' and not manual:
         last, end_hour = _last_phase_info(schedule, 'montar')
         if last and start_day <= last:
             limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
