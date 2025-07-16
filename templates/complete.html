@@ -8,6 +8,7 @@
             <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
             <label>Cliente:<input type="text" name="client" required></label><br>
             <label>Fecha límite:<input type="text" name="due_date" placeholder="dd-mm" required></label><br>
+            <label><input type="checkbox" name="planned" checked> Planificar</label><br>
             <label>Prioridad:
                 <select name="priority">
                     <option value="Alta">Alta</option>
@@ -38,6 +39,12 @@
             <label>Fecha:<input type="text" name="date" placeholder="dd-mm" required></label><br>
             <button type="submit">Añadir</button>
         </form>
+    </div>
+    <div class="bug-btn-container">
+        <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
+    </div>
+    <div class="hours-btn-container">
+        <button id="hours-btn" type="button">Editar jornada laboral</button>
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
@@ -72,44 +79,58 @@
     </div>
     </div> <!-- end complete-top -->
     <div class="complete-calendar">
-        <h2>Calendario (dos semanas)</h2>
+        <h2>Calendario</h2>
         <div class="controls">
             <form id="filter-form" method="get">
-                <input type="hidden" name="offset" value="{{ offset }}">
                 <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
                 <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
                 <button type="submit">Filtrar</button>
             </form>
             <button id="today-btn">HOY</button>
-            <button id="left-btn">&lt;</button>
-            <button id="right-btn">&gt;</button>
-        </div>
-        <div class="slider">
-            <input type="range" id="day-range" min="0" max="{{ max_offset }}" value="{{ offset }}">
         </div>
         <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
-    <tr class="weeknums">
-        <th></th>
-        {% for w in week_spans %}
-        <th colspan="{{ w.span }}" class="weeknum">{{ w.week }}</th>
+    <tr id="hours-row" class="hours-row" style="display:none;">
+        <th class="resource-col">Horas</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set h = hours.get(d.isoformat(), 8) %}
+        <th><form class="hours-form" data-date="{{ d.isoformat() }}"><select>
+            {% for n in range(1,10) %}
+            <option value="{{n}}" {% if n==h %}selected{% endif %}>{{n}}h</option>
+            {% endfor %}
+        </select></form></th>
+        {% else %}
+        <th colspan="2" class="weekend-cell"></th>
+        {% endif %}
         {% endfor %}
     </tr>
-    <tr>
+    <tr class="day-row">
         <th class="resource-col">Recurso</th>
-        {% for d in days %}
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        {% else %}
+        <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
         {% endfor %}
     </tr>
     <tr class="milestones-row">
-        <td></td>
-        {% for d in days %}
+        <td class="resource-col"></td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
         {% set ms = milestones.get(d.isoformat()) %}
-        <td class="milestone-cell{% if d == today %} today{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
             {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
         </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
         {% endfor %}
     </tr>
     </thead>
@@ -117,24 +138,31 @@
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
         <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
-        {% for d in days %}
-        <td class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <td data-date="{{ d.isoformat() }}" class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}">
+            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
                     <span class="ok">&#10004;</span>
                 {% endif %}
+                {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
+                {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
                 {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}
             {% endfor %}
         </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
         {% endfor %}
     </tr>
     {% endfor %}
@@ -142,11 +170,47 @@
 </table>
         </div>
         <div id="info-popup" class="info-popup"></div>
+<div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
+        <div id="bug-modal" class="modal">
+            <div class="modal-content">
+                <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
+                    <label>Quién lo registra:
+                        <select name="user" required>
+                            <option value="Unai">Unai</option>
+                            <option value="Pilar">Pilar</option>
+                            <option value="Ane">Ane</option>
+                            <option value="Irene">Irene</option>
+                        </select>
+                    </label><br>
+                    <label>Pestaña:
+                        <select name="tab" required>
+                            <option value="Completo">Completo</option>
+                            <option value="Calendario">Calendario</option>
+                            <option value="Proyectos">Proyectos</option>
+                            <option value="Hitos">Hitos</option>
+                            <option value="Vacaciones">Vacaciones</option>
+                        </select>
+                    </label><br>
+                    <label>Frecuencia:
+                        <select name="freq" required>
+                            <option>Primera vez</option>
+                            <option>Un par</option>
+                            <option>Bastante a menudo</option>
+                            <option>Siempre. Estoy hasta los cojones.</option>
+                        </select>
+                    </label><br>
+                    <label>Detalle:<br>
+                        <textarea name="detail" rows="4" required></textarea>
+                    </label><br>
+                    <button type="submit">Enviar</button>
+                </form>
+                <button type="button" id="bug-cancel">Cerrar</button>
+            </div>
+        </div>
     </div>
     <div class="complete-projects">
         <h2>Proyectos <button id="projects-toggle" type="button">&#8722;</button></h2>
         <form method="get" class="controls">
-            <input type="hidden" name="offset" value="{{ offset }}">
             <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
             <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
             <button type="submit">Filtrar</button>
@@ -158,6 +222,8 @@
                 <th>Cliente</th>
                 <th>Fecha inicio</th>
                 <th>Fecha límite</th>
+                <th>En plazo</th>
+                <th>Planificado</th>
                 <th>Prioridad</th>
                 {% for ph in phases %}
                     {% if ph == 'pedidos' %}
@@ -172,19 +238,45 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr style="background-color: {{ p.color }};">
+            <tr data-pid="{{ p.id }}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>{{ p.start_date }}</td>
-                <td>{{ p.due_date }}</td>
+                <td>{{ p.due_date }}
+                    <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
+                        <input type="hidden" name="pid" value="{{ p.id }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <input type="date" name="due_date" value="{{ p.due_date }}">
+                        <button type="submit">Cambiar</button>
+                    </form>
+                </td>
+                <td>
+                    {% if p.met %}
+                        <span class="ok">&#10004;</span>
+                    {% else %}
+                        <span class="late">&#10060;</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if plan_map.get(p.id) %}
+                        <span class="ok">&#10004;</span>
+                    {% else %}
+                        <span class="late">&#10060;</span>
+                    {% endif %}
+                </td>
                 <td>{{ p.priority }}</td>
                 {% for ph in phases %}
                     <td>
                     {% if p.phases.get(ph) %}
+                        {% set val = p.phases[ph] %}
                         {% if ph == 'pedidos' %}
-                            {{ p.phases[ph] }}<br>
+                            {{ val }}<br>
                         {% else %}
-                            {{ p.phases[ph] }}h<br>
+                            {% if val is sequence %}
+                                {{ val|sum }}h<br>
+                            {% else %}
+                                {{ val }}h<br>
+                            {% endif %}
                         {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
@@ -194,6 +286,13 @@
                                 {% endfor %}
                             </select>
                             <button type="submit">Guardar</button>
+                        </form>
+                        <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
+                            <input type="hidden" name="pid" value="{{ p.id }}">
+                            <input type="hidden" name="phase" value="{{ ph }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
+                            <button type="submit">Cambiar</button>
                         </form>
                     {% endif %}
                     </td>
@@ -224,11 +323,41 @@
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const slider = document.getElementById('day-range');
+  const REORG_URL = "{{ url_for('reorganize_phase') }}";
+  const MOVE_URL = "{{ url_for('move_phase') }}";
+  const DELETE_URL = "{{ url_for('delete_phase') }}";
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  const DUE_URL = "{{ url_for('update_due_date') }}";
+  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const HOURS_URL = "{{ url_for('update_hours') }}";
+  const START_DATA = {{ start_map|tojson }};
+  const LAST_KEY = 'lastMoved';
+  const SCROLL_KEY2 = 'scrollDate';
   const filterForm = document.getElementById('filter-form');
-  const offsetInput = filterForm.querySelector('input[name="offset"]');
-
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
+  const hoursBtn = document.getElementById('hours-btn');
+  const hoursRow = document.getElementById('hours-row');
+  const thead = document.querySelector('.schedule thead');
+  function toggleHours() {
+    const open = hoursRow.style.display !== 'none';
+    hoursRow.style.display = open ? 'none' : 'table-row';
+    thead.classList.toggle('open', !open);
+  }
+  if (hoursBtn) {
+    hoursBtn.addEventListener('click', toggleHours);
+  }
+  document.querySelectorAll('.hours-form').forEach(f => {
+    f.addEventListener('change', () => {
+      const val = f.querySelector('select').value;
+      sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+      fetch(HOURS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: f.dataset.date, hours: val })
+      }).then(() => location.reload());
+    });
+  });
 
   document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
     const worker = tr.dataset.worker;
@@ -239,14 +368,20 @@
     }
   });
 
-  function update() {
-    offsetInput.value = slider.value;
-    filterForm.submit();
-  }
 
-  slider.addEventListener('input', update);
 
   const wrapper = document.querySelector('.schedule-wrapper');
+  const SCROLL_KEY = 'completeScroll';
+  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+  if (savedScroll !== null) {
+    wrapper.scrollLeft = parseFloat(savedScroll);
+  } else {
+    const cell = document.querySelector('th.today');
+    if (cell) cell.scrollIntoView({behavior: 'auto', inline: 'center'});
+  }
+  wrapper.addEventListener('scroll', () => {
+    sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
+  });
   wrapper.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();
@@ -254,21 +389,25 @@
   });
   const todayBtn = document.getElementById('today-btn');
   todayBtn.addEventListener('click', () => {
-    offsetInput.value = {{ today_offset }};
-    filterForm.submit();
-  });
-  document.getElementById('left-btn').addEventListener('click', () => {
-    slider.stepDown();
-    update();
-  });
-  document.getElementById('right-btn').addEventListener('click', () => {
-    slider.stepUp();
-    update();
+    const cell = document.querySelector('th.today');
+    if (cell) cell.scrollIntoView({behavior: 'smooth', inline: 'center'});
   });
 
   const tasks = document.querySelectorAll('.task');
   const popup = document.getElementById('info-popup');
+  let lastDrag = null;
   tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      popup.style.display = 'none';
+      lastDrag = {
+        pid: t.dataset.pid,
+        phase: t.dataset.phase,
+        date: t.dataset.day,
+        worker: t.closest('tr').dataset.worker,
+        part: t.dataset.part
+      };
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
+    });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -281,6 +420,15 @@
           o.classList.remove('highlight');
         }
       });
+      document.querySelectorAll('.projects-table tbody tr[data-pid]').forEach(row => {
+        if (row.dataset.pid === t.dataset.pid) {
+          row.classList.add('proj-highlight');
+          row.classList.remove('proj-dim');
+        } else {
+          row.classList.add('proj-dim');
+          row.classList.remove('proj-highlight');
+        }
+      });
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
         html += `Inicio: ${info.start_date}<br>`;
@@ -291,6 +439,9 @@
         if (val) {
           if (ph === 'pedidos') {
             html += `Plazo acopio: ${val}<br>`;
+          } else if (Array.isArray(val)) {
+            const total = val.reduce((a,b) => a + parseInt(b), 0);
+            html += `${ph}: ${total}h<br>`;
           } else if (parseInt(val)) {
             html += `${ph}: ${val}h<br>`;
           }
@@ -299,15 +450,124 @@
       if (info.image) {
         html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
       }
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
+      html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
+      html += ` <button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aqu\u00ed</button>`;
+      if (Array.isArray(info.phases[t.dataset.phase])) {
+        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer divisi\u00f3n</button>`;
+      }
+      html += ` <form id="start-form" style="display:inline">` +
+               `<input type="date" id="start-input" value="${startVal}" required>` +
+               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
+               `</form>`;
+      html += ` <form id="due-form" style="display:inline">` +
+               `<input type="date" id="due-input" value="${info.due_date}" required>` +
+               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
+               `</form>`;
+      if (t.dataset.phase === 'pedidos') {
+        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+      }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
+      const btn = document.getElementById('reorg-btn');
+      if (btn) {
+        btn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch(REORG_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
+          }).then(resp => resp.ok ? resp.json() : null)
+            .then(d => {
+              if (d) {
+                localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+                localStorage.setItem(SCROLL_KEY2, d.date);
+              }
+              location.reload();
+            });
+        });
+      }
+      const del = document.getElementById('del-btn');
+      if (del) {
+        del.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Borrar fase?')) {
+            fetch(DELETE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+            }).then(() => location.reload());
+          }
+        });
+      }
+      const split = document.getElementById('split-btn');
+      if (split) {
+        split.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Dividir fase a partir de este d\u00eda?')) {
+            fetch(SPLIT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
+            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }
+        });
+      }
+      const unsplit = document.getElementById('unsplit-btn');
+      if (unsplit) {
+        unsplit.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
+            fetch(UNSPLIT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
+            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }
+        });
+      }
+      const startForm = document.getElementById('start-form');
+      if (startForm) {
+        startForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('start-btn');
+          const val = document.getElementById('start-input').value;
+          fetch(START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
+      const dueForm = document.getElementById('due-form');
+      if (dueForm) {
+        dueForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('due-btn');
+          const val = document.getElementById('due-input').value;
+          fetch(DUE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
+          }).then(resp => {
+            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+          });
+        });
+      }
     });
   });
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
+    document.querySelectorAll('.projects-table tbody tr').forEach(r => {
+      r.classList.remove('proj-highlight', 'proj-dim');
+    });
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
@@ -343,6 +603,36 @@
     sessionStorage.removeItem('highlightPid');
   }
 
+  const moved = localStorage.getItem(LAST_KEY);
+  if (moved) {
+    const m = JSON.parse(moved);
+    tasks.forEach(t => {
+      if (t.dataset.pid === m.pid && t.dataset.phase === m.phase) {
+        t.classList.add('moved');
+      }
+    });
+    const sd = localStorage.getItem(SCROLL_KEY2);
+    if (sd) {
+      const cell = document.querySelector(`td[data-date='${sd}']`);
+      if (cell) cell.scrollIntoView({behavior:'auto', inline:'center'});
+      localStorage.removeItem(SCROLL_KEY2);
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      const info = sessionStorage.getItem('undoMove');
+      if (info) {
+        const data = JSON.parse(info);
+        fetch(MOVE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+      }
+    }
+  });
+
   document.querySelectorAll('.conflict-link').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -357,10 +647,6 @@
       }
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
     });
   });
@@ -372,11 +658,37 @@
       let t = Array.from(tasks).find(o => o.dataset.pid === pid);
       if (t) {
         showTask(t);
-      } else if (link.dataset.offset) {
-        sessionStorage.setItem('highlightPid', pid);
-        slider.value = link.dataset.offset;
-        update();
       }
+    });
+  });
+  document.querySelectorAll('tbody td[data-date]').forEach(cell => {
+    cell.addEventListener('dragover', e => {
+      e.preventDefault();
+    });
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const date = cell.dataset.date;
+      const worker = cell.closest('tr').dataset.worker;
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
+      })
+      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+      .then(({ok, data}) => {
+        if (!ok) {
+          alert(data.error || 'Error');
+          return;
+        }
+        if (data.message) alert(data.message);
+        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+        location.reload();
+      });
     });
   });
   const projToggle = document.getElementById('projects-toggle');
@@ -387,5 +699,65 @@
       projToggle.innerHTML = projDiv.classList.contains('collapsed') ? '&#43;' : '&#8722;';
     });
   }
+  const bugBtn = document.getElementById('bug-btn');
+  const bugModal = document.getElementById('bug-modal');
+  const bugCancel = document.getElementById('bug-cancel');
+  if (bugBtn && bugModal) {
+    bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
+    bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
+    bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
+  }
+  document.querySelectorAll('.start-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (!resp.ok) {
+            return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+          }
+          return resp.json();
+        })
+        .then(d => {
+          if (d) {
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.get('pid'), phase: data.get('phase'), date: d.date}));
+            if (d.date !== data.get('date')) localStorage.setItem(SCROLL_KEY2, d.date);
+          }
+          location.reload();
+        });
+    });
+  });
+  document.querySelectorAll('.due-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(DUE_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+        });
+    });
+const CONFLICTS = {{ conflicts|tojson }};
+const conflictModal = document.getElementById("conflict-modal");
+const conflictText = document.getElementById("conflict-text");
+const conflictClose = document.getElementById("conflict-close");
+let conflictIndex = 0;
+function showNextConflict() {
+  if (conflictIndex < CONFLICTS.length) {
+    const c = CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + ": " + c.message;
+    conflictModal.style.display = "block";
+  } else {
+    conflictModal.style.display = "none";
+  }
+}
+if (CONFLICTS.length) {
+  showNextConflict();
+  conflictClose.addEventListener("click", () => {
+    conflictIndex++;
+    showNextConflict();
+  });
+}
+
+  });
 </script>
 {% endblock %}
