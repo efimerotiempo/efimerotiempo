@@ -186,6 +186,10 @@ horas restantes de esa fase.
 Si posteriormente quieres revertir la operación, el mismo recuadro muestra
 un botón **Deshacer división** que vuelve a unir ambas mitades sumando sus
 horas. Se conserva el trabajador asignado a la parte mayor.
+Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
+simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
+mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
+final de la fase anterior.
 Además se muestra un pequeño formulario con un campo de fecha y un botón
 **Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
 introducida no es válida se despliega una alerta explicando el motivo.

@@ -228,24 +228,17 @@ def schedule_projects(projects):
             val = project['phases'].get(phase)
             if not val:
                 continue
+
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
                 days_needed = sum(
                     1
                     for i in range((date.fromisoformat(val) - current).days + 1)
                     if (current + timedelta(days=i)).weekday() not in WEEKEND
                 )
-                total_hours = 0
-            else:
-                segs = val if isinstance(val, list) else [val]
-                total_hours = sum(int(v) for v in segs)
-                days_needed = (total_hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-
-            if planned:
-                worker = assigned.get(phase)
-                if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
+                worker = assigned.get(phase) if planned else UNPLANNED
+                if planned and worker and _worker_on_vacation(worker, current, days_needed, vac_map):
                     worker = None
-
-                if not worker:
+                if planned and not worker:
                     worker = find_worker_for_phase(
                         phase,
                         worker_schedule,
@@ -269,19 +262,15 @@ def schedule_projects(projects):
                             'pid': project['id'],
                         })
                         assigned[phase] = worker
-            else:
-                worker = UNPLANNED
-
-            if not worker or phase not in WORKERS.get(worker, []):
-                msg = f'Sin recurso para fase {phase}'
-                conflicts.append({
-                    'id': len(conflicts) + 1,
-                    'project': project['name'],
-                    'message': msg,
-                    'key': f"{project['name']}|{msg}",
-                })
-                continue
-            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                if not worker or phase not in WORKERS.get(worker, []):
+                    msg = f'Sin recurso para fase {phase}'
+                    conflicts.append({
+                        'id': len(conflicts) + 1,
+                        'project': project['name'],
+                        'message': msg,
+                        'key': f"{project['name']}|{msg}",
+                    })
+                    continue
                 current, hour, end_date = assign_pedidos(
                     worker_schedule[worker],
                     current,
@@ -297,31 +286,86 @@ def schedule_projects(projects):
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
+                seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
                 start_overrides = project.get('segment_starts', {}).get(phase) if planned else None
                 for idx, seg in enumerate(segs):
+                    hours = int(seg)
+                    days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+                    if not planned:
+                        worker = UNPLANNED
+                    else:
+                        worker = None
+                        if seg_workers and idx < len(seg_workers):
+                            worker = seg_workers[idx]
+                        if not worker:
+                            worker = assigned.get(phase)
+                        if worker and _worker_on_vacation(worker, current, days_needed, vac_map):
+                            worker = None
+                        if not worker:
+                            worker = find_worker_for_phase(
+                                phase,
+                                worker_schedule,
+                                project.get('priority'),
+                                start_day=current,
+                                days=days_needed,
+                                vacations=vac_map,
+                                hours_map=hours_map,
+                            )
+                            prev = None
+                            if seg_workers and idx < len(seg_workers):
+                                prev = seg_workers[idx]
+                            else:
+                                prev = assigned.get(phase)
+                            if worker and prev and worker != prev:
+                                vac_days = _vacation_days_in_range(prev, current, days_needed, vac_map)
+                                reassignments.append({
+                                    'project': project['name'],
+                                    'client': project['client'],
+                                    'old': prev,
+                                    'new': worker,
+                                    'phase': phase,
+                                    'dates': [d.isoformat() for d in vac_days],
+                                    'pid': project['id'],
+                                })
+                            if seg_workers:
+                                if len(seg_workers) <= idx:
+                                    seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
+                                seg_workers[idx] = worker
+                            else:
+                                assigned[phase] = worker
+
+                    if not worker or phase not in WORKERS.get(worker, []):
+                        msg = f'Sin recurso para fase {phase}'
+                        conflicts.append({
+                            'id': len(conflicts) + 1,
+                            'project': project['name'],
+                            'message': msg,
+                            'key': f"{project['name']}|{msg}",
+                        })
+                        continue
+
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
                         if override > current:
                             current = override
                             hour = 0
-                    hours = int(seg)
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
-                    current,
-                    hour,
-                    phase,
-                    project['name'],
-                    project['client'],
-                    hours,
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    worker,
-                    project['start_date'],
-                    project.get('priority'),
-                    project['id'],
-                    hours_map,
-                    part=idx if isinstance(val, list) else None,
-                )
+                        current,
+                        hour,
+                        phase,
+                        project['name'],
+                        project['client'],
+                        hours,
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        worker,
+                        project['start_date'],
+                        project.get('priority'),
+                        project['id'],
+                        hours_map,
+                        part=idx if isinstance(val, list) else None,
+                    )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
             msg = 'No se cumple la fecha de entrega'
@@ -674,10 +718,7 @@ def previous_phase_end(projects, pid, phase, part=None):
     last = None
     for worker, day, ph, hours, prt in tasks:
         dt = date.fromisoformat(day)
-        if ph == phase and part is not None and prt is not None and prt < part:
-            if not last or dt > last:
-                last = dt
-        elif ph in PHASE_ORDER[:idx]:
+        if ph in PHASE_ORDER[:idx]:
             if not last or dt > last:
                 last = dt
     return last

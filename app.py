@@ -322,7 +322,12 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
         if idx < len(seg_starts):
             seg_starts[idx] = new_date.isoformat()
         if worker:
-            proj.setdefault('assigned', {})[phase] = worker
+            seg_workers = proj.setdefault('segment_workers', {}).setdefault(
+                phase, [None] * len(proj['phases'][phase])
+            )
+            if idx >= len(seg_workers):
+                seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
+            seg_workers[idx] = worker
     if worker:
         proj['planned'] = worker != UNPLANNED
     save_projects(projects)
@@ -1013,6 +1018,8 @@ def split_phase_route():
 
     proj['phases'][phase] = [part1, part2]
     proj.setdefault('segment_starts', {}).setdefault(phase, [None, None])
+    worker = proj.get('assigned', {}).get(phase)
+    proj.setdefault('segment_workers', {}).setdefault(phase, [worker, worker])
     save_projects(projects)
     return '', 204
 
@@ -1050,6 +1057,11 @@ def unsplit_phase():
         proj['segment_starts'][phase] = [segs[0]]
         if not segs[0]:
             proj['segment_starts'].pop(phase)
+    segw = proj.get('segment_workers', {}).get(phase)
+    if segw is not None:
+        proj['segment_workers'].pop(phase, None)
+        if not proj['segment_workers']:
+            proj.pop('segment_workers')
     save_projects(projects)
     return '', 204
 
