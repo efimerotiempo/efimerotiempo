@@ -294,9 +294,9 @@
                             {{ val }}<br>
                         {% else %}
                             {% if val is sequence %}
-                                {{ val|sum }}h<br>
+                                {{ val|map('int')|sum }}h<br>
                             {% else %}
-                                {{ val }}h<br>
+                                {{ val|int }}h<br>
                             {% endif %}
                         {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
