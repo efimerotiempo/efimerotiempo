@@ -977,6 +977,41 @@ def update_start_date():
     return redirect(next_url)
 
 
+@app.route('/update_phase_hours', methods=['POST'])
+def update_phase_hours():
+    """Modify hours for a specific phase."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    hours_val = data.get('hours')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not phase or hours_val is None:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    try:
+        hours = int(hours_val)
+        if hours <= 0:
+            raise ValueError
+    except Exception:
+        return jsonify({'error': 'Horas inválidas'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in proj.get('phases', {}):
+        return jsonify({'error': 'Fase no encontrada'}), 404
+    proj['phases'][phase] = hours
+    if proj.get('segment_starts'):
+        proj['segment_starts'].pop(phase, None)
+        if not proj['segment_starts']:
+            proj.pop('segment_starts')
+    if proj.get('segment_workers'):
+        proj['segment_workers'].pop(phase, None)
+        if not proj['segment_workers']:
+            proj.pop('segment_workers')
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
 @app.route('/update_hours', methods=['POST'])
 def update_hours():
     """Set working hours for a specific day (1-9)."""

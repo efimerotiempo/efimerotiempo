@@ -151,6 +151,7 @@
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
+  const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -262,17 +263,24 @@
       html += `<div>Prioridad: ${info.priority}</div>`;
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
+      let hoursVal = 0;
       if (phVal) {
         if (t.dataset.phase === 'pedidos') {
           phaseText = `Plazo acopio: ${phVal}`;
         } else if (Array.isArray(phVal)) {
-          const total = phVal.reduce((a,b) => a + parseInt(b), 0);
-          phaseText = `Horas de la fase: ${total}h`;
+          hoursVal = phVal.reduce((a,b) => a + parseInt(b), 0);
+          phaseText = `Horas de la fase: ${hoursVal}h`;
         } else if (parseInt(phVal)) {
+          hoursVal = parseInt(phVal);
           phaseText = `Horas de la fase: ${phVal}h`;
         }
       }
-      html += `<div>${phaseText} <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
+      html += `<div>${phaseText}`;
+      if (t.dataset.phase !== 'pedidos') {
+        html += ` <form id="hours-form" style="display:inline"><input type="number" id="hours-input" value="${hoursVal}" min="1" required><button type="submit" id="hours-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar horas</button></form>`;
+      }
+      html += `</div>`;
+      html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
       html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
       html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
       html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
@@ -379,6 +387,20 @@
             }
             location.reload();
           });
+        });
+      }
+      const hoursForm = document.getElementById('hours-form');
+      if (hoursForm) {
+        hoursForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('hours-btn');
+          const val = document.getElementById('hours-input').value;
+          fetch(PHASE_HOURS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
       const dueForm = document.getElementById('due-form');
