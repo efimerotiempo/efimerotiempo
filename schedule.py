@@ -220,7 +220,7 @@ def schedule_projects(projects):
     reassignments = []
     for project in projects:
         planned = project.get('planned', True)
-        current = date.today() if not planned else date.fromisoformat(project['start_date'])
+        current = date.fromisoformat(project['start_date'])
         hour = 0
         end_date = current
         assigned = project.get('assigned', {})
@@ -287,7 +287,7 @@ def schedule_projects(projects):
             else:
                 segs = val if isinstance(val, list) else [val]
                 seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
-                start_overrides = project.get('segment_starts', {}).get(phase) if planned else None
+                start_overrides = project.get('segment_starts', {}).get(phase)
                 for idx, seg in enumerate(segs):
                     hours = int(seg)
                     days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY

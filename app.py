@@ -373,8 +373,6 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if not p.get('planned', True):
-            p['start_date'] = date.today().isoformat()
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
