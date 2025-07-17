@@ -17,5 +17,17 @@
     </nav>
     <hr/>
     {% block content %}{% endblock %}
+    <script>
+      const SCROLL_KEY_GENERIC = 'scroll:' + location.pathname;
+      const saved = sessionStorage.getItem(SCROLL_KEY_GENERIC);
+      if (saved !== null) {
+        window.scrollTo(0, parseFloat(saved));
+      }
+      function storeScroll() {
+        sessionStorage.setItem(SCROLL_KEY_GENERIC, window.scrollY);
+      }
+      window.addEventListener('scroll', storeScroll);
+      window.addEventListener('beforeunload', storeScroll);
+    </script>
 </body>
 </html>

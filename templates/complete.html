@@ -445,17 +445,6 @@
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
   });
-  const VSCROLL_KEY = 'pageScroll';
-  const savedTop = sessionStorage.getItem(VSCROLL_KEY);
-  if (savedTop !== null) {
-    window.scrollTo(0, parseFloat(savedTop));
-  }
-  window.addEventListener('scroll', () => {
-    sessionStorage.setItem(VSCROLL_KEY, window.scrollY);
-  });
-  window.addEventListener('beforeunload', () => {
-    sessionStorage.setItem(VSCROLL_KEY, window.scrollY);
-  });
   wrapper.addEventListener('wheel', (e) => {
     if (!e.shiftKey) return;
     e.preventDefault();
