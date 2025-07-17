@@ -173,6 +173,23 @@ tr.collapsed td:not(:first-child) { display: none; }
     z-index: 10;
 }
 
+.project-form {
+    border-collapse: collapse;
+}
+.project-form td {
+    border: 1px solid #ccc;
+    padding: 4px;
+}
+.project-form input,
+.project-form select {
+    width: 100%;
+    box-sizing: border-box;
+}
+.save-btn {
+    font-size: 1.5em;
+    padding: 10px 20px;
+}
+
 .bug-btn-container {
     text-align: center;
     margin-bottom: 10px;
