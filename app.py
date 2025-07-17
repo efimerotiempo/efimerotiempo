@@ -1006,6 +1006,29 @@ def update_phase_hours():
         proj['segment_workers'].pop(phase, None)
         if not proj['segment_workers']:
             proj.pop('segment_workers')
+    frozen = proj.get('frozen', False)
+    if frozen:
+        proj['frozen'] = False
+    sched, _ = schedule_projects(projects)
+    if frozen:
+        frozen_tasks = []
+        last = None
+        for w, days in sched.items():
+            for d, tasks in days.items():
+                for t in tasks:
+                    if t['pid'] == pid:
+                        item = t.copy()
+                        item['worker'] = w
+                        item['day'] = d
+                        item['frozen'] = True
+                        frozen_tasks.append(item)
+                        dt = date.fromisoformat(d)
+                        if not last or dt > last:
+                            last = dt
+        proj['frozen'] = True
+        proj['frozen_tasks'] = frozen_tasks
+        if last:
+            proj['end_date'] = last.isoformat()
     save_projects(projects)
     if request.is_json:
         return '', 204
