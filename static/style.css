@@ -68,8 +68,6 @@ table.schedule td.weekend-cell {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    height: 100vh;
-    overflow-y: auto;
 }
 
 .complete-container > div { padding: 5px; }
