@@ -255,46 +255,35 @@
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
-      let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
-      html += `Inicio: ${info.start_date}<br>`;
-      html += `Límite: ${info.due_date}<br>`;
-      html += `Prioridad: ${info.priority}<br>`;
-      PHASES.forEach(ph => {
-        const val = info.phases[ph];
-        if (val) {
-          if (ph === 'pedidos') {
-            html += `Plazo acopio: ${val}<br>`;
-          } else if (Array.isArray(val)) {
-            const total = val.reduce((a,b) => a + parseInt(b), 0);
-            html += `${ph}: ${total}h<br>`;
-          } else if (parseInt(val)) {
-            html += `${ph}: ${val}h<br>`;
-          }
-        }
-      });
-      if (info.image) {
-        html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
-      }
+      let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
-      html += ` <button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aqu\u00ed</button>`;
-      if (Array.isArray(info.phases[t.dataset.phase])) {
-        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer divisi\u00f3n</button>`;
+      html += `<div>Inicio: ${info.start_date} <form id="proj-start-form" style="display:inline"><input type="date" id="proj-start-input" value="${info.start_date}" required><button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button></form></div>`;
+      html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Prioridad: ${info.priority}</div>`;
+      let phaseText = '';
+      const phVal = info.phases[t.dataset.phase];
+      if (phVal) {
+        if (t.dataset.phase === 'pedidos') {
+          phaseText = `Plazo acopio: ${phVal}`;
+        } else if (Array.isArray(phVal)) {
+          const total = phVal.reduce((a,b) => a + parseInt(b), 0);
+          phaseText = `Horas de la fase: ${total}h`;
+        } else if (parseInt(phVal)) {
+          phaseText = `Horas de la fase: ${phVal}h`;
+        }
       }
-       html += ` <form id="start-form" style="display:inline">` +
-                `<input type="date" id="start-input" value="${startVal}" required>` +
-                `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
-                `</form>`;
-       html += ` <form id="due-form" style="display:inline">` +
-                `<input type="date" id="due-input" value="${info.due_date}" required>` +
-                `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
-                `</form>`;
-       html += ` <form id="proj-start-form" style="display:inline">` +
-                `<input type="date" id="proj-start-input" value="${info.start_date}" required>` +
-                `<button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button>` +
-                `</form>`;
+      html += `<div>${phaseText} <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
+      html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
+      html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
+      if (Array.isArray(info.phases[t.dataset.phase])) {
+        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+      }
+      html += `</div>`;
       if (t.dataset.phase === 'pedidos') {
-        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+        html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button></div>`;
+      }
+      if (info.image) {
+        html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
       }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
