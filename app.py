@@ -612,7 +612,7 @@ def add_project():
                     )
         projects.append(project)
         save_projects(projects)
-        return redirect(url_for('project_list'))
+        return redirect(url_for('calendar_view', highlight=project['id']))
     return render_template('add_project.html', phases=PHASE_ORDER, today=date.today().isoformat())
 
 
@@ -730,7 +730,7 @@ def complete():
                     )
         projects.append(project)
         save_projects(projects)
-        return redirect(url_for('complete'))
+        return redirect(url_for('complete', highlight=project['id']))
 
     schedule, conflicts = schedule_projects(projects)
     plan_map = planning_status(schedule)

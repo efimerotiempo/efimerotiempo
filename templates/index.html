@@ -443,6 +443,15 @@
     t.scrollIntoView({behavior: 'smooth', block: 'center'});
   }
 
+  const params = new URLSearchParams(location.search);
+  const highlight = params.get('highlight');
+  if (highlight) {
+    sessionStorage.setItem('highlightPid', highlight);
+    params.delete('highlight');
+    const url = new URL(location);
+    url.search = params.toString();
+    history.replaceState(null, '', url);
+  }
   const stored = sessionStorage.getItem('highlightPid');
   if (stored) {
     const t = Array.from(tasks).find(o => o.dataset.pid === stored);
