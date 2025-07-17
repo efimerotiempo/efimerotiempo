@@ -300,6 +300,8 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return None, 'Proyecto no encontrado'
+    if proj.get('frozen'):
+        return None, 'Proyecto congelado'
 
     if worker and phase not in WORKERS.get(worker, []):
         return None, 'Trabajador sin esa fase'
@@ -377,6 +379,9 @@ def get_projects():
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
             changed = True
+
+        p.setdefault('frozen', False)
+        p.setdefault('frozen_tasks', [])
 
         p.setdefault('assigned', {})
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
@@ -1231,6 +1236,41 @@ def delete_bug(bid):
     bugs = [b for b in bugs if str(b.get('id')) != bid]
     save_bugs(bugs)
     return redirect(url_for('bug_list'))
+
+
+@app.route('/toggle_freeze/<pid>', methods=['POST'])
+def toggle_freeze(pid):
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    if proj.get('frozen'):
+        proj['frozen'] = False
+        proj.pop('frozen_tasks', None)
+    else:
+        schedule, _ = schedule_projects(projects)
+        frozen = []
+        last = None
+        for w, days in schedule.items():
+            for day, tasks in days.items():
+                for t in tasks:
+                    if t['pid'] == pid:
+                        item = t.copy()
+                        item['worker'] = w
+                        item['day'] = day
+                        item['frozen'] = True
+                        frozen.append(item)
+                        d = date.fromisoformat(day)
+                        if not last or d > last:
+                            last = d
+        proj['frozen'] = True
+        proj['frozen_tasks'] = frozen
+        if last:
+            proj['end_date'] = last.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(request.referrer or url_for('calendar_view'))
 
 
 @app.route('/bugs')
