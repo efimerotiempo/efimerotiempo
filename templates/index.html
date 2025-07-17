@@ -277,7 +277,7 @@
       }
       html += `<div>${phaseText}`;
       if (t.dataset.phase !== 'pedidos') {
-        html += ` <form id="hours-form" style="display:inline"><input type="number" id="hours-input" value="${hoursVal}" min="1" required><button type="submit" id="hours-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar horas</button></form>`;
+        html += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${hoursVal}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar horas</button></form>`;
       }
       html += `</div>`;
       html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
@@ -389,13 +389,13 @@
           });
         });
       }
-      const hoursForm = document.getElementById('hours-form');
+      const hoursForm = document.getElementById('phase-hours-form');
       if (hoursForm) {
         hoursForm.addEventListener('submit', ev => {
           ev.preventDefault();
           ev.stopPropagation();
-          const btn = document.getElementById('hours-btn');
-          const val = document.getElementById('hours-input').value;
+          const btn = hoursForm.querySelector('button');
+          const val = document.getElementById('phase-hours-input').value;
           fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
