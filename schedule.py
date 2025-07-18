@@ -302,6 +302,7 @@ def schedule_projects(projects):
                     project['id'],
                     worker,
                     project_frozen=project.get('frozen', False),
+                    project_blocked=project.get('blocked', False),
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
@@ -388,6 +389,7 @@ def schedule_projects(projects):
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
                         project_frozen=project.get('frozen', False),
+                        project_blocked=project.get('blocked', False),
                     )
         project['end_date'] = end_date.isoformat()
         if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
@@ -437,6 +439,7 @@ def assign_phase(
     *,
     manual=False,
     project_frozen=False,
+    project_blocked=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -487,6 +490,7 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -531,6 +535,7 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -562,6 +567,7 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -579,7 +585,22 @@ def assign_phase(
     return next_day, next_hour, last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid, worker=None, *, project_frozen=False):
+def assign_pedidos(
+    schedule,
+    start_day,
+    end_day,
+    project_name,
+    client,
+    due_date,
+    color,
+    start_date,
+    priority,
+    pid,
+    worker=None,
+    *,
+    project_frozen=False,
+    project_blocked=False,
+):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
     while day.weekday() in WEEKEND or (
@@ -608,6 +629,7 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
             'priority': priority,
             'pid': pid,
             'frozen': project_frozen,
+            'blocked': project_blocked,
         })
         schedule[day_str] = tasks
         last_day = day

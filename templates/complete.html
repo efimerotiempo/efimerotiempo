@@ -195,7 +195,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}
             {% endfor %}
@@ -493,7 +493,7 @@
         }
       });
         const info = PROJECT_DATA[t.dataset.pid];
-        let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong>`;
+        let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
         const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
         html += `<div>Inicio: ${info.start_date} <form id="proj-start-form" style="display:inline"><input type="date" id="proj-start-input" value="${info.start_date}" required><button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button></form></div>`;
         html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
@@ -520,6 +520,7 @@
         html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
         html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
         html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
+        html += `<div><button id="block-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.blocked ? 'Desbloquear' : 'Bloquear'}</button></div>`;
         html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
         if (Array.isArray(info.phases[t.dataset.phase])) {
           html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -598,6 +599,14 @@
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
           fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
+            .then(() => location.reload());
+        });
+      }
+      const block = document.getElementById('block-btn');
+      if (block) {
+        block.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
             .then(() => location.reload());
         });
       }

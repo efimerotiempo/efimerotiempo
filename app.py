@@ -382,6 +382,7 @@ def get_projects():
 
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
+        p.setdefault('blocked', False)
 
         p.setdefault('assigned', {})
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
@@ -1325,6 +1326,20 @@ def toggle_freeze(pid):
         proj['frozen_tasks'] = frozen
         if last:
             proj['end_date'] = last.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/toggle_block/<pid>', methods=['POST'])
+def toggle_block(pid):
+    """Toggle blocked state on a project."""
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    proj['blocked'] = not proj.get('blocked', False)
     save_projects(projects)
     if request.is_json:
         return '', 204

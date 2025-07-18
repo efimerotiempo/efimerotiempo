@@ -30,7 +30,7 @@
     <tbody>
     {% for p in projects %}
     <tr class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
-        <td>{{ p.name }}</td>
+        <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
         <td>
             {{ p.start_date }}
