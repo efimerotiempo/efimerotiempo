@@ -1462,6 +1462,8 @@ def kanbanize_webhook():
         return '', 400
     try:
         data = json.loads(payload)
+        if isinstance(data, str):
+            data = json.loads(data)
     except Exception:
         return '', 400
     card = data.get('card')
