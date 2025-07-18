@@ -7,6 +7,7 @@ import json
 import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
+import requests
 import sys
 import importlib.util
 
@@ -73,6 +74,11 @@ UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
+
+# Kanbanize integration constants
+KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
+KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
+KANBANIZE_BOARD = '682d829a0aafe44469o50acd'
 
 
 def active_workers(today=None):
@@ -446,6 +452,66 @@ def split_markers(schedule):
             if lst:
                 ends.add(f"{pid}|{phase}|{lst[-1].isoformat()}")
     return starts.union(ends)
+
+
+def _kanban_card_to_project(card):
+    """Convert a Kanbanize card payload into a project dict."""
+    fields = {f.get('name'): f.get('value') for f in card.get('customFields', [])}
+    project_name = fields.get('ID personalizado') or card.get('customId') or card.get('taskid')
+    if not project_name:
+        return None
+    client = card.get('title', '')
+    due = parse_input_date(fields.get('Fecha cliente'))
+
+    def h(name):
+        try:
+            return int(fields.get(name, 0))
+        except Exception:
+            return 0
+
+    phases = {}
+    val = h('Horas Acabado')
+    if val:
+        phases['pintar'] = val
+    val = h('Horas Montaje')
+    if val:
+        phases['montar'] = val
+    val = h('Horas Preparación')
+    if val:
+        phases['recepcionar material'] = val
+    val = h('Horas Soldadura')
+    if val:
+        phases['soldar'] = val
+
+    project = {
+        'id': str(uuid.uuid4()),
+        'name': project_name,
+        'client': client,
+        'start_date': date.today().isoformat(),
+        'due_date': due.isoformat() if due else '',
+        'priority': 'Sin prioridad',
+        'color': None,
+        'phases': phases,
+        'assigned': {},
+        'image': None,
+        'planned': False,
+    }
+    return project
+
+
+def _fetch_kanban_card(card_id):
+    """Retrieve card details from Kanbanize via the REST API."""
+    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD}/cards/{card_id}"
+    headers = {'apikey': KANBANIZE_API_KEY}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, dict):
+                return data.get('data') or data
+    except Exception as e:
+        print('Kanbanize API error:', e)
+    return None
 
 
 @app.route('/')
@@ -1344,6 +1410,39 @@ def toggle_block(pid):
     if request.is_json:
         return '', 204
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/kanbanize-webhook', methods=['POST'])
+def kanbanize_webhook():
+    """Handle Kanbanize webhook events and create projects automatically."""
+    payload = request.form.get('kanbanize_payload')
+    if not payload and request.is_json:
+        payload = request.json.get('kanbanize_payload')
+    if not payload:
+        return '', 400
+    try:
+        data = json.loads(payload)
+    except Exception:
+        return '', 400
+    card = data.get('card')
+    if not card or card.get('boardid') != KANBANIZE_BOARD:
+        return '', 204
+    if data.get('trigger') != 'taskCreated':
+        return '', 204
+    if not card.get('customFields'):
+        details = _fetch_kanban_card(card.get('taskid'))
+        if details:
+            card = details.get('card', details)
+    project = _kanban_card_to_project(card)
+    if not project:
+        return '', 204
+    projects = get_projects()
+    if any(p['name'] == project['name'] for p in projects):
+        return '', 204
+    project['color'] = COLORS[len(projects) % len(COLORS)]
+    projects.append(project)
+    save_projects(projects)
+    return '', 204
 
 
 @app.route('/bugs')
