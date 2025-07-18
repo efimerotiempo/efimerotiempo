@@ -8,6 +8,7 @@ import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
+import urllib.parse
 import sys
 import importlib.util
 
@@ -259,6 +260,8 @@ def _parse_kanban_payload(req):
             raw = req.get_data(as_text=True)
             payload = raw.strip() if raw else None
         if payload:
+            if isinstance(payload, str):
+                payload = urllib.parse.unquote(payload)
             data = _decode_json(payload)
     if isinstance(data, dict):
         return data
@@ -1563,7 +1566,11 @@ def kanbanize_webhook():
     raw_body = request.get_data()
     print('Raw body:', raw_body)
     data = _parse_kanban_payload(request)
-    print('Kanbanize payload:', data)
+    if data is not None:
+        print("\u2705 Webhook recibido:")
+        print(data)
+    else:
+        print("No se pudo decodificar kanbanize_payload")
     if not data:
         return '', 400
 
