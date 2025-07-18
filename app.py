@@ -576,9 +576,12 @@ def calendar_view():
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
-        try:
-            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-        except Exception:
+        if p.get('due_date'):
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except ValueError:
+                p['met'] = False
+        else:
             p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
@@ -643,9 +646,12 @@ def project_list():
     for p in projects:
         if p['id'] in end_dates:
             p['end_date'] = end_dates[p['id']]
-            try:
-                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-            except Exception:
+            if p.get('due_date'):
+                try:
+                    p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+                except ValueError:
+                    p['met'] = False
+            else:
                 p['met'] = False
         else:
             p['met'] = False
@@ -857,9 +863,12 @@ def complete():
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
-        try:
-            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-        except Exception:
+        if p.get('due_date'):
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except ValueError:
+                p['met'] = False
+        else:
             p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
@@ -962,7 +971,13 @@ def update_priority(pid):
         details = []
         for cid in changed_ids:
             pr = next(p for p in projects if p['id'] == cid)
-            met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+            if pr.get('due_date'):
+                try:
+                    met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+                except ValueError:
+                    met = False
+            else:
+                met = False
             start_offset = (date.fromisoformat(start_dates[cid]) - MIN_DATE).days if cid in start_dates else 0
             details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
         if pid in start_dates:
@@ -1083,8 +1098,12 @@ def update_start_date():
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
-    if proj.get('due_date') and new_date > date.fromisoformat(proj['due_date']):
-        return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
+    if proj.get('due_date'):
+        try:
+            if new_date > date.fromisoformat(proj['due_date']):
+                return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
+        except ValueError:
+            pass
     proj['start_date'] = new_date.isoformat()
     save_projects(projects)
     if request.is_json:

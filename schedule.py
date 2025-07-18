@@ -392,19 +392,30 @@ def schedule_projects(projects):
                         project_blocked=project.get('blocked', False),
                     )
         project['end_date'] = end_date.isoformat()
-        if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
-            msg = 'No se cumple la fecha de entrega'
-            conflicts.append({
-                'id': len(conflicts) + 1,
-                'project': project['name'],
-                'message': msg,
-                'key': f"{project['name']}|{msg}",
-            })
+        if project.get('due_date'):
+            try:
+                due_dt = date.fromisoformat(project['due_date'])
+                if date.fromisoformat(project['end_date']) > due_dt:
+                    msg = 'No se cumple la fecha de entrega'
+                    conflicts.append({
+                        'id': len(conflicts) + 1,
+                        'project': project['name'],
+                        'message': msg,
+                        'key': f"{project['name']}|{msg}",
+                    })
+            except ValueError:
+                pass
     for r in reassignments:
         proj = next((p for p in projects if p['id'] == r['pid']), None)
         if not proj:
             continue
-        met = date.fromisoformat(proj['end_date']) <= date.fromisoformat(proj['due_date'])
+        if proj.get('due_date'):
+            try:
+                met = date.fromisoformat(proj['end_date']) <= date.fromisoformat(proj['due_date'])
+            except ValueError:
+                met = True
+        else:
+            met = True
         days = ', '.join(r['dates'])
         msg = (
             f"Vacaciones de {r['old']} ({days}); fase {r['phase']} reasignada a {r['new']}. "
@@ -475,7 +486,12 @@ def assign_phase(
             tasks = schedule.get(day_str, [])
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -520,7 +536,12 @@ def assign_phase(
             # each project aporta como mucho ocho horas diarias. Tras asignar
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -552,7 +573,12 @@ def assign_phase(
         available = limit - start if limit != float('inf') else HOURS_PER_DAY
         if available > 0:
             allocate = min(remaining, available)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -616,7 +642,12 @@ def assign_pedidos(
             continue
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
-        late = day > date.fromisoformat(due_date)
+        late = False
+        if due_date:
+            try:
+                late = day > date.fromisoformat(due_date)
+            except ValueError:
+                late = False
         tasks.append({
             'project': project_name,
             'client': client,
