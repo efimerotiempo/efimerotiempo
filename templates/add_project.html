@@ -2,28 +2,57 @@
 {% block content %}
 <h2>Añadir proyecto</h2>
 <form method="post" enctype="multipart/form-data">
-    <label>Nombre del proyecto:<input type="text" name="name" required></label><br>
-    <label>Cliente:<input type="text" name="client" required></label><br>
-    <label>Fecha límite:<input type="text" name="due_date" placeholder="dd-mm" required></label><br>
-    <label>Prioridad:
-        <select name="priority">
-            <option value="Alta">Alta</option>
-            <option value="Media">Media</option>
-            <option value="Baja">Baja</option>
-            <option value="Sin prioridad" selected>Sin prioridad</option>
-        </select>
-    </label><br>
+<table class="project-form">
+    <tr>
+        <td>Nombre del proyecto</td>
+        <td colspan="2"><input type="text" name="name" required></td>
+    </tr>
+    <tr>
+        <td>Cliente</td>
+        <td colspan="2"><input type="text" name="client" required></td>
+    </tr>
+    <tr>
+        <td>Fecha límite</td>
+        <td colspan="2"><input type="text" name="due_date" placeholder="dd-mm" required></td>
+    </tr>
+    <tr>
+        <td>Planificar</td>
+        <td colspan="2"><input type="checkbox" name="planned" checked></td>
+    </tr>
+    <tr>
+        <td>Prioridad</td>
+        <td colspan="2">
+            <select name="priority">
+                <option value="Alta">Alta</option>
+                <option value="Media">Media</option>
+                <option value="Baja">Baja</option>
+                <option value="Sin prioridad" selected>Sin prioridad</option>
+            </select>
+        </td>
+    </tr>
     {% for phase in phases %}
         {% if phase == 'pedidos' %}
-            <label>Plazo acopio:<input type="text" name="pedidos" placeholder="dd-mm"></label><br>
+        <tr>
+            <td>Plazo acopio</td>
+            <td colspan="2"><input type="text" name="pedidos" placeholder="dd-mm"></td>
+        </tr>
         {% else %}
-            <label>{{ phase }} (horas):
-                <input type="number" name="{{ phase }}">
-                <input type="number" name="{{ phase }}_days" placeholder="días">
-            </label><br>
+        <tr>
+            <td>{{ phase }} (horas)</td>
+            <td><input type="number" name="{{ phase }}"></td>
+            <td><input type="number" name="{{ phase }}_days" placeholder="días"></td>
+        </tr>
         {% endif %}
     {% endfor %}
-    <label>Imagen:<input type="file" name="image" accept="image/*"></label><br>
-    <button type="submit">Guardar</button>
+    <tr>
+        <td>Imagen</td>
+        <td colspan="2"><input type="file" name="image" accept="image/*"></td>
+    </tr>
+    <tr>
+        <td colspan="3" style="text-align:center;">
+            <button class="save-btn" type="submit">Guardar</button>
+        </td>
+    </tr>
+</table>
 </form>
 {% endblock %}
