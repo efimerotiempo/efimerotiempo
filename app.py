@@ -1560,6 +1560,8 @@ def toggle_block(pid):
 @app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
     """Receive Kanbanize data and prefill the project form."""
+    raw_body = request.get_data()
+    print('Raw body:', raw_body)
     data = _parse_kanban_payload(request)
     print('Kanbanize payload:', data)
     if not data:
