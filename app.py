@@ -7,7 +7,7 @@ import json
 import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
-import requests
+from urllib.request import Request, urlopen
 import sys
 import importlib.util
 
@@ -502,13 +502,13 @@ def _kanban_card_to_project(card):
 def _fetch_kanban_card(card_id):
     """Retrieve card details from Kanbanize via the REST API."""
     url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD}/cards/{card_id}"
-    headers = {'apikey': KANBANIZE_API_KEY}
+    req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            if isinstance(data, dict):
-                return data.get('data') or data
+        with urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                data = json.load(resp)
+                if isinstance(data, dict):
+                    return data.get('data') or data
     except Exception as e:
         print('Kanbanize API error:', e)
     return None
