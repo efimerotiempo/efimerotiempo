@@ -496,7 +496,15 @@ def split_markers(schedule):
 
 def _kanban_card_to_project(card):
     """Convert a Kanbanize card payload into a project dict."""
-    fields = {f.get('name'): f.get('value') for f in card.get('customFields', [])}
+    fields_raw = card.get('customFields')
+    while isinstance(fields_raw, str):
+        try:
+            fields_raw = json.loads(fields_raw)
+        except Exception:
+            break
+    if not isinstance(fields_raw, list):
+        fields_raw = []
+    fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
     project_name = fields.get('ID personalizado') or card.get('customId') or card.get('taskid')
     if not project_name:
         return None
@@ -1478,10 +1486,18 @@ def kanbanize_webhook():
         return '', 204
     if data.get('trigger') != 'taskCreated':
         return '', 204
-    if not card.get('customFields'):
+    fields_data = card.get('customFields')
+    while isinstance(fields_data, str):
+        try:
+            fields_data = json.loads(fields_data)
+        except Exception:
+            break
+    if not fields_data:
         details = _fetch_kanban_card(card.get('taskid'))
         if details:
             card = details.get('card', details)
+            fields_data = card.get('customFields', [])
+    card['customFields'] = fields_data
     project = _kanban_card_to_project(card)
     cards = load_kanban_cards()
     cards.append({'timestamp': data.get('timestamp'), 'card': card})
