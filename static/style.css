@@ -291,3 +291,7 @@ tr.collapsed td:not(:first-child) { display: none; }
     font-weight: bold;
     border: 3px solid #000;
 }
+.kanban-conflict {
+    color: hotpink;
+    font-weight: bold;
+}

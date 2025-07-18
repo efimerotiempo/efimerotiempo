@@ -542,11 +542,16 @@ def _kanban_card_to_project(card):
     if not isinstance(fields_raw, list):
         fields_raw = []
     fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
-    project_name = fields.get('ID personalizado') or card.get('customId') or card.get('taskid')
+    project_name = (
+        fields.get('ID personalizado de tarjeta')
+        or fields.get('ID personalizado')
+        or card.get('customId')
+        or card.get('taskid')
+    )
     if not project_name:
         return None
     client = card.get('title', '')
-    due = parse_input_date(fields.get('Fecha cliente'))
+    due = parse_input_date(fields.get('Fecha Cliente') or fields.get('Fecha cliente'))
 
     def h(name):
         try:
@@ -1572,6 +1577,24 @@ def kanbanize_webhook():
     cards = load_kanban_cards()
     cards.append({'timestamp': data.get('timestamp'), 'card': card})
     save_kanban_cards(cards)
+
+    project = _kanban_card_to_project(card)
+    if project:
+        projects = get_projects()
+        if project.get('color') is None:
+            project['color'] = COLORS[len(projects) % len(COLORS)]
+        projects.append(project)
+        save_projects(projects)
+        extras = load_extra_conflicts()
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': project['name'],
+            'message': 'Proyecto creado desde Kanbanize',
+            'key': f"kanban-{project['id']}",
+            'pid': project['id'],
+            'source': 'kanbanize',
+        })
+        save_extra_conflicts(extras)
 
     return '', 204
 
