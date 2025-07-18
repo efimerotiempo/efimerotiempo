@@ -1461,12 +1461,19 @@ def kanbanize_webhook():
     if not payload:
         return '', 400
     try:
+        if isinstance(payload, bytes):
+            payload = payload.decode('utf-8')
         data = json.loads(payload)
-        if isinstance(data, str):
+        while isinstance(data, str):
             data = json.loads(data)
     except Exception:
         return '', 400
     card = data.get('card')
+    if isinstance(card, str):
+        try:
+            card = json.loads(card)
+        except Exception:
+            return '', 400
     if not card or str(card.get('boardid')) != str(KANBANIZE_BOARD_ID):
         return '', 204
     if data.get('trigger') != 'taskCreated':
