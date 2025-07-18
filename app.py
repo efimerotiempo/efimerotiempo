@@ -100,6 +100,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
+KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
@@ -153,6 +154,17 @@ def parse_input_date(value):
     return None
 
 
+def format_dd_mm(value):
+    """Return 'dd-mm' string for a date or date string."""
+    if not value:
+        return ''
+    if isinstance(value, str):
+        value = parse_input_date(value)
+    if isinstance(value, date):
+        return f"{value.day:02d}-{value.month:02d}"
+    return ''
+
+
 def planning_status(schedule):
     """Return mapping pid -> True if fully scheduled."""
     status = {}
@@ -193,6 +205,31 @@ def save_kanban_cards(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(KANBAN_CARDS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def load_prefill_project():
+    """Return the pending Kanbanize project data, if any."""
+    if os.path.exists(KANBAN_PREFILL_FILE):
+        with open(KANBAN_PREFILL_FILE, 'r') as f:
+            try:
+                return json.load(f)
+            except Exception:
+                return {}
+    return {}
+
+
+def save_prefill_project(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(KANBAN_PREFILL_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def clear_prefill_project():
+    if os.path.exists(KANBAN_PREFILL_FILE):
+        try:
+            os.remove(KANBAN_PREFILL_FILE)
+        except Exception:
+            pass
 
 
 def send_bug_report(bug):
@@ -682,6 +719,7 @@ def project_list():
 @app.route('/add', methods=['GET', 'POST'])
 def add_project():
     if request.method == 'POST':
+        clear_prefill_project()
         data = request.form
         file = request.files.get('image')
         image_path = None
@@ -739,7 +777,13 @@ def add_project():
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('calendar_view', highlight=project['id']))
-    return render_template('add_project.html', phases=PHASE_ORDER, today=date.today().isoformat())
+    prefill = load_prefill_project()
+    return render_template(
+        'add_project.html',
+        phases=PHASE_ORDER,
+        today=date.today().isoformat(),
+        prefill=prefill,
+    )
 
 
 @app.route('/add_milestone', methods=['POST'])
@@ -1481,52 +1525,54 @@ def toggle_block(pid):
 
 @app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
-    """Handle Kanbanize webhook events and create projects automatically."""
-    payload = request.form.get('kanbanize_payload')
-    if not payload and request.is_json:
-        payload = request.json.get('kanbanize_payload')
-    if not payload:
-        return '', 400
-    try:
-        if isinstance(payload, bytes):
-            payload = payload.decode('utf-8')
-        data = json.loads(payload)
-        while isinstance(data, str):
-            data = json.loads(data)
-    except Exception:
-        return '', 400
-    card = data.get('card')
+    """Receive Kanbanize data and prefill the project form."""
+    data = request.get_json(silent=True)
+    if not data:
+        payload = request.form.get('kanbanize_payload')
+        if not payload and request.is_json:
+            payload = request.json.get('kanbanize_payload')
+        if not payload:
+            return '', 400
+        try:
+            if isinstance(payload, bytes):
+                payload = payload.decode('utf-8')
+            data = json.loads(payload)
+            while isinstance(data, str):
+                data = json.loads(data)
+        except Exception:
+            return '', 400
+
+    card = data.get('card') or data
     if isinstance(card, str):
         try:
             card = json.loads(card)
         except Exception:
-            return '', 400
-    if not card or str(card.get('boardid')) != str(KANBANIZE_BOARD_ID):
-        return '', 204
-    if data.get('trigger') != 'taskCreated':
-        return '', 204
-    fields_data = card.get('customFields')
-    while isinstance(fields_data, str):
+            card = {}
+
+    fields_raw = card.get('customFields', {})
+    while isinstance(fields_raw, str):
         try:
-            fields_data = json.loads(fields_data)
+            fields_raw = json.loads(fields_raw)
         except Exception:
             break
-    if not fields_data:
-        details = _fetch_kanban_card(card.get('taskid'))
-        if details:
-            card = details.get('card', details)
-            fields_data = card.get('customFields', [])
-    card['customFields'] = fields_data
-    project = _kanban_card_to_project(card)
+    if isinstance(fields_raw, list):
+        fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
+    elif isinstance(fields_raw, dict):
+        fields = fields_raw
+    else:
+        fields = {}
+
+    prefill = {
+        'name': fields.get('ID personalizado de tarjeta', ''),
+        'client': card.get('title', ''),
+        'due_date': format_dd_mm(fields.get('Fecha Cliente')),
+    }
+    save_prefill_project(prefill)
+
     cards = load_kanban_cards()
     cards.append({'timestamp': data.get('timestamp'), 'card': card})
     save_kanban_cards(cards)
-    if project:
-        projects = get_projects()
-        if not any(p['name'] == project['name'] for p in projects):
-            project['color'] = COLORS[len(projects) % len(COLORS)]
-            projects.append(project)
-            save_projects(projects)
+
     return '', 204
 
 
