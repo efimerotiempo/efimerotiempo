@@ -232,6 +232,39 @@ def clear_prefill_project():
             pass
 
 
+def _decode_json(value):
+    """Try to parse *value* as JSON repeatedly until it's not a string."""
+    while isinstance(value, (bytes, str)):
+        try:
+            if isinstance(value, bytes):
+                value = value.decode('utf-8')
+            value = json.loads(value)
+        except Exception:
+            break
+    return value
+
+
+def _parse_kanban_payload(req):
+    """Return payload dict from a webhook request."""
+    data = req.get_json(silent=True)
+    if isinstance(data, str):
+        data = _decode_json(data)
+    if not data:
+        payload = (
+            req.form.get('kanbanize_payload')
+            or req.form.get('payload')
+            or req.form.get('data')
+        )
+        if not payload:
+            raw = req.get_data(as_text=True)
+            payload = raw.strip() if raw else None
+        if payload:
+            data = _decode_json(payload)
+    if isinstance(data, dict):
+        return data
+    return None
+
+
 def send_bug_report(bug):
     msg = EmailMessage()
     msg['Subject'] = f"BUG {bug['id']} - {bug['tab']}"
@@ -533,12 +566,8 @@ def split_markers(schedule):
 
 def _kanban_card_to_project(card):
     """Convert a Kanbanize card payload into a project dict."""
-    fields_raw = card.get('customFields')
-    while isinstance(fields_raw, str):
-        try:
-            fields_raw = json.loads(fields_raw)
-        except Exception:
-            break
+    fields_raw = card.get('customFields') or card.get('customfields')
+    fields_raw = _decode_json(fields_raw) or []
     if not isinstance(fields_raw, list):
         fields_raw = []
     fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
@@ -1531,35 +1560,15 @@ def toggle_block(pid):
 @app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
     """Receive Kanbanize data and prefill the project form."""
-    data = request.get_json(silent=True)
+    data = _parse_kanban_payload(request)
     if not data:
-        payload = request.form.get('kanbanize_payload')
-        if not payload and request.is_json:
-            payload = request.json.get('kanbanize_payload')
-        if not payload:
-            return '', 400
-        try:
-            if isinstance(payload, bytes):
-                payload = payload.decode('utf-8')
-            data = json.loads(payload)
-            while isinstance(data, str):
-                data = json.loads(data)
-        except Exception:
-            return '', 400
+        return '', 400
 
-    card = data.get('card') or data
-    if isinstance(card, str):
-        try:
-            card = json.loads(card)
-        except Exception:
-            card = {}
+    card = data.get('card') or data.get('data') or data
+    card = _decode_json(card) or {}
 
-    fields_raw = card.get('customFields', {})
-    while isinstance(fields_raw, str):
-        try:
-            fields_raw = json.loads(fields_raw)
-        except Exception:
-            break
+    fields_raw = card.get('customFields') or card.get('customfields')
+    fields_raw = _decode_json(fields_raw) or []
     if isinstance(fields_raw, list):
         fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
     elif isinstance(fields_raw, dict):
