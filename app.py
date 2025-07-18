@@ -81,7 +81,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.endpoint == "static":
+    if request.endpoint in ("static", "kanbanize_webhook"):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
