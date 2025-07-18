@@ -1561,6 +1561,7 @@ def toggle_block(pid):
 def kanbanize_webhook():
     """Receive Kanbanize data and prefill the project form."""
     data = _parse_kanban_payload(request)
+    print('Kanbanize payload:', data)
     if not data:
         return '', 400
 
