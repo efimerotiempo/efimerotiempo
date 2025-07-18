@@ -99,11 +99,13 @@ UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
+KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
-KANBANIZE_BOARD = '682d829a0aafe44469o50acd'
+KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
+KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
 
 def active_workers(today=None):
@@ -177,6 +179,19 @@ def load_bugs():
 def save_bugs(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(BUGS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def load_kanban_cards():
+    if os.path.exists(KANBAN_CARDS_FILE):
+        with open(KANBAN_CARDS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_kanban_cards(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(KANBAN_CARDS_FILE, 'w') as f:
         json.dump(data, f)
 
 
@@ -526,7 +541,7 @@ def _kanban_card_to_project(card):
 
 def _fetch_kanban_card(card_id):
     """Retrieve card details from Kanbanize via the REST API."""
-    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD}/cards/{card_id}"
+    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
     req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
     try:
         with urlopen(req, timeout=10) as resp:
@@ -1450,7 +1465,7 @@ def kanbanize_webhook():
     except Exception:
         return '', 400
     card = data.get('card')
-    if not card or card.get('boardid') != KANBANIZE_BOARD:
+    if not card or str(card.get('boardid')) != str(KANBANIZE_BOARD_ID):
         return '', 204
     if data.get('trigger') != 'taskCreated':
         return '', 204
@@ -1459,14 +1474,15 @@ def kanbanize_webhook():
         if details:
             card = details.get('card', details)
     project = _kanban_card_to_project(card)
-    if not project:
-        return '', 204
-    projects = get_projects()
-    if any(p['name'] == project['name'] for p in projects):
-        return '', 204
-    project['color'] = COLORS[len(projects) % len(COLORS)]
-    projects.append(project)
-    save_projects(projects)
+    cards = load_kanban_cards()
+    cards.append({'timestamp': data.get('timestamp'), 'card': card})
+    save_kanban_cards(cards)
+    if project:
+        projects = get_projects()
+        if not any(p['name'] == project['name'] for p in projects):
+            project['color'] = COLORS[len(projects) % len(COLORS)]
+            projects.append(project)
+            save_projects(projects)
     return '', 204
 
 
@@ -1475,6 +1491,13 @@ def bug_list():
     """Show table with all recorded bugs."""
     bugs = load_bugs()
     return render_template('bugs.html', bugs=bugs)
+
+
+@app.route('/kanbanize')
+def kanbanize_list():
+    """Display all received Kanbanize cards."""
+    cards = load_kanban_cards()
+    return render_template('kanbanize.html', cards=cards)
 
 
 if __name__ == '__main__':
