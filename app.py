@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
 import uuid
 import os
@@ -61,6 +61,31 @@ WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 
 app = Flask(__name__)
+
+# Basic HTTP authentication setup
+AUTH_USER = os.environ.get("EFIMERO_USER", "admin")
+AUTH_PASS = os.environ.get("EFIMERO_PASS", "secreto")
+
+
+def _check_auth(user, password):
+    return user == AUTH_USER and password == AUTH_PASS
+
+
+def _authenticate():
+    return Response(
+        "Acceso denegado.\n",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Login requerido"'},
+    )
+
+
+@app.before_request
+def _require_auth():
+    if request.endpoint == "static":
+        return
+    auth = request.authorization
+    if not auth or not _check_auth(auth.username, auth.password):
+        return _authenticate()
 
 COLORS = [
     '#ffd9e8', '#ffe4c4', '#e0ffff', '#d0f0c0', '#fef9b7', '#ffe8d6',
