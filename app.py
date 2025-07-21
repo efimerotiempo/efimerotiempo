@@ -1580,10 +1580,10 @@ def kanbanize_webhook():
         inner_data = json.loads(raw_payload)
         card = inner_data.get("card", {})
     except Exception as e:
-        print("\u274c Error procesando payload:", e)
+        print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
 
-    print("\u2705 Tarjeta recibida:")
+    print("Tarjeta recibida:")
     print(card)
 
     custom = card.get('customFields', {})
