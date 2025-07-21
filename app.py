@@ -619,7 +619,9 @@ def _kanban_card_to_project(card):
         'priority': 'Sin prioridad',
         'color': None,
         'phases': phases,
-        'assigned': {},
+        # Ensure each phase is explicitly set to the unplanned worker so the
+        # calendar always displays the tasks as soon as the project is created.
+        'assigned': {ph: UNPLANNED for ph in phases},
         'image': None,
         'planned': False,
     }
