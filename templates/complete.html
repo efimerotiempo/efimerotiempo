@@ -670,11 +670,35 @@
       }
     });
   });
+  const rows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
+  rows.forEach(row => {
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const pid = row.dataset.pid;
+      rows.forEach(r => {
+        if (r.dataset.pid === pid) {
+          r.classList.add('proj-highlight');
+          r.classList.remove('proj-dim');
+        } else {
+          r.classList.add('proj-dim');
+          r.classList.remove('proj-highlight');
+        }
+      });
+      tasks.forEach(t => {
+        if (t.dataset.pid === pid) {
+          t.classList.add('highlight');
+          t.classList.remove('dim');
+        } else {
+          t.classList.add('dim');
+          t.classList.remove('highlight');
+        }
+      });
+    });
+  });
+
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
-    document.querySelectorAll('.projects-table tbody tr').forEach(r => {
-      r.classList.remove('proj-highlight', 'proj-dim');
-    });
+    rows.forEach(r => r.classList.remove('proj-highlight', 'proj-dim'));
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());

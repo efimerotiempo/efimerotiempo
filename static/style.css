@@ -291,6 +291,10 @@ tr.collapsed td:not(:first-child) { display: none; }
     font-weight: bold;
     border: 3px solid #000;
 }
+.projects-table tbody tr form { display: none; }
+.projects-table tr.proj-highlight form {
+    display: inline;
+}
 .kanban-conflict {
     color: hotpink;
     font-weight: bold;

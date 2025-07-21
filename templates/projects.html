@@ -29,7 +29,7 @@
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+    <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
         <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
         <td>
@@ -181,6 +181,26 @@
           }
         });
     });
+  });
+
+  const rows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
+  rows.forEach(row => {
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const pid = row.dataset.pid;
+      rows.forEach(r => {
+        if (r.dataset.pid === pid) {
+          r.classList.add('proj-highlight');
+          r.classList.remove('proj-dim');
+        } else {
+          r.classList.add('proj-dim');
+          r.classList.remove('proj-highlight');
+        }
+      });
+    });
+  });
+  document.addEventListener('click', () => {
+    rows.forEach(r => r.classList.remove('proj-highlight', 'proj-dim'));
   });
 </script>
 {% endblock %}
