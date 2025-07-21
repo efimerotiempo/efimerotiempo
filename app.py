@@ -1568,67 +1568,12 @@ def toggle_block(pid):
 
 
 @app.route('/kanbanize-webhook', methods=['POST'])
-def kanbanize_webhook():
-    """Receive a Kanbanize card and turn it into a project."""
-    raw_body = request.get_data()
-    print('Raw body:', raw_body)
-
-    data = _parse_kanban_payload(request)
-    if not data:
-        return jsonify({'error': 'No se recibió kanbanize_payload'}), 400
-
-    print("\u2705 Webhook recibido:")
+def recibir_kanbanize():
+    """Log the payload received from Kanbanize for debugging."""
+    data = request.get_json(silent=True)
+    print("Datos recibidos desde Kanbanize:")
     print(data)
-
-    card = data.get('card') or data.get('data') or data
-    card = _decode_json(card) or {}
-
-    custom = card.get('customFields') or {}
-    custom = _decode_json(custom) or {}
-
-    phases = {}
-    try:
-        if 'Horas Montaje' in custom:
-            phases['montar'] = int(custom['Horas Montaje'])
-        if 'Horas Soldadura' in custom:
-            phases['soldar'] = int(custom['Horas Soldadura'])
-        if 'Horas Acabado' in custom:
-            phases['pintar'] = int(custom['Horas Acabado'])
-    except Exception:
-        pass
-
-    project = {
-        'id': str(uuid.uuid4()),
-        'name': card.get('customCardId', 'Sin nombre'),
-        'client': card.get('title', 'Sin cliente'),
-        'start_date': date.today().isoformat(),
-        'due_date': '',
-        'priority': 'Sin prioridad',
-        'color': None,
-        'phases': phases,
-        'assigned': {ph: UNPLANNED for ph in phases},
-        'image': None,
-        'planned': False,
-    }
-
-    projects = get_projects()
-    if project.get('color') is None:
-        project['color'] = COLORS[len(projects) % len(COLORS)]
-    projects.append(project)
-    save_projects(projects)
-
-    extras = load_extra_conflicts()
-    extras.append({
-        'id': str(uuid.uuid4()),
-        'project': project['name'],
-        'message': 'Proyecto creado desde Kanbanize',
-        'key': f"kanban-{project['id']}",
-        'pid': project['id'],
-        'source': 'kanbanize',
-    })
-    save_extra_conflicts(extras)
-
-    return jsonify({'mensaje': 'Proyecto creado'})
+    return jsonify({"mensaje": "Recibido"})
 
 
 @app.route('/bugs')
