@@ -1579,7 +1579,7 @@ def kanbanize_webhook():
     else:
         print("No se pudo decodificar kanbanize_payload")
     if not data:
-        return '', 400
+        return jsonify({"error": "No se recibió kanbanize_payload"}), 400
 
     card = data.get('card') or data.get('data') or data
     card = _decode_json(card) or {}
@@ -1622,7 +1622,7 @@ def kanbanize_webhook():
         })
         save_extra_conflicts(extras)
 
-    return '', 204
+    return jsonify({"message": "Tarjeta recibida"})
 
 
 @app.route('/bugs')
