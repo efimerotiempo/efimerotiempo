@@ -353,6 +353,13 @@
                             </select>
                             <button type="submit">Guardar</button>
                         </form>
+                        <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
+                            <input type="hidden" name="pid" value="{{ p.id }}">
+                            <input type="hidden" name="phase" value="{{ ph }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
+                            <button type="submit">Horas</button>
+                        </form>
                         <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                             <input type="hidden" name="pid" value="{{ p.id }}">
                             <input type="hidden" name="phase" value="{{ ph }}">
@@ -888,6 +895,16 @@
       ev.preventDefault();
       const data = new FormData(f);
       fetch(PROJ_START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+        });
+    });
+  });
+  document.querySelectorAll('.phase-hours-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(PHASE_HOURS_URL, { method: 'POST', body: data })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
