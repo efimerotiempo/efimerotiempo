@@ -234,12 +234,12 @@ def clear_prefill_project():
 
 
 def _decode_json(value):
-    """Try to parse *value* as JSON repeatedly until it's not a string."""
+    """Try to parse *value* as JSON, ignoring trailing text."""
     while isinstance(value, (bytes, str)):
         try:
             if isinstance(value, bytes):
                 value = value.decode('utf-8')
-            value = json.loads(value)
+            value, idx = json.JSONDecoder().raw_decode(value)
         except Exception:
             break
     return value
@@ -570,12 +570,17 @@ def split_markers(schedule):
 def _kanban_card_to_project(card):
     """Convert a Kanbanize card payload into a project dict."""
     fields_raw = card.get('customFields') or card.get('customfields')
-    fields_raw = _decode_json(fields_raw) or []
-    if not isinstance(fields_raw, list):
-        fields_raw = []
-    fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
+    fields_raw = _decode_json(fields_raw) or {}
+    if isinstance(fields_raw, list):
+        fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
+    elif isinstance(fields_raw, dict):
+        fields = fields_raw
+    else:
+        fields = {}
+
     project_name = (
-        fields.get('ID personalizado de tarjeta')
+        card.get('customCardId')
+        or fields.get('ID personalizado de tarjeta')
         or fields.get('ID personalizado')
         or card.get('customId')
         or card.get('taskid')
@@ -1587,7 +1592,7 @@ def kanbanize_webhook():
         fields = {}
 
     prefill = {
-        'name': fields.get('ID personalizado de tarjeta', ''),
+        'name': card.get('customCardId') or fields.get('ID personalizado de tarjeta', ''),
         'client': card.get('title', ''),
         'due_date': format_dd_mm(fields.get('Fecha Cliente')),
     }
