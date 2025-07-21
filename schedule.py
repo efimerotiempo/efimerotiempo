@@ -238,7 +238,14 @@ def schedule_projects(projects):
         if project.get('frozen'):
             continue
         planned = project.get('planned', True)
-        current = date.fromisoformat(project['start_date'])
+        if not planned:
+            # Unplanned projects should always appear starting from today so
+            # they remain visible in the "Sin planificar" row regardless of
+            # when they were created or loaded from disk.
+            current = date.today()
+            project['start_date'] = current.isoformat()
+        else:
+            current = date.fromisoformat(project['start_date'])
         hour = 0
         end_date = current
         assigned = project.get('assigned', {})
