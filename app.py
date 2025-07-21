@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
 import uuid
 import os
@@ -7,6 +7,8 @@ import json
 import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
+from urllib.request import Request, urlopen
+import urllib.parse
 import sys
 import importlib.util
 
@@ -61,6 +63,31 @@ HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 
 app = Flask(__name__)
 
+# Basic HTTP authentication setup
+AUTH_USER = os.environ.get("EFIMERO_USER", "admin")
+AUTH_PASS = os.environ.get("EFIMERO_PASS", "secreto")
+
+
+def _check_auth(user, password):
+    return user == AUTH_USER and password == AUTH_PASS
+
+
+def _authenticate():
+    return Response(
+        "Acceso denegado.\n",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Login requerido"'},
+    )
+
+
+@app.before_request
+def _require_auth():
+    if request.endpoint in ("static", "kanbanize_webhook"):
+        return
+    auth = request.authorization
+    if not auth or not _check_auth(auth.username, auth.password):
+        return _authenticate()
+
 COLORS = [
     '#ffd9e8', '#ffe4c4', '#e0ffff', '#d0f0c0', '#fef9b7', '#ffe8d6',
     '#dcebf1', '#e6d3f8', '#fdfd96', '#e7f5ff', '#ccffcc', '#e9f7fd',
@@ -73,6 +100,14 @@ UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
+KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
+KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
+
+# Kanbanize integration constants
+KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
+KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
+KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
+KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
 
 def active_workers(today=None):
@@ -120,6 +155,17 @@ def parse_input_date(value):
     return None
 
 
+def format_dd_mm(value):
+    """Return 'dd-mm' string for a date or date string."""
+    if not value:
+        return ''
+    if isinstance(value, str):
+        value = parse_input_date(value)
+    if isinstance(value, date):
+        return f"{value.day:02d}-{value.month:02d}"
+    return ''
+
+
 def planning_status(schedule):
     """Return mapping pid -> True if fully scheduled."""
     status = {}
@@ -147,6 +193,79 @@ def save_bugs(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(BUGS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def load_kanban_cards():
+    if os.path.exists(KANBAN_CARDS_FILE):
+        with open(KANBAN_CARDS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_kanban_cards(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(KANBAN_CARDS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def load_prefill_project():
+    """Return the pending Kanbanize project data, if any."""
+    if os.path.exists(KANBAN_PREFILL_FILE):
+        with open(KANBAN_PREFILL_FILE, 'r') as f:
+            try:
+                return json.load(f)
+            except Exception:
+                return {}
+    return {}
+
+
+def save_prefill_project(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(KANBAN_PREFILL_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def clear_prefill_project():
+    if os.path.exists(KANBAN_PREFILL_FILE):
+        try:
+            os.remove(KANBAN_PREFILL_FILE)
+        except Exception:
+            pass
+
+
+def _decode_json(value):
+    """Try to parse *value* as JSON, ignoring trailing text."""
+    while isinstance(value, (bytes, str)):
+        try:
+            if isinstance(value, bytes):
+                value = value.decode('utf-8')
+            value, idx = json.JSONDecoder().raw_decode(value)
+        except Exception:
+            break
+    return value
+
+
+def _parse_kanban_payload(req):
+    """Return payload dict from a webhook request."""
+    data = req.get_json(silent=True)
+    if isinstance(data, str):
+        data = _decode_json(data)
+    if not data:
+        payload = (
+            req.form.get('kanbanize_payload')
+            or req.form.get('payload')
+            or req.form.get('data')
+        )
+        if not payload:
+            raw = req.get_data(as_text=True)
+            payload = raw.strip() if raw else None
+        if payload:
+            if isinstance(payload, str):
+                payload = urllib.parse.unquote(payload)
+            data = _decode_json(payload)
+    if isinstance(data, dict):
+        return data
+    return None
 
 
 def send_bug_report(bug):
@@ -300,6 +419,8 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return None, 'Proyecto no encontrado'
+    if proj.get('frozen'):
+        return None, 'Proyecto congelado'
 
     if worker and phase not in WORKERS.get(worker, []):
         return None, 'Trabajador sin esa fase'
@@ -373,12 +494,14 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if not p.get('planned', True):
-            p['start_date'] = date.today().isoformat()
         if not p.get('color'):
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
             changed = True
+
+        p.setdefault('frozen', False)
+        p.setdefault('frozen_tasks', [])
+        p.setdefault('blocked', False)
 
         p.setdefault('assigned', {})
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
@@ -444,6 +567,82 @@ def split_markers(schedule):
     return starts.union(ends)
 
 
+def _kanban_card_to_project(card):
+    """Convert a Kanbanize card payload into a project dict."""
+    fields_raw = card.get('customFields') or card.get('customfields')
+    fields_raw = _decode_json(fields_raw) or {}
+    if isinstance(fields_raw, list):
+        fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
+    elif isinstance(fields_raw, dict):
+        fields = fields_raw
+    else:
+        fields = {}
+
+    project_name = (
+        card.get('customCardId')
+        or fields.get('ID personalizado de tarjeta')
+        or fields.get('ID personalizado')
+        or card.get('customId')
+        or card.get('taskid')
+    )
+    if not project_name:
+        return None
+    client = card.get('title', '')
+    due = parse_input_date(fields.get('Fecha Cliente') or fields.get('Fecha cliente'))
+
+    def h(name):
+        try:
+            return int(fields.get(name, 0))
+        except Exception:
+            return 0
+
+    phases = {}
+    val = h('Horas Acabado')
+    if val:
+        phases['pintar'] = val
+    val = h('Horas Montaje')
+    if val:
+        phases['montar'] = val
+    val = h('Horas Preparación')
+    if val:
+        phases['recepcionar material'] = val
+    val = h('Horas Soldadura')
+    if val:
+        phases['soldar'] = val
+
+    project = {
+        'id': str(uuid.uuid4()),
+        'name': project_name,
+        'client': client,
+        'start_date': date.today().isoformat(),
+        'due_date': due.isoformat() if due else '',
+        'priority': 'Sin prioridad',
+        'color': None,
+        'phases': phases,
+        # Ensure each phase is explicitly set to the unplanned worker so the
+        # calendar always displays the tasks as soon as the project is created.
+        'assigned': {ph: UNPLANNED for ph in phases},
+        'image': None,
+        'planned': False,
+    }
+    return project
+
+
+def _fetch_kanban_card(card_id):
+    """Retrieve card details from Kanbanize via the REST API."""
+    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
+    req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                data = json.load(resp)
+                if isinstance(data, dict):
+                    return data.get('data') or data
+    except Exception as e:
+        print('Kanbanize API error:', e)
+    return None
+
+
 @app.route('/')
 def home():
     """Redirect to the combined view by default."""
@@ -458,9 +657,12 @@ def calendar_view():
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
-        try:
-            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-        except Exception:
+        if p.get('due_date'):
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except ValueError:
+                p['met'] = False
+        else:
             p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
@@ -525,9 +727,12 @@ def project_list():
     for p in projects:
         if p['id'] in end_dates:
             p['end_date'] = end_dates[p['id']]
-            try:
-                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-            except Exception:
+            if p.get('due_date'):
+                try:
+                    p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+                except ValueError:
+                    p['met'] = False
+            else:
                 p['met'] = False
         else:
             p['met'] = False
@@ -558,6 +763,7 @@ def project_list():
 @app.route('/add', methods=['GET', 'POST'])
 def add_project():
     if request.method == 'POST':
+        clear_prefill_project()
         data = request.form
         file = request.files.get('image')
         image_path = None
@@ -614,8 +820,14 @@ def add_project():
                     )
         projects.append(project)
         save_projects(projects)
-        return redirect(url_for('project_list'))
-    return render_template('add_project.html', phases=PHASE_ORDER, today=date.today().isoformat())
+        return redirect(url_for('calendar_view', highlight=project['id']))
+    prefill = load_prefill_project()
+    return render_template(
+        'add_project.html',
+        phases=PHASE_ORDER,
+        today=date.today().isoformat(),
+        prefill=prefill,
+    )
 
 
 @app.route('/add_milestone', methods=['POST'])
@@ -732,16 +944,19 @@ def complete():
                     )
         projects.append(project)
         save_projects(projects)
-        return redirect(url_for('complete'))
+        return redirect(url_for('complete', highlight=project['id']))
 
     schedule, conflicts = schedule_projects(projects)
     plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
-        try:
-            p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
-        except Exception:
+        if p.get('due_date'):
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except ValueError:
+                p['met'] = False
+        else:
             p['met'] = False
     milestones = load_milestones()
     extra = load_extra_conflicts()
@@ -844,7 +1059,13 @@ def update_priority(pid):
         details = []
         for cid in changed_ids:
             pr = next(p for p in projects if p['id'] == cid)
-            met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+            if pr.get('due_date'):
+                try:
+                    met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
+                except ValueError:
+                    met = False
+            else:
+                met = False
             start_offset = (date.fromisoformat(start_dates[cid]) - MIN_DATE).days if cid in start_dates else 0
             details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
         if pid in start_dates:
@@ -941,6 +1162,95 @@ def update_due_date():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj['due_date'] = new_date.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
+@app.route('/update_start_date', methods=['POST'])
+def update_start_date():
+    """Modify a project's start date."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    date_str = data.get('start_date') or data.get('date')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not date_str:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    new_date = parse_input_date(date_str)
+    if not new_date:
+        return jsonify({'error': 'Fecha inválida'}), 400
+    if new_date < MIN_DATE or new_date > MAX_DATE:
+        return jsonify({'error': 'Fecha fuera de rango'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    if proj.get('due_date'):
+        try:
+            if new_date > date.fromisoformat(proj['due_date']):
+                return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
+        except ValueError:
+            pass
+    proj['start_date'] = new_date.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
+@app.route('/update_phase_hours', methods=['POST'])
+def update_phase_hours():
+    """Modify hours for a specific phase."""
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    hours_val = data.get('hours')
+    next_url = data.get('next') or request.args.get('next') or url_for('project_list')
+    if not pid or not phase or hours_val is None:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    try:
+        hours = int(hours_val)
+        if hours <= 0:
+            raise ValueError
+    except Exception:
+        return jsonify({'error': 'Horas inválidas'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in proj.get('phases', {}):
+        return jsonify({'error': 'Fase no encontrada'}), 404
+    proj['phases'][phase] = hours
+    if proj.get('segment_starts'):
+        proj['segment_starts'].pop(phase, None)
+        if not proj['segment_starts']:
+            proj.pop('segment_starts')
+    if proj.get('segment_workers'):
+        proj['segment_workers'].pop(phase, None)
+        if not proj['segment_workers']:
+            proj.pop('segment_workers')
+    frozen = proj.get('frozen', False)
+    if frozen:
+        proj['frozen'] = False
+    sched, _ = schedule_projects(projects)
+    if frozen:
+        frozen_tasks = []
+        last = None
+        for w, days in sched.items():
+            for d, tasks in days.items():
+                for t in tasks:
+                    if t['pid'] == pid:
+                        item = t.copy()
+                        item['worker'] = w
+                        item['day'] = d
+                        item['frozen'] = True
+                        frozen_tasks.append(item)
+                        dt = date.fromisoformat(d)
+                        if not last or dt > last:
+                            last = dt
+        proj['frozen'] = True
+        proj['frozen_tasks'] = frozen_tasks
+        if last:
+            proj['end_date'] = last.isoformat()
     save_projects(projects)
     if request.is_json:
         return '', 204
@@ -1200,11 +1510,143 @@ def report_bug():
     return redirect(request.referrer or url_for('complete'))
 
 
+@app.route('/delete_bug/<bid>', methods=['POST'])
+def delete_bug(bid):
+    bugs = load_bugs()
+    bugs = [b for b in bugs if str(b.get('id')) != bid]
+    save_bugs(bugs)
+    return redirect(url_for('bug_list'))
+
+
+@app.route('/toggle_freeze/<pid>', methods=['POST'])
+def toggle_freeze(pid):
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    if proj.get('frozen'):
+        proj['frozen'] = False
+        proj.pop('frozen_tasks', None)
+    else:
+        schedule, _ = schedule_projects(projects)
+        frozen = []
+        last = None
+        for w, days in schedule.items():
+            for day, tasks in days.items():
+                for t in tasks:
+                    if t['pid'] == pid:
+                        item = t.copy()
+                        item['worker'] = w
+                        item['day'] = day
+                        item['frozen'] = True
+                        frozen.append(item)
+                        d = date.fromisoformat(day)
+                        if not last or d > last:
+                            last = d
+        proj['frozen'] = True
+        proj['frozen_tasks'] = frozen
+        if last:
+            proj['end_date'] = last.isoformat()
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/toggle_block/<pid>', methods=['POST'])
+def toggle_block(pid):
+    """Toggle blocked state on a project."""
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    proj['blocked'] = not proj.get('blocked', False)
+    save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/kanbanize-webhook', methods=['POST'])
+def kanbanize_webhook():
+    """Recibe una tarjeta de Kanbanize y la convierte en un proyecto."""
+
+    raw_body = request.get_data()
+    print('Raw body:', raw_body)
+
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        print("Error al decodificar JSON:", e)
+        return jsonify({'error': 'No se pudo leer el JSON'}), 400
+
+    print("Datos recibidos desde Kanbanize:")
+    print(data)
+
+    card = data.get('card') or data.get('data') or {}
+    custom = card.get('customFields', {})
+
+    fases = []
+    try:
+        if 'Horas Montaje' in custom:
+            fases.append({'nombre': 'montar', 'duracion': int(custom['Horas Montaje'])})
+        if 'Horas Soldadura' in custom:
+            fases.append({'nombre': 'soldar', 'duracion': int(custom['Horas Soldadura'])})
+        if 'Horas Acabado' in custom:
+            fases.append({'nombre': 'pintar', 'duracion': int(custom['Horas Acabado'])})
+    except Exception as e:
+        print("Error al procesar fases:", e)
+
+    phases = {f['nombre']: f['duracion'] for f in fases}
+
+    project = {
+        'id': str(uuid.uuid4()),
+        'name': card.get('customCardId', 'Sin nombre'),
+        'client': card.get('title', 'Sin cliente'),
+        'start_date': date.today().isoformat(),
+        'due_date': date.today().isoformat(),
+        'priority': 'Sin prioridad',
+        'color': None,
+        'phases': phases,
+        'assigned': {ph: UNPLANNED for ph in phases},
+        'image': None,
+        'planned': False,
+    }
+
+    projects = load_projects()
+
+    if project.get('color') is None:
+        project['color'] = COLORS[len(projects) % len(COLORS)]
+
+    projects.append(project)
+    save_projects(projects)
+
+    extras = load_extra_conflicts()
+    extras.append({
+        'id': str(uuid.uuid4()),
+        'proyecto': project['name'],
+        'mensaje': 'Proyecto creado desde Kanbanize',
+        'key': f"kanban-{project['id']}",
+        'source': 'kanbanize',
+        'pid': project['id'],
+    })
+    save_extra_conflicts(extras)
+
+    return jsonify({"mensaje": "Proyecto creado"}), 200
+
+
 @app.route('/bugs')
 def bug_list():
     """Show table with all recorded bugs."""
     bugs = load_bugs()
     return render_template('bugs.html', bugs=bugs)
+
+
+@app.route('/kanbanize')
+def kanbanize_list():
+    """Display all received Kanbanize cards."""
+    cards = load_kanban_cards()
+    return render_template('kanbanize.html', cards=cards)
 
 
 if __name__ == '__main__':

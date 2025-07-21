@@ -29,10 +29,18 @@
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr style="background-color: {{ p.color }};">
-        <td>{{ p.name }}</td>
+    <tr class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+        <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
-        <td>{{ p.start_date }}</td>
+        <td>
+            {{ p.start_date }}
+            <form class="proj-start-form" method="post" action="{{ url_for('update_start_date') }}">
+                <input type="hidden" name="pid" value="{{ p.id }}">
+                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                <input type="date" name="start_date" value="{{ p.start_date }}">
+                <button type="submit">Cambiar</button>
+            </form>
+        </td>
         <td>{{ p.due_date }}
             <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
                 <input type="hidden" name="pid" value="{{ p.id }}">
@@ -64,9 +72,9 @@
                     {{ val }}<br>
                 {% else %}
                     {% if val is sequence %}
-                        {{ val|sum }}h<br>
+                        {{ val|map('int')|sum }}h<br>
                     {% else %}
-                        {{ val }}h<br>
+                        {{ val|int }}h<br>
                     {% endif %}
                 {% endif %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
@@ -77,6 +85,13 @@
                         {% endfor %}
                     </select>
                     <button type="submit">Guardar</button>
+                </form>
+                <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
+                    <input type="hidden" name="pid" value="{{ p.id }}">
+                    <input type="hidden" name="phase" value="{{ ph }}">
+                    <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
+                    <button type="submit">Horas</button>
                 </form>
                 <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
@@ -111,6 +126,8 @@
 <script>
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
+  const PROJ_START_URL = "{{ url_for('update_start_date') }}";
+  const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   document.querySelectorAll('.start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
@@ -130,6 +147,34 @@
       ev.preventDefault();
       const data = new FormData(f);
       fetch(DUE_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) {
+            location.reload();
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+    });
+  });
+  document.querySelectorAll('.proj-start-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(PROJ_START_URL, { method: 'POST', body: data })
+        .then(resp => {
+          if (resp.ok) {
+            location.reload();
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+    });
+  });
+  document.querySelectorAll('.phase-hours-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(PHASE_HOURS_URL, { method: 'POST', body: data })
         .then(resp => {
           if (resp.ok) {
             location.reload();
