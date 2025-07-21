@@ -975,6 +975,9 @@ def complete():
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
 
+    sort_option = request.args.get('sort', 'created')
+    orig_order = {p['id']: idx for idx, p in enumerate(projects)}
+
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
 
