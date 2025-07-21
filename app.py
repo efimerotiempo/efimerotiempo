@@ -1218,8 +1218,9 @@ def update_phase_hours():
         return jsonify({'error': 'Horas inválidas'}), 400
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj or phase not in proj.get('phases', {}):
-        return jsonify({'error': 'Fase no encontrada'}), 404
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    proj.setdefault('phases', {})
     proj['phases'][phase] = hours
     if proj.get('segment_starts'):
         proj['segment_starts'].pop(phase, None)

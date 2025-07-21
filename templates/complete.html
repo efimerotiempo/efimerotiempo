@@ -328,17 +328,16 @@
                 <td>{{ p.priority }}</td>
                 {% for ph in phases %}
                     <td>
-                    {% if p.phases.get(ph) %}
-                        {% set val = p.phases[ph] %}
-                        {% if ph == 'pedidos' %}
-                            {{ val }}<br>
+                    {% set val = p.phases.get(ph, 0) %}
+                    {% if ph == 'pedidos' %}
+                        {{ val }}<br>
+                    {% else %}
+                        {% if val is sequence %}
+                            {{ val|map('int')|sum }}h<br>
                         {% else %}
-                            {% if val is sequence %}
-                                {{ val|map('int')|sum }}h<br>
-                            {% else %}
-                                {{ val|int }}h<br>
-                            {% endif %}
+                            {{ val|int }}h<br>
                         {% endif %}
+                    {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <select name="worker">
@@ -355,7 +354,6 @@
                             <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
                             <button type="submit">Cambiar</button>
                         </form>
-                    {% endif %}
                     </td>
                 {% endfor %}
                 <td>
