@@ -1569,60 +1569,66 @@ def toggle_block(pid):
 
 @app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
-    """Receive Kanbanize data and prefill the project form."""
+    """Receive a Kanbanize card and turn it into a project."""
     raw_body = request.get_data()
     print('Raw body:', raw_body)
+
     data = _parse_kanban_payload(request)
-    if data is not None:
-        print("\u2705 Webhook recibido:")
-        print(data)
-    else:
-        print("No se pudo decodificar kanbanize_payload")
     if not data:
-        return jsonify({"error": "No se recibió kanbanize_payload"}), 400
+        return jsonify({'error': 'No se recibió kanbanize_payload'}), 400
+
+    print("\u2705 Webhook recibido:")
+    print(data)
 
     card = data.get('card') or data.get('data') or data
     card = _decode_json(card) or {}
 
-    fields_raw = card.get('customFields') or card.get('customfields')
-    fields_raw = _decode_json(fields_raw) or []
-    if isinstance(fields_raw, list):
-        fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
-    elif isinstance(fields_raw, dict):
-        fields = fields_raw
-    else:
-        fields = {}
+    custom = card.get('customFields') or {}
+    custom = _decode_json(custom) or {}
 
-    prefill = {
-        'name': card.get('customCardId') or fields.get('ID personalizado de tarjeta', ''),
-        'client': card.get('title', ''),
-        'due_date': format_dd_mm(fields.get('Fecha Cliente')),
+    phases = {}
+    try:
+        if 'Horas Montaje' in custom:
+            phases['montar'] = int(custom['Horas Montaje'])
+        if 'Horas Soldadura' in custom:
+            phases['soldar'] = int(custom['Horas Soldadura'])
+        if 'Horas Acabado' in custom:
+            phases['pintar'] = int(custom['Horas Acabado'])
+    except Exception:
+        pass
+
+    project = {
+        'id': str(uuid.uuid4()),
+        'name': card.get('customCardId', 'Sin nombre'),
+        'client': card.get('title', 'Sin cliente'),
+        'start_date': date.today().isoformat(),
+        'due_date': '',
+        'priority': 'Sin prioridad',
+        'color': None,
+        'phases': phases,
+        'assigned': {ph: UNPLANNED for ph in phases},
+        'image': None,
+        'planned': False,
     }
-    save_prefill_project(prefill)
 
-    cards = load_kanban_cards()
-    cards.append({'timestamp': data.get('timestamp'), 'card': card})
-    save_kanban_cards(cards)
+    projects = get_projects()
+    if project.get('color') is None:
+        project['color'] = COLORS[len(projects) % len(COLORS)]
+    projects.append(project)
+    save_projects(projects)
 
-    project = _kanban_card_to_project(card)
-    if project:
-        projects = get_projects()
-        if project.get('color') is None:
-            project['color'] = COLORS[len(projects) % len(COLORS)]
-        projects.append(project)
-        save_projects(projects)
-        extras = load_extra_conflicts()
-        extras.append({
-            'id': str(uuid.uuid4()),
-            'project': project['name'],
-            'message': 'Proyecto creado desde Kanbanize',
-            'key': f"kanban-{project['id']}",
-            'pid': project['id'],
-            'source': 'kanbanize',
-        })
-        save_extra_conflicts(extras)
+    extras = load_extra_conflicts()
+    extras.append({
+        'id': str(uuid.uuid4()),
+        'project': project['name'],
+        'message': 'Proyecto creado desde Kanbanize',
+        'key': f"kanban-{project['id']}",
+        'pid': project['id'],
+        'source': 'kanbanize',
+    })
+    save_extra_conflicts(extras)
 
-    return jsonify({"message": "Tarjeta recibida"})
+    return jsonify({'mensaje': 'Proyecto creado'})
 
 
 @app.route('/bugs')
