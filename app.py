@@ -739,12 +739,21 @@ def project_list():
             p['met'] = False
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
+    sort_option = request.args.get('sort', 'created')
+
+    orig_order = {p['id']: idx for idx, p in enumerate(projects)}
+
     if project_filter or client_filter:
         projects = [
             p for p in projects
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
         ]
+
+    if sort_option == 'name':
+        projects.sort(key=lambda p: p['name'].lower())
+    else:
+        projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
     start_map = phase_start_map(projects)
     hours_map = load_daily_hours()
     projects = expand_for_display(projects)
@@ -756,6 +765,7 @@ def project_list():
         all_workers=active_workers(),
         project_filter=project_filter,
         client_filter=client_filter,
+        sort_option=sort_option,
         start_map=start_map,
         hours=hours_map,
     )
@@ -984,6 +994,11 @@ def complete():
     else:
         filtered_projects = projects
 
+    if sort_option == 'name':
+        filtered_projects.sort(key=lambda p: p['name'].lower())
+    else:
+        filtered_projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
+
     filtered_projects = expand_for_display(filtered_projects)
 
     points = split_markers(schedule)
@@ -1010,6 +1025,7 @@ def complete():
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,
+        sort_option=sort_option,
         today=today,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,

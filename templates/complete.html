@@ -266,6 +266,12 @@
         <form method="get" class="controls">
             <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
             <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+            <label>Ordenar:
+                <select name="sort">
+                    <option value="created" {% if sort_option == 'created' %}selected{% endif %}>Creación</option>
+                    <option value="name" {% if sort_option == 'name' %}selected{% endif %}>Nombre</option>
+                </select>
+            </label>
             <button type="submit">Filtrar</button>
         </form>
         <table class="projects-table">
