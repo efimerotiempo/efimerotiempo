@@ -4,6 +4,7 @@ import uuid
 import os
 import copy
 import json
+import re
 import smtplib
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
@@ -1576,8 +1577,20 @@ def kanbanize_webhook():
 
     try:
         data = request.get_json(force=True)
-        raw_payload = data.get("kanbanize_payload")
-        inner_data = json.loads(raw_payload)
+        raw_payload = data.get("kanbanize_payload", "")
+
+        # Extraer el primer bloque JSON válido entre llaves
+        match = re.search(r"\{.*\}", raw_payload)
+        if not match:
+            print("No se encontró JSON válido en kanbanize_payload")
+            return jsonify({'error': 'JSON inválido'}), 400
+
+        try:
+            clean_payload = match.group(0)
+            inner_data = json.loads(clean_payload)
+        except Exception as e:
+            print("Error al parsear JSON interno:", e)
+            return jsonify({'error': 'Error al parsear JSON'}), 400
         card = inner_data.get("card", {})
     except Exception as e:
         print("Error procesando payload:", e)
