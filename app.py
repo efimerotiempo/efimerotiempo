@@ -1580,7 +1580,7 @@ def kanbanize_webhook():
         print("Error al decodificar JSON:", e)
         return jsonify({'error': 'No se pudo leer el JSON'}), 400
 
-    print("\ud83d\udce5 Datos recibidos desde Kanbanize:")
+    print("Datos recibidos desde Kanbanize:")
     print(data)
 
     card = data.get('card') or data.get('data') or {}
