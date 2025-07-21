@@ -1568,12 +1568,71 @@ def toggle_block(pid):
 
 
 @app.route('/kanbanize-webhook', methods=['POST'])
-def recibir_kanbanize():
-    """Log the payload received from Kanbanize for debugging."""
-    data = request.get_json(silent=True)
-    print("Datos recibidos desde Kanbanize:")
+def kanbanize_webhook():
+    """Recibe una tarjeta de Kanbanize y la convierte en un proyecto."""
+
+    raw_body = request.get_data()
+    print('Raw body:', raw_body)
+
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        print("Error al decodificar JSON:", e)
+        return jsonify({'error': 'No se pudo leer el JSON'}), 400
+
+    print("\ud83d\udce5 Datos recibidos desde Kanbanize:")
     print(data)
-    return jsonify({"mensaje": "Recibido"})
+
+    card = data.get('card') or data.get('data') or {}
+    custom = card.get('customFields', {})
+
+    fases = []
+    try:
+        if 'Horas Montaje' in custom:
+            fases.append({'nombre': 'montar', 'duracion': int(custom['Horas Montaje'])})
+        if 'Horas Soldadura' in custom:
+            fases.append({'nombre': 'soldar', 'duracion': int(custom['Horas Soldadura'])})
+        if 'Horas Acabado' in custom:
+            fases.append({'nombre': 'pintar', 'duracion': int(custom['Horas Acabado'])})
+    except Exception as e:
+        print("Error al procesar fases:", e)
+
+    phases = {f['nombre']: f['duracion'] for f in fases}
+
+    project = {
+        'id': str(uuid.uuid4()),
+        'name': card.get('customCardId', 'Sin nombre'),
+        'client': card.get('title', 'Sin cliente'),
+        'start_date': date.today().isoformat(),
+        'due_date': date.today().isoformat(),
+        'priority': 'Sin prioridad',
+        'color': None,
+        'phases': phases,
+        'assigned': {ph: UNPLANNED for ph in phases},
+        'image': None,
+        'planned': False,
+    }
+
+    projects = load_projects()
+
+    if project.get('color') is None:
+        project['color'] = COLORS[len(projects) % len(COLORS)]
+
+    projects.append(project)
+    save_projects(projects)
+
+    extras = load_extra_conflicts()
+    extras.append({
+        'id': str(uuid.uuid4()),
+        'proyecto': project['name'],
+        'mensaje': 'Proyecto creado desde Kanbanize',
+        'key': f"kanban-{project['id']}",
+        'source': 'kanbanize',
+        'pid': project['id'],
+    })
+    save_extra_conflicts(extras)
+
+    return jsonify({"mensaje": "Proyecto creado"}), 200
 
 
 @app.route('/bugs')
