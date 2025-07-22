@@ -425,8 +425,11 @@
       fetch(HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ date: f.dataset.date, hours: val })
-      }).then(() => location.reload());
+      }).then(resp => {
+        if (resp.ok) { location.reload(); } else { alert('Error'); }
+      });
     });
   });
 
@@ -606,16 +609,20 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
-            .then(() => location.reload());
+          fetch('/toggle_freeze/' + freeze.dataset.pid, {
+            method: 'POST',
+            credentials: 'same-origin'
+          }).then(() => location.reload());
         });
       }
       const block = document.getElementById('block-btn');
       if (block) {
         block.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
-            .then(() => location.reload());
+          fetch('/toggle_block/' + block.dataset.pid, {
+            method: 'POST',
+            credentials: 'same-origin'
+          }).then(() => location.reload());
         });
       }
       const startForm = document.getElementById('start-form');
@@ -628,6 +635,7 @@
           fetch(START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -644,6 +652,7 @@
           fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
@@ -658,6 +667,7 @@
           fetch(DUE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -674,6 +684,7 @@
           fetch(PROJ_START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
@@ -731,12 +742,17 @@
       });
       fetch(ROW_URL, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify(data)
-      }).then(() => {
-        const url = new URL(location);
-        url.searchParams.set('highlight', pid);
-        location.href = url;
+      }).then(resp => {
+        if (resp.ok) {
+          const url = new URL(location);
+          url.searchParams.set('highlight', pid);
+          location.href = url;
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
       });
     });
   });
@@ -812,6 +828,7 @@
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
         }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
       }
@@ -861,6 +878,7 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
       })
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
@@ -896,7 +914,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(START_URL, { method: 'POST', body: data })
+      fetch(START_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (!resp.ok) {
             return resp.json().then(d => { alert(d.error || 'Error'); return null; });
@@ -916,7 +934,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(DUE_URL, { method: 'POST', body: data })
+      fetch(DUE_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
@@ -926,7 +944,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(PROJ_START_URL, { method: 'POST', body: data })
+      fetch(PROJ_START_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
@@ -936,7 +954,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(PHASE_HOURS_URL, { method: 'POST', body: data })
+      fetch(PHASE_HOURS_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (resp.ok) {
             const url = new URL(location);

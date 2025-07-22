@@ -190,6 +190,7 @@
       fetch(HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ date: f.dataset.date, hours: val })
       }).then(() => location.reload());
     });
@@ -296,6 +297,7 @@
           fetch(REORG_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
           }).then(resp => resp.ok ? resp.json() : null)
             .then(d => {
@@ -315,6 +317,7 @@
             fetch(DELETE_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
@@ -328,6 +331,7 @@
             fetch(SPLIT_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
             }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
           }
@@ -341,6 +345,7 @@
             fetch(UNSPLIT_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
             }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
           }
@@ -350,7 +355,7 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
+          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }
@@ -358,7 +363,7 @@
       if (block) {
         block.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
+          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }
@@ -372,6 +377,7 @@
           fetch(START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
             if (!resp.ok) {
@@ -397,6 +403,7 @@
          fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
           }).then(resp => {
             if (resp.ok) {
@@ -419,6 +426,7 @@
           fetch(DUE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -435,6 +443,7 @@
           fetch(PROJ_START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
@@ -511,6 +520,7 @@
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
         }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
       }
@@ -560,6 +570,7 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
       })
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
