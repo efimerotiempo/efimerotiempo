@@ -31,6 +31,7 @@
         {% endfor %}
         <th>Cambiar</th>
         <th></th>
+        <th>Actualizar</th>
     </tr>
     </thead>
     <tbody>
@@ -44,7 +45,6 @@
                 <input type="hidden" name="pid" value="{{ p.id }}">
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="date" name="start_date" value="{{ p.start_date }}">
-                <button type="submit">Cambiar</button>
             </form>
         </td>
         <td>{{ p.due_date }}
@@ -52,7 +52,6 @@
                 <input type="hidden" name="pid" value="{{ p.id }}">
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="date" name="due_date" value="{{ p.due_date }}">
-                <button type="submit">Cambiar</button>
             </form>
         </td>
         <td>
@@ -89,21 +88,18 @@
                             <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
                     </select>
-                    <button type="submit">Guardar</button>
                 </form>
                 <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
-                    <button type="submit">Horas</button>
                 </form>
                 <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
-                    <button type="submit">Cambiar</button>
                 </form>
             </td>
         {% endfor %}
@@ -115,14 +111,14 @@
                         <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit">Actualizar</button>
             </form>
         </td>
         <td>
-            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}">
+            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
                 <button class="delete-btn" type="submit">&#10060;</button>
             </form>
         </td>
+        <td><button class="row-update-btn">ACTUALIZAR</button></td>
     </tr>
     {% endfor %}
     </tbody>
@@ -204,6 +200,21 @@
           r.classList.add('proj-dim');
           r.classList.remove('proj-highlight');
         }
+      });
+    });
+  });
+  document.querySelectorAll('.row-update-btn').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const row = btn.closest('tr');
+      const pid = row.dataset.pid;
+      const forms = row.querySelectorAll('form:not(.delete-form)');
+      const promises = Array.from(forms).map(f => fetch(f.action, {method: f.method || 'POST', body: new FormData(f)}));
+      Promise.all(promises).then(() => {
+        const url = new URL(location);
+        url.searchParams.set('highlight', pid);
+        location.href = url;
       });
     });
   });

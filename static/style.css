@@ -295,6 +295,9 @@ tr.collapsed td:not(:first-child) { display: none; }
 .projects-table tr.proj-highlight form {
     display: inline;
 }
+.projects-table tbody tr form button { display: none; }
+.projects-table .row-update-btn { display: none; }
+.projects-table tr.proj-highlight .row-update-btn { display: inline; }
 .kanban-conflict {
     color: hotpink;
     font-weight: bold;
