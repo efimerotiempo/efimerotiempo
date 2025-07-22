@@ -503,6 +503,7 @@ def get_projects():
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
+        p.setdefault('source', 'manual')
 
         p.setdefault('assigned', {})
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
@@ -625,6 +626,7 @@ def _kanban_card_to_project(card):
         'assigned': {ph: UNPLANNED for ph in phases},
         'image': None,
         'planned': False,
+        'source': 'api',
     }
     return project
 
@@ -800,6 +802,7 @@ def add_project():
             'assigned': {},
             'image': image_path,
             'planned': 'planned' in data,
+            'source': 'manual',
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)
@@ -1745,6 +1748,7 @@ def kanbanize_webhook():
         'assigned': {f['nombre']: UNPLANNED for f in fases},
         'image': None,
         'planned': False,
+        'source': 'api',
     }
 
     if project.get('color') is None:

@@ -283,6 +283,7 @@
                 <th>Fecha límite</th>
                 <th>En plazo</th>
                 <th>Planificado</th>
+                <th>Origen</th>
                 <th>Prioridad</th>
                 {% for ph in phases %}
                     {% if ph == 'pedidos' %}
@@ -330,6 +331,7 @@
                         <span class="late">&#10060;</span>
                     {% endif %}
                 </td>
+                <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
                 <td>{{ p.priority }}</td>
                 {% for ph in phases %}
                     <td>

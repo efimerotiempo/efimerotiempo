@@ -21,6 +21,7 @@
         <th>Fecha límite</th>
         <th>En plazo</th>
         <th>Planificado</th>
+        <th>Origen</th>
         <th>Prioridad</th>
         {% for ph in phases %}
             {% if ph == 'pedidos' %}
@@ -69,6 +70,7 @@
             {% endif %}
         </td>
         <td>{{ p.priority }}</td>
+        <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
         {% for ph in phases %}
             <td>
             {% set val = p.phases.get(ph, 0) %}
