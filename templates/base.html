@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>Planificador</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 <body>
     <nav>
@@ -13,9 +14,22 @@
         <a href="{{ url_for('milestone_list') }}">Hitos</a> |
         <a href="{{ url_for('vacation_list') }}">Vacaciones</a> |
         <a href="{{ url_for('bug_list') }}">Bugs</a> |
+        <a href="{{ url_for('kanbanize_list') }}">Kanbanize</a> |
         <a href="{{ url_for('add_project') }}">Añadir proyecto</a>
     </nav>
     <hr/>
     {% block content %}{% endblock %}
+    <script>
+      const SCROLL_KEY_GENERIC = 'scroll:' + location.pathname;
+      const saved = sessionStorage.getItem(SCROLL_KEY_GENERIC);
+      if (saved !== null) {
+        window.scrollTo(0, parseFloat(saved));
+      }
+      function storeScroll() {
+        sessionStorage.setItem(SCROLL_KEY_GENERIC, window.scrollY);
+      }
+      window.addEventListener('scroll', storeScroll);
+      window.addEventListener('beforeunload', storeScroll);
+    </script>
 </body>
 </html>

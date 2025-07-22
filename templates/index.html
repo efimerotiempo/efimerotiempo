@@ -61,7 +61,7 @@
     <tbody>
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
-        <td class="resource-col"><span class="worker-toggle">&#8722;</span>{{ worker }} ({{ workers[worker]|join(', ') }})</td>
+        <td class="resource-col"><span class="worker-toggle">&#8722;</span><strong>{{ worker.upper() }}</strong> ({{ workers[worker]|join(', ') }})</td>
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
@@ -71,7 +71,7 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation">VACACIONES</div>
             {% else %}
-            <div class="task" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -79,7 +79,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
             </div>
             {% endif %}
             {% endfor %}
@@ -89,8 +89,21 @@
         {% endif %}
         {% endfor %}
     </tr>
-    {% endfor %}
+{% endfor %}
     </tbody>
+    <tfoot>
+    <tr class="day-row">
+        <th class="resource-col">Recurso</th>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
+        {% else %}
+        <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    </tfoot>
 </table>
 </div>
 <div id="info-popup" class="info-popup"></div>
@@ -105,7 +118,7 @@
 </form>
 <ul>
 {% for c in conflicts %}
-    <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
+    <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }} - {{ c.client }}</a>: {{ c.message }}
         {% if c.changes %}
         <ul>
             {% for ch in c.changes %}
@@ -134,9 +147,11 @@
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
+  const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
+  const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -230,42 +245,44 @@
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
-      let html = `<strong>${info.name} - ${info.client} - ${t.dataset.phase}</strong><br>`;
-      html += `Inicio: ${info.start_date}<br>`;
-      html += `Límite: ${info.due_date}<br>`;
-      html += `Prioridad: ${info.priority}<br>`;
-      PHASES.forEach(ph => {
-        const val = info.phases[ph];
-        if (val) {
-          if (ph === 'pedidos') {
-            html += `Plazo acopio: ${val}<br>`;
-          } else if (Array.isArray(val)) {
-            const total = val.reduce((a,b) => a + parseInt(b), 0);
-            html += `${ph}: ${total}h<br>`;
-          } else if (parseInt(val)) {
-            html += `${ph}: ${val}h<br>`;
-          }
-        }
-      });
-      if (info.image) {
-        html += `<img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;">`;
-      }
+      let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button>`;
-      html += ` <button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aqu\u00ed</button>`;
-      if (Array.isArray(info.phases[t.dataset.phase])) {
-        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer divisi\u00f3n</button>`;
+      html += `<div>Inicio: ${info.start_date} <form id="proj-start-form" style="display:inline"><input type="date" id="proj-start-input" value="${info.start_date}" required><button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button></form></div>`;
+      html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Prioridad: ${info.priority}</div>`;
+      let phaseText = '';
+      const phVal = info.phases[t.dataset.phase];
+      let hoursVal = 0;
+      if (phVal) {
+        if (t.dataset.phase === 'pedidos') {
+          phaseText = `Plazo acopio: ${phVal}`;
+        } else if (Array.isArray(phVal)) {
+          hoursVal = phVal.reduce((a,b) => a + parseInt(b), 0);
+          phaseText = `Horas de la fase: ${hoursVal}h`;
+        } else if (parseInt(phVal)) {
+          hoursVal = parseInt(phVal);
+          phaseText = `Horas de la fase: ${phVal}h`;
+        }
       }
-      html += ` <form id="start-form" style="display:inline">` +
-               `<input type="date" id="start-input" value="${startVal}" required>` +
-               `<button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button>` +
-               `</form>`;
-      html += ` <form id="due-form" style="display:inline">` +
-               `<input type="date" id="due-input" value="${info.due_date}" required>` +
-               `<button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button>` +
-               `</form>`;
+      html += `<div>${phaseText}`;
+      if (t.dataset.phase !== 'pedidos') {
+        html += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${hoursVal}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar horas</button></form>`;
+      }
+      html += `</div>`;
+      html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
+      html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
+      html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
+      html += `<div><button id="block-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.blocked ? 'Desbloquear' : 'Bloquear'}</button></div>`;
+      html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
+      if (Array.isArray(info.phases[t.dataset.phase])) {
+        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+      }
+      html += `</div>`;
       if (t.dataset.phase === 'pedidos') {
-        html += ` <button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button>`;
+        html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button></div>`;
+      }
+      if (info.image) {
+        html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
       }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
@@ -329,6 +346,22 @@
           }
         });
       }
+      const freeze = document.getElementById('freeze-btn');
+      if (freeze) {
+        freeze.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
+            .then(() => location.reload());
+        });
+      }
+      const block = document.getElementById('block-btn');
+      if (block) {
+        block.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
+            .then(() => location.reload());
+        });
+      }
       const startForm = document.getElementById('start-form');
       if (startForm) {
         startForm.addEventListener('submit', ev => {
@@ -354,6 +387,28 @@
           });
         });
       }
+      const hoursForm = document.getElementById('phase-hours-form');
+      if (hoursForm) {
+        hoursForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = hoursForm.querySelector('button');
+          const val = document.getElementById('phase-hours-input').value;
+         fetch(PHASE_HOURS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+          }).then(resp => {
+            if (resp.ok) {
+              const url = new URL(location);
+              url.searchParams.set('highlight', btn.dataset.pid);
+              location.href = url;
+            } else {
+              resp.json().then(d => alert(d.error || 'Error'));
+            }
+          });
+        });
+      }
       const dueForm = document.getElementById('due-form');
       if (dueForm) {
         dueForm.addEventListener('submit', ev => {
@@ -368,6 +423,20 @@
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });
+        });
+      }
+      const projForm = document.getElementById('proj-start-form');
+      if (projForm) {
+        projForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const btn = document.getElementById('proj-start-btn');
+          const val = document.getElementById('proj-start-input').value;
+          fetch(PROJ_START_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
+          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
     });
@@ -400,6 +469,15 @@
     t.scrollIntoView({behavior: 'smooth', block: 'center'});
   }
 
+  const params = new URLSearchParams(location.search);
+  const highlight = params.get('highlight');
+  if (highlight) {
+    sessionStorage.setItem('highlightPid', highlight);
+    params.delete('highlight');
+    const url = new URL(location);
+    url.search = params.toString();
+    history.replaceState(null, '', url);
+  }
   const stored = sessionStorage.getItem('highlightPid');
   if (stored) {
     const t = Array.from(tasks).find(o => o.dataset.pid === stored);
@@ -495,29 +573,33 @@
         if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
         location.reload();
       });
+      });
     });
 const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
+const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+const NEW_CONFLICTS = CONFLICTS.filter(c => !seen[c.key]);
 let conflictIndex = 0;
 function showNextConflict() {
-  if (conflictIndex < CONFLICTS.length) {
-    const c = CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + ": " + c.message;
+  if (conflictIndex < NEW_CONFLICTS.length) {
+    const c = NEW_CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
     conflictModal.style.display = "block";
   } else {
     conflictModal.style.display = "none";
   }
 }
-if (CONFLICTS.length) {
+if (NEW_CONFLICTS.length) {
   showNextConflict();
   conflictClose.addEventListener("click", () => {
+    const c = NEW_CONFLICTS[conflictIndex];
+    seen[c.key] = true;
+    localStorage.setItem('seenConflicts', JSON.stringify(seen));
     conflictIndex++;
     showNextConflict();
   });
 }
-
-  });
 </script>
 {% endblock %}
