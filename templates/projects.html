@@ -128,6 +128,7 @@
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const ROW_URL = "{{ url_for('update_project_row') }}";
   document.querySelectorAll('.start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
@@ -209,9 +210,29 @@
       ev.stopPropagation();
       const row = btn.closest('tr');
       const pid = row.dataset.pid;
-      const forms = row.querySelectorAll('form:not(.delete-form)');
-      const promises = Array.from(forms).map(f => fetch(f.action, {method: f.method || 'POST', body: new FormData(f)}));
-      Promise.all(promises).then(() => {
+      const data = {pid, workers:{}, phases:{}, phase_starts:{}};
+      row.querySelectorAll('form:not(.delete-form)').forEach(f => {
+        const fd = new FormData(f);
+        if (f.classList.contains('phase-hours-form')) {
+          data.phases[fd.get('phase')] = fd.get('hours');
+        } else if (f.classList.contains('start-form')) {
+          data.phase_starts[fd.get('phase')] = fd.get('date');
+        } else if (f.action.includes('update_worker')) {
+          const phase = f.action.split('/').pop();
+          data.workers[phase] = fd.get('worker');
+        } else if (f.classList.contains('proj-start-form')) {
+          data.start_date = fd.get('start_date') || fd.get('date');
+        } else if (f.classList.contains('due-form')) {
+          data.due_date = fd.get('due_date');
+        } else if (f.action.includes('update_priority')) {
+          data.priority = fd.get('priority');
+        }
+      });
+      fetch(ROW_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(() => {
         const url = new URL(location);
         url.searchParams.set('highlight', pid);
         location.href = url;

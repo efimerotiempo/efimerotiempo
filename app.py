@@ -1281,6 +1281,95 @@ def update_phase_hours():
         return '', 204
     return redirect(next_url)
 
+@app.route('/update_project_row', methods=['POST'])
+def update_project_row():
+    """Apply multiple field changes for a project in one request."""
+    data = request.get_json() or {}
+    pid = data.get('pid')
+    if not pid:
+        return jsonify({'error': 'Datos incompletos'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+
+    if 'start_date' in data:
+        sd = parse_input_date(data['start_date'])
+        if sd:
+            if proj.get('due_date'):
+                try:
+                    if sd > date.fromisoformat(proj['due_date']):
+                        return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
+                except ValueError:
+                    pass
+            proj['start_date'] = sd.isoformat()
+    if 'due_date' in data:
+        dd = parse_input_date(data['due_date'])
+        proj['due_date'] = dd.isoformat() if dd else ''
+    if 'priority' in data:
+        proj['priority'] = data['priority']
+
+    was_frozen = proj.get('frozen', False)
+    if was_frozen:
+        proj['frozen'] = False
+
+    for ph, val in (data.get('phases') or {}).items():
+        try:
+            hours = int(val)
+            if hours <= 0:
+                continue
+        except Exception:
+            continue
+        proj.setdefault('phases', {})
+        prev = proj['phases'].get(ph)
+        was_list = isinstance(prev, list)
+        proj['phases'][ph] = hours
+        if was_list:
+            if proj.get('segment_starts'):
+                proj['segment_starts'].pop(ph, None)
+                if not proj['segment_starts']:
+                    proj.pop('segment_starts')
+            if proj.get('segment_workers'):
+                proj['segment_workers'].pop(ph, None)
+                if not proj['segment_workers']:
+                    proj.pop('segment_workers')
+
+    if data.get('phase_starts'):
+        seg = proj.setdefault('segment_starts', {})
+        for ph, d in data['phase_starts'].items():
+            val = parse_input_date(d)
+            if val:
+                seg[ph] = val.isoformat()
+
+    if data.get('workers'):
+        ass = proj.setdefault('assigned', {})
+        for ph, w in data['workers'].items():
+            ass[ph] = w
+
+    sched, _ = schedule_projects(projects)
+    if was_frozen:
+        frozen_tasks = []
+        last = None
+        for w, days in sched.items():
+            for d, tasks in days.items():
+                for t in tasks:
+                    if t['pid'] == pid:
+                        item = t.copy()
+                        item['worker'] = w
+                        item['day'] = d
+                        item['frozen'] = True
+                        frozen_tasks.append(item)
+                        dt = date.fromisoformat(d)
+                        if not last or dt > last:
+                            last = dt
+        proj['frozen'] = True
+        proj['frozen_tasks'] = frozen_tasks
+        if last:
+            proj['end_date'] = last.isoformat()
+
+    save_projects(projects)
+    return jsonify({'status': 'ok'})
+
 
 @app.route('/update_hours', methods=['POST'])
 def update_hours():
