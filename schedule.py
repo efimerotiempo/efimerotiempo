@@ -292,6 +292,7 @@ def schedule_projects(projects):
                     conflicts.append({
                         'id': len(conflicts) + 1,
                         'project': project['name'],
+                        'client': project['client'],
                         'message': msg,
                         'key': f"{project['name']}|{msg}",
                     })
@@ -366,6 +367,7 @@ def schedule_projects(projects):
                         conflicts.append({
                             'id': len(conflicts) + 1,
                             'project': project['name'],
+                            'client': project['client'],
                             'message': msg,
                             'key': f"{project['name']}|{msg}",
                         })
@@ -407,6 +409,7 @@ def schedule_projects(projects):
                     conflicts.append({
                         'id': len(conflicts) + 1,
                         'project': project['name'],
+                        'client': project['client'],
                         'message': msg,
                         'key': f"{project['name']}|{msg}",
                     })
@@ -431,6 +434,7 @@ def schedule_projects(projects):
         conflicts.append({
             'id': len(conflicts) + 1,
             'project': r['project'],
+            'client': r['client'],
             'message': msg,
             'key': f"vac-{r['pid']}-{r['phase']}-{days}",
             'pid': r['pid'],

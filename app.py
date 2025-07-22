@@ -1101,6 +1101,7 @@ def update_priority(pid):
         extras.append({
             'id': str(uuid.uuid4()),
             'project': changed_proj['name'],
+            'client': changed_proj['client'],
             'message': msg,
             'changes': details,
             'key': f'prio-{pid}-{len(extras)}',
@@ -1460,6 +1461,7 @@ def delete_project(pid):
         extras.append({
             'id': str(uuid.uuid4()),
             'project': removed['name'],
+            'client': removed['client'],
             'message': msg,
             'key': f'del-{pid}',
         })
@@ -1663,6 +1665,7 @@ def kanbanize_webhook():
     extras.append({
         'id': str(uuid.uuid4()),
         'project': project['name'],
+        'client': project['client'],
         'message': 'Proyecto creado desde Kanbanize',
         'key': f"kanban-{project['id']}",
         'source': 'kanbanize',

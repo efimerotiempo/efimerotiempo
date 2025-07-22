@@ -96,7 +96,7 @@
         </form>
         <ul>
 {% for c in conflicts %}
-            <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
+            <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }} - {{ c.client }}</a>: {{ c.message }}
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
@@ -914,19 +914,24 @@
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
+const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+const NEW_CONFLICTS = CONFLICTS.filter(c => !seen[c.key]);
 let conflictIndex = 0;
 function showNextConflict() {
-  if (conflictIndex < CONFLICTS.length) {
-    const c = CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + ": " + c.message;
+  if (conflictIndex < NEW_CONFLICTS.length) {
+    const c = NEW_CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
     conflictModal.style.display = "block";
   } else {
     conflictModal.style.display = "none";
   }
 }
-if (CONFLICTS.length) {
+if (NEW_CONFLICTS.length) {
   showNextConflict();
   conflictClose.addEventListener("click", () => {
+    const c = NEW_CONFLICTS[conflictIndex];
+    seen[c.key] = true;
+    localStorage.setItem('seenConflicts', JSON.stringify(seen));
     conflictIndex++;
     showNextConflict();
   });
