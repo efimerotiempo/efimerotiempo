@@ -181,7 +181,9 @@
       fetch(PHASE_HOURS_URL, { method: 'POST', body: data })
         .then(resp => {
           if (resp.ok) {
-            location.reload();
+            const url = new URL(location);
+            url.searchParams.set('highlight', data.get('pid'));
+            location.href = url;
           } else {
             resp.json().then(d => alert(d.error || 'Error'));
           }

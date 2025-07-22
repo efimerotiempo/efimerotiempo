@@ -394,11 +394,19 @@
           ev.stopPropagation();
           const btn = hoursForm.querySelector('button');
           const val = document.getElementById('phase-hours-input').value;
-          fetch(PHASE_HOURS_URL, {
+         fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
-          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
+          }).then(resp => {
+            if (resp.ok) {
+              const url = new URL(location);
+              url.searchParams.set('highlight', btn.dataset.pid);
+              location.href = url;
+            } else {
+              resp.json().then(d => alert(d.error || 'Error'));
+            }
+          });
         });
       }
       const dueForm = document.getElementById('due-form');

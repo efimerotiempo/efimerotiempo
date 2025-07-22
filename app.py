@@ -1241,15 +1241,18 @@ def update_phase_hours():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
+    prev_val = proj['phases'].get(phase)
+    was_list = isinstance(prev_val, list)
     proj['phases'][phase] = hours
-    if proj.get('segment_starts'):
-        proj['segment_starts'].pop(phase, None)
-        if not proj['segment_starts']:
-            proj.pop('segment_starts')
-    if proj.get('segment_workers'):
-        proj['segment_workers'].pop(phase, None)
-        if not proj['segment_workers']:
-            proj.pop('segment_workers')
+    if was_list:
+        if proj.get('segment_starts'):
+            proj['segment_starts'].pop(phase, None)
+            if not proj['segment_starts']:
+                proj.pop('segment_starts')
+        if proj.get('segment_workers'):
+            proj['segment_workers'].pop(phase, None)
+            if not proj['segment_workers']:
+                proj.pop('segment_workers')
     frozen = proj.get('frozen', False)
     if frozen:
         proj['frozen'] = False
