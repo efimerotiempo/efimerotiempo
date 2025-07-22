@@ -505,6 +505,12 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('source', 'manual')
 
+        segs = p.get('segment_starts')
+        if segs:
+            for ph, val in list(segs.items()):
+                if val and not isinstance(val, list):
+                    segs[ph] = [val]
+
         p.setdefault('assigned', {})
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
         if missing:
@@ -1342,7 +1348,7 @@ def update_project_row():
         for ph, d in data['phase_starts'].items():
             val = parse_input_date(d)
             if val:
-                seg[ph] = val.isoformat()
+                seg[ph] = [val.isoformat()]
 
     if data.get('workers'):
         ass = proj.setdefault('assigned', {})
