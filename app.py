@@ -505,6 +505,12 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('source', 'manual')
 
+        if not p.get('planned', True):
+            today_str = date.today().isoformat()
+            if p.get('start_date') != today_str:
+                p['start_date'] = today_str
+                changed = True
+
         segs = p.get('segment_starts')
         if segs:
             for ph, val in list(segs.items()):

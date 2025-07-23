@@ -239,17 +239,14 @@ def schedule_projects(projects):
             continue
         planned = project.get('planned', True)
         if not planned:
-            if project.get('start_date'):
-                try:
-                    current = date.fromisoformat(project['start_date'])
-                except ValueError:
-                    current = date.today()
-                    project['start_date'] = current.isoformat()
-            else:
+            current = date.today()
+            project['start_date'] = current.isoformat()
+        else:
+            try:
+                current = date.fromisoformat(project['start_date'])
+            except Exception:
                 current = date.today()
                 project['start_date'] = current.isoformat()
-        else:
-            current = date.fromisoformat(project['start_date'])
         hour = 0
         end_date = current
         assigned = project.get('assigned', {})
