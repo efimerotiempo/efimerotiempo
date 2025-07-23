@@ -1732,7 +1732,7 @@ def kanbanize_webhook():
     # the project's due date, e.g. "2025-07-21".
     raw_text = raw_body.decode('utf-8', 'ignore') if isinstance(raw_body, bytes) else str(raw_body)
     date_matches = re.findall(r"\d{4}-\d{2}-\d{2}", raw_text)
-    due_date_obj = parse_input_date(date_matches[-1]) if date_matches else date.today()
+    fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
 
     try:
         data = request.get_json(force=True)
@@ -1761,6 +1761,11 @@ def kanbanize_webhook():
 
     custom = card.get('customFields', {})
 
+    due_str = card.get('deadline') or custom.get('Fecha Cliente')
+    if not due_str and fallback_due:
+        due_str = fallback_due.isoformat()
+    due_date_obj = parse_input_date(due_str) or date.today()
+
     def obtener_duracion(campo):
         try:
             valor = custom.get(campo)
@@ -1774,19 +1779,44 @@ def kanbanize_webhook():
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
     ]
 
+    task_id = card.get('taskid') or card.get('cardId') or card.get('id')
     nombre_proyecto = card.get('customCardId') or "Sin datos"
     cliente = card.get('title') or "Sin datos"
+    kanban_priority = (card.get('priority') or '').lower()
+    priority_map = {
+        'critical': 'Alta',
+        'high': 'Alta',
+        'average': 'Media',
+        'low': 'Baja',
+    }
+    proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
+    color_hex = card.get('tcolor')
 
     projects = load_projects()
     existing = next((p for p in projects
-                     if p.get('source') == 'api' and p.get('name') == nombre_proyecto), None)
+                     if p.get('source') == 'api' and (
+                         (task_id and str(p.get('kanban_id')) == str(task_id)) or
+                         p.get('name') == nombre_proyecto
+                     )), None)
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
 
     if existing:
         changed = False
+        if existing.get('kanban_id') != task_id:
+            existing['kanban_id'] = task_id
+            changed = True
+        if existing.get('name') != nombre_proyecto:
+            existing['name'] = nombre_proyecto
+            changed = True
         if existing.get('client') != cliente:
             existing['client'] = cliente
+            changed = True
+        if existing.get('priority') != proj_priority:
+            existing['priority'] = proj_priority
+            changed = True
+        if color_hex and existing.get('color') != color_hex:
+            existing['color'] = color_hex
             changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
@@ -1807,16 +1837,15 @@ def kanbanize_webhook():
             'client': cliente,
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat(),
-            'priority': 'Sin prioridad',
-            'color': None,
+            'priority': proj_priority,
+            'color': color_hex or COLORS[len(projects) % len(COLORS)],
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
             'image': None,
             'planned': False,
             'source': 'api',
+            'kanban_id': task_id,
         }
-        if project.get('color') is None:
-            project['color'] = COLORS[len(projects) % len(COLORS)]
         projects.append(project)
         save_projects(projects)
 
