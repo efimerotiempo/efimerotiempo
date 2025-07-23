@@ -31,6 +31,7 @@
             {% endif %}
         {% endfor %}
         <th>Cambiar</th>
+        <th>Imagen</th>
         <th></th>
         <th>Actualizar</th>
     </tr>
@@ -113,6 +114,12 @@
                         <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
                     {% endfor %}
                 </select>
+            </form>
+        </td>
+        <td>
+            <form class="image-form" method="post" enctype="multipart/form-data" action="{{ url_for('update_image', pid=p.id) }}">
+                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                <input type="file" name="image" accept="image/*">
             </form>
         </td>
         <td>
@@ -229,7 +236,7 @@
       const row = btn.closest('tr');
       const pid = row.dataset.pid;
       const data = {pid, workers:{}, phases:{}, phase_starts:{}};
-      row.querySelectorAll('form:not(.delete-form)').forEach(f => {
+      row.querySelectorAll('form:not(.delete-form):not(.image-form)').forEach(f => {
         const fd = new FormData(f);
         if (f.classList.contains('phase-hours-form')) {
           data.phases[fd.get('phase')] = fd.get('hours');
@@ -246,6 +253,19 @@
           data.priority = fd.get('priority');
         }
       });
+      const imgForm = row.querySelector('.image-form');
+      let imgPromise = Promise.resolve();
+      if (imgForm) {
+        const inp = imgForm.querySelector('input[type=file]');
+        if (inp && inp.files.length) {
+          const fd = new FormData(imgForm);
+          imgPromise = fetch(imgForm.action, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+          });
+        }
+      }
       fetch(ROW_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -253,9 +273,11 @@
         body: JSON.stringify(data)
       }).then(resp => {
         if (resp.ok) {
-          const url = new URL(location);
-          url.searchParams.set('highlight', pid);
-          location.href = url;
+          imgPromise.then(() => {
+            const url = new URL(location);
+            url.searchParams.set('highlight', pid);
+            location.href = url;
+          });
         } else {
           resp.json().then(d => alert(d.error || 'Error'));
         }

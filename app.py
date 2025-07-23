@@ -1386,6 +1386,27 @@ def update_project_row():
     return jsonify({'status': 'ok'})
 
 
+@app.route('/update_image/<pid>', methods=['POST'])
+def update_image(pid):
+    """Attach or replace a project's image file."""
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+    file = request.files.get('image')
+    next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
+    if file and file.filename:
+        ext = os.path.splitext(secure_filename(file.filename))[1]
+        fname = f"{uuid.uuid4()}{ext}"
+        save_path = os.path.join(UPLOAD_FOLDER, fname)
+        file.save(save_path)
+        proj['image'] = f"uploads/{fname}"
+        save_projects(projects)
+    if request.is_json:
+        return '', 204
+    return redirect(next_url)
+
+
 @app.route('/update_hours', methods=['POST'])
 def update_hours():
     """Set working hours for a specific day (1-9)."""
