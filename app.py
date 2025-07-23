@@ -1751,6 +1751,7 @@ def kanbanize_webhook():
             print("Error al parsear JSON interno:", e)
             return jsonify({'error': 'Error al parsear JSON'}), 400
         card = inner_data.get("card", {})
+        payload_timestamp = inner_data.get("timestamp")
     except Exception as e:
         print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
@@ -1777,41 +1778,67 @@ def kanbanize_webhook():
     cliente = card.get('title') or "Sin datos"
 
     projects = load_projects()
+    existing = next((p for p in projects
+                     if p.get('source') == 'api' and p.get('name') == nombre_proyecto), None)
 
-    project = {
-        'id': str(uuid.uuid4()),
-        'name': nombre_proyecto,
-        'client': cliente,
-        'start_date': date.today().isoformat(),
-        'due_date': due_date_obj.isoformat(),
-        'priority': 'Sin prioridad',
-        'color': None,
-        'phases': {f['nombre']: f['duracion'] for f in fases},
-        'assigned': {f['nombre']: UNPLANNED for f in fases},
-        'image': None,
-        'planned': False,
-        'source': 'api',
-    }
+    new_phases = {f['nombre']: f['duracion'] for f in fases}
 
-    if project.get('color') is None:
-        project['color'] = COLORS[len(projects) % len(COLORS)]
+    if existing:
+        changed = False
+        if existing.get('client') != cliente:
+            existing['client'] = cliente
+            changed = True
+        if existing.get('due_date') != due_date_obj.isoformat():
+            existing['due_date'] = due_date_obj.isoformat()
+            changed = True
+        for ph, hours in new_phases.items():
+            if existing.get('phases', {}).get(ph) != hours:
+                existing.setdefault('phases', {})[ph] = hours
+                changed = True
+            if ph not in existing.get('assigned', {}):
+                existing.setdefault('assigned', {})[ph] = UNPLANNED
+                changed = True
+        if changed:
+            save_projects(projects)
+    else:
+        project = {
+            'id': str(uuid.uuid4()),
+            'name': nombre_proyecto,
+            'client': cliente,
+            'start_date': date.today().isoformat(),
+            'due_date': due_date_obj.isoformat(),
+            'priority': 'Sin prioridad',
+            'color': None,
+            'phases': new_phases,
+            'assigned': {f['nombre']: UNPLANNED for f in fases},
+            'image': None,
+            'planned': False,
+            'source': 'api',
+        }
+        if project.get('color') is None:
+            project['color'] = COLORS[len(projects) % len(COLORS)]
+        projects.append(project)
+        save_projects(projects)
 
-    projects.append(project)
-    save_projects(projects)
+    cards = load_kanban_cards()
+    cards.append({'timestamp': payload_timestamp, 'card': card})
+    save_kanban_cards(cards)
 
-    extras = load_extra_conflicts()
-    extras.append({
-        'id': str(uuid.uuid4()),
-        'project': project['name'],
-        'client': project['client'],
-        'message': 'Proyecto creado desde Kanbanize',
-        'key': f"kanban-{project['id']}",
-        'source': 'kanbanize',
-        'pid': project['id'],
-    })
-    save_extra_conflicts(extras)
-
-    return jsonify({"mensaje": "Proyecto creado"}), 200
+    if not existing:
+        extras = load_extra_conflicts()
+        extras.append({
+            'id': str(uuid.uuid4()),
+            'project': project['name'],
+            'client': project['client'],
+            'message': 'Proyecto creado desde Kanbanize',
+            'key': f"kanban-{project['id']}",
+            'source': 'kanbanize',
+            'pid': project['id'],
+        })
+        save_extra_conflicts(extras)
+        return jsonify({"mensaje": "Proyecto creado"}), 200
+    else:
+        return jsonify({"mensaje": "Proyecto actualizado"}), 200
 
 
 @app.route('/bugs')
