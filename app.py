@@ -503,7 +503,9 @@ def get_projects():
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
-        p.setdefault('source', 'manual')
+        if 'source' not in p:
+            p['source'] = 'manual'
+            changed = True
 
         if not p.get('planned', True):
             today_str = date.today().isoformat()
