@@ -1727,6 +1727,13 @@ def kanbanize_webhook():
     raw_body = request.get_data()
     print("Raw body:", raw_body)
 
+    # Detect the last date contained anywhere in the request body. Kanbanize
+    # sends extra data after the JSON payload where the final line represents
+    # the project's due date, e.g. "2025-07-21".
+    raw_text = raw_body.decode('utf-8', 'ignore') if isinstance(raw_body, bytes) else str(raw_body)
+    date_matches = re.findall(r"\d{4}-\d{2}-\d{2}", raw_text)
+    due_date_obj = parse_input_date(date_matches[-1]) if date_matches else date.today()
+
     try:
         data = request.get_json(force=True)
         raw_payload = data.get("kanbanize_payload", "")
@@ -1776,7 +1783,7 @@ def kanbanize_webhook():
         'name': nombre_proyecto,
         'client': cliente,
         'start_date': date.today().isoformat(),
-        'due_date': date.today().isoformat(),
+        'due_date': due_date_obj.isoformat(),
         'priority': 'Sin prioridad',
         'color': None,
         'phases': {f['nombre']: f['duracion'] for f in fases},
