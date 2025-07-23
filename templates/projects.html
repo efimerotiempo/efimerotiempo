@@ -4,6 +4,12 @@
 <form method="get" class="controls">
     <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
     <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+    <label>Ordenar:
+        <select name="sort">
+            <option value="created" {% if sort_option == 'created' %}selected{% endif %}>Creación</option>
+            <option value="name" {% if sort_option == 'name' %}selected{% endif %}>Nombre</option>
+        </select>
+    </label>
     <button type="submit">Filtrar</button>
 </form>
 <table class="projects-table">
@@ -15,6 +21,7 @@
         <th>Fecha límite</th>
         <th>En plazo</th>
         <th>Planificado</th>
+        <th>Origen</th>
         <th>Prioridad</th>
         {% for ph in phases %}
             {% if ph == 'pedidos' %}
@@ -24,12 +31,14 @@
             {% endif %}
         {% endfor %}
         <th>Cambiar</th>
+        <th>Imagen</th>
         <th></th>
+        <th>Actualizar</th>
     </tr>
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+    <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
         <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
         <td>
@@ -38,7 +47,6 @@
                 <input type="hidden" name="pid" value="{{ p.id }}">
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="date" name="start_date" value="{{ p.start_date }}">
-                <button type="submit">Cambiar</button>
             </form>
         </td>
         <td>{{ p.due_date }}
@@ -46,7 +54,6 @@
                 <input type="hidden" name="pid" value="{{ p.id }}">
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="date" name="due_date" value="{{ p.due_date }}">
-                <button type="submit">Cambiar</button>
             </form>
         </td>
         <td>
@@ -64,19 +71,19 @@
             {% endif %}
         </td>
         <td>{{ p.priority }}</td>
+        <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
         {% for ph in phases %}
             <td>
-            {% if p.phases.get(ph) %}
-                {% set val = p.phases[ph] %}
-                {% if ph == 'pedidos' %}
-                    {{ val }}<br>
+            {% set val = p.phases.get(ph, 0) %}
+            {% if ph == 'pedidos' %}
+                {{ val }}<br>
+            {% else %}
+                {% if val is sequence %}
+                    {{ val|map('int')|sum }}h<br>
                 {% else %}
-                    {% if val is sequence %}
-                        {{ val|map('int')|sum }}h<br>
-                    {% else %}
-                        {{ val|int }}h<br>
-                    {% endif %}
+                    {{ val|int }}h<br>
                 {% endif %}
+            {% endif %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <select name="worker">
@@ -84,23 +91,19 @@
                             <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
                     </select>
-                    <button type="submit">Guardar</button>
                 </form>
                 <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
-                    <button type="submit">Horas</button>
                 </form>
                 <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
-                    <button type="submit">Cambiar</button>
                 </form>
-            {% endif %}
             </td>
         {% endfor %}
         <td>
@@ -111,14 +114,20 @@
                         <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit">Actualizar</button>
             </form>
         </td>
         <td>
-            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}">
+            <form class="image-form" method="post" enctype="multipart/form-data" action="{{ url_for('update_image', pid=p.id) }}">
+                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                <input type="file" name="image" accept="image/*">
+            </form>
+        </td>
+        <td>
+            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
                 <button class="delete-btn" type="submit">&#10060;</button>
             </form>
         </td>
+        <td><button class="row-update-btn">ACTUALIZAR</button></td>
     </tr>
     {% endfor %}
     </tbody>
@@ -128,11 +137,16 @@
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const ROW_URL = "{{ url_for('update_project_row') }}";
   document.querySelectorAll('.start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(START_URL, { method: 'POST', body: data })
+      fetch(START_URL, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin'
+      })
         .then(resp => {
           if (resp.ok) {
             location.reload();
@@ -146,7 +160,11 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(DUE_URL, { method: 'POST', body: data })
+      fetch(DUE_URL, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin'
+      })
         .then(resp => {
           if (resp.ok) {
             location.reload();
@@ -160,7 +178,11 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(PROJ_START_URL, { method: 'POST', body: data })
+      fetch(PROJ_START_URL, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin'
+      })
         .then(resp => {
           if (resp.ok) {
             location.reload();
@@ -174,15 +196,96 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(PHASE_HOURS_URL, { method: 'POST', body: data })
+      fetch(PHASE_HOURS_URL, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin'
+      })
         .then(resp => {
           if (resp.ok) {
-            location.reload();
+            const url = new URL(location);
+            url.searchParams.set('highlight', data.get('pid'));
+            location.href = url;
           } else {
             resp.json().then(d => alert(d.error || 'Error'));
           }
         });
     });
+  });
+
+  const rows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
+  rows.forEach(row => {
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const pid = row.dataset.pid;
+      rows.forEach(r => {
+        if (r.dataset.pid === pid) {
+          r.classList.add('proj-highlight');
+          r.classList.remove('proj-dim');
+        } else {
+          r.classList.add('proj-dim');
+          r.classList.remove('proj-highlight');
+        }
+      });
+    });
+  });
+  document.querySelectorAll('.row-update-btn').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const row = btn.closest('tr');
+      const pid = row.dataset.pid;
+      const data = {pid, workers:{}, phases:{}, phase_starts:{}};
+      row.querySelectorAll('form:not(.delete-form):not(.image-form)').forEach(f => {
+        const fd = new FormData(f);
+        if (f.classList.contains('phase-hours-form')) {
+          data.phases[fd.get('phase')] = fd.get('hours');
+        } else if (f.classList.contains('start-form')) {
+          data.phase_starts[fd.get('phase')] = fd.get('date');
+        } else if (f.action.includes('update_worker')) {
+          const phase = f.action.split('/').pop();
+          data.workers[phase] = fd.get('worker');
+        } else if (f.classList.contains('proj-start-form')) {
+          data.start_date = fd.get('start_date') || fd.get('date');
+        } else if (f.classList.contains('due-form')) {
+          data.due_date = fd.get('due_date');
+        } else if (f.action.includes('update_priority')) {
+          data.priority = fd.get('priority');
+        }
+      });
+      const imgForm = row.querySelector('.image-form');
+      let imgPromise = Promise.resolve();
+      if (imgForm) {
+        const inp = imgForm.querySelector('input[type=file]');
+        if (inp && inp.files.length) {
+          const fd = new FormData(imgForm);
+          imgPromise = fetch(imgForm.action, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+          });
+        }
+      }
+      fetch(ROW_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data)
+      }).then(resp => {
+        if (resp.ok) {
+          imgPromise.then(() => {
+            const url = new URL(location);
+            url.searchParams.set('highlight', pid);
+            location.href = url;
+          });
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
+    });
+  });
+  document.addEventListener('click', () => {
+    rows.forEach(r => r.classList.remove('proj-highlight', 'proj-dim'));
   });
 </script>
 {% endblock %}

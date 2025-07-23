@@ -118,7 +118,7 @@
 </form>
 <ul>
 {% for c in conflicts %}
-    <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
+    <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }} - {{ c.client }}</a>: {{ c.message }}
         {% if c.changes %}
         <ul>
             {% for ch in c.changes %}
@@ -190,6 +190,7 @@
       fetch(HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ date: f.dataset.date, hours: val })
       }).then(() => location.reload());
     });
@@ -296,6 +297,7 @@
           fetch(REORG_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
           }).then(resp => resp.ok ? resp.json() : null)
             .then(d => {
@@ -315,6 +317,7 @@
             fetch(DELETE_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
@@ -328,6 +331,7 @@
             fetch(SPLIT_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
             }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
           }
@@ -341,6 +345,7 @@
             fetch(UNSPLIT_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
               body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
             }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
           }
@@ -350,7 +355,7 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
+          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }
@@ -358,7 +363,7 @@
       if (block) {
         block.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
+          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }
@@ -372,6 +377,7 @@
           fetch(START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
             if (!resp.ok) {
@@ -394,11 +400,20 @@
           ev.stopPropagation();
           const btn = hoursForm.querySelector('button');
           const val = document.getElementById('phase-hours-input').value;
-          fetch(PHASE_HOURS_URL, {
+         fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
-          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
+          }).then(resp => {
+            if (resp.ok) {
+              const url = new URL(location);
+              url.searchParams.set('highlight', btn.dataset.pid);
+              location.href = url;
+            } else {
+              resp.json().then(d => alert(d.error || 'Error'));
+            }
+          });
         });
       }
       const dueForm = document.getElementById('due-form');
@@ -411,6 +426,7 @@
           fetch(DUE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -427,6 +443,7 @@
           fetch(PROJ_START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
@@ -503,6 +520,7 @@
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
         }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
       }
@@ -552,6 +570,7 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
       })
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
@@ -571,19 +590,24 @@ const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
+const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+const NEW_CONFLICTS = CONFLICTS.filter(c => !seen[c.key]);
 let conflictIndex = 0;
 function showNextConflict() {
-  if (conflictIndex < CONFLICTS.length) {
-    const c = CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + ": " + c.message;
+  if (conflictIndex < NEW_CONFLICTS.length) {
+    const c = NEW_CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
     conflictModal.style.display = "block";
   } else {
     conflictModal.style.display = "none";
   }
 }
-if (CONFLICTS.length) {
+if (NEW_CONFLICTS.length) {
   showNextConflict();
   conflictClose.addEventListener("click", () => {
+    const c = NEW_CONFLICTS[conflictIndex];
+    seen[c.key] = true;
+    localStorage.setItem('seenConflicts', JSON.stringify(seen));
     conflictIndex++;
     showNextConflict();
   });
