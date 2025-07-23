@@ -1736,6 +1736,7 @@ def kanbanize_webhook():
 
     try:
         data = request.get_json(force=True)
+        print("Payload recibido:", data)
         inner_data = data  # Asume que Kanbanize ya envía el JSON directamente
         card = inner_data.get("card", {})
         payload_timestamp = inner_data.get("timestamp")
