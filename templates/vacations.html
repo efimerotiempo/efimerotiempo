@@ -17,7 +17,7 @@
     <tr><th>Trabajador</th><th>Inicio</th><th>Fin</th><th></th></tr>
     {% for v in vacations %}
     <tr>
-        <td>{{ v.worker }}</td>
+        <td><strong>{{ v.worker.upper() }}</strong></td>
         <td>{{ v.start }}</td>
         <td>{{ v.end }}</td>
         <td>

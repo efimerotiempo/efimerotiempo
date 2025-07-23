@@ -216,11 +216,36 @@ def schedule_projects(projects):
                     'priority': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
+    # Place frozen projects first so other tasks respect their positions
+    for p in projects:
+        if p.get('frozen'):
+            for t in p.get('frozen_tasks', []):
+                w = t['worker']
+                day = t['day']
+                entry = t.copy()
+                entry.pop('worker', None)
+                entry.pop('day', None)
+                worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
+
+    # Sort frozen tasks chronologically
+    for w, days in worker_schedule.items():
+        for d, lst in days.items():
+            lst.sort(key=lambda x: x.get('start', 0))
+
     conflicts = []
     reassignments = []
     for project in projects:
+        if project.get('frozen'):
+            continue
         planned = project.get('planned', True)
-        current = date.today() if not planned else date.fromisoformat(project['start_date'])
+        if not planned:
+            # Unplanned projects should always appear starting from today so
+            # they remain visible in the "Sin planificar" row regardless of
+            # when they were created or loaded from disk.
+            current = date.today()
+            project['start_date'] = current.isoformat()
+        else:
+            current = date.fromisoformat(project['start_date'])
         hour = 0
         end_date = current
         assigned = project.get('assigned', {})
@@ -267,6 +292,7 @@ def schedule_projects(projects):
                     conflicts.append({
                         'id': len(conflicts) + 1,
                         'project': project['name'],
+                        'client': project['client'],
                         'message': msg,
                         'key': f"{project['name']}|{msg}",
                     })
@@ -283,11 +309,13 @@ def schedule_projects(projects):
                     project.get('priority'),
                     project['id'],
                     worker,
+                    project_frozen=project.get('frozen', False),
+                    project_blocked=project.get('blocked', False),
                 )
             else:
                 segs = val if isinstance(val, list) else [val]
                 seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
-                start_overrides = project.get('segment_starts', {}).get(phase) if planned else None
+                start_overrides = project.get('segment_starts', {}).get(phase)
                 for idx, seg in enumerate(segs):
                     hours = int(seg)
                     days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
@@ -339,16 +367,19 @@ def schedule_projects(projects):
                         conflicts.append({
                             'id': len(conflicts) + 1,
                             'project': project['name'],
+                            'client': project['client'],
                             'message': msg,
                             'key': f"{project['name']}|{msg}",
                         })
                         continue
 
+                    manual = False
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
                         if override > current:
                             current = override
                             hour = 0
+                        manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
                         current,
@@ -365,21 +396,36 @@ def schedule_projects(projects):
                         project['id'],
                         hours_map,
                         part=idx if isinstance(val, list) else None,
+                        manual=manual,
+                        project_frozen=project.get('frozen', False),
+                        project_blocked=project.get('blocked', False),
                     )
         project['end_date'] = end_date.isoformat()
-        if date.fromisoformat(project['end_date']) > date.fromisoformat(project['due_date']):
-            msg = 'No se cumple la fecha de entrega'
-            conflicts.append({
-                'id': len(conflicts) + 1,
-                'project': project['name'],
-                'message': msg,
-                'key': f"{project['name']}|{msg}",
-            })
+        if project.get('due_date'):
+            try:
+                due_dt = date.fromisoformat(project['due_date'])
+                if date.fromisoformat(project['end_date']) > due_dt:
+                    msg = 'No se cumple la fecha de entrega'
+                    conflicts.append({
+                        'id': len(conflicts) + 1,
+                        'project': project['name'],
+                        'client': project['client'],
+                        'message': msg,
+                        'key': f"{project['name']}|{msg}",
+                    })
+            except ValueError:
+                pass
     for r in reassignments:
         proj = next((p for p in projects if p['id'] == r['pid']), None)
         if not proj:
             continue
-        met = date.fromisoformat(proj['end_date']) <= date.fromisoformat(proj['due_date'])
+        if proj.get('due_date'):
+            try:
+                met = date.fromisoformat(proj['end_date']) <= date.fromisoformat(proj['due_date'])
+            except ValueError:
+                met = True
+        else:
+            met = True
         days = ', '.join(r['dates'])
         msg = (
             f"Vacaciones de {r['old']} ({days}); fase {r['phase']} reasignada a {r['new']}. "
@@ -388,6 +434,7 @@ def schedule_projects(projects):
         conflicts.append({
             'id': len(conflicts) + 1,
             'project': r['project'],
+            'client': r['client'],
             'message': msg,
             'key': f"vac-{r['pid']}-{r['phase']}-{days}",
             'pid': r['pid'],
@@ -395,11 +442,32 @@ def schedule_projects(projects):
     return worker_schedule, conflicts
 
 
-def assign_phase(schedule, start_day, start_hour, phase, project_name, client, hours, due_date, color, worker, start_date, priority, pid, hours_map, part=None):
+def assign_phase(
+    schedule,
+    start_day,
+    start_hour,
+    phase,
+    project_name,
+    client,
+    hours,
+    due_date,
+    color,
+    worker,
+    start_date,
+    priority,
+    pid,
+    hours_map,
+    part=None,
+    *,
+    manual=False,
+    project_frozen=False,
+    project_blocked=False,
+):
     # When scheduling 'montar', queue the task right after the worker finishes
-    # the mounting phase of their previous project. If there are free hours left
-    # that day, reuse them before moving on to the next workday.
-    if phase == 'montar':
+    # the mounting phase of their previous project unless an explicit start was
+    # requested. If there are free hours left that day, reuse them before moving
+    # on to the next workday.
+    if phase == 'montar' and not manual:
         last, end_hour = _last_phase_info(schedule, 'montar')
         if last and start_day <= last:
             limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
@@ -429,7 +497,12 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
             tasks = schedule.get(day_str, [])
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -443,6 +516,8 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'priority': priority,
                 'pid': pid,
                 'part': part,
+                'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -472,7 +547,12 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
             # each project aporta como mucho ocho horas diarias. Tras asignar
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -486,6 +566,8 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'priority': priority,
                 'pid': pid,
                 'part': part,
+                'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -502,7 +584,12 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
         available = limit - start if limit != float('inf') else HOURS_PER_DAY
         if available > 0:
             allocate = min(remaining, available)
-            late = day > date.fromisoformat(due_date)
+            late = False
+            if due_date:
+                try:
+                    late = day > date.fromisoformat(due_date)
+                except ValueError:
+                    late = False
             tasks.append({
                 'project': project_name,
                 'client': client,
@@ -516,6 +603,8 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
                 'priority': priority,
                 'pid': pid,
                 'part': part,
+                'frozen': project_frozen,
+                'blocked': project_blocked,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -533,7 +622,22 @@ def assign_phase(schedule, start_day, start_hour, phase, project_name, client, h
     return next_day, next_hour, last_day
 
 
-def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date, color, start_date, priority, pid, worker=None):
+def assign_pedidos(
+    schedule,
+    start_day,
+    end_day,
+    project_name,
+    client,
+    due_date,
+    color,
+    start_date,
+    priority,
+    pid,
+    worker=None,
+    *,
+    project_frozen=False,
+    project_blocked=False,
+):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
     while day.weekday() in WEEKEND or (
@@ -549,7 +653,12 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
             continue
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
-        late = day > date.fromisoformat(due_date)
+        late = False
+        if due_date:
+            try:
+                late = day > date.fromisoformat(due_date)
+            except ValueError:
+                late = False
         tasks.append({
             'project': project_name,
             'client': client,
@@ -561,6 +670,8 @@ def assign_pedidos(schedule, start_day, end_day, project_name, client, due_date,
             'start_date': start_date,
             'priority': priority,
             'pid': pid,
+            'frozen': project_frozen,
+            'blocked': project_blocked,
         })
         schedule[day_str] = tasks
         last_day = day
