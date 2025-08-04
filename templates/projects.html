@@ -70,8 +70,8 @@
                 <span class="late">&#10060;</span>
             {% endif %}
         </td>
-        <td>{{ p.priority }}</td>
         <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
+        <td>{{ p.priority }}</td>
         {% for ph in phases %}
             <td>
             {% set val = p.phases.get(ph, 0) %}
@@ -117,6 +117,11 @@
             </form>
         </td>
         <td>
+            {% if p.image %}
+                {{ p.image.rsplit('/', 1)[-1] }}
+            {% else %}
+                &mdash;
+            {% endif %}
             <form class="image-form" method="post" enctype="multipart/form-data" action="{{ url_for('update_image', pid=p.id) }}">
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="file" name="image" accept="image/*">
@@ -210,6 +215,25 @@
             resp.json().then(d => alert(d.error || 'Error'));
           }
         });
+    });
+  });
+
+  // Save image immediately when selected
+  document.querySelectorAll('.image-form input[type=file]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const form = inp.closest('form');
+      const fd = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      }).then(resp => {
+        if (resp.ok) {
+          location.reload();
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
     });
   });
 
