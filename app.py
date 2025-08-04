@@ -83,7 +83,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.endpoint in ("static", "kanbanize_webhook"):
+    if request.path.startswith("/static") or request.path == "/kanbanize-webhook":
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -1873,4 +1873,4 @@ def kanbanize_list():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=6000)
