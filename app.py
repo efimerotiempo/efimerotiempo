@@ -1735,11 +1735,11 @@ def kanbanize_webhook():
     fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
 
     try:
-        data = request.get_json(force=True)
-        print("Payload recibido:", data)
-        inner_data = data  # Asume que Kanbanize ya envía el JSON directamente
-        card = inner_data.get("card", {})
-        payload_timestamp = inner_data.get("timestamp")
+        outer = request.get_json(force=True)
+        raw_payload = outer.get("kanbanize_payload")
+        data = json.loads(raw_payload) if raw_payload else {}
+        card = data.get("card", {})
+        payload_timestamp = data.get("timestamp")
     except Exception as e:
         print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
