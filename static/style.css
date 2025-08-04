@@ -221,6 +221,12 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
+.kanban-table thead th {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 10;
+}
 
 .modal {
     display: none;
@@ -284,4 +290,17 @@ tr.collapsed td:not(:first-child) { display: none; }
 .projects-table tr.proj-highlight {
     font-weight: bold;
     border: 3px solid #000;
+}
+.projects-table tbody tr form { display: none; }
+.projects-table tr.proj-highlight form {
+    display: inline;
+}
+.projects-table tbody tr form button { display: none; }
+.projects-table tbody tr form.delete-form { display: inline; }
+.projects-table tbody tr form.delete-form button { display: inline; }
+.projects-table .row-update-btn { display: none; }
+.projects-table tr.proj-highlight .row-update-btn { display: inline; }
+.kanban-conflict {
+    color: hotpink;
+    font-weight: bold;
 }

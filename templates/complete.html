@@ -95,8 +95,8 @@
             <button type="submit">Mostrar todos</button>
         </form>
         <ul>
-        {% for c in conflicts %}
-            <li><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }}</a>: {{ c.message }}
+{% for c in conflicts %}
+            <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }} - {{ c.client }}</a>: {{ c.message }}
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
@@ -266,6 +266,12 @@
         <form method="get" class="controls">
             <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
             <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
+            <label>Ordenar:
+                <select name="sort">
+                    <option value="created" {% if sort_option == 'created' %}selected{% endif %}>Creación</option>
+                    <option value="name" {% if sort_option == 'name' %}selected{% endif %}>Nombre</option>
+                </select>
+            </label>
             <button type="submit">Filtrar</button>
         </form>
         <table class="projects-table">
@@ -277,6 +283,7 @@
                 <th>Fecha límite</th>
                 <th>En plazo</th>
                 <th>Planificado</th>
+                <th>Origen</th>
                 <th>Prioridad</th>
                 {% for ph in phases %}
                     {% if ph == 'pedidos' %}
@@ -286,7 +293,9 @@
                     {% endif %}
                 {% endfor %}
                 <th>Cambiar</th>
+                <th>Imagen</th>
                 <th></th>
+                <th>Actualizar</th>
             </tr>
             </thead>
             <tbody>
@@ -300,7 +309,6 @@
                         <input type="hidden" name="pid" value="{{ p.id }}">
                         <input type="hidden" name="next" value="{{ url_for('complete') }}">
                         <input type="date" name="start_date" value="{{ p.start_date }}">
-                        <button type="submit">Cambiar</button>
                     </form>
                 </td>
                 <td>{{ p.due_date }}
@@ -308,7 +316,6 @@
                         <input type="hidden" name="pid" value="{{ p.id }}">
                         <input type="hidden" name="next" value="{{ url_for('complete') }}">
                         <input type="date" name="due_date" value="{{ p.due_date }}">
-                        <button type="submit">Cambiar</button>
                     </form>
                 </td>
                 <td>
@@ -325,20 +332,20 @@
                         <span class="late">&#10060;</span>
                     {% endif %}
                 </td>
+                <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
                 <td>{{ p.priority }}</td>
                 {% for ph in phases %}
                     <td>
-                    {% if p.phases.get(ph) %}
-                        {% set val = p.phases[ph] %}
-                        {% if ph == 'pedidos' %}
-                            {{ val }}<br>
+                    {% set val = p.phases.get(ph, 0) %}
+                    {% if ph == 'pedidos' %}
+                        {{ val }}<br>
+                    {% else %}
+                        {% if val is sequence %}
+                            {{ val|map('int')|sum }}h<br>
                         {% else %}
-                            {% if val is sequence %}
-                                {{ val|map('int')|sum }}h<br>
-                            {% else %}
-                                {{ val|int }}h<br>
-                            {% endif %}
+                            {{ val|int }}h<br>
                         {% endif %}
+                    {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <select name="worker">
@@ -346,16 +353,19 @@
                                     <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
                                 {% endfor %}
                             </select>
-                            <button type="submit">Guardar</button>
+                        </form>
+                        <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
+                            <input type="hidden" name="pid" value="{{ p.id }}">
+                            <input type="hidden" name="phase" value="{{ ph }}">
+                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
                         </form>
                         <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                             <input type="hidden" name="pid" value="{{ p.id }}">
                             <input type="hidden" name="phase" value="{{ ph }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
-                            <button type="submit">Cambiar</button>
                         </form>
-                    {% endif %}
                     </td>
                 {% endfor %}
                 <td>
@@ -366,14 +376,25 @@
                                 <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
                             {% endfor %}
                         </select>
-                        <button type="submit">Actualizar</button>
                     </form>
                 </td>
                 <td>
-                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}">
+                    {% if p.image %}
+                        {{ p.image.rsplit('/', 1)[-1] }}
+                    {% else %}
+                        &mdash;
+                    {% endif %}
+                    <form class="image-form" method="post" enctype="multipart/form-data" action="{{ url_for('update_image', pid=p.id) }}">
+                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                        <input type="file" name="image" accept="image/*">
+                    </form>
+                </td>
+                <td>
+                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}" class="delete-form">
                         <button class="delete-btn" type="submit">&#10060;</button>
                     </form>
                 </td>
+                <td><button class="row-update-btn">ACTUALIZAR</button></td>
             </tr>
             {% endfor %}
             </tbody>
@@ -394,6 +415,7 @@
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const ROW_URL = "{{ url_for('update_project_row') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -417,8 +439,11 @@
       fetch(HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ date: f.dataset.date, hours: val })
-      }).then(() => location.reload());
+      }).then(resp => {
+        if (resp.ok) { location.reload(); } else { alert('Error'); }
+      });
     });
   });
 
@@ -598,16 +623,20 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST' })
-            .then(() => location.reload());
+          fetch('/toggle_freeze/' + freeze.dataset.pid, {
+            method: 'POST',
+            credentials: 'same-origin'
+          }).then(() => location.reload());
         });
       }
       const block = document.getElementById('block-btn');
       if (block) {
         block.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST' })
-            .then(() => location.reload());
+          fetch('/toggle_block/' + block.dataset.pid, {
+            method: 'POST',
+            credentials: 'same-origin'
+          }).then(() => location.reload());
         });
       }
       const startForm = document.getElementById('start-form');
@@ -620,6 +649,7 @@
           fetch(START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -636,6 +666,7 @@
           fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
@@ -650,6 +681,7 @@
           fetch(DUE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
@@ -666,17 +698,97 @@
           fetch(PROJ_START_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
     });
   });
+  const rows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
+  rows.forEach(row => {
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const pid = row.dataset.pid;
+      rows.forEach(r => {
+        if (r.dataset.pid === pid) {
+          r.classList.add('proj-highlight');
+          r.classList.remove('proj-dim');
+        } else {
+          r.classList.add('proj-dim');
+          r.classList.remove('proj-highlight');
+        }
+      });
+      tasks.forEach(t => {
+        if (t.dataset.pid === pid) {
+          t.classList.add('highlight');
+          t.classList.remove('dim');
+        } else {
+          t.classList.add('dim');
+          t.classList.remove('highlight');
+        }
+      });
+    });
+  });
+  document.querySelectorAll('.row-update-btn').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const row = btn.closest('tr');
+      const pid = row.dataset.pid;
+      const data = {pid, workers:{}, phases:{}, phase_starts:{}};
+      row.querySelectorAll('form:not(.delete-form):not(.image-form)').forEach(f => {
+        const fd = new FormData(f);
+        if (f.classList.contains('phase-hours-form')) {
+          data.phases[fd.get('phase')] = fd.get('hours');
+        } else if (f.classList.contains('start-form')) {
+          data.phase_starts[fd.get('phase')] = fd.get('date');
+        } else if (f.action.includes('update_worker')) {
+          const phase = f.action.split('/').pop();
+          data.workers[phase] = fd.get('worker');
+        } else if (f.classList.contains('proj-start-form')) {
+          data.start_date = fd.get('start_date') || fd.get('date');
+        } else if (f.classList.contains('due-form')) {
+          data.due_date = fd.get('due_date');
+        } else if (f.action.includes('update_priority')) {
+          data.priority = fd.get('priority');
+        }
+      });
+      const imgForm = row.querySelector('.image-form');
+      let imgPromise = Promise.resolve();
+      if (imgForm) {
+        const inp = imgForm.querySelector('input[type=file]');
+        if (inp && inp.files.length) {
+          const fd = new FormData(imgForm);
+          imgPromise = fetch(imgForm.action, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+          });
+        }
+      }
+      fetch(ROW_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data)
+      }).then(resp => {
+        if (resp.ok) {
+          imgPromise.then(() => {
+            const url = new URL(location);
+            url.searchParams.set('highlight', pid);
+            location.href = url;
+          });
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
+    });
+  });
+
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
-    document.querySelectorAll('.projects-table tbody tr').forEach(r => {
-      r.classList.remove('proj-highlight', 'proj-dim');
-    });
+    rows.forEach(r => r.classList.remove('proj-highlight', 'proj-dim'));
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
@@ -745,6 +857,7 @@
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
         }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
       }
@@ -794,6 +907,7 @@
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
       })
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
@@ -829,7 +943,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(START_URL, { method: 'POST', body: data })
+      fetch(START_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (!resp.ok) {
             return resp.json().then(d => { alert(d.error || 'Error'); return null; });
@@ -849,7 +963,7 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(DUE_URL, { method: 'POST', body: data })
+      fetch(DUE_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
@@ -859,29 +973,69 @@
     f.addEventListener('submit', ev => {
       ev.preventDefault();
       const data = new FormData(f);
-      fetch(PROJ_START_URL, { method: 'POST', body: data })
+      fetch(PROJ_START_URL, { method: 'POST', body: data, credentials: 'same-origin' })
         .then(resp => {
           if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
+    });
+  });
+  document.querySelectorAll('.phase-hours-form').forEach(f => {
+    f.addEventListener('submit', ev => {
+      ev.preventDefault();
+      const data = new FormData(f);
+      fetch(PHASE_HOURS_URL, { method: 'POST', body: data, credentials: 'same-origin' })
+        .then(resp => {
+          if (resp.ok) {
+            const url = new URL(location);
+            url.searchParams.set('highlight', data.get('pid'));
+            location.href = url;
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+    });
+  });
+
+  // Save image immediately when selected
+  document.querySelectorAll('.image-form input[type=file]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const form = inp.closest('form');
+      const fd = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      }).then(resp => {
+        if (resp.ok) {
+          location.reload();
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
     });
   });
   const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
+const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+const NEW_CONFLICTS = CONFLICTS.filter(c => !seen[c.key]);
 let conflictIndex = 0;
 function showNextConflict() {
-  if (conflictIndex < CONFLICTS.length) {
-    const c = CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + ": " + c.message;
+  if (conflictIndex < NEW_CONFLICTS.length) {
+    const c = NEW_CONFLICTS[conflictIndex];
+    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
     conflictModal.style.display = "block";
   } else {
     conflictModal.style.display = "none";
   }
 }
-if (CONFLICTS.length) {
+if (NEW_CONFLICTS.length) {
   showNextConflict();
   conflictClose.addEventListener("click", () => {
+    const c = NEW_CONFLICTS[conflictIndex];
+    seen[c.key] = true;
+    localStorage.setItem('seenConflicts', JSON.stringify(seen));
     conflictIndex++;
     showNextConflict();
   });
