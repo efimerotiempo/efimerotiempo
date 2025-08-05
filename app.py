@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 import urllib.parse
 import sys
 import importlib.util
+import random
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -95,6 +96,25 @@ COLORS = [
     '#ffd8be', '#f8f0fb', '#f2ffde', '#fae1dd', '#fffff0', '#e8f0fe',
     '#ffcfd2', '#f0fff4', '#e7f9ea', '#fff2cc', '#e0e0ff', '#f0f8ff',
 ]
+
+_last_api_color = None
+
+
+def _next_api_color():
+    """Return a light random color distinct from the last one."""
+    global _last_api_color
+    while True:
+        r = random.randint(0, 255)
+        g = random.randint(0, 255)
+        b = random.randint(0, 255)
+        # Relative luminance to avoid very dark colors
+        luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        if luminance < 140:
+            continue
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        if color != _last_api_color:
+            _last_api_color = color
+            return color
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -495,10 +515,16 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if not p.get('color'):
-            p['color'] = COLORS[color_index % len(COLORS)]
-            color_index += 1
-            changed = True
+        if p.get('source') == 'api':
+            color = p.get('color')
+            if not color or not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
+                p['color'] = _next_api_color()
+                changed = True
+        else:
+            if not p.get('color') or p.get('color') not in COLORS:
+                p['color'] = COLORS[color_index % len(COLORS)]
+                color_index += 1
+                changed = True
 
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
@@ -590,9 +616,11 @@ def _kanban_card_to_project(card):
     if isinstance(fields_raw, list):
         fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
     elif isinstance(fields_raw, dict):
-        fields = fields_raw
+        fields = dict(fields_raw)
     else:
         fields = {}
+    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+        fields.pop(k, None)
 
     project_name = (
         card.get('customCardId')
@@ -1720,34 +1748,61 @@ def toggle_block(pid):
     return redirect(request.referrer or url_for('calendar_view'))
 
 
-@app.route('/kanbanize-webhook', methods=['POST'])
+@app.route('/kanbanize-webhook', methods=['POST']) 
 def kanbanize_webhook():
     """Convert incoming Kanbanize card data into a new project."""
 
     raw_body = request.get_data()
     print("Raw body:", raw_body)
 
-    # Detect the last date contained anywhere in the request body. Kanbanize
-    # sends extra data after the JSON payload where the final line represents
-    # the project's due date, e.g. "2025-07-21".
+    # Buscar última fecha en el cuerpo como fallback
     raw_text = raw_body.decode('utf-8', 'ignore') if isinstance(raw_body, bytes) else str(raw_body)
     date_matches = re.findall(r"\d{4}-\d{2}-\d{2}", raw_text)
     fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
 
     try:
-        data = request.get_json(force=True)
-        print("Payload recibido:", data)
-        inner_data = data  # Asume que Kanbanize ya envía el JSON directamente
-        card = inner_data.get("card", {})
-        payload_timestamp = inner_data.get("timestamp")
+        data = _parse_kanban_payload(request)
     except Exception as e:
         print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
 
+    if not data:
+        return jsonify({'error': 'Error al procesar datos'}), 400
+
+    # Si es un payload anidado dentro de "kanbanize_payload", decodificarlo
+    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+        try:
+            payload_str = data["kanbanize_payload"]
+            # Cortar el string justo después del último cierre de llave
+            last_brace = payload_str.rfind("}")
+            if last_brace != -1:
+                payload_str = payload_str[:last_brace + 1]
+            data = json.loads(payload_str)
+        except Exception as e:
+            print("Error decodificando kanbanize_payload interno:", e)
+            return jsonify({'error': 'JSON interno inválido'}), 400
+
+    print("Payload recibido:", data)
+
+    card = data.get("card", {})
+    payload_timestamp = data.get("timestamp")
+
     print("Tarjeta recibida:")
     print(card)
 
-    custom = card.get('customFields', {})
+    raw_custom = card.get('customFields') or {}
+    if isinstance(raw_custom, list):
+        custom = {
+            f.get('name'): f.get('value')
+            for f in raw_custom if isinstance(f, dict)
+        }
+    elif isinstance(raw_custom, dict):
+        custom = dict(raw_custom)
+    else:
+        custom = {}
+    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+        custom.pop(k, None)
+    card['customFields'] = custom
 
     due_str = card.get('deadline') or custom.get('Fecha Cliente')
     if not due_str and fallback_due:
@@ -1755,21 +1810,32 @@ def kanbanize_webhook():
     due_date_obj = parse_input_date(due_str) or date.today()
 
     def obtener_duracion(campo):
+        valor = custom.get(campo)
+        if valor in [None, ""]:
+            return 0
+        if isinstance(valor, str):
+            match = re.search(r"\d+", valor)
+            return int(match.group()) if match else 0
         try:
-            valor = custom.get(campo)
-            return int(valor) if valor not in [None, ""] else 0
+            return int(valor)
         except Exception:
             return 0
 
     fases = [
+        {'nombre': 'recepcionar material', 'duracion': obtener_duracion('Horas Preparación')},
         {'nombre': 'montar', 'duracion': obtener_duracion('Horas Montaje')},
         {'nombre': 'soldar', 'duracion': obtener_duracion('Horas Soldadura')},
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
     ]
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
-    nombre_proyecto = card.get('customCardId') or "Sin datos"
-    cliente = card.get('title') or "Sin datos"
+    nombre_proyecto = (
+        card.get('customCardId')
+        or card.get('effectiveCardId')
+        or card.get('title')
+        or f"Kanbanize-{task_id or uuid.uuid4()}"
+    )
+    cliente = card.get('title') or "Sin cliente"
     kanban_priority = (card.get('priority') or '').lower()
     priority_map = {
         'critical': 'Alta',
@@ -1778,7 +1844,6 @@ def kanbanize_webhook():
         'low': 'Baja',
     }
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
-    color_hex = card.get('tcolor')
 
     projects = load_projects()
     existing = next((p for p in projects
@@ -1803,8 +1868,8 @@ def kanbanize_webhook():
         if existing.get('priority') != proj_priority:
             existing['priority'] = proj_priority
             changed = True
-        if color_hex and existing.get('color') != color_hex:
-            existing['color'] = color_hex
+        if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
+            existing['color'] = _next_api_color()
             changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
@@ -1826,7 +1891,7 @@ def kanbanize_webhook():
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat(),
             'priority': proj_priority,
-            'color': color_hex or COLORS[len(projects) % len(COLORS)],
+            'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
             'image': None,
