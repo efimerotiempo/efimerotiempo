@@ -1885,8 +1885,10 @@ def kanbanize_webhook():
             existing['name'] = nombre_proyecto; changed = True
         if existing.get('client') != cliente:
             existing['client'] = cliente; changed = True
-        if existing.get('priority') != proj_priority:
-            existing['priority'] = proj_priority; changed = True
+        if proj_priority in ("Alta", "Baja"):
+            if existing.get('priority') != proj_priority:
+                existing['priority'] = proj_priority
+                changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color(); changed = True
 
