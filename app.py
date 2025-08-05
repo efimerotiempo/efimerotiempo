@@ -1755,12 +1755,8 @@ def toggle_block(pid):
 
 @app.route('/kanbanize-webhook', methods=['POST']) 
 def kanbanize_webhook():
-    """Convert incoming Kanbanize card data into a new project."""
-
+    """Procesa una tarjeta de Kanbanize: crea o actualiza un proyecto según customCardId o name."""
     raw_body = request.get_data()
-    print("Raw body:", raw_body)
-
-    # Buscar última fecha en el cuerpo como fallback
     raw_text = raw_body.decode('utf-8', 'ignore') if isinstance(raw_body, bytes) else str(raw_body)
     date_matches = re.findall(r"\d{4}-\d{2}-\d{2}", raw_text)
     fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
@@ -1768,39 +1764,29 @@ def kanbanize_webhook():
     try:
         data = _parse_kanban_payload(request)
     except Exception as e:
-        print("Error procesando payload:", e)
-        return jsonify({'error': 'Error al procesar datos'}), 400
+        return jsonify({'error': f'Error procesando payload: {e}'}), 400
 
     if not data:
-        return jsonify({'error': 'Error al procesar datos'}), 400
+        return jsonify({'error': 'Payload vacío o inválido'}), 400
 
-    # Si es un payload anidado dentro de "kanbanize_payload", decodificarlo
+    # Si payload viene anidado
     if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
         try:
             payload_str = data["kanbanize_payload"]
-            # Cortar el string justo después del último cierre de llave
             last_brace = payload_str.rfind("}")
             if last_brace != -1:
                 payload_str = payload_str[:last_brace + 1]
             data = json.loads(payload_str)
         except Exception as e:
-            print("Error decodificando kanbanize_payload interno:", e)
-            return jsonify({'error': 'JSON interno inválido'}), 400
-
-    print("Payload recibido:", data)
+            return jsonify({'error': f'JSON interno inválido: {e}'}), 400
 
     card = data.get("card", {})
     payload_timestamp = data.get("timestamp")
 
-    print("Tarjeta recibida:")
-    print(card)
-
+    # Extraer custom fields
     raw_custom = card.get('customFields') or {}
     if isinstance(raw_custom, list):
-        custom = {
-            f.get('name'): f.get('value')
-            for f in raw_custom if isinstance(f, dict)
-        }
+        custom = {f.get('name'): f.get('value') for f in raw_custom if isinstance(f, dict)}
     elif isinstance(raw_custom, dict):
         custom = dict(raw_custom)
     else:
@@ -1809,11 +1795,32 @@ def kanbanize_webhook():
         custom.pop(k, None)
     card['customFields'] = custom
 
-    due_str = card.get('deadline') or custom.get('Fecha Cliente')
-    if not due_str and fallback_due:
-        due_str = fallback_due.isoformat()
-    due_date_obj = parse_input_date(due_str) or date.today()
+    # --- Fecha cliente / fecha tope ---
+    raw_due = card.get('deadline') or custom.get('Fecha Cliente')
 
+    # Detectar y convertir timestamp
+    if isinstance(raw_due, (int, float)):
+        # Si es muy grande, probablemente está en milisegundos
+        if raw_due > 1e12:
+            raw_due = datetime.fromtimestamp(raw_due / 1000).strftime("%Y-%m-%d")
+        else:
+            raw_due = datetime.fromtimestamp(raw_due).strftime("%Y-%m-%d")
+
+    # Si es string numérico, convertir a int
+    elif isinstance(raw_due, str) and raw_due.isdigit():
+        ts_val = int(raw_due)
+        if ts_val > 1e12:
+            raw_due = datetime.fromtimestamp(ts_val / 1000).strftime("%Y-%m-%d")
+        else:
+            raw_due = datetime.fromtimestamp(ts_val).strftime("%Y-%m-%d")
+
+    # Si no viene nada y tenemos fallback
+    if not raw_due and fallback_due:
+        raw_due = fallback_due.isoformat()
+
+    due_date_obj = parse_input_date(raw_due) or date.today()
+
+    # --- Función auxiliar para horas ---
     def obtener_duracion(campo):
         valor = custom.get(campo)
         if valor in [None, ""]:
@@ -1833,14 +1840,13 @@ def kanbanize_webhook():
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
     ]
 
+    # --- Identificación ---
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
-    nombre_proyecto = (
-        card.get('customCardId')
-        or card.get('effectiveCardId')
-        or card.get('title')
-        or f"Kanbanize-{task_id or uuid.uuid4()}"
-    )
+    custom_card_id = card.get('customCardId') or card.get('effectiveCardId')
+    nombre_proyecto = custom_card_id or f"Kanbanize-{task_id or uuid.uuid4()}"
     cliente = card.get('title') or "Sin cliente"
+
+    # --- Prioridad ---
     kanban_priority = (card.get('priority') or '').lower()
     priority_map = {
         'critical': 'Alta',
@@ -1851,54 +1857,62 @@ def kanbanize_webhook():
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
     projects = load_projects()
-    existing = next(
-        (
-            p
-            for p in projects
-            if p.get('source') == 'api' and p.get('name') == nombre_proyecto
-        ),
-        None,
-    )
 
-    new_phases = {f['nombre']: f['duracion'] for f in fases}
+    # --- Buscar primero por customCardId ---
+    existing = next(
+        (p for p in projects if p.get('source') == 'api' and p.get('customCardId') == custom_card_id),
+        None
+    )
+    changed = False
+
+    # Si no existe, buscar por nombre
+    if not existing:
+        existing = next(
+            (p for p in projects if p.get('name') == nombre_proyecto),
+            None
+        )
+        if existing and not existing.get('customCardId'):
+            existing['customCardId'] = custom_card_id
+            changed = True
+
+    new_phases = {f['nombre']: f['duracion'] for f in fases if f['duracion'] > 0}
 
     if existing:
-        changed = False
+        # Actualizar siempre due_date y otros campos si cambian
         if existing.get('kanban_id') != task_id:
-            existing['kanban_id'] = task_id
-            changed = True
+            existing['kanban_id'] = task_id; changed = True
         if existing.get('name') != nombre_proyecto:
-            existing['name'] = nombre_proyecto
-            changed = True
+            existing['name'] = nombre_proyecto; changed = True
         if existing.get('client') != cliente:
-            existing['client'] = cliente
-            changed = True
+            existing['client'] = cliente; changed = True
         if existing.get('priority') != proj_priority:
-            existing['priority'] = proj_priority
-            changed = True
+            existing['priority'] = proj_priority; changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
-            existing['color'] = _next_api_color()
-            changed = True
-        if existing.get('due_date') != due_date_obj.isoformat():
-            existing['due_date'] = due_date_obj.isoformat()
-            changed = True
+            existing['color'] = _next_api_color(); changed = True
+
+        # Siempre actualizar fecha tope desde Kanbanize
+        existing['due_date'] = due_date_obj.isoformat()
+        changed = True
+
         for ph, hours in new_phases.items():
             if existing.get('phases', {}).get(ph) != hours:
-                existing.setdefault('phases', {})[ph] = hours
-                changed = True
+                existing.setdefault('phases', {})[ph] = hours; changed = True
             if ph not in existing.get('assigned', {}):
-                existing.setdefault('assigned', {})[ph] = UNPLANNED
-                changed = True
+                existing.setdefault('assigned', {})[ph] = UNPLANNED; changed = True
+
         if changed:
             save_projects(projects)
+
     else:
+        # Crear nuevo proyecto con prioridad siempre en "Sin prioridad"
         project = {
             'id': str(uuid.uuid4()),
+            'customCardId': custom_card_id,
             'name': nombre_proyecto,
             'client': cliente,
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat(),
-            'priority': proj_priority,
+            'priority': 'Sin prioridad',  # 🔹 Forzado para evitar gris oscuro
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
@@ -1910,6 +1924,7 @@ def kanbanize_webhook():
         projects.append(project)
         save_projects(projects)
 
+    # Guardar tarjeta recibida
     cards = load_kanban_cards()
     cards.append({'timestamp': payload_timestamp, 'card': card})
     save_kanban_cards(cards)
@@ -1929,6 +1944,7 @@ def kanbanize_webhook():
         return jsonify({"mensaje": "Proyecto creado"}), 200
     else:
         return jsonify({"mensaje": "Proyecto actualizado"}), 200
+
 
 
 @app.route('/bugs')
