@@ -516,7 +516,8 @@ def get_projects():
     assigned_projects = []
     for p in projects:
         if p.get('source') == 'api':
-            if not p.get('color'):
+            color = p.get('color')
+            if not color or not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
                 p['color'] = _next_api_color()
                 changed = True
         else:
@@ -1867,7 +1868,7 @@ def kanbanize_webhook():
         if existing.get('priority') != proj_priority:
             existing['priority'] = proj_priority
             changed = True
-        if not existing.get('color'):
+        if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
             changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
