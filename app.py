@@ -1818,9 +1818,8 @@ def kanbanize_webhook():
         'low': 'Baja',
     }
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
-    color_hex = card.get('tcolor')
 
-    projects = load_projects()
+    projects = get_projects()
     existing = next((p for p in projects
                      if p.get('source') == 'api' and (
                          (task_id and str(p.get('kanban_id')) == str(task_id)) or
@@ -1843,9 +1842,6 @@ def kanbanize_webhook():
         if existing.get('priority') != proj_priority:
             existing['priority'] = proj_priority
             changed = True
-        if color_hex and existing.get('color') != color_hex:
-            existing['color'] = color_hex
-            changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
             changed = True
@@ -1859,6 +1855,7 @@ def kanbanize_webhook():
         if changed:
             save_projects(projects)
     else:
+        color = COLORS[len(projects) % len(COLORS)]
         project = {
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
@@ -1866,7 +1863,7 @@ def kanbanize_webhook():
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat(),
             'priority': proj_priority,
-            'color': color_hex or COLORS[len(projects) % len(COLORS)],
+            'color': color,
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
             'image': None,
