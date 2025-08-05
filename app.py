@@ -1722,16 +1722,14 @@ def toggle_block(pid):
     return redirect(request.referrer or url_for('calendar_view'))
 
 
-@app.route('/kanbanize-webhook', methods=['POST'])
+@app.route('/kanbanize-webhook', methods=['POST']) 
 def kanbanize_webhook():
     """Convert incoming Kanbanize card data into a new project."""
 
     raw_body = request.get_data()
     print("Raw body:", raw_body)
 
-    # Detect the last date contained anywhere in the request body. Kanbanize
-    # sends extra data after the JSON payload where the final line represents
-    # the project's due date, e.g. "2025-07-21".
+    # Buscar última fecha en el cuerpo como fallback
     raw_text = raw_body.decode('utf-8', 'ignore') if isinstance(raw_body, bytes) else str(raw_body)
     date_matches = re.findall(r"\d{4}-\d{2}-\d{2}", raw_text)
     fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
@@ -1741,9 +1739,25 @@ def kanbanize_webhook():
     except Exception as e:
         print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
+
     if not data:
         return jsonify({'error': 'Error al procesar datos'}), 400
+
+    # Si es un payload anidado dentro de "kanbanize_payload", decodificarlo
+    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+        try:
+            payload_str = data["kanbanize_payload"]
+            # Cortar el string justo después del último cierre de llave
+            last_brace = payload_str.rfind("}")
+            if last_brace != -1:
+                payload_str = payload_str[:last_brace + 1]
+            data = json.loads(payload_str)
+        except Exception as e:
+            print("Error decodificando kanbanize_payload interno:", e)
+            return jsonify({'error': 'JSON interno inválido'}), 400
+
     print("Payload recibido:", data)
+
     card = data.get("card", {})
     payload_timestamp = data.get("timestamp")
 
@@ -1782,18 +1796,20 @@ def kanbanize_webhook():
             return 0
 
     fases = [
-        {
-            'nombre': 'recepcionar material',
-            'duracion': obtener_duracion('Horas Preparación'),
-        },
+        {'nombre': 'recepcionar material', 'duracion': obtener_duracion('Horas Preparación')},
         {'nombre': 'montar', 'duracion': obtener_duracion('Horas Montaje')},
         {'nombre': 'soldar', 'duracion': obtener_duracion('Horas Soldadura')},
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
     ]
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
-    nombre_proyecto = card.get('customCardId') or "Sin datos"
-    cliente = card.get('title') or "Sin datos"
+    nombre_proyecto = (
+        card.get('customCardId')
+        or card.get('effectiveCardId')
+        or card.get('title')
+        or f"Kanbanize-{task_id or uuid.uuid4()}"
+    )
+    cliente = card.get('title') or "Sin cliente"
     kanban_priority = (card.get('priority') or '').lower()
     priority_map = {
         'critical': 'Alta',
