@@ -83,7 +83,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.endpoint in ("static", "kanbanize_webhook"):
+    if request.path.startswith("/static") or request.path == "/kanbanize-webhook":
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -1735,14 +1735,15 @@ def kanbanize_webhook():
     fallback_due = parse_input_date(date_matches[-1]) if date_matches else None
 
     try:
-        data = request.get_json(force=True)
-        print("Payload recibido:", data)
-        inner_data = data  # Asume que Kanbanize ya envía el JSON directamente
-        card = inner_data.get("card", {})
-        payload_timestamp = inner_data.get("timestamp")
+        data = _parse_kanban_payload(request)
     except Exception as e:
         print("Error procesando payload:", e)
         return jsonify({'error': 'Error al procesar datos'}), 400
+    if not data:
+        return jsonify({'error': 'Error al procesar datos'}), 400
+    print("Payload recibido:", data)
+    card = data.get("card", {})
+    payload_timestamp = data.get("timestamp")
 
     print("Tarjeta recibida:")
     print(card)
