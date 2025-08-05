@@ -759,6 +759,7 @@ def calendar_view():
         phases=PHASE_ORDER,
         hours=hours_map,
         split_points=points,
+        palette=COLORS,
     )
 
 
@@ -812,6 +813,7 @@ def project_list():
         sort_option=sort_option,
         start_map=start_map,
         hours=hours_map,
+        palette=COLORS,
     )
 
 
@@ -1084,6 +1086,7 @@ def complete():
         hours=hours_map,
         plan_map=plan_map,
         split_points=points,
+        palette=COLORS,
     )
 
 
@@ -1353,6 +1356,8 @@ def update_project_row():
         proj['due_date'] = dd.isoformat() if dd else ''
     if 'priority' in data:
         proj['priority'] = data['priority']
+    if 'color' in data:
+        proj['color'] = data['color']
 
     was_frozen = proj.get('frozen', False)
     if was_frozen:

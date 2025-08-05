@@ -285,6 +285,7 @@
                 <th>Planificado</th>
                 <th>Origen</th>
                 <th>Prioridad</th>
+                <th>Color</th>
                 {% for ph in phases %}
                     {% if ph == 'pedidos' %}
                         <th>Plazo acopio</th>
@@ -334,6 +335,13 @@
                 </td>
                 <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
                 <td>{{ p.priority }}</td>
+                <td>
+                    <select class="color-select" style="display:none">
+                        {% for c in palette %}
+                            <option value="{{ c }}" {% if p.color == c %}selected{% endif %} style="background-color: {{ c }};">{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
                 {% for ph in phases %}
                     <td>
                     {% set val = p.phases.get(ph, 0) %}
@@ -714,9 +722,13 @@
         if (r.dataset.pid === pid) {
           r.classList.add('proj-highlight');
           r.classList.remove('proj-dim');
+          const sel = r.querySelector('.color-select');
+          if (sel) sel.style.display = 'inline';
         } else {
           r.classList.add('proj-dim');
           r.classList.remove('proj-highlight');
+          const sel = r.querySelector('.color-select');
+          if (sel) sel.style.display = 'none';
         }
       });
       tasks.forEach(t => {
@@ -754,6 +766,10 @@
           data.priority = fd.get('priority');
         }
       });
+      const colorSel = row.querySelector('.color-select');
+      if (colorSel) {
+        data.color = colorSel.value;
+      }
       const imgForm = row.querySelector('.image-form');
       let imgPromise = Promise.resolve();
       if (imgForm) {
@@ -788,7 +804,11 @@
 
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
-    rows.forEach(r => r.classList.remove('proj-highlight', 'proj-dim'));
+    rows.forEach(r => {
+      r.classList.remove('proj-highlight', 'proj-dim');
+      const sel = r.querySelector('.color-select');
+      if (sel) sel.style.display = 'none';
+    });
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
