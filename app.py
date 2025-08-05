@@ -1842,6 +1842,10 @@ def kanbanize_webhook():
         if existing.get('priority') != proj_priority:
             existing['priority'] = proj_priority
             changed = True
+        if not existing.get('color') or existing.get('color') not in COLORS:
+            index = projects.index(existing)
+            existing['color'] = COLORS[index % len(COLORS)]
+            changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
             changed = True
