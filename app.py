@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 import urllib.parse
 import sys
 import importlib.util
+import random
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -95,6 +96,25 @@ COLORS = [
     '#ffd8be', '#f8f0fb', '#f2ffde', '#fae1dd', '#fffff0', '#e8f0fe',
     '#ffcfd2', '#f0fff4', '#e7f9ea', '#fff2cc', '#e0e0ff', '#f0f8ff',
 ]
+
+_last_api_color = None
+
+
+def _next_api_color():
+    """Return a light random color distinct from the last one."""
+    global _last_api_color
+    while True:
+        r = random.randint(0, 255)
+        g = random.randint(0, 255)
+        b = random.randint(0, 255)
+        # Relative luminance to avoid very dark colors
+        luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        if luminance < 140:
+            continue
+        color = f"#{r:02x}{g:02x}{b:02x}"
+        if color != _last_api_color:
+            _last_api_color = color
+            return color
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -495,10 +515,15 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if not p.get('color') or p.get('color') not in COLORS:
-            p['color'] = COLORS[color_index % len(COLORS)]
-            color_index += 1
-            changed = True
+        if p.get('source') == 'api':
+            if not p.get('color'):
+                p['color'] = _next_api_color()
+                changed = True
+        else:
+            if not p.get('color') or p.get('color') not in COLORS:
+                p['color'] = COLORS[color_index % len(COLORS)]
+                color_index += 1
+                changed = True
 
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
@@ -1819,8 +1844,7 @@ def kanbanize_webhook():
     }
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
-    projects = get_projects()
-    next_color = COLORS[len(projects) % len(COLORS)]
+    projects = load_projects()
     existing = next((p for p in projects
                      if p.get('source') == 'api' and (
                          (task_id and str(p.get('kanban_id')) == str(task_id)) or
@@ -1843,8 +1867,8 @@ def kanbanize_webhook():
         if existing.get('priority') != proj_priority:
             existing['priority'] = proj_priority
             changed = True
-        if not existing.get('color') or existing.get('color') not in COLORS:
-            existing['color'] = next_color
+        if not existing.get('color'):
+            existing['color'] = _next_api_color()
             changed = True
         if existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
@@ -1866,7 +1890,7 @@ def kanbanize_webhook():
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat(),
             'priority': proj_priority,
-            'color': next_color,
+            'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
             'image': None,
