@@ -1851,11 +1851,14 @@ def kanbanize_webhook():
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
     projects = load_projects()
-    existing = next((p for p in projects
-                     if p.get('source') == 'api' and (
-                         (task_id and str(p.get('kanban_id')) == str(task_id)) or
-                         p.get('name') == nombre_proyecto
-                     )), None)
+    existing = next(
+        (
+            p
+            for p in projects
+            if p.get('source') == 'api' and p.get('name') == nombre_proyecto
+        ),
+        None,
+    )
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
 
