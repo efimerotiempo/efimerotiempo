@@ -590,9 +590,11 @@ def _kanban_card_to_project(card):
     if isinstance(fields_raw, list):
         fields = {f.get('name'): f.get('value') for f in fields_raw if isinstance(f, dict)}
     elif isinstance(fields_raw, dict):
-        fields = fields_raw
+        fields = dict(fields_raw)
     else:
         fields = {}
+    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+        fields.pop(k, None)
 
     project_name = (
         card.get('customCardId')
@@ -1748,7 +1750,19 @@ def kanbanize_webhook():
     print("Tarjeta recibida:")
     print(card)
 
-    custom = card.get('customFields', {})
+    raw_custom = card.get('customFields') or {}
+    if isinstance(raw_custom, list):
+        custom = {
+            f.get('name'): f.get('value')
+            for f in raw_custom if isinstance(f, dict)
+        }
+    elif isinstance(raw_custom, dict):
+        custom = dict(raw_custom)
+    else:
+        custom = {}
+    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+        custom.pop(k, None)
+    card['customFields'] = custom
 
     due_str = card.get('deadline') or custom.get('Fecha Cliente')
     if not due_str and fallback_due:
@@ -1756,13 +1770,22 @@ def kanbanize_webhook():
     due_date_obj = parse_input_date(due_str) or date.today()
 
     def obtener_duracion(campo):
+        valor = custom.get(campo)
+        if valor in [None, ""]:
+            return 0
+        if isinstance(valor, str):
+            match = re.search(r"\d+", valor)
+            return int(match.group()) if match else 0
         try:
-            valor = custom.get(campo)
-            return int(valor) if valor not in [None, ""] else 0
+            return int(valor)
         except Exception:
             return 0
 
     fases = [
+        {
+            'nombre': 'recepcionar material',
+            'duracion': obtener_duracion('Horas Preparación'),
+        },
         {'nombre': 'montar', 'duracion': obtener_duracion('Horas Montaje')},
         {'nombre': 'soldar', 'duracion': obtener_duracion('Horas Soldadura')},
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
