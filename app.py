@@ -495,7 +495,7 @@ def get_projects():
     color_index = 0
     assigned_projects = []
     for p in projects:
-        if not p.get('color'):
+        if not p.get('color') or p.get('color') not in COLORS:
             p['color'] = COLORS[color_index % len(COLORS)]
             color_index += 1
             changed = True
@@ -1910,4 +1910,4 @@ def kanbanize_list():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=9000)
+    app.run(debug=True, host='0.0.0.0', port=6000)
