@@ -559,9 +559,7 @@
           html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
         }
         html += `</div>`;
-        if (t.dataset.phase === 'pedidos') {
-          html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button></div>`;
-        }
+        html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
         if (info.image) {
           html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
         }
