@@ -1862,6 +1862,22 @@ def kanbanize_webhook():
     }
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
+    extlink = card.get('extlink')
+    image_path = None
+    if extlink:
+        try:
+            req = Request(extlink, headers={'User-Agent': 'Mozilla/5.0'})
+            with urlopen(req) as resp:
+                content = resp.read()
+            ext = os.path.splitext(urllib.parse.urlparse(extlink).path)[1] or '.jpg'
+            fname = f"{uuid.uuid4()}{ext}"
+            save_path = os.path.join(UPLOAD_FOLDER, fname)
+            with open(save_path, 'wb') as f:
+                f.write(content)
+            image_path = f"uploads/{fname}"
+        except Exception as e:
+            print("Error descargando imagen de Kanbanize:", e)
+
     projects = load_projects()
     existing = next(
         (
@@ -1894,6 +1910,9 @@ def kanbanize_webhook():
         if due_date_obj and existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
             changed = True
+        if image_path and existing.get('image') != image_path:
+            existing['image'] = image_path
+            changed = True
         for ph, hours in new_phases.items():
             if existing.get('phases', {}).get(ph) != hours:
                 existing.setdefault('phases', {})[ph] = hours
@@ -1914,7 +1933,7 @@ def kanbanize_webhook():
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
-            'image': None,
+            'image': image_path,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
