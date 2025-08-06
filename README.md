@@ -176,7 +176,9 @@ más temprano respetando todas las restricciones, el proyecto se guarda con
 la nueva fecha de inicio y el calendario se actualiza al recargar la página.
 Se ofrece también un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
-permanecen en su sitio.
+permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
+que asigna la fase seleccionada al día actual dentro de la fila *Sin planificar*
+para reprogramarla más adelante.
 Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
 la aplicación divide la duración de esa fase en dos mitades aunque la fecha
 elegida no coincida exactamente con su mitad. La segunda parte se mantiene

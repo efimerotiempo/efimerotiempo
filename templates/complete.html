@@ -560,6 +560,7 @@
         }
         html += `</div>`;
         html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
+        html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
         if (info.image) {
           html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
         }
@@ -597,6 +598,20 @@
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
+        });
+      }
+      const unplan = document.getElementById('unplan-btn');
+      if (unplan) {
+        unplan.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const today = new Date().toISOString().slice(0,10);
+          const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+          if (unplan.dataset.part) body.part = unplan.dataset.part;
+          fetch(MOVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
         });
       }
       const split = document.getElementById('split-btn');
