@@ -1800,6 +1800,12 @@ def kanbanize_webhook():
     card = data.get("card", {})
     payload_timestamp = data.get("timestamp")
 
+    if card.get("lanename") == "Seguimiento compras":
+        cards = load_kanban_cards()
+        cards.append({'timestamp': payload_timestamp, 'card': card})
+        save_kanban_cards(cards)
+        return jsonify({"mensaje": "Tarjeta ignorada"}), 200
+
     print("Tarjeta recibida:")
     print(card)
 

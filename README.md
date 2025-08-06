@@ -39,6 +39,10 @@ parte de la planificación. Si quieres conservar los datos en otra ubicación,
 define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
 de iniciar la aplicación.
 
+La aplicación también puede recibir tarjetas desde Kanbanize mediante un webhook.
+Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará pero no
+generará ningún proyecto.
+
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
  hito y la descripción se muestra en rojo, en negrita y con un tamaño de letra
