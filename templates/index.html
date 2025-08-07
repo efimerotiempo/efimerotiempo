@@ -12,7 +12,9 @@
 <div class="hours-btn-container">
     <button id="hours-btn" type="button">Editar jornada laboral</button>
 </div>
-<div class="schedule-wrapper">
+<div class="schedule-container">
+    <div class="schedule-scroll-top"><div></div></div>
+    <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
@@ -109,6 +111,7 @@
     </tr>
     </tfoot>
 </table>
+    </div>
 </div>
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
@@ -167,10 +170,21 @@
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
+  const topScroll = document.querySelector('.schedule-scroll-top');
+  let syncTopWidth;
+  if (topScroll) {
+    const topInner = topScroll.firstElementChild;
+    syncTopWidth = () => { topInner.style.width = wrapper.scrollWidth + 'px'; };
+    syncTopWidth();
+    window.addEventListener('resize', syncTopWidth);
+    topScroll.addEventListener('scroll', () => { wrapper.scrollLeft = topScroll.scrollLeft; });
+    wrapper.addEventListener('scroll', () => { topScroll.scrollLeft = wrapper.scrollLeft; });
+  }
   const SCROLL_KEY = 'calendarScroll';
   const savedScroll = sessionStorage.getItem(SCROLL_KEY);
   if (savedScroll !== null) {
     wrapper.scrollLeft = parseFloat(savedScroll);
+    if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
   } else {
     const todayCell = document.querySelector('th.today');
     if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});

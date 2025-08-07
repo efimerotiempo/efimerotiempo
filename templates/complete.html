@@ -72,6 +72,8 @@
             <button id="today-btn">HOY</button>
         </div>
         <div class="calendar-flex">
+        <div class="schedule-container">
+        <div class="schedule-scroll-top"><div></div></div>
         <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
@@ -169,6 +171,7 @@
     </tr>
     </tfoot>
         </table>
+        </div>
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
@@ -420,6 +423,32 @@
     </div>
 </div>
 <script>
+  const FILTER_KEY = 'projectsFilter';
+  (function() {
+    const form = document.querySelector('.complete-projects form.controls');
+    if (!form) return;
+    const projInput = form.querySelector('input[name="project"]');
+    const clientInput = form.querySelector('input[name="client"]');
+    const sortSelect = form.querySelector('select[name="sort"]');
+    const saved = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+    if (!location.search && (saved.project || saved.client || saved.sort)) {
+      const params = new URLSearchParams(saved);
+      location.search = params.toString();
+      return;
+    }
+    localStorage.setItem(FILTER_KEY, JSON.stringify({
+      project: projInput.value,
+      client: clientInput.value,
+      sort: sortSelect.value
+    }));
+    form.addEventListener('submit', () => {
+      localStorage.setItem(FILTER_KEY, JSON.stringify({
+        project: projInput.value,
+        client: clientInput.value,
+        sort: sortSelect.value
+      }));
+    });
+  })();
   const PROJECT_DATA = {{ project_data|tojson }};
   console.log(PROJECT_DATA);
   const PHASES = {{ phases|tojson }};
@@ -471,10 +500,21 @@
 
 
   const wrapper = document.querySelector('.schedule-wrapper');
+  const topScroll = document.querySelector('.schedule-scroll-top');
+  let syncTopWidth;
+  if (topScroll) {
+    const topInner = topScroll.firstElementChild;
+    syncTopWidth = () => { topInner.style.width = wrapper.scrollWidth + 'px'; };
+    syncTopWidth();
+    window.addEventListener('resize', syncTopWidth);
+    topScroll.addEventListener('scroll', () => { wrapper.scrollLeft = topScroll.scrollLeft; });
+    wrapper.addEventListener('scroll', () => { topScroll.scrollLeft = wrapper.scrollLeft; });
+  }
   const SCROLL_KEY = 'calendarScroll';
   const savedScroll = sessionStorage.getItem(SCROLL_KEY);
   if (savedScroll !== null) {
     wrapper.scrollLeft = parseFloat(savedScroll);
+    if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
   } else {
     const todayCell = document.querySelector('th.today');
     if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
@@ -933,62 +973,82 @@
       });
     });
   });
-  const unplanPanel = document.getElementById('unplanned-panel');
-  const unplanHide = document.getElementById('unplanned-hide');
-  const unplanShow = document.getElementById('unplanned-show');
-  const unplanResizer = document.getElementById('unplanned-resizer');
-  const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+    const unplanPanel = document.getElementById('unplanned-panel');
+    const unplanHide = document.getElementById('unplanned-hide');
+    const unplanShow = document.getElementById('unplanned-show');
+    const unplanResizer = document.getElementById('unplanned-resizer');
+    const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+    const UNPLAN_SCROLL_KEY = 'unplannedScroll';
+    const unplanList = unplanPanel ? unplanPanel.querySelector('.unplanned-list') : null;
 
-  function syncUnplannedHeight() {
-    const wrap = document.querySelector('.schedule-wrapper');
-    if (wrap && unplanPanel) {
-      unplanPanel.style.height = wrap.offsetHeight + 'px';
+    function syncUnplannedHeight() {
+      const container = document.querySelector('.schedule-container');
+      if (container && unplanPanel) {
+        unplanPanel.style.height = container.offsetHeight + 'px';
+      }
     }
-  }
 
   syncUnplannedHeight();
   window.addEventListener('resize', syncUnplannedHeight);
-  if (unplanPanel) {
-    const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
-    if (savedWidth) {
-      unplanPanel.style.width = savedWidth + 'px';
-    }
-  }
-  if (unplanPanel && unplanHide && unplanShow) {
-    unplanHide.addEventListener('click', () => {
-      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
-      unplanPanel.style.display = 'none';
-      unplanShow.style.display = 'block';
-    });
-    unplanShow.addEventListener('click', () => {
-      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
-      if (saved) {
-        unplanPanel.style.width = saved + 'px';
+    if (unplanPanel) {
+      const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
+      if (savedWidth) {
+        unplanPanel.style.width = savedWidth + 'px';
       }
-      unplanPanel.style.display = 'block';
-      unplanShow.style.display = 'none';
-      syncUnplannedHeight();
-    });
-  }
-  if (unplanPanel && unplanResizer) {
-    let startX, startWidth;
-    const onMouseMove = (e) => {
-      const dx = startX - e.clientX;
-      const newWidth = Math.max(100, startWidth + dx);
-      unplanPanel.style.width = newWidth + 'px';
-    };
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
-    };
-    unplanResizer.addEventListener('mousedown', (e) => {
-      startX = e.clientX;
-      startWidth = unplanPanel.offsetWidth;
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    });
-  }
+      if (unplanList) {
+        const savedScroll = localStorage.getItem(UNPLAN_SCROLL_KEY);
+        if (savedScroll) unplanList.scrollTop = parseInt(savedScroll, 10);
+        unplanList.addEventListener('scroll', () => {
+          localStorage.setItem(UNPLAN_SCROLL_KEY, unplanList.scrollTop);
+        });
+      }
+    }
+  if (unplanPanel && unplanHide && unplanShow) {
+      unplanHide.addEventListener('click', () => {
+        localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
+        if (unplanList) localStorage.setItem(UNPLAN_SCROLL_KEY, unplanList.scrollTop);
+        unplanPanel.style.display = 'none';
+        unplanShow.style.display = 'block';
+        if (syncTopWidth) syncTopWidth();
+        if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
+      });
+      unplanShow.addEventListener('click', () => {
+        const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
+        if (saved) {
+          unplanPanel.style.width = saved + 'px';
+        }
+        unplanPanel.style.display = 'block';
+        unplanShow.style.display = 'none';
+        syncUnplannedHeight();
+        if (syncTopWidth) syncTopWidth();
+        if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
+        if (unplanList) {
+          const s = localStorage.getItem(UNPLAN_SCROLL_KEY);
+          if (s) unplanList.scrollTop = parseInt(s, 10);
+        }
+      });
+    }
+    if (unplanPanel && unplanResizer) {
+      let startX, startWidth;
+      const onMouseMove = (e) => {
+        const dx = startX - e.clientX;
+        const newWidth = Math.max(100, startWidth + dx);
+        unplanPanel.style.width = newWidth + 'px';
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
+        if (syncTopWidth) syncTopWidth();
+        if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
+      };
+      unplanResizer.addEventListener('mousedown', (e) => {
+        startX = e.clientX;
+        startWidth = unplanPanel.offsetWidth;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
   document.querySelectorAll('.task.vacation').forEach(div => {
     div.addEventListener('click', () => {
       const del = div.querySelector('.vac-delete');

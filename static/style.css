@@ -85,7 +85,10 @@ table.schedule td.weekend-cell {
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 .calendar-flex { display: flex; align-items: flex-start; position: relative; width: 100%; }
+.schedule-container { display: flex; flex-direction: column; flex: 1; }
 .schedule-wrapper { flex: 1; overflow-x: auto; }
+.schedule-scroll-top { overflow-x: auto; overflow-y: hidden; }
+.schedule-scroll-top div { height: 1px; }
 .unplanned-panel {
     width: 2500px;
     border-left: 1px solid #ccc;
