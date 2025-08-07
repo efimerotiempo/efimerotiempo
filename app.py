@@ -501,6 +501,7 @@ def get_projects():
         p.setdefault('frozen', False)
         p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
+        p.setdefault('material_confirmed_date', '')
         if 'source' not in p:
             p['source'] = 'manual'
             changed = True
@@ -820,6 +821,7 @@ def add_project():
             'client': data['client'],
             'start_date': date.today().isoformat(),
             'due_date': due.isoformat() if due else '',
+            'material_confirmed_date': '',
             'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
@@ -984,11 +986,15 @@ def complete():
     for item in unplanned:
         pid = item['pid']
         phase = item['phase']
-        proj = groups.setdefault(pid, {
-            'project': item['project'],
-            'client': item['client'],
-            'phases': {}
-        })
+        proj = groups.setdefault(
+            pid,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'material_date': item.get('material_date'),
+                'phases': {},
+            },
+        )
         ph = proj['phases'].setdefault(phase, {
             'project': item['project'],
             'client': item['client'],
@@ -1019,11 +1025,15 @@ def complete():
             ph['frozen'] = True
     unplanned = []
     for data in groups.values():
-        unplanned.append({
-            'project': data['project'],
-            'client': data['client'],
-            'tasks': list(data['phases'].values())
-        })
+        unplanned.append(
+            {
+                'project': data['project'],
+                'client': data['client'],
+                'material_date': data.get('material_date'),
+                'tasks': list(data['phases'].values()),
+            }
+        )
+    unplanned.sort(key=lambda g: g.get('material_date') or '9999-12-31')
     schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
@@ -1815,6 +1825,8 @@ def kanbanize_webhook():
 
     due_str = card.get('deadline') or custom.get('Fecha Cliente')
     due_date_obj = parse_kanban_date(due_str)
+    mat_str = custom.get('Fecha material confirmado')
+    material_date_obj = parse_kanban_date(mat_str)
 
     def obtener_duracion(campo):
         valor = custom.get(campo)
@@ -1886,6 +1898,9 @@ def kanbanize_webhook():
         if due_date_obj and existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
             changed = True
+        if material_date_obj and existing.get('material_confirmed_date') != material_date_obj.isoformat():
+            existing['material_confirmed_date'] = material_date_obj.isoformat()
+            changed = True
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
@@ -1905,6 +1920,7 @@ def kanbanize_webhook():
             'client': cliente,
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
+            'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
             'priority': proj_priority,
             'color': _next_api_color(),
             'phases': new_phases,

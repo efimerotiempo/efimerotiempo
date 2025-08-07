@@ -116,10 +116,16 @@ ampliarse o reducirse sin límite arrastrando su borde izquierdo y se sitúa a l
 derecha del todo, fuera del área
 desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
 y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
-mostrar de nuevo la columna cuando se oculta. La tabla de proyectos muestra
-una columna indicando con un ✔ verde si está planificado o una ❌ si permanece
-sin planificar. La columna inicial del calendario muestra únicamente el nombre
-de cada persona y permanece fija a la izquierda para que siempre sea visible.
+mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
+fecha **Material confirmado** de cada proyecto.
+
+La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
+**Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
+si está planificado o una ❌ si permanece sin planificar. La columna inicial del
+calendario muestra únicamente el nombre de cada persona y permanece fija a la
+izquierda para que siempre sea visible. La fecha de material confirmado también
+se visualiza en la ventana emergente al pulsar cualquier fase, tanto en el
+calendario como en la columna de fases sin planificar.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo

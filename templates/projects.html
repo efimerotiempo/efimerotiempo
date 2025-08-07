@@ -19,6 +19,7 @@
         <th>Cliente</th>
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
+        <th>Fecha material confirmado</th>
         <th>En plazo</th>
         <th>Planificado</th>
         <th>Origen</th>
@@ -57,6 +58,7 @@
                 <input type="date" name="due_date" value="{{ p.due_date }}">
             </form>
         </td>
+        <td>{{ p.material_confirmed_date }}</td>
         <td>
             {% if p.met %}
                 <span class="ok">&#10004;</span>

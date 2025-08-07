@@ -248,6 +248,7 @@
       let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
       html += `<div>Prioridad: ${info.priority}</div>`;
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
