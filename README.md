@@ -108,7 +108,8 @@ calendario y ya no se le asignan nuevas fases.
 
 Junto al calendario hay una columna llamada **Fases sin planificar** que
 reúne todas las fases pendientes. Desde esa lista puedes arrastrarlas al
-calendario para programarlas en el día y operario deseados. La tabla de
+calendario para programarlas en el día y operario deseados. La columna es
+ancha y permite redimensionarse arrastrando su borde izquierdo. La tabla de
 proyectos muestra una columna indicando con un ✔ verde si está planificado o
 una ❌ si permanece sin planificar.
 

@@ -86,9 +86,10 @@ table.schedule td.weekend-cell {
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
 .calendar-flex { display: flex; align-items: flex-start; position: relative; }
-.unplanned-panel { width: 250px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; }
+.unplanned-panel { width: 2500px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; position: relative; }
 .unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
 #unplanned-show { display: none; float: right; margin-top: 5px; }
+.unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 
 /* make first column fit contents */
 .resource-col {

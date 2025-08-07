@@ -167,6 +167,7 @@
         </table>
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
+            <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for t in unplanned %}
@@ -876,6 +877,7 @@
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanHide = document.getElementById('unplanned-hide');
   const unplanShow = document.getElementById('unplanned-show');
+  const unplanResizer = document.getElementById('unplanned-resizer');
   if (unplanPanel && unplanHide && unplanShow) {
     unplanHide.addEventListener('click', () => {
       unplanPanel.style.display = 'none';
@@ -884,6 +886,24 @@
     unplanShow.addEventListener('click', () => {
       unplanPanel.style.display = 'block';
       unplanShow.style.display = 'none';
+    });
+  }
+  if (unplanPanel && unplanResizer) {
+    let startX, startWidth;
+    const onMouseMove = (e) => {
+      const dx = startX - e.clientX;
+      const newWidth = Math.max(100, startWidth + dx);
+      unplanPanel.style.width = newWidth + 'px';
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    unplanResizer.addEventListener('mousedown', (e) => {
+      startX = e.clientX;
+      startWidth = unplanPanel.offsetWidth;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     });
   }
   const projToggle = document.getElementById('projects-toggle');
