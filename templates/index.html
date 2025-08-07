@@ -12,7 +12,9 @@
 <div class="hours-btn-container">
     <button id="hours-btn" type="button">Editar jornada laboral</button>
 </div>
-<div class="schedule-wrapper">
+<div class="calendar-scroll">
+  <div id="top-scroll" class="top-scroll"><div class="top-scroll-inner"></div></div>
+  <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
@@ -40,20 +42,6 @@
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
         {% else %}
         <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
-        {% endif %}
-        {% endfor %}
-    </tr>
-    <tr class="milestones-row">
-        <td class="resource-col"></td>
-        {% for c in cols %}
-        {% if c.type == 'day' %}
-        {% set d = c.dates[0] %}
-        {% set ms = milestones.get(d.isoformat()) %}
-        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
-            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
-        </td>
-        {% else %}
-        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
         {% endif %}
         {% endfor %}
     </tr>
@@ -103,11 +91,31 @@
         {% endif %}
         {% endfor %}
     </tr>
+    <tr class="milestones-row">
+        <td class="resource-col"></td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
+            {% if ms %}
+                {% for m in ms %}
+                <div class="milestone-label">{{ m }}</div>
+                {% endfor %}
+            {% endif %}
+        </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
+        {% endif %}
+        {% endfor %}
+    </tr>
     </tfoot>
 </table>
+  </div>
 </div>
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
+<div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
@@ -140,14 +148,13 @@
 </ul>
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
+  console.log(PROJECT_DATA);
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
-  const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
@@ -155,20 +162,47 @@
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
+  const materialModal = document.getElementById('material-modal');
+  const materialText = document.getElementById('material-text');
+  const materialClose = document.getElementById('material-close');
   const filterForm = document.getElementById('filter-form');
 
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
+  const topScroll = document.getElementById('top-scroll');
+  const topInner = topScroll ? topScroll.querySelector('.top-scroll-inner') : null;
+  function syncTopWidth() {
+    if (topInner) topInner.style.width = wrapper.scrollWidth + 'px';
+  }
+  syncTopWidth();
+  window.addEventListener('resize', syncTopWidth);
+  let syncingTop = false;
+  let syncingBottom = false;
+  if (topScroll) {
+    topScroll.addEventListener('scroll', () => {
+      if (!syncingTop) {
+        syncingBottom = true;
+        wrapper.scrollLeft = topScroll.scrollLeft;
+        syncingBottom = false;
+      }
+    });
+  }
   const SCROLL_KEY = 'calendarScroll';
   const savedScroll = sessionStorage.getItem(SCROLL_KEY);
   if (savedScroll !== null) {
     wrapper.scrollLeft = parseFloat(savedScroll);
+    if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
   } else {
     const todayCell = document.querySelector('th.today');
     if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
   }
   wrapper.addEventListener('scroll', () => {
+    if (!syncingBottom && topScroll) {
+      syncingTop = true;
+      topScroll.scrollLeft = wrapper.scrollLeft;
+      syncingTop = false;
+    }
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
   });
   const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
@@ -224,11 +258,12 @@
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
+      const row = t.closest('[data-worker]');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
-        worker: t.closest('tr').dataset.worker,
+        worker: row ? row.dataset.worker : '',
         part: t.dataset.part
       };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
@@ -248,8 +283,8 @@
       const info = PROJECT_DATA[t.dataset.pid];
       let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<div>Inicio: ${info.start_date} <form id="proj-start-form" style="display:inline"><input type="date" id="proj-start-input" value="${info.start_date}" required><button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button></form></div>`;
       html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
       html += `<div>Prioridad: ${info.priority}</div>`;
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
@@ -271,44 +306,26 @@
       }
       html += `</div>`;
       html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-      html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
       html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
-      html += `<div><button id="block-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.blocked ? 'Desbloquear' : 'Bloquear'}</button></div>`;
       html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
       if (Array.isArray(info.phases[t.dataset.phase])) {
         html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
       }
       html += `</div>`;
-      if (t.dataset.phase === 'pedidos') {
-        html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="pedidos">&#10060; Borrar fase</button></div>`;
-      }
+      html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
+      html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
       if (info.image) {
-        html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
+        const imgUrl = `${STATIC_URL}${info.image}`;
+        html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+      } else if (info.kanban_attachments && info.kanban_attachments.length) {
+        const attUrl = info.kanban_attachments[0].url;
+        html += `<div><a href="${attUrl}" target="_blank"><img src="${attUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
       }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
-      const btn = document.getElementById('reorg-btn');
-      if (btn) {
-        btn.addEventListener('click', ev => {
-          ev.stopPropagation();
-          fetch(REORG_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
-          }).then(resp => resp.ok ? resp.json() : null)
-            .then(d => {
-              if (d) {
-                localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
-                localStorage.setItem(SCROLL_KEY2, d.date);
-              }
-              location.reload();
-            });
-        });
-      }
       const del = document.getElementById('del-btn');
       if (del) {
         del.addEventListener('click', ev => {
@@ -321,6 +338,21 @@
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
+        });
+      }
+      const unplan = document.getElementById('unplan-btn');
+      if (unplan) {
+        unplan.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const today = new Date().toISOString().slice(0,10);
+          const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+          if (unplan.dataset.part) body.part = unplan.dataset.part;
+          fetch(MOVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
         });
       }
       const split = document.getElementById('split-btn');
@@ -359,14 +391,6 @@
             .then(() => location.reload());
         });
       }
-      const block = document.getElementById('block-btn');
-      if (block) {
-        block.addEventListener('click', ev => {
-          ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST', credentials: 'same-origin' })
-            .then(() => location.reload());
-        });
-      }
       const startForm = document.getElementById('start-form');
       if (startForm) {
         startForm.addEventListener('submit', ev => {
@@ -388,6 +412,13 @@
             if (d) {
               localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
               if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+              const info = PROJECT_DATA[btn.dataset.pid] || {};
+              if (info.material_confirmed_date && d.date < info.material_confirmed_date) {
+                materialText.textContent = 'SIN MATERIAL';
+                materialModal.style.display = 'block';
+                materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+                return;
+              }
             }
             location.reload();
           });
@@ -431,21 +462,6 @@
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });
-        });
-      }
-      const projForm = document.getElementById('proj-start-form');
-      if (projForm) {
-        projForm.addEventListener('submit', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const btn = document.getElementById('proj-start-btn');
-          const val = document.getElementById('proj-start-input').value;
-          fetch(PROJ_START_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
-          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
     });
@@ -564,6 +580,8 @@
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
+      const info = PROJECT_DATA[data.pid] || {};
+      const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
@@ -579,10 +597,16 @@
           alert(data.error || 'Error');
           return;
         }
-        if (data.message) alert(data.message);
         localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
         if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-        location.reload();
+        if (beforeMaterial) {
+          materialText.textContent = 'SIN MATERIAL';
+          materialModal.style.display = 'block';
+          materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+        } else {
+          if (data.message) alert(data.message);
+          location.reload();
+        }
       });
       });
     });

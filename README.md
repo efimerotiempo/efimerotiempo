@@ -11,7 +11,7 @@ python app.py
 ```
 
 Visita `http://localhost:5000` en tu navegador para ir directamente a la vista
-**Completo**, que combina el calendario, los proyectos y el formulario de alta.
+**Completo**, que combina el calendario y los proyectos.
 El calendario precarga desde tres meses antes hasta seis meses después de la fecha
 actual para que puedas desplazarte por todo ese periodo manteniendo pulsada la
 tecla **Shift** mientras giras la rueda del ratón. El botón **HOY** centra la
@@ -39,20 +39,24 @@ parte de la planificación. Si quieres conservar los datos en otra ubicación,
 define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
 de iniciar la aplicación.
 
+La aplicación también puede recibir tarjetas desde Kanbanize mediante un webhook.
+Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará pero no
+generará ningún proyecto.
+
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
- hito y la descripción se muestra en rojo, en negrita y con un tamaño de letra
- el doble de grande dentro de su celda. Existe una pestaña **Hitos** que
- muestra la lista completa y permite eliminarlos con una **X** roja.
+ hito y la descripción se muestra en rojo y en negrita al final del calendario,
+ con un tamaño de letra la mitad de grande que el resto de celdas. Si hay varios
+ hitos para el mismo día, se apilan en líneas separadas. Existe una pestaña
+ **Hitos** que muestra la lista completa y permite eliminarlos con una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
-parte superior se muestran, de izquierda a derecha, el formulario de alta, el
-de hitos y la lista de conflictos. Debajo aparecen el calendario y, al final,
-la lista de proyectos. Cada sección se expande por
-mpleto y la página ofrece una barra de desplazamiento vertical para consultar
-la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
+parte superior se muestran el formulario de hitos y la lista de conflictos.
+Debajo aparecen el calendario y, al final,
+la lista de proyectos. Cada sección se expande por completo y la página ofrece una barra de desplazamiento vertical para consultar la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
-sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
+sobre la tabla, o mediante las barras de desplazamiento que hay tanto arriba como
+abajo. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
 
@@ -60,10 +64,11 @@ Los fines de semana se representan con una franja negra que agrupa el sábado y 
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
-automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
-eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
-lista de conflictos aparece un aviso indicando la eliminación y los cambios que
-ha producido.
+automáticamente. Los filtros por proyecto y cliente recuerdan la última
+selección aunque cambies de pestaña o recargues la página. Junto a cada
+proyecto hay un botón rojo con una **X** para eliminarlo. Al borrar un proyecto
+se vuelve a calcular la planificación y en la lista de conflictos aparece un
+aviso indicando la eliminación y los cambios que ha producido.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
 de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
@@ -90,47 +95,49 @@ Todas las incidencias se almacenan también en un archivo y pueden consultarse
 desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
 usuario, pestaña y detalle.
 
-Al crear nuevos proyectos, el planificador asigna cada fase a la persona
-especializada en dicha tarea que pueda comenzarla antes. Los trabajadores
-con esa fase en primer lugar tienen preferencia frente a quienes la
-tienen en segundo o tercer puesto. Si varias personas con la misma
-prioridad están libres el mismo día, se escoge a quien tenga menos horas
-pendientes. De este modo, fases idénticas en proyectos distintos se
-reparten y se adelantan lo máximo posible aprovechando los huecos libres.
+Al crear nuevos proyectos, todas las fases se asignan por defecto a **Sin
+planificar**. Desde la tabla de proyectos o el calendario puedes moverlas a
+cualquier trabajador sin restricciones de habilidades; el planificador solo
+considera su disponibilidad para colocarlas lo antes posible.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
-lista de proyectos. El planificador automático lo ignora al repartir
-fases por defecto.
+lista de proyectos. El planificador automático lo ignora al repartir fases por
+defecto.
 
 Las filas del calendario muestran a las personas siempre en este orden:
 Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,
 Igor, Albi y Eneko. A partir del 21 de julio Igor deja de aparecer en el
 calendario y ya no se le asignan nuevas fases.
-Junto a cada nombre se indican entre paréntesis las fases que puede realizar en
-su orden de prioridad para consultarlo de un vistazo.
 
-Fabio se dedica exclusivamente a soldar, de modo que no puede recibir fases de
-montaje.
+Junto al calendario hay una columna llamada **Fases sin planificar** que
+reúne todas las fases pendientes. Cada proyecto aparece como una carpeta con
+su nombre y cliente; las carpetas están plegadas por defecto y se pueden
+desplegar para ver y arrastrar sus fases al calendario. Dentro de cada proyecto
+las horas de una misma fase se agrupan y se muestran como una única entrada con
+el total pendiente. La columna comienza con 2500 px de ancho pero puede
+ampliarse o reducirse sin límite arrastrando su borde izquierdo y se sitúa a la
+derecha del todo, fuera del área
+desplazable del calendario. El ancho elegido y la posición del desplazamiento
+vertical se mantienen aunque se oculte y vuelva a mostrar la columna, así como
+al cambiar de pestaña y volver a **Completo**. Un botón «Fases sin planificar»
+flotante permite mostrar de nuevo la columna cuando se oculta. Las carpetas se
+ordenan por la fecha **Material confirmado** de cada proyecto y una división
+separa los que cuentan con esa fecha de los que no.
 
-La fila **Sin planificar** cuenta con todas las habilidades pero las trata por
-igual sin prioridad entre ellas.
-
-Además existe una fila adicional llamada **Sin planificar** donde se acumulan
-las fases de los proyectos que no se quieran programar todavía. Estas tareas
-se asignan siempre a partir del día de hoy. Aunque cada proyecto se reparte en
-tramos de ocho horas diarias, la fila no tiene límite de jornada, por lo que
-pueden coincidir tantos proyectos como se desee en el mismo día.
-En el formulario de alta aparece una casilla **Planificar** marcada por
-defecto. Si se desmarca, el nuevo proyecto se coloca en la fila *Sin
-planificar* hasta que se decida moverlo manualmente. La tabla de proyectos
-muestra una columna indicando con un ✔ verde si está planificado o una ❌ si
-permanece sin planificar.
-La vista **Completo** incorpora la misma columna y verifica realmente si
-quedan fases en la fila *Sin planificar* para mostrar el estado correcto.
-Las fases y los proyectos pueden arrastrarse libremente desde la fila
-*Sin planificar* al calendario del resto de trabajadores y viceversa. Al
-hacerlo la aplicación cambia automáticamente su estado de planificado para
-mantener la coherencia.
+La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
+**Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
+si está planificado o una ❌ si permanece sin planificar. A continuación se
+encuentran las columnas **Imagen** y **Imagen kanbanize**; esta última muestra
+la URL completa de cada archivo adjunto recibido desde Kanbanize al crear o
+actualizar una tarjeta y permite abrirla en una nueva pestaña. Además, al
+pulsar una fase en el calendario se visualizará la primera imagen adjunta como
+enlace clicable que abre la imagen original en una nueva pestaña, igual que si
+se hubiera cargado manualmente. La columna inicial del calendario muestra
+únicamente el nombre de cada persona y permanece fija a la izquierda para que
+siempre sea visible. La fecha de material confirmado también se visualiza en la
+ventana emergente al pulsar cualquier fase, tanto en el calendario como en la
+columna de fases sin planificar. Si se programa una fase en una fecha anterior a la de material
+confirmado, aparece un aviso emergente con el texto **SIN MATERIAL** en rojo.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
@@ -169,14 +176,12 @@ cada entrada.
 Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar
 una tarea en el calendario.
-Ese mismo recuadro incluye ahora un botón **Reorganizar** que intenta
-reubicar la fase seleccionada en el primer hueco libre disponible,
-preferentemente antes de la fecha asignada. Si se encuentra un hueco
-más temprano respetando todas las restricciones, el proyecto se guarda con
-la nueva fecha de inicio y el calendario se actualiza al recargar la página.
-Si la fase mostrada es **Pedidos**, también se ofrece un botón rojo
-**Borrar fase** que elimina ese tramo de la planificación tras una
-confirmación. Las demás fases de ese proyecto permanecen en su sitio.
+
+Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
+la planificación tras una confirmación. Las demás fases de ese proyecto
+permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
+que asigna la fase seleccionada al día actual dentro de la columna *Fases sin
+planificar* para reprogramarla más adelante.
 Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
 la aplicación divide la duración de esa fase en dos mitades aunque la fecha
 elegida no coincida exactamente con su mitad. La segunda parte se mantiene
@@ -190,9 +195,6 @@ Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
 simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
 mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
 final de la fase anterior.
-Además se muestra un pequeño formulario con un campo de fecha y un botón
-**Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
-introducida no es válida se despliega una alerta explicando el motivo.
 Otro formulario permite editar la **fecha límite** del proyecto desde esa misma
 ventana emergente o desde las tablas de proyectos, mostrando igualmente un
 aviso si la nueva fecha no es correcta.
@@ -209,10 +211,9 @@ Si la fase acaba programándose en una fecha distinta a la elegida al soltarla,
 el calendario se desplazará automáticamente a ese nuevo día para que sea fácil
 encontrarla y se mostrará una alerta indicando por qué no pudo quedarse en la
 celda seleccionada.
-Durante este proceso se validan tres aspectos: el trabajador debe tener esa
-fase entre sus habilidades, el día escogido no puede coincidir con sus
-vacaciones (salvo en el caso de Irene, que puede trabajar igualmente de lunes a
-viernes) y la fase no se puede adelantar a la inmediatamente anterior.
+Durante este proceso se validan dos aspectos: el día escogido no puede
+coincidir con las vacaciones del trabajador y la fase no se puede adelantar a
+la inmediatamente anterior.
 El resaltado negro permanece hasta que se mueva otra fase.
 
 El día actual aparece destacado con un borde rojo grueso en el calendario. Las
@@ -237,15 +238,13 @@ Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
-asignaciones de tareas, excepto en el caso de **Irene**, que puede recibir
-trabajo esos días mientras no caigan en fin de semana. Sus vacaciones siguen
-mostrándose en el calendario aunque no influyan en la planificación. Si un trabajador tenía
-proyectos planificados en esas fechas, la planificación se recalcula y esas
-fases se reasignan automáticamente al trabajador disponible con menor carga. En
-la lista de conflictos se añade una nota indicando los días de vacaciones, a qué
-persona se han movido las tareas y si el proyecto sigue cumpliendo su fecha
-límite tras el cambio. Aunque un trabajador tenga vacaciones cerca de la fecha
-de inicio de un proyecto, no se descarta para nuevas fases: la planificación
-simplemente salta sus días libres y continúa al finalizar su descanso. Si el
-periodo de la fase solo incluye un día de vacaciones, se sigue asignando a ese
-trabajador y la tarea se retoma tras su ausencia.
+asignaciones de tareas y la planificación simplemente salta esos días,
+continuando cuando el trabajador regresa de su descanso. En el calendario puedes
+pulsar sobre un día de vacaciones para mostrar una X roja y eliminarlo.
+La lista oculta automáticamente las vacaciones cuyo periodo ya ha finalizado.
+
+### Recursos
+
+La pestaña **Recursos** muestra la lista de trabajadores con una casilla para
+activar o desactivar su visualización. Las filas desmarcadas desaparecen del
+calendario hasta que se vuelvan a marcar.
