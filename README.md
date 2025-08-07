@@ -125,15 +125,15 @@ La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
 **Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
 si está planificado o una ❌ si permanece sin planificar. A continuación se
 encuentran las columnas **Imagen** y **Imagen kanbanize**; esta última muestra
-enlaces a los archivos adjuntos recibidos desde Kanbanize al crear o actualizar
-una tarjeta, utilizando el nombre y la URL proporcionados. Además, al pulsar una
-fase en el calendario se visualizará la primera imagen adjunta como enlace
-clicable que abre la imagen original en una nueva pestaña, igual que si se
-hubiera cargado manualmente. La columna inicial del calendario muestra únicamente el nombre de cada
-persona y permanece fija a la izquierda para que siempre sea visible. La fecha
-de material confirmado también se visualiza en la ventana emergente al pulsar
-cualquier fase, tanto en el calendario como en la columna de fases sin
-planificar. Si se programa una fase en una fecha anterior a la de material
+la URL completa de cada archivo adjunto recibido desde Kanbanize al crear o
+actualizar una tarjeta y permite abrirla en una nueva pestaña. Además, al
+pulsar una fase en el calendario se visualizará la primera imagen adjunta como
+enlace clicable que abre la imagen original en una nueva pestaña, igual que si
+se hubiera cargado manualmente. La columna inicial del calendario muestra
+únicamente el nombre de cada persona y permanece fija a la izquierda para que
+siempre sea visible. La fecha de material confirmado también se visualiza en la
+ventana emergente al pulsar cualquier fase, tanto en el calendario como en la
+columna de fases sin planificar. Si se programa una fase en una fecha anterior a la de material
 confirmado, aparece un aviso emergente con el texto **SIN MATERIAL** en rojo.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina

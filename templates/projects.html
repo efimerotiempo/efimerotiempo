@@ -141,7 +141,7 @@
         <td>
             {% if p.kanban_attachments %}
                 {% for att in p.kanban_attachments %}
-                    <a href="{{ att.url }}" target="_blank">{{ att.name }}</a>{% if not loop.last %}, {% endif %}
+                    <a href="{{ att.url }}" target="_blank">{{ att.url }}</a>{% if not loop.last %}, {% endif %}
                 {% endfor %}
             {% else %}
                 &mdash;
