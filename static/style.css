@@ -90,7 +90,7 @@ table.schedule td.weekend-cell {
 .top-scroll-inner { height: 1px; }
 .schedule-wrapper { flex: 1; overflow-x: auto; }
 .unplanned-panel {
-    width: 2500px;
+    width: 800px;
     border-left: 1px solid #ccc;
     padding: 5px;
     position: relative;

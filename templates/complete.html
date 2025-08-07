@@ -978,9 +978,11 @@
   syncUnplannedHeight();
   window.addEventListener('resize', () => { syncUnplannedHeight(); syncTopWidth(); });
   if (unplanPanel) {
-    const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
-    if (savedWidth) {
+    const savedWidth = parseInt(localStorage.getItem(UNPLAN_WIDTH_KEY), 10);
+    if (savedWidth && savedWidth > 100 && savedWidth < window.innerWidth - 100) {
       unplanPanel.style.width = savedWidth + 'px';
+    } else {
+      unplanPanel.style.width = '800px';
     }
   }
   if (unplanList) {
@@ -999,9 +1001,11 @@
       syncTopWidth();
     });
     unplanShow.addEventListener('click', () => {
-      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
-      if (saved) {
+      const saved = parseInt(localStorage.getItem(UNPLAN_WIDTH_KEY), 10);
+      if (saved && saved > 100 && saved < window.innerWidth - 100) {
         unplanPanel.style.width = saved + 'px';
+      } else {
+        unplanPanel.style.width = '800px';
       }
       unplanPanel.style.display = 'block';
       unplanShow.style.display = 'none';
