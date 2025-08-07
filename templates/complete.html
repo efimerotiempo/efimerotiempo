@@ -121,7 +121,7 @@
     <tbody>
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
-        <td class="resource-col"><span class="worker-toggle">&#8722;</span><strong>{{ worker.upper() }}</strong> ({{ workers[worker]|join(', ') }})</td>
+        <td class="resource-col">{{ worker }}</td>
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
@@ -398,7 +398,6 @@
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
   const filterForm = document.getElementById('filter-form');
-  const collapsedSet = new Set(JSON.parse(localStorage.getItem('collapsedWorkers') || '[]'));
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
@@ -425,14 +424,6 @@
     });
   });
 
-  document.querySelectorAll('tbody tr[data-worker]').forEach(tr => {
-    const worker = tr.dataset.worker;
-    const btn = tr.querySelector('.worker-toggle');
-    if (collapsedSet.has(worker)) {
-      tr.classList.add('collapsed');
-      if (btn) btn.textContent = '+';
-    }
-  });
 
 
 
@@ -750,21 +741,6 @@
     popup.style.display = 'none';
   });
   popup.addEventListener('click', (e) => e.stopPropagation());
-  document.querySelectorAll('.worker-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tr = btn.closest('tr');
-      const worker = tr.dataset.worker;
-      tr.classList.toggle('collapsed');
-      if (tr.classList.contains('collapsed')) {
-        collapsedSet.add(worker);
-        btn.textContent = '+';
-      } else {
-        collapsedSet.delete(worker);
-        btn.textContent = '−';
-      }
-      localStorage.setItem('collapsedWorkers', JSON.stringify(Array.from(collapsedSet)));
-    });
-  });
   function showTask(t) {
     t.dispatchEvent(new Event('click'));
     const rect = t.getBoundingClientRect();

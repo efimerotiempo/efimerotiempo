@@ -111,10 +111,12 @@ reúne todas las fases pendientes. Cada proyecto aparece como una carpeta con
 su nombre y cliente; las carpetas están plegadas por defecto y se pueden
 desplegar para ver y arrastrar sus fases al calendario. La columna comienza
 con 2500 px de ancho pero puede ampliarse o reducirse sin límite arrastrando
-su borde izquierdo. Un botón «Fases sin planificar» flotante permite mostrar
-de nuevo la columna cuando se oculta. La tabla de proyectos muestra una
-columna indicando con un ✔ verde si está planificado o una ❌ si permanece sin
-planificar.
+su borde izquierdo y se sitúa a la derecha del todo, fuera del área
+desplazable del calendario. Un botón «Fases sin planificar» flotante permite
+mostrar de nuevo la columna cuando se oculta. La tabla de proyectos muestra
+una columna indicando con un ✔ verde si está planificado o una ❌ si permanece
+sin planificar. La columna inicial del calendario muestra únicamente el nombre
+de cada persona y permanece fija a la izquierda para que siempre sea visible.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo

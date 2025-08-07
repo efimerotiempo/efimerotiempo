@@ -515,6 +515,16 @@ def get_projects():
                     segs[ph] = [val]
 
         p.setdefault('assigned', {})
+        # Update planned flag based on assigned workers
+        if any(w != UNPLANNED for w in p['assigned'].values()):
+            if not p.get('planned', False):
+                p['planned'] = True
+                changed = True
+        else:
+            if p.get('planned', False):
+                p['planned'] = False
+                changed = True
+
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
         if missing:
             schedule, _ = schedule_projects(assigned_projects)

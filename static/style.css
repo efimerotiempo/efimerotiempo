@@ -4,7 +4,6 @@ table.schedule {
     width: auto; /* fit content so columns match cells */
     table-layout: auto;
 }
-.schedule-wrapper { overflow-x: auto; }
 table.schedule th, table.schedule td {
     border: 1px solid #ccc;
     padding: 4px;
@@ -81,11 +80,12 @@ table.schedule td.weekend-cell {
     flex: 1;
     overflow-x: auto;
 }
-.complete-calendar { flex: none; overflow-x: auto; }
+.complete-calendar { flex: none; }
 .complete-projects { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
-.calendar-flex { display: inline-flex; align-items: flex-start; position: relative; }
+.calendar-flex { display: flex; align-items: flex-start; position: relative; width: 100%; }
+.schedule-wrapper { flex: 1; overflow-x: auto; }
 .unplanned-panel { width: 2500px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; position: relative; }
 .unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
 #unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
