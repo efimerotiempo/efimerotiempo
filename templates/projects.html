@@ -34,6 +34,7 @@
         {% endfor %}
         <th>Cambiar</th>
         <th>Imagen</th>
+        <th>Imagen kanbanize</th>
         <th></th>
         <th>Actualizar</th>
     </tr>
@@ -136,6 +137,13 @@
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="file" name="image" accept="image/*">
             </form>
+        </td>
+        <td>
+            {% if p.kanban_image %}
+                {{ p.kanban_image }}
+            {% else %}
+                &mdash;
+            {% endif %}
         </td>
         <td>
             <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
