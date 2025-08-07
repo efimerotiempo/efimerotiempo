@@ -158,9 +158,7 @@ cada entrada.
 Al crear un proyecto puedes adjuntar una imagen opcional. Esta se guarda en
 `static/uploads` y se muestra en el recuadro informativo que aparece al pulsar
 una tarea en el calendario.
-Si una tarjeta de Kanbanize trae un `extlink`, ese archivo se descarga
-automáticamente y se adjunta como imagen del proyecto, mostrándose en el mismo
-recuadro.
+
 Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
 permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**

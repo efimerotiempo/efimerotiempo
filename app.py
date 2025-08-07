@@ -1852,21 +1852,7 @@ def kanbanize_webhook():
     }
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
-    extlink = card.get('extlink')
     image_path = None
-    if extlink:
-        try:
-            req = Request(extlink, headers={'User-Agent': 'Mozilla/5.0'})
-            with urlopen(req) as resp:
-                content = resp.read()
-            ext = os.path.splitext(urllib.parse.urlparse(extlink).path)[1] or '.jpg'
-            fname = f"{uuid.uuid4()}{ext}"
-            save_path = os.path.join(UPLOAD_FOLDER, fname)
-            with open(save_path, 'wb') as f:
-                f.write(content)
-            image_path = f"uploads/{fname}"
-        except Exception as e:
-            print("Error descargando imagen de Kanbanize:", e)
 
     projects = load_projects()
     existing = next(
