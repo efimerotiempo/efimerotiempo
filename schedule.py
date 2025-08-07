@@ -10,6 +10,7 @@ EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
+INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -118,6 +119,19 @@ def save_vacations(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(VACATIONS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def load_inactive_workers():
+    if os.path.exists(INACTIVE_WORKERS_FILE):
+        with open(INACTIVE_WORKERS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_inactive_workers(workers):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(INACTIVE_WORKERS_FILE, 'w') as f:
+        json.dump(workers, f)
 
 
 def load_daily_hours():

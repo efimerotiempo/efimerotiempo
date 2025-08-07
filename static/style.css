@@ -128,6 +128,10 @@ table.schedule td.weekend-cell {
     margin: -4px;
     padding: 4px;
 }
+.vac-delete {
+    color: red;
+    cursor: pointer;
+}
 
 
 .milestone-day {

@@ -112,7 +112,8 @@ su nombre y cliente; las carpetas están plegadas por defecto y se pueden
 desplegar para ver y arrastrar sus fases al calendario. La columna comienza
 con 2500 px de ancho pero puede ampliarse o reducirse sin límite arrastrando
 su borde izquierdo y se sitúa a la derecha del todo, fuera del área
-desplazable del calendario. Un botón «Fases sin planificar» flotante permite
+desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
+y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
 mostrar de nuevo la columna cuando se oculta. La tabla de proyectos muestra
 una columna indicando con un ✔ verde si está planificado o una ❌ si permanece
 sin planificar. La columna inicial del calendario muestra únicamente el nombre
@@ -220,4 +221,11 @@ cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
 asignaciones de tareas y la planificación simplemente salta esos días,
-continuando cuando el trabajador regresa de su descanso.
+continuando cuando el trabajador regresa de su descanso. En el calendario puedes
+pulsar sobre un día de vacaciones para mostrar una X roja y eliminarlo.
+
+### Recursos
+
+La pestaña **Recursos** muestra la lista de trabajadores con una casilla para
+activar o desactivar su visualización. Las filas desmarcadas desaparecen del
+calendario hasta que se vuelvan a marcar.

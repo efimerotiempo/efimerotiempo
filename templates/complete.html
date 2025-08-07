@@ -129,7 +129,7 @@
             {% set tasks = days_data.get(d.isoformat(), []) %}
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
-            <div class="task vacation">VACACIONES</div>
+            <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
             <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 {% if t.late %}
@@ -861,12 +861,24 @@
   const unplanHide = document.getElementById('unplanned-hide');
   const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
+  const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+  if (unplanPanel) {
+    const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
+    if (savedWidth) {
+      unplanPanel.style.width = savedWidth + 'px';
+    }
+  }
   if (unplanPanel && unplanHide && unplanShow) {
     unplanHide.addEventListener('click', () => {
+      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
       unplanPanel.style.display = 'none';
       unplanShow.style.display = 'block';
     });
     unplanShow.addEventListener('click', () => {
+      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
+      if (saved) {
+        unplanPanel.style.width = saved + 'px';
+      }
       unplanPanel.style.display = 'block';
       unplanShow.style.display = 'none';
     });
@@ -881,6 +893,7 @@
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
     };
     unplanResizer.addEventListener('mousedown', (e) => {
       startX = e.clientX;
@@ -889,6 +902,25 @@
       document.addEventListener('mouseup', onMouseUp);
     });
   }
+  document.querySelectorAll('.task.vacation').forEach(div => {
+    div.addEventListener('click', () => {
+      const del = div.querySelector('.vac-delete');
+      if (del) del.style.display = 'block';
+    });
+  });
+  document.querySelectorAll('.vac-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const parent = btn.parentElement;
+      const worker = parent.dataset.worker;
+      const day = parent.dataset.day;
+      fetch('/remove_vacation', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `worker=${encodeURIComponent(worker)}&date=${encodeURIComponent(day)}`
+      }).then(() => location.reload());
+    });
+  });
   document.querySelectorAll('.folder-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const content = btn.parentElement.nextElementSibling;

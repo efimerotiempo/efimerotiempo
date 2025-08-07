@@ -42,6 +42,8 @@ load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
+load_inactive_workers = _schedule_mod.load_inactive_workers
+save_inactive_workers = _schedule_mod.save_inactive_workers
 PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
@@ -138,7 +140,8 @@ def active_workers(today=None):
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     if today >= IGOR_END and 'Igor' in workers:
         workers.remove('Igor')
-    return workers
+    inactive = set(load_inactive_workers())
+    return [w for w in workers if w not in inactive]
 
 
 def parse_input_date(value):
@@ -677,9 +680,10 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    today = date.today()
     schedule.pop(UNPLANNED, None)
-    if date.today() >= IGOR_END:
-        schedule.pop('Igor', None)
+    visible = set(active_workers(today))
+    schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
             try:
@@ -708,8 +712,6 @@ def calendar_view():
                 ]
 
     points = split_markers(schedule)
-
-    today = date.today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
@@ -917,10 +919,59 @@ def delete_vacation(vid):
     return redirect(url_for('vacation_list'))
 
 
+@app.route('/remove_vacation', methods=['POST'])
+def remove_vacation():
+    worker = request.form['worker']
+    day = date.fromisoformat(request.form['date'])
+    vacations = load_vacations()
+    new_list = []
+    for v in vacations:
+        if v['worker'] != worker:
+            new_list.append(v)
+            continue
+        start = date.fromisoformat(v['start'])
+        end = date.fromisoformat(v['end'])
+        if day < start or day > end:
+            new_list.append(v)
+            continue
+        if start == end == day:
+            continue
+        if start == day:
+            v['start'] = (day + timedelta(days=1)).isoformat()
+            new_list.append(v)
+        elif end == day:
+            v['end'] = (day - timedelta(days=1)).isoformat()
+            new_list.append(v)
+        else:
+            before = v.copy()
+            after = v.copy()
+            before['end'] = (day - timedelta(days=1)).isoformat()
+            after['start'] = (day + timedelta(days=1)).isoformat()
+            before['id'] = str(uuid.uuid4())
+            after['id'] = str(uuid.uuid4())
+            new_list.extend([before, after])
+    save_vacations(new_list)
+    return ('', 204)
+
+
+@app.route('/resources', methods=['GET', 'POST'])
+def resources():
+    workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+    inactive = set(load_inactive_workers())
+    if request.method == 'POST':
+        active = request.form.getlist('worker')
+        inactive = [w for w in workers if w not in active]
+        save_inactive_workers(inactive)
+        return redirect(url_for('resources'))
+    return render_template('resources.html', workers=workers, inactive=inactive)
+
+
 @app.route('/complete')
 def complete():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    today = date.today()
+    visible = set(active_workers(today))
     plan_map = planning_status(schedule)
     unplanned = []
     if UNPLANNED in schedule:
@@ -939,8 +990,7 @@ def complete():
         })
         g['tasks'].append(item)
     unplanned = list(groups.values())
-    if date.today() >= IGOR_END:
-        schedule.pop('Igor', None)
+    schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
             try:
