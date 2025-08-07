@@ -16,10 +16,6 @@
         <td colspan="2"><input type="text" name="due_date" value="{{ prefill.due_date or '' }}" placeholder="dd-mm" required></td>
     </tr>
     <tr>
-        <td>Planificar</td>
-        <td colspan="2"><input type="checkbox" name="planned" {% if not prefill %}checked{% endif %}></td>
-    </tr>
-    <tr>
         <td>Prioridad</td>
         <td colspan="2">
             <select name="priority">

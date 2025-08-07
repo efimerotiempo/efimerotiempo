@@ -456,8 +456,6 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     if proj.get('frozen'):
         return None, 'Proyecto congelado'
 
-    if worker and phase not in WORKERS.get(worker, []):
-        return None, 'Trabajador sin esa fase'
     vac_map = _schedule_mod._build_vacation_map()
     if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
         return None, 'Vacaciones en esa fecha'
@@ -844,7 +842,6 @@ def add_project():
             file.save(save_path)
             image_path = f"uploads/{fname}"
         projects = get_projects()
-        schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         due = parse_input_date(data['due_date'])
         project = {
@@ -858,7 +855,7 @@ def add_project():
             'phases': {},
             'assigned': {},
             'image': image_path,
-            'planned': 'planned' in data,
+            'planned': False,
             'source': 'manual',
         }
         for phase in PHASE_ORDER:
@@ -869,9 +866,7 @@ def add_project():
                     val = parse_input_date(value_h)
                     if val:
                         project['phases'][phase] = val.isoformat()
-                        project['assigned'][phase] = find_worker_for_phase(
-                            phase, schedule, project['priority']
-                        )
+                        project['assigned'][phase] = UNPLANNED
             else:
                 hours = 0
                 if value_h:
@@ -886,9 +881,7 @@ def add_project():
                         pass
                 if hours:
                     project['phases'][phase] = hours
-                    project['assigned'][phase] = find_worker_for_phase(
-                        phase, schedule, project['priority']
-                    )
+                    project['assigned'][phase] = UNPLANNED
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('calendar_view', highlight=project['id']))
@@ -969,7 +962,6 @@ def complete():
             save_path = os.path.join(UPLOAD_FOLDER, fname)
             file.save(save_path)
             image_path = f"uploads/{fname}"
-        schedule, _ = schedule_projects(projects)
         color = COLORS[len(projects) % len(COLORS)]
         due = parse_input_date(data['due_date'])
         project = {
@@ -983,7 +975,7 @@ def complete():
             'phases': {},
             'assigned': {},
             'image': image_path,
-            'planned': 'planned' in data,
+            'planned': False,
         }
         for phase in PHASE_ORDER:
             value_h = data.get(phase)
@@ -993,9 +985,7 @@ def complete():
                     val = parse_input_date(value_h)
                     if val:
                         project['phases'][phase] = val.isoformat()
-                        project['assigned'][phase] = find_worker_for_phase(
-                            phase, schedule, project['priority']
-                        )
+                        project['assigned'][phase] = UNPLANNED
             else:
                 hours = 0
                 if value_h:
@@ -1010,9 +1000,7 @@ def complete():
                         pass
                 if hours:
                     project['phases'][phase] = hours
-                    project['assigned'][phase] = find_worker_for_phase(
-                        phase, schedule, project['priority']
-                    )
+                    project['assigned'][phase] = UNPLANNED
         projects.append(project)
         save_projects(projects)
         return redirect(url_for('complete', highlight=project['id']))

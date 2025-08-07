@@ -288,7 +288,7 @@ def schedule_projects(projects):
                             'pid': project['id'],
                         })
                         assigned[phase] = worker
-                if not worker or phase not in WORKERS.get(worker, []):
+                if not worker:
                     msg = f'Sin recurso para fase {phase}'
                     conflicts.append({
                         'id': len(conflicts) + 1,
@@ -363,7 +363,7 @@ def schedule_projects(projects):
                             else:
                                 assigned[phase] = worker
 
-                    if not worker or phase not in WORKERS.get(worker, []):
+                    if not worker:
                         msg = f'Sin recurso para fase {phase}'
                         conflicts.append({
                             'id': len(conflicts) + 1,
@@ -754,10 +754,8 @@ def find_worker_for_phase(
     be seleccionado manualmente desde la vista de proyectos.
     """
     candidates = []
-    for worker, skills in WORKERS.items():
-        if worker == 'Unai':
-            continue
-        if phase not in skills:
+    for worker in WORKERS:
+        if worker in ('Unai', UNPLANNED):
             continue
         start = start_day or date.today()
         if worker == 'Igor' and start >= IGOR_END:
@@ -776,15 +774,14 @@ def find_worker_for_phase(
             hours_map,
         )
         load = _worker_load(schedule, worker)
-        index = 0 if worker == UNPLANNED else skills.index(phase)
-        candidates.append((free, load, index, worker))
+        candidates.append((free, load, worker))
     if not candidates:
         return None
     if priority == 'Alta':
-        earliest = min(candidates, key=lambda c: (c[0], c[1], c[2]))
-        return earliest[3]
-    candidates.sort(key=lambda c: (c[0], c[1], c[2]))
-    return candidates[0][3]
+        earliest = min(candidates, key=lambda c: (c[0], c[1]))
+        return earliest[2]
+    candidates.sort(key=lambda c: (c[0], c[1]))
+    return candidates[0][2]
 
 def compute_schedule_map(projects):
     """Return a mapping of project id to scheduled tasks."""
