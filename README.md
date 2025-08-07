@@ -122,9 +122,11 @@ fecha **Material confirmado** de cada proyecto.
 La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
 **Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
 si está planificado o una ❌ si permanece sin planificar. A continuación se
-encuentran las columnas **Imagen** y **Imagen kanbanize**; esta última recoge
-los archivos adjuntos recibidos desde Kanbanize al crear o actualizar una
-tarjeta. La columna inicial del calendario muestra únicamente el nombre de cada
+encuentran las columnas **Imagen** y **Imagen kanbanize**; esta última muestra
+enlaces a los archivos adjuntos recibidos desde Kanbanize al crear o actualizar
+una tarjeta, utilizando el nombre y la URL proporcionados. Además, al pulsar una
+fase en el calendario se visualizará la primera imagen adjunta igual que si se
+hubiera cargado manualmente. La columna inicial del calendario muestra únicamente el nombre de cada
 persona y permanece fija a la izquierda para que siempre sea visible. La fecha
 de material confirmado también se visualiza en la ventana emergente al pulsar
 cualquier fase, tanto en el calendario como en la columna de fases sin

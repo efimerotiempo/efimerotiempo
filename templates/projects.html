@@ -139,8 +139,10 @@
             </form>
         </td>
         <td>
-            {% if p.kanban_image %}
-                {{ p.kanban_image }}
+            {% if p.kanban_attachments %}
+                {% for att in p.kanban_attachments %}
+                    <a href="{{ att.url }}" target="_blank">{{ att.name }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor %}
             {% else %}
                 &mdash;
             {% endif %}

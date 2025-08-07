@@ -502,7 +502,11 @@ def get_projects():
         p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
-        p.setdefault('kanban_image', None)
+        p.setdefault('kanban_attachments', [])
+        if 'kanban_image' in p and not p['kanban_attachments']:
+            old = p.pop('kanban_image')
+            if isinstance(old, str) and old:
+                p['kanban_attachments'] = [{'name': old, 'url': old}]
         if 'source' not in p:
             p['source'] = 'manual'
             changed = True
@@ -651,7 +655,7 @@ def _kanban_card_to_project(card):
         # calendar always displays the tasks as soon as the project is created.
         'assigned': {ph: UNPLANNED for ph in phases},
         'image': None,
-        'kanban_image': None,
+        'kanban_attachments': [],
         'planned': False,
         'source': 'api',
     }
@@ -829,7 +833,7 @@ def add_project():
             'phases': {},
             'assigned': {},
             'image': image_path,
-            'kanban_image': None,
+            'kanban_attachments': [],
             'planned': False,
             'source': 'manual',
         }
@@ -1868,14 +1872,14 @@ def kanbanize_webhook():
     proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
     attachments_raw = data.get('Attachments') or card.get('Attachments') or []
+    kanban_files = []
     if isinstance(attachments_raw, list):
-        kanban_img = ", ".join(
-            (a.get('name') or a.get('fileName') or a.get('filename') or str(a))
-            if isinstance(a, dict) else str(a)
-            for a in attachments_raw
-        )
-    else:
-        kanban_img = attachments_raw if isinstance(attachments_raw, str) else ''
+        for a in attachments_raw:
+            if isinstance(a, dict):
+                name = (a.get('name') or a.get('fileName') or a.get('filename') or '').strip()
+                url = a.get('url') or a.get('fileUrl') or a.get('link') or ''
+                if name and url:
+                    kanban_files.append({'name': name, 'url': url})
 
     image_path = None
 
@@ -1917,8 +1921,8 @@ def kanbanize_webhook():
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
-        if existing.get('kanban_image') != kanban_img:
-            existing['kanban_image'] = kanban_img
+        if existing.get('kanban_attachments') != kanban_files:
+            existing['kanban_attachments'] = kanban_files
             changed = True
         for ph, hours in new_phases.items():
             if existing.get('phases', {}).get(ph) != hours:
@@ -1942,7 +1946,7 @@ def kanbanize_webhook():
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
             'image': image_path,
-            'kanban_image': kanban_img,
+            'kanban_attachments': kanban_files,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
