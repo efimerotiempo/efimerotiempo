@@ -72,7 +72,9 @@
             <button id="today-btn">HOY</button>
         </div>
         <div class="calendar-flex">
-        <div class="schedule-wrapper">
+        <div class="calendar-scroll">
+          <div id="top-scroll" class="top-scroll"><div class="top-scroll-inner"></div></div>
+          <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
     {% set day_names = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'] %}
@@ -169,6 +171,7 @@
     </tr>
     </tfoot>
         </table>
+          </div>
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
@@ -471,15 +474,39 @@
 
 
   const wrapper = document.querySelector('.schedule-wrapper');
+  const topScroll = document.getElementById('top-scroll');
+  const topInner = topScroll ? topScroll.querySelector('.top-scroll-inner') : null;
+  function syncTopWidth() {
+    if (topInner) topInner.style.width = wrapper.scrollWidth + 'px';
+  }
+  syncTopWidth();
+  window.addEventListener('resize', () => { syncTopWidth(); });
+  let syncingTop = false;
+  let syncingBottom = false;
+  if (topScroll) {
+    topScroll.addEventListener('scroll', () => {
+      if (!syncingTop) {
+        syncingBottom = true;
+        wrapper.scrollLeft = topScroll.scrollLeft;
+        syncingBottom = false;
+      }
+    });
+  }
   const SCROLL_KEY = 'calendarScroll';
   const savedScroll = sessionStorage.getItem(SCROLL_KEY);
   if (savedScroll !== null) {
     wrapper.scrollLeft = parseFloat(savedScroll);
+    if (topScroll) topScroll.scrollLeft = wrapper.scrollLeft;
   } else {
     const todayCell = document.querySelector('th.today');
     if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
   }
   wrapper.addEventListener('scroll', () => {
+    if (!syncingBottom && topScroll) {
+      syncingTop = true;
+      topScroll.scrollLeft = wrapper.scrollLeft;
+      syncingTop = false;
+    }
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
   });
   wrapper.addEventListener('wheel', (e) => {
@@ -937,7 +964,9 @@
   const unplanHide = document.getElementById('unplanned-hide');
   const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
+  const unplanList = unplanPanel ? unplanPanel.querySelector('.unplanned-list') : null;
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+  const UNPLAN_SCROLL_KEY = 'unplannedScroll';
 
   function syncUnplannedHeight() {
     const wrap = document.querySelector('.schedule-wrapper');
@@ -947,18 +976,27 @@
   }
 
   syncUnplannedHeight();
-  window.addEventListener('resize', syncUnplannedHeight);
+  window.addEventListener('resize', () => { syncUnplannedHeight(); syncTopWidth(); });
   if (unplanPanel) {
     const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
     if (savedWidth) {
       unplanPanel.style.width = savedWidth + 'px';
     }
   }
+  if (unplanList) {
+    const savedScroll = localStorage.getItem(UNPLAN_SCROLL_KEY);
+    if (savedScroll) unplanList.scrollTop = parseFloat(savedScroll);
+    unplanList.addEventListener('scroll', () => {
+      localStorage.setItem(UNPLAN_SCROLL_KEY, unplanList.scrollTop);
+    });
+  }
   if (unplanPanel && unplanHide && unplanShow) {
     unplanHide.addEventListener('click', () => {
       localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
+      if (unplanList) localStorage.setItem(UNPLAN_SCROLL_KEY, unplanList.scrollTop);
       unplanPanel.style.display = 'none';
       unplanShow.style.display = 'block';
+      syncTopWidth();
     });
     unplanShow.addEventListener('click', () => {
       const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
@@ -968,6 +1006,9 @@
       unplanPanel.style.display = 'block';
       unplanShow.style.display = 'none';
       syncUnplannedHeight();
+      syncTopWidth();
+      const ss = localStorage.getItem(UNPLAN_SCROLL_KEY);
+      if (ss && unplanList) unplanList.scrollTop = parseFloat(ss);
     });
   }
   if (unplanPanel && unplanResizer) {
@@ -976,6 +1017,7 @@
       const dx = startX - e.clientX;
       const newWidth = Math.max(100, startWidth + dx);
       unplanPanel.style.width = newWidth + 'px';
+      syncTopWidth();
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);

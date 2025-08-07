@@ -55,7 +55,8 @@ parte superior se muestran el formulario de hitos y la lista de conflictos.
 Debajo aparecen el calendario y, al final,
 la lista de proyectos. Cada sección se expande por completo y la página ofrece una barra de desplazamiento vertical para consultar la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
-sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
+sobre la tabla, o mediante las barras de desplazamiento que hay tanto arriba como
+abajo. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
 exceso recortado.
 
@@ -63,10 +64,11 @@ Los fines de semana se representan con una franja negra que agrupa el sábado y 
 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
-automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
-eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
-lista de conflictos aparece un aviso indicando la eliminación y los cambios que
-ha producido.
+automáticamente. Los filtros por proyecto y cliente recuerdan la última
+selección aunque cambies de pestaña o recargues la página. Junto a cada
+proyecto hay un botón rojo con una **X** para eliminarlo. Al borrar un proyecto
+se vuelve a calcular la planificación y en la lista de conflictos aparece un
+aviso indicando la eliminación y los cambios que ha producido.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
 de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
@@ -115,11 +117,12 @@ las horas de una misma fase se agrupan y se muestran como una única entrada con
 el total pendiente. La columna comienza con 2500 px de ancho pero puede
 ampliarse o reducirse sin límite arrastrando su borde izquierdo y se sitúa a la
 derecha del todo, fuera del área
-desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
-y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
-mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
-fecha **Material confirmado** de cada proyecto y una división separa los que
-cuentan con esa fecha de los que no.
+desplazable del calendario. El ancho elegido y la posición del desplazamiento
+vertical se mantienen aunque se oculte y vuelva a mostrar la columna, así como
+al cambiar de pestaña y volver a **Completo**. Un botón «Fases sin planificar»
+flotante permite mostrar de nuevo la columna cuando se oculta. Las carpetas se
+ordenan por la fecha **Material confirmado** de cada proyecto y una división
+separa los que cuentan con esa fecha de los que no.
 
 La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
 **Fecha material confirmado**, e incluye una columna indicando con un ✔ verde

@@ -163,6 +163,40 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
+  const FILTER_FORM = document.querySelector('form.controls');
+  if (FILTER_FORM) {
+    const projInp = FILTER_FORM.querySelector('input[name="project"]');
+    const clientInp = FILTER_FORM.querySelector('input[name="client"]');
+    const sortSel = FILTER_FORM.querySelector('select[name="sort"]');
+    const PF_KEY = 'projFilter';
+    const CF_KEY = 'clientFilter';
+    const SO_KEY = 'sortOption';
+    const params = new URLSearchParams(location.search);
+    const storedProj = localStorage.getItem(PF_KEY);
+    const storedClient = localStorage.getItem(CF_KEY);
+    const storedSort = localStorage.getItem(SO_KEY);
+    let needSubmit = false;
+    if (!params.get('project') && storedProj) {
+      projInp.value = storedProj;
+      needSubmit = true;
+    }
+    if (!params.get('client') && storedClient) {
+      clientInp.value = storedClient;
+      needSubmit = true;
+    }
+    if (!params.get('sort') && storedSort) {
+      sortSel.value = storedSort;
+      needSubmit = true;
+    }
+    if (needSubmit && (storedProj || storedClient || storedSort)) {
+      FILTER_FORM.submit();
+    }
+    FILTER_FORM.addEventListener('submit', () => {
+      localStorage.setItem(PF_KEY, projInp.value);
+      localStorage.setItem(CF_KEY, clientInp.value);
+      localStorage.setItem(SO_KEY, sortSel.value);
+    });
+  }
   document.querySelectorAll('.start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
