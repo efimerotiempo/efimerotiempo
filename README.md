@@ -161,12 +161,7 @@ una tarea en el calendario.
 Si una tarjeta de Kanbanize trae un `extlink`, ese archivo se descarga
 automáticamente y se adjunta como imagen del proyecto, mostrándose en el mismo
 recuadro.
-Ese mismo recuadro incluye ahora un botón **Reorganizar** que intenta
-reubicar la fase seleccionada en el primer hueco libre disponible,
-preferentemente antes de la fecha asignada. Si se encuentra un hueco
-más temprano respetando todas las restricciones, el proyecto se guarda con
-la nueva fecha de inicio y el calendario se actualiza al recargar la página.
-Se ofrece también un botón rojo **Borrar fase** que elimina ese tramo de
+Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
 permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
 que asigna la fase seleccionada al día actual dentro de la fila *Sin planificar*
@@ -184,9 +179,6 @@ Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
 simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
 mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
 final de la fase anterior.
-Además se muestra un pequeño formulario con un campo de fecha y un botón
-**Cambiar** para modificar manualmente el inicio de la fase. Si la fecha
-introducida no es válida se despliega una alerta explicando el motivo.
 Otro formulario permite editar la **fecha límite** del proyecto desde esa misma
 ventana emergente o desde las tablas de proyectos, mostrando igualmente un
 aviso si la nueva fecha no es correcta.

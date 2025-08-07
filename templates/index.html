@@ -142,12 +142,10 @@
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const REORG_URL = "{{ url_for('reorganize_phase') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
-  const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
@@ -248,7 +246,6 @@
       const info = PROJECT_DATA[t.dataset.pid];
       let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<div>Inicio: ${info.start_date} <form id="proj-start-form" style="display:inline"><input type="date" id="proj-start-input" value="${info.start_date}" required><button type="submit" id="proj-start-btn" data-pid="${t.dataset.pid}">Cambiar inicio</button></form></div>`;
       html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
       html += `<div>Prioridad: ${info.priority}</div>`;
       let phaseText = '';
@@ -271,9 +268,7 @@
       }
       html += `</div>`;
       html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-      html += `<div><button id="reorg-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Reorganizar</button></div>`;
       html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
-      html += `<div><button id="block-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.blocked ? 'Desbloquear' : 'Bloquear'}</button></div>`;
       html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
       if (Array.isArray(info.phases[t.dataset.phase])) {
         html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -289,25 +284,6 @@
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
-      const btn = document.getElementById('reorg-btn');
-      if (btn) {
-        btn.addEventListener('click', ev => {
-          ev.stopPropagation();
-          fetch(REORG_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase })
-          }).then(resp => resp.ok ? resp.json() : null)
-            .then(d => {
-              if (d) {
-                localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
-                localStorage.setItem(SCROLL_KEY2, d.date);
-              }
-              location.reload();
-            });
-        });
-      }
       const del = document.getElementById('del-btn');
       if (del) {
         del.addEventListener('click', ev => {
@@ -370,14 +346,6 @@
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
           fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST', credentials: 'same-origin' })
-            .then(() => location.reload());
-        });
-      }
-      const block = document.getElementById('block-btn');
-      if (block) {
-        block.addEventListener('click', ev => {
-          ev.stopPropagation();
-          fetch('/toggle_block/' + block.dataset.pid, { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }
@@ -445,21 +413,6 @@
           }).then(resp => {
             if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
           });
-        });
-      }
-      const projForm = document.getElementById('proj-start-form');
-      if (projForm) {
-        projForm.addEventListener('submit', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const btn = document.getElementById('proj-start-btn');
-          const val = document.getElementById('proj-start-input').value;
-          fetch(PROJ_START_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, start_date: val })
-          }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
     });

@@ -385,48 +385,6 @@ def build_calendar(start, end):
     return days, cols, week_spans
 
 
-def attempt_reorganize(projects, pid, phase, days=30):
-    """Try to move ``phase`` of project ``pid`` to an earlier slot.
-
-    Return the new first day of the phase if it changes, otherwise ``None``.
-    """
-    mapping = compute_schedule_map(projects)
-    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    if not tasks:
-        return False
-    orig_start = date.fromisoformat(tasks[0][1])
-    proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj:
-        return False
-    base = date.fromisoformat(proj['start_date'])
-    best = orig_start
-    best_date = base
-    for delta in range(1, days + 1):
-        cand = base - timedelta(days=delta)
-        temp = copy.deepcopy(projects)
-        for tp in temp:
-            if tp['id'] == pid:
-                tp['start_date'] = cand.isoformat()
-                if tp.get('segment_starts'):
-                    tp['segment_starts'].pop(phase, None)
-                break
-        new_map = compute_schedule_map(temp)
-        new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
-        if not new_tasks:
-            continue
-        start2 = date.fromisoformat(new_tasks[0][1])
-        if start2 < best:
-            best = start2
-            best_date = cand
-    if best < orig_start:
-        proj['start_date'] = best_date.isoformat()
-        if proj.get('segment_starts'):
-            proj['segment_starts'].pop(phase, None)
-        save_projects(projects)
-        return best.isoformat()
-    return None
-
-
 def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
@@ -1464,21 +1422,6 @@ def update_hours():
     if request.is_json:
         return '', 204
     return redirect(request.referrer or url_for('calendar_view'))
-
-
-@app.route('/reorganize', methods=['POST'])
-def reorganize_phase():
-    data = request.get_json() or request.form
-    pid = data.get('pid')
-    phase = data.get('phase')
-    if not pid or not phase:
-        return '', 400
-    projects = get_projects()
-    new_day = attempt_reorganize(projects, pid, phase)
-    if new_day:
-        return jsonify({'date': new_day, 'pid': pid, 'phase': phase, 'part': part})
-    return '', 204
-
 
 @app.route('/delete_phase', methods=['POST'])
 def delete_phase():
