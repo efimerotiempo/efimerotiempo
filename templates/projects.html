@@ -19,6 +19,7 @@
         <th>Cliente</th>
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
+        <th>Fecha material confirmado</th>
         <th>En plazo</th>
         <th>Planificado</th>
         <th>Origen</th>
@@ -33,6 +34,7 @@
         {% endfor %}
         <th>Cambiar</th>
         <th>Imagen</th>
+        <th>Imagen kanbanize</th>
         <th></th>
         <th>Actualizar</th>
     </tr>
@@ -57,6 +59,7 @@
                 <input type="date" name="due_date" value="{{ p.due_date }}">
             </form>
         </td>
+        <td>{{ p.material_confirmed_date }}</td>
         <td>
             {% if p.met %}
                 <span class="ok">&#10004;</span>
@@ -134,6 +137,15 @@
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="file" name="image" accept="image/*">
             </form>
+        </td>
+        <td>
+            {% if p.kanban_attachments %}
+                {% for att in p.kanban_attachments %}
+                    <a href="{{ att.url }}" target="_blank">{{ att.url }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+                &mdash;
+            {% endif %}
         </td>
         <td>
             <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">

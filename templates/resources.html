@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Recursos</h2>
+<form method="post">
+  <table class="resource-table">
+    <tr><th>Recurso</th><th>Visible</th></tr>
+    {% for w in workers %}
+    <tr>
+      <td>{{ w }}</td>
+      <td style="text-align:center;"><input type="checkbox" name="worker" value="{{ w }}" {% if w not in inactive %}checked{% endif %}></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button type="submit">Guardar</button>
+</form>
+{% endblock %}
