@@ -195,6 +195,7 @@
         <button id="unplanned-show" style="display:none;">Fases sin planificar</button>
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
+<div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -399,6 +400,9 @@
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
+  const materialModal = document.getElementById('material-modal');
+  const materialText = document.getElementById('material-text');
+  const materialClose = document.getElementById('material-close');
   const filterForm = document.getElementById('filter-form');
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
@@ -607,7 +611,18 @@
             credentials: 'same-origin',
             body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
           }).then(resp => {
-            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
+            if (resp.ok) {
+              const info = PROJECT_DATA[btn.dataset.pid] || {};
+              if (info.material_confirmed_date && val < info.material_confirmed_date) {
+                materialText.textContent = 'SIN MATERIAL';
+                materialModal.style.display = 'block';
+                materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+              } else {
+                location.reload();
+              }
+            } else {
+              resp.json().then(d => alert(d.error || 'Error'));
+            }
           });
         });
       }
@@ -838,6 +853,8 @@
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
+      const info = PROJECT_DATA[data.pid] || {};
+      const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
@@ -853,10 +870,16 @@
           alert(data.error || 'Error');
           return;
         }
-        if (data.message) alert(data.message);
         localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
         if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-        location.reload();
+        if (beforeMaterial) {
+          materialText.textContent = 'SIN MATERIAL';
+          materialModal.style.display = 'block';
+          materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+        } else {
+          if (data.message) alert(data.message);
+          location.reload();
+        }
       });
     });
   });
@@ -963,6 +986,13 @@
           if (d) {
             localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.get('pid'), phase: data.get('phase'), date: d.date}));
             if (d.date !== data.get('date')) localStorage.setItem(SCROLL_KEY2, d.date);
+            const info = PROJECT_DATA[data.get('pid')] || {};
+            if (info.material_confirmed_date && d.date < info.material_confirmed_date) {
+              materialText.textContent = 'SIN MATERIAL';
+              materialModal.style.display = 'block';
+              materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+              return;
+            }
           }
           location.reload();
         });
