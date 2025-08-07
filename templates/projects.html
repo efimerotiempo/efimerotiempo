@@ -158,6 +158,32 @@
     </tbody>
 </table>
 <script>
+  const FILTER_KEY = 'projectsFilter';
+  (function() {
+    const form = document.querySelector('form.controls');
+    if (!form) return;
+    const projInput = form.querySelector('input[name="project"]');
+    const clientInput = form.querySelector('input[name="client"]');
+    const sortSelect = form.querySelector('select[name="sort"]');
+    const saved = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+    if (!location.search && (saved.project || saved.client || saved.sort)) {
+      const params = new URLSearchParams(saved);
+      location.search = params.toString();
+      return;
+    }
+    localStorage.setItem(FILTER_KEY, JSON.stringify({
+      project: projInput.value,
+      client: clientInput.value,
+      sort: sortSelect.value
+    }));
+    form.addEventListener('submit', () => {
+      localStorage.setItem(FILTER_KEY, JSON.stringify({
+        project: projInput.value,
+        client: clientInput.value,
+        sort: sortSelect.value
+      }));
+    });
+  })();
   const START_URL = "{{ url_for('update_phase_start') }}";
   const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
