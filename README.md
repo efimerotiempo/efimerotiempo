@@ -109,9 +109,11 @@ calendario y ya no se le asignan nuevas fases.
 Junto al calendario hay una columna llamada **Fases sin planificar** que
 reúne todas las fases pendientes. Cada proyecto aparece como una carpeta con
 su nombre y cliente; las carpetas están plegadas por defecto y se pueden
-desplegar para ver y arrastrar sus fases al calendario. La columna comienza
-con 2500 px de ancho pero puede ampliarse o reducirse sin límite arrastrando
-su borde izquierdo y se sitúa a la derecha del todo, fuera del área
+desplegar para ver y arrastrar sus fases al calendario. Dentro de cada proyecto
+las horas de una misma fase se agrupan y se muestran como una única entrada con
+el total pendiente. La columna comienza con 2500 px de ancho pero puede
+ampliarse o reducirse sin límite arrastrando su borde izquierdo y se sitúa a la
+derecha del todo, fuera del área
 desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
 y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
 mostrar de nuevo la columna cuando se oculta. La tabla de proyectos muestra

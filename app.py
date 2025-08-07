@@ -983,13 +983,47 @@ def complete():
     groups = {}
     for item in unplanned:
         pid = item['pid']
-        g = groups.setdefault(pid, {
+        phase = item['phase']
+        proj = groups.setdefault(pid, {
             'project': item['project'],
             'client': item['client'],
-            'tasks': []
+            'phases': {}
         })
-        g['tasks'].append(item)
-    unplanned = list(groups.values())
+        ph = proj['phases'].setdefault(phase, {
+            'project': item['project'],
+            'client': item['client'],
+            'pid': pid,
+            'phase': phase,
+            'color': item.get('color'),
+            'priority': item.get('priority'),
+            'due_date': item.get('due_date'),
+            'start_date': item.get('start_date'),
+            'day': item.get('day'),
+            'hours': 0,
+            'late': item.get('late', False),
+            'blocked': item.get('blocked', False),
+            'frozen': item.get('frozen', False),
+        })
+        ph['hours'] += item.get('hours', 0)
+        if item.get('day') and (ph['day'] is None or item['day'] < ph['day']):
+            ph['day'] = item['day']
+        if item.get('start_date') and (ph['start_date'] is None or item['start_date'] < ph['start_date']):
+            ph['start_date'] = item['start_date']
+        if item.get('due_date') and (ph['due_date'] is None or item['due_date'] < ph['due_date']):
+            ph['due_date'] = item['due_date']
+        if item.get('late'):
+            ph['late'] = True
+        if item.get('blocked'):
+            ph['blocked'] = True
+        if item.get('frozen'):
+            ph['frozen'] = True
+    unplanned = []
+    for data in groups.values():
+        unplanned.append({
+            'project': data['project'],
+            'client': data['client'],
+            'tasks': list(data['phases'].values())
+        })
     schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
