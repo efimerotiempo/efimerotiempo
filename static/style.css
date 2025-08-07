@@ -94,6 +94,7 @@ table.schedule td.weekend-cell {
 .folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
 .folder-header .folder-toggle { margin-right: 5px; }
 .folder-content { padding-left: 10px; }
+.unplanned-divider { border: none; border-top: 2px solid #000; margin: 10px 0; }
 
 /* make first column fit contents */
 .resource-col {

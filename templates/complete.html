@@ -170,7 +170,29 @@
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
             <div class="unplanned-list" data-worker="Sin planificar">
-            {% for g in unplanned %}
+            {% for g in unplanned_with %}
+            <div class="unplanned-folder">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
+                <div class="folder-content" style="display:none;">
+                {% for t in g.tasks %}
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                    {% if t.late %}
+                        <span class="late">&#10060;</span>
+                    {% else %}
+                        <span class="ok">&#10004;</span>
+                    {% endif %}
+                    {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
+                    {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if unplanned_with and unplanned_without %}
+            <hr class="unplanned-divider" />
+            {% endif %}
+            {% for g in unplanned_without %}
             <div class="unplanned-folder">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
                 <div class="folder-content" style="display:none;">

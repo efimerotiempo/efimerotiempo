@@ -1041,6 +1041,8 @@ def complete():
             }
         )
     unplanned.sort(key=lambda g: g.get('material_date') or '9999-12-31')
+    unplanned_with = [g for g in unplanned if g.get('material_date')]
+    unplanned_without = [g for g in unplanned if not g.get('material_date')]
     schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
@@ -1121,7 +1123,8 @@ def complete():
         plan_map=plan_map,
         split_points=points,
         palette=COLORS,
-        unplanned=unplanned,
+        unplanned_with=unplanned_with,
+        unplanned_without=unplanned_without,
     )
 
 
