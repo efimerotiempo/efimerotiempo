@@ -1925,12 +1925,5 @@ def bug_list():
     return render_template('bugs.html', bugs=bugs)
 
 
-@app.route('/kanbanize')
-def kanbanize_list():
-    """Display all received Kanbanize cards."""
-    cards = load_kanban_cards()
-    return render_template('kanbanize.html', cards=cards)
-
-
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=6000)

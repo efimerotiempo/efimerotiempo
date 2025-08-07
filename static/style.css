@@ -98,11 +98,18 @@ table.schedule td.weekend-cell {
 /* make first column fit contents */
 .resource-col {
     white-space: nowrap;
-    width: 1%;
     position: sticky;
     left: 0;
     background: #fff;
     z-index: 5;
+}
+
+table.schedule th.resource-col,
+table.schedule td.resource-col {
+    min-width: 150px;
+    width: 150px;
+    border: 3px solid #000;
+    font-weight: bold;
 }
 
 /* keep projects table width */
