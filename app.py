@@ -421,8 +421,9 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
         return None, 'Vacaciones en esa fecha'
     prev_end = previous_phase_end(projects, pid, phase, part)
+    warning = None
     if prev_end and new_date <= prev_end:
-        return None, 'No puede adelantarse a la fase previa'
+        warning = 'ORDEN INADECUADO DE FASES'
     # Prepare a deep copy to test the new start without modifying real data yet
     temp = copy.deepcopy(projects)
     tproj = next((p for p in temp if p['id'] == pid), None)
@@ -478,7 +479,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     if worker:
         proj['planned'] = worker != UNPLANNED
     save_projects(projects)
-    return new_date.isoformat(), None
+    return new_date.isoformat(), warning
 
 
 def get_projects():
@@ -1394,12 +1395,6 @@ def update_start_date():
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
-    if proj.get('due_date'):
-        try:
-            if new_date > date.fromisoformat(proj['due_date']):
-                return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
-        except ValueError:
-            pass
     proj['start_date'] = new_date.isoformat()
     save_projects(projects)
     if request.is_json:
@@ -1483,12 +1478,6 @@ def update_project_row():
     if 'start_date' in data:
         sd = parse_input_date(data['start_date'])
         if sd:
-            if proj.get('due_date'):
-                try:
-                    if sd > date.fromisoformat(proj['due_date']):
-                        return jsonify({'error': 'Inicio posterior a la fecha límite'}), 400
-                except ValueError:
-                    pass
             proj['start_date'] = sd.isoformat()
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])

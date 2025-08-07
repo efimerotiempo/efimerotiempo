@@ -165,6 +165,7 @@
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
+<div id="order-modal" class="conflict-modal"><div class="conflict-content"><div id="order-text" style="color:orange;font-weight:bold">ORDEN INADECUADO DE FASES</div><button id="order-close">Cerrar</button></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
         <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -252,7 +253,16 @@
   const materialModal = document.getElementById('material-modal');
   const materialText = document.getElementById('material-text');
   const materialClose = document.getElementById('material-close');
+  const orderModal = document.getElementById('order-modal');
+  const orderText = document.getElementById('order-text');
+  const orderClose = document.getElementById('order-close');
   const filterForm = document.getElementById('filter-form');
+
+  function showOrderWarning(msg) {
+    orderText.textContent = msg;
+    orderModal.style.display = 'block';
+    orderClose.onclick = () => { orderModal.style.display = 'none'; location.reload(); };
+  }
 
 
   // allow horizontal scrolling with Shift + wheel over the schedule
@@ -652,8 +662,11 @@
           materialModal.style.display = 'block';
           materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
         } else {
-          if (data.message) alert(data.message);
-          location.reload();
+          if (data.message) {
+            showOrderWarning(data.message);
+          } else {
+            location.reload();
+          }
         }
       });
       });
