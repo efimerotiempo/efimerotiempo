@@ -907,62 +907,9 @@ def delete_vacation(vid):
     return redirect(url_for('vacation_list'))
 
 
-@app.route('/complete', methods=['GET', 'POST'])
+@app.route('/complete')
 def complete():
     projects = get_projects()
-    if request.method == 'POST':
-        data = request.form
-        file = request.files.get('image')
-        image_path = None
-        if file and file.filename:
-            ext = os.path.splitext(secure_filename(file.filename))[1]
-            fname = f"{uuid.uuid4()}{ext}"
-            save_path = os.path.join(UPLOAD_FOLDER, fname)
-            file.save(save_path)
-            image_path = f"uploads/{fname}"
-        color = COLORS[len(projects) % len(COLORS)]
-        due = parse_input_date(data['due_date'])
-        project = {
-            'id': str(uuid.uuid4()),
-            'name': data['name'],
-            'client': data['client'],
-            'start_date': date.today().isoformat(),
-            'due_date': due.isoformat() if due else '',
-            'priority': data.get('priority', 'Sin prioridad'),
-            'color': color,
-            'phases': {},
-            'assigned': {},
-            'image': image_path,
-            'planned': False,
-        }
-        for phase in PHASE_ORDER:
-            value_h = data.get(phase)
-            value_d = data.get(f"{phase}_days")
-            if phase == 'pedidos':
-                if value_h:
-                    val = parse_input_date(value_h)
-                    if val:
-                        project['phases'][phase] = val.isoformat()
-                        project['assigned'][phase] = UNPLANNED
-            else:
-                hours = 0
-                if value_h:
-                    try:
-                        hours += int(value_h)
-                    except ValueError:
-                        pass
-                if value_d:
-                    try:
-                        hours += int(value_d) * HOURS_PER_DAY
-                    except ValueError:
-                        pass
-                if hours:
-                    project['phases'][phase] = hours
-                    project['assigned'][phase] = UNPLANNED
-        projects.append(project)
-        save_projects(projects)
-        return redirect(url_for('complete', highlight=project['id']))
-
     schedule, conflicts = schedule_projects(projects)
     plan_map = planning_status(schedule)
     if date.today() >= IGOR_END:

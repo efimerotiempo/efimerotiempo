@@ -2,59 +2,6 @@
 {% block content %}
 <div class="complete-container">
     <div class="complete-top">
-    <div class="complete-add">
-        <h2>Añadir proyecto</h2>
-        <form method="post" enctype="multipart/form-data">
-        <table class="project-form">
-            <tr>
-                <td>Nombre del proyecto</td>
-                <td colspan="2"><input type="text" name="name" required></td>
-            </tr>
-            <tr>
-                <td>Cliente</td>
-                <td colspan="2"><input type="text" name="client" required></td>
-            </tr>
-            <tr>
-                <td>Fecha límite</td>
-                <td colspan="2"><input type="text" name="due_date" placeholder="dd-mm" required></td>
-            </tr>
-            <tr>
-                <td>Prioridad</td>
-                <td colspan="2">
-                    <select name="priority">
-                        <option value="Alta">Alta</option>
-                        <option value="Media">Media</option>
-                        <option value="Baja">Baja</option>
-                        <option value="Sin prioridad" selected>Sin prioridad</option>
-                    </select>
-                </td>
-            </tr>
-            {% for phase in phases %}
-                {% if phase == 'pedidos' %}
-                <tr>
-                    <td>Plazo acopio</td>
-                    <td colspan="2"><input type="text" name="pedidos" placeholder="dd-mm"></td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td>{{ phase }} (horas)</td>
-                    <td><input type="number" name="{{ phase }}"></td>
-                    <td><input type="number" name="{{ phase }}_days" placeholder="días"></td>
-                </tr>
-                {% endif %}
-            {% endfor %}
-            <tr>
-                <td>Imagen</td>
-                <td colspan="2"><input type="file" name="image" accept="image/*"></td>
-            </tr>
-            <tr>
-                <td colspan="3" style="text-align:center;">
-                    <button class="save-btn" type="submit">Guardar</button>
-                </td>
-            </tr>
-        </table>
-        </form>
-    </div>
     <div class="complete-milestones">
         <h2>Hitos</h2>
         <form method="post" action="{{ url_for('add_milestone') }}">

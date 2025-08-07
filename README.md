@@ -11,7 +11,7 @@ python app.py
 ```
 
 Visita `http://localhost:5000` en tu navegador para ir directamente a la vista
-**Completo**, que combina el calendario, los proyectos y el formulario de alta.
+**Completo**, que combina el calendario y los proyectos.
 El calendario precarga desde tres meses antes hasta seis meses después de la fecha
 actual para que puedas desplazarte por todo ese periodo manteniendo pulsada la
 tecla **Shift** mientras giras la rueda del ratón. El botón **HOY** centra la
@@ -50,11 +50,9 @@ generará ningún proyecto.
  muestra la lista completa y permite eliminarlos con una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
-parte superior se muestran, de izquierda a derecha, el formulario de alta, el
-de hitos y la lista de conflictos. Debajo aparecen el calendario y, al final,
-la lista de proyectos. Cada sección se expande por
-mpleto y la página ofrece una barra de desplazamiento vertical para consultar
-la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
+parte superior se muestran el formulario de hitos y la lista de conflictos.
+Debajo aparecen el calendario y, al final,
+la lista de proyectos. Cada sección se expande por completo y la página ofrece una barra de desplazamiento vertical para consultar la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón
 sobre la tabla. Las columnas del calendario son ahora el doble de anchas para
 facilitar la lectura y cada tarea se muestra como mucho en dos líneas, con el
@@ -196,8 +194,7 @@ el calendario se desplazará automáticamente a ese nuevo día para que sea fác
 encontrarla y se mostrará una alerta indicando por qué no pudo quedarse en la
 celda seleccionada.
 Durante este proceso se validan dos aspectos: el día escogido no puede
-coincidir con las vacaciones del trabajador (salvo en el caso de Irene, que
-puede trabajar igualmente de lunes a viernes) y la fase no se puede adelantar a
+coincidir con las vacaciones del trabajador y la fase no se puede adelantar a
 la inmediatamente anterior.
 El resaltado negro permanece hasta que se mueva otra fase.
 
@@ -223,15 +220,5 @@ Desde la pestaña **Vacaciones** puedes registrar periodos de descanso para
 cualquier trabajador seleccionándolo en la lista y especificando las fechas de
 inicio y fin. Los días marcados como vacaciones aparecen rellenados en rojo y el
 bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
-asignaciones de tareas, excepto en el caso de **Irene**, que puede recibir
-trabajo esos días mientras no caigan en fin de semana. Sus vacaciones siguen
-mostrándose en el calendario aunque no influyan en la planificación. Si un trabajador tenía
-proyectos planificados en esas fechas, la planificación se recalcula y esas
-fases se reasignan automáticamente al trabajador disponible con menor carga. En
-la lista de conflictos se añade una nota indicando los días de vacaciones, a qué
-persona se han movido las tareas y si el proyecto sigue cumpliendo su fecha
-límite tras el cambio. Aunque un trabajador tenga vacaciones cerca de la fecha
-de inicio de un proyecto, no se descarta para nuevas fases: la planificación
-simplemente salta sus días libres y continúa al finalizar su descanso. Si el
-periodo de la fase solo incluye un día de vacaciones, se sigue asignando a ese
-trabajador y la tarea se retoma tras su ausencia.
+asignaciones de tareas y la planificación simplemente salta esos días,
+continuando cuando el trabajador regresa de su descanso.
