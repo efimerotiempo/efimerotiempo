@@ -507,6 +507,10 @@ def get_projects():
             old = p.pop('kanban_image')
             if isinstance(old, str) and old:
                 p['kanban_attachments'] = [{'name': old, 'url': old}]
+        for att in p['kanban_attachments']:
+            url = att.get('url', '')
+            if url and (url.startswith('/') or not re.match(r'https?://', url)):
+                att['url'] = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
         if 'source' not in p:
             p['source'] = 'manual'
             changed = True
