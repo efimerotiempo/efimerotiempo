@@ -71,6 +71,7 @@
             </form>
             <button id="today-btn">HOY</button>
         </div>
+        <div class="calendar-flex">
         <div class="schedule-wrapper">
 <table class="schedule">
     <thead>
@@ -163,8 +164,27 @@
         {% endfor %}
     </tr>
     </tfoot>
-</table>
+        </table>
         </div>
+        <div class="unplanned-panel" id="unplanned-panel">
+            <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
+            <div class="unplanned-list" data-worker="Sin planificar">
+            {% for t in unplanned %}
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                {% if t.late %}
+                    <span class="late">&#10060;</span>
+                {% else %}
+                    <span class="ok">&#10004;</span>
+                {% endif %}
+                {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
+                {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        </div>
+        <button id="unplanned-show" style="display:none;">Fases sin planificar</button>
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
         <div id="bug-modal" class="modal">
@@ -437,11 +457,12 @@
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
+      const row = t.closest('[data-worker]');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
-        worker: t.closest('tr').dataset.worker,
+        worker: row ? row.dataset.worker : '',
         part: t.dataset.part
       };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
@@ -852,6 +873,19 @@
       });
     });
   });
+  const unplanPanel = document.getElementById('unplanned-panel');
+  const unplanHide = document.getElementById('unplanned-hide');
+  const unplanShow = document.getElementById('unplanned-show');
+  if (unplanPanel && unplanHide && unplanShow) {
+    unplanHide.addEventListener('click', () => {
+      unplanPanel.style.display = 'none';
+      unplanShow.style.display = 'block';
+    });
+    unplanShow.addEventListener('click', () => {
+      unplanPanel.style.display = 'block';
+      unplanShow.style.display = 'none';
+    });
+  }
   const projToggle = document.getElementById('projects-toggle');
   if (projToggle) {
     const projDiv = document.querySelector('.complete-projects');

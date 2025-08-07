@@ -92,9 +92,9 @@ Todas las incidencias se almacenan también en un archivo y pueden consultarse
 desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
 usuario, pestaña y detalle.
 
-Al crear nuevos proyectos, todas las fases se asignan por defecto a la fila
-**Sin planificar**. Desde la tabla de proyectos o el calendario puedes moverlas
-a cualquier trabajador sin restricciones de habilidades; el planificador solo
+Al crear nuevos proyectos, todas las fases se asignan por defecto a **Sin
+planificar**. Desde la tabla de proyectos o el calendario puedes moverlas a
+cualquier trabajador sin restricciones de habilidades; el planificador solo
 considera su disponibilidad para colocarlas lo antes posible.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
@@ -106,18 +106,11 @@ Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,
 Igor, Albi y Eneko. A partir del 21 de julio Igor deja de aparecer en el
 calendario y ya no se le asignan nuevas fases.
 
-Además existe una fila adicional llamada **Sin planificar** donde se acumulan
-las fases de los proyectos que no se quieran programar todavía. Estas tareas se
-asignan siempre a partir del día de hoy. Aunque cada proyecto se reparte en
-tramos de ocho horas diarias, la fila no tiene límite de jornada, por lo que
-pueden coincidir tantos proyectos como se desee en el mismo día. La tabla de
+Junto al calendario hay una columna llamada **Fases sin planificar** que
+reúne todas las fases pendientes. Desde esa lista puedes arrastrarlas al
+calendario para programarlas en el día y operario deseados. La tabla de
 proyectos muestra una columna indicando con un ✔ verde si está planificado o
 una ❌ si permanece sin planificar.
-
-Las fases y los proyectos pueden arrastrarse libremente desde la fila *Sin
-planificar* al calendario del resto de trabajadores y viceversa. Al hacerlo la
-aplicación cambia automáticamente su estado de planificado para mantener la
-coherencia.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
@@ -162,8 +155,8 @@ recuadro.
 Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
 permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
-que asigna la fase seleccionada al día actual dentro de la fila *Sin planificar*
-para reprogramarla más adelante.
+que asigna la fase seleccionada al día actual dentro de la columna *Fases sin
+planificar* para reprogramarla más adelante.
 Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
 la aplicación divide la duración de esa fase en dos mitades aunque la fecha
 elegida no coincida exactamente con su mitad. La segunda parte se mantiene

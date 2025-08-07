@@ -222,11 +222,12 @@
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
+      const row = t.closest('[data-worker]');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
-        worker: t.closest('tr').dataset.worker,
+        worker: row ? row.dataset.worker : '',
         part: t.dataset.part
       };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));

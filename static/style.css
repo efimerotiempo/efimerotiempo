@@ -85,6 +85,11 @@ table.schedule td.weekend-cell {
 .complete-projects { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
+.calendar-flex { display: flex; align-items: flex-start; position: relative; }
+.unplanned-panel { width: 250px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; }
+.unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
+#unplanned-show { display: none; float: right; margin-top: 5px; }
+
 /* make first column fit contents */
 .resource-col {
     white-space: nowrap;

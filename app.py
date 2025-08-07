@@ -135,7 +135,7 @@ def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
     if today is None:
         today = date.today()
-    workers = list(WORKERS.keys())
+    workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     if today >= IGOR_END and 'Igor' in workers:
         workers.remove('Igor')
     return workers
@@ -667,7 +667,7 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
-    plan_map = planning_status(schedule)
+    schedule.pop(UNPLANNED, None)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
@@ -718,7 +718,7 @@ def calendar_view():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        workers=active_workers(today),
+        workers=WORKERS,
         today=today,
         project_filter=project_filter,
         client_filter=client_filter,
@@ -776,7 +776,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=active_workers(),
+        all_workers=active_workers() + [UNPLANNED],
         project_filter=project_filter,
         client_filter=client_filter,
         sort_option=sort_option,
@@ -912,6 +912,13 @@ def complete():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     plan_map = planning_status(schedule)
+    unplanned = []
+    if UNPLANNED in schedule:
+        for day, tasks in schedule.pop(UNPLANNED).items():
+            for t in tasks:
+                item = t.copy()
+                item['day'] = day
+                unplanned.append(item)
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
@@ -977,7 +984,7 @@ def complete():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        workers=active_workers(today),
+        workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
         projects=filtered_projects,
@@ -985,7 +992,7 @@ def complete():
         today=today,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=active_workers(today),
+        all_workers=active_workers(today) + [UNPLANNED],
         milestones=milestone_map,
         project_data=project_map,
         start_map=start_map,
@@ -993,6 +1000,7 @@ def complete():
         plan_map=plan_map,
         split_points=points,
         palette=COLORS,
+        unplanned=unplanned,
     )
 
 
