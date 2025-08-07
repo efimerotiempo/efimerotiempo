@@ -111,8 +111,23 @@ def save_milestones(data):
 def load_vacations():
     if os.path.exists(VACATIONS_FILE):
         with open(VACATIONS_FILE, 'r') as f:
-            return json.load(f)
-    return []
+            data = json.load(f)
+    else:
+        data = []
+    today = date.today()
+    filtered = []
+    for v in data:
+        end = v.get('end')
+        if end:
+            try:
+                if date.fromisoformat(end) < today:
+                    continue
+            except ValueError:
+                pass
+        filtered.append(v)
+    if len(filtered) != len(data):
+        save_vacations(filtered)
+    return filtered
 
 
 def save_vacations(data):

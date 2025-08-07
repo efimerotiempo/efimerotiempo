@@ -223,6 +223,7 @@ bloque ocupa toda la celda del calendario, sin dejar huecos. No admiten
 asignaciones de tareas y la planificación simplemente salta esos días,
 continuando cuando el trabajador regresa de su descanso. En el calendario puedes
 pulsar sobre un día de vacaciones para mostrar una X roja y eliminarlo.
+La lista oculta automáticamente las vacaciones cuyo periodo ya ha finalizado.
 
 ### Recursos
 
