@@ -81,15 +81,19 @@ table.schedule td.weekend-cell {
     flex: 1;
     overflow-x: auto;
 }
-.complete-calendar { flex: none; }
+.complete-calendar { flex: none; overflow-x: auto; }
 .complete-projects { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
 
-.calendar-flex { display: flex; align-items: flex-start; position: relative; }
+.calendar-flex { display: inline-flex; align-items: flex-start; position: relative; }
 .unplanned-panel { width: 2500px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; position: relative; }
 .unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
-#unplanned-show { display: none; float: right; margin-top: 5px; }
+#unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
+.unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
+.folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
+.folder-header .folder-toggle { margin-right: 5px; }
+.folder-content { padding-left: 10px; }
 
 /* make first column fit contents */
 .resource-col {

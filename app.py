@@ -919,6 +919,16 @@ def complete():
                 item = t.copy()
                 item['day'] = day
                 unplanned.append(item)
+    groups = {}
+    for item in unplanned:
+        pid = item['pid']
+        g = groups.setdefault(pid, {
+            'project': item['project'],
+            'client': item['client'],
+            'tasks': []
+        })
+        g['tasks'].append(item)
+    unplanned = list(groups.values())
     if date.today() >= IGOR_END:
         schedule.pop('Igor', None)
     for p in projects:
