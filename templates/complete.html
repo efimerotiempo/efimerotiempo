@@ -417,6 +417,7 @@
 </div>
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
+  console.log(PROJECT_DATA);
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
@@ -571,7 +572,9 @@
           const imgUrl = `${STATIC_URL}${info.image}`;
           html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
         } else if (info.kanban_attachments && info.kanban_attachments.length) {
-          const attUrl = info.kanban_attachments[0].url;
+          const attUrl = info.kanban_attachments[0].url.startsWith('http')
+            ? info.kanban_attachments[0].url
+            : 'https://caldereriacpk.kanbanize.com' + info.kanban_attachments[0].url;
           html += `<div><a href="${attUrl}" target="_blank"><img src="${attUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
         }
       popup.innerHTML = html;

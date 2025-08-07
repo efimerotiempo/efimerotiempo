@@ -727,7 +727,8 @@ def calendar_view():
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
-
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
     project_map = {p['id']: p for p in projects}
     start_map = phase_start_map(projects)
 
@@ -1114,7 +1115,8 @@ def complete():
     milestone_map = {}
     for m in milestones:
         milestone_map.setdefault(m['date'], []).append(m['description'])
-
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
     project_map = {p['id']: p for p in projects}
     start_map = phase_start_map(projects)
 
