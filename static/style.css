@@ -86,8 +86,17 @@ table.schedule td.weekend-cell {
 
 .calendar-flex { display: flex; align-items: flex-start; position: relative; width: 100%; }
 .schedule-wrapper { flex: 1; overflow-x: auto; }
-.unplanned-panel { width: 2500px; border-left: 1px solid #ccc; padding: 5px; overflow-y: auto; position: relative; }
+.unplanned-panel {
+    width: 2500px;
+    border-left: 1px solid #ccc;
+    padding: 5px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
 .unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
+.unplanned-list { overflow-y: auto; flex: 1; }
 #unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }

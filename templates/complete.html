@@ -938,6 +938,16 @@
   const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+
+  function syncUnplannedHeight() {
+    const wrap = document.querySelector('.schedule-wrapper');
+    if (wrap && unplanPanel) {
+      unplanPanel.style.height = wrap.offsetHeight + 'px';
+    }
+  }
+
+  syncUnplannedHeight();
+  window.addEventListener('resize', syncUnplannedHeight);
   if (unplanPanel) {
     const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
     if (savedWidth) {
@@ -957,6 +967,7 @@
       }
       unplanPanel.style.display = 'block';
       unplanShow.style.display = 'none';
+      syncUnplannedHeight();
     });
   }
   if (unplanPanel && unplanResizer) {
