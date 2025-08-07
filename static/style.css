@@ -95,9 +95,8 @@ table.schedule td.weekend-cell {
     flex-direction: column;
     box-sizing: border-box;
 }
-.unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
+.unplanned-panel h3 { margin: 0; }
 .unplanned-list { overflow-y: auto; flex: 1; }
-#unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
 .unplanned-folder.dim { opacity: 0.3; }
@@ -175,7 +174,6 @@ table.schedule td.resource-col {
     background: #000;
 }
 
-.worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
 
 

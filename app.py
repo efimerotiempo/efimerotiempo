@@ -692,7 +692,72 @@ def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
-    schedule.pop(UNPLANNED, None)
+    unplanned_raw = []
+    if UNPLANNED in schedule:
+        for day, tasks in schedule.pop(UNPLANNED).items():
+            for t in tasks:
+                item = t.copy()
+                item['day'] = day
+                unplanned_raw.append(item)
+    groups = {}
+    for item in unplanned_raw:
+        pid = item['pid']
+        phase = item['phase']
+        proj = groups.setdefault(
+            pid,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'material_date': item.get('material_date'),
+                'phases': {},
+            },
+        )
+        ph = proj['phases'].setdefault(
+            phase,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'pid': pid,
+                'phase': phase,
+                'color': item.get('color'),
+                'priority': item.get('priority'),
+                'due_date': item.get('due_date'),
+                'start_date': item.get('start_date'),
+                'day': item.get('day'),
+                'hours': 0,
+                'late': item.get('late', False),
+                'blocked': item.get('blocked', False),
+                'frozen': item.get('frozen', False),
+            },
+        )
+        ph['hours'] += item.get('hours', 0)
+        if item.get('day') and (ph['day'] is None or item['day'] < ph['day']):
+            ph['day'] = item['day']
+        if item.get('start_date') and (
+            ph['start_date'] is None or item['start_date'] < ph['start_date']
+        ):
+            ph['start_date'] = item['start_date']
+        if item.get('due_date') and (
+            ph['due_date'] is None or item['due_date'] < ph['due_date']
+        ):
+            ph['due_date'] = item['due_date']
+        if item.get('late'):
+            ph['late'] = True
+        if item.get('blocked'):
+            ph['blocked'] = True
+        if item.get('frozen'):
+            ph['frozen'] = True
+    unplanned_list = []
+    for pid, data in groups.items():
+        unplanned_list.append(
+            {
+                'pid': pid,
+                'project': data['project'],
+                'client': data['client'],
+                'material_date': data.get('material_date'),
+                'tasks': list(data['phases'].values()),
+            }
+        )
     visible = set(active_workers(today))
     schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
@@ -717,16 +782,27 @@ def calendar_view():
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
                 schedule[worker][day] = [
-                    t for t in tasks
+                    t
+                    for t in tasks
                     if (not project_filter or project_filter.lower() in t['project'].lower())
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
+        unplanned_list = [
+            g
+            for g in unplanned_list
+            if (not project_filter or project_filter.lower() in g['project'].lower())
+            and (not client_filter or client_filter.lower() in g['client'].lower())
+        ]
 
     points = split_markers(schedule)
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+
+    unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
+    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
+    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     milestone_map = {}
     for m in milestones:
@@ -753,6 +829,8 @@ def calendar_view():
         hours=hours_map,
         split_points=points,
         palette=COLORS,
+        unplanned_with=unplanned_with,
+        unplanned_without=unplanned_without,
     )
 
 

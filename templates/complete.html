@@ -172,7 +172,7 @@
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
-            <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
+            <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for g in unplanned_with %}
             <div class="unplanned-folder" data-pid="{{ g.pid }}">
@@ -218,7 +218,6 @@
             </div>
         </div>
         </div>
-        <button id="unplanned-show" style="display:none;">Fases sin planificar</button>
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
@@ -934,8 +933,6 @@
     });
   });
   const unplanPanel = document.getElementById('unplanned-panel');
-  const unplanHide = document.getElementById('unplanned-hide');
-  const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
 
@@ -953,22 +950,6 @@
     if (savedWidth) {
       unplanPanel.style.width = savedWidth + 'px';
     }
-  }
-  if (unplanPanel && unplanHide && unplanShow) {
-    unplanHide.addEventListener('click', () => {
-      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
-      unplanPanel.style.display = 'none';
-      unplanShow.style.display = 'block';
-    });
-    unplanShow.addEventListener('click', () => {
-      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
-      if (saved) {
-        unplanPanel.style.width = saved + 'px';
-      }
-      unplanPanel.style.display = 'block';
-      unplanShow.style.display = 'none';
-      syncUnplannedHeight();
-    });
   }
   if (unplanPanel && unplanResizer) {
     let startX, startWidth;
