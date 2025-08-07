@@ -1880,8 +1880,10 @@ def kanbanize_webhook():
         for a in attachments_raw:
             if isinstance(a, dict):
                 name = (a.get('name') or a.get('fileName') or a.get('filename') or '').strip()
-                url = a.get('url') or a.get('fileUrl') or a.get('link') or ''
+                url = (a.get('url') or a.get('fileUrl') or a.get('link') or '').strip()
                 if name and url:
+                    if url.startswith('/') or not re.match(r'https?://', url):
+                        url = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
                     kanban_files.append({'name': name, 'url': url})
 
     image_path = None
