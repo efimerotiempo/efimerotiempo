@@ -126,7 +126,8 @@ si está planificado o una ❌ si permanece sin planificar. A continuación se
 encuentran las columnas **Imagen** y **Imagen kanbanize**; esta última muestra
 enlaces a los archivos adjuntos recibidos desde Kanbanize al crear o actualizar
 una tarjeta, utilizando el nombre y la URL proporcionados. Además, al pulsar una
-fase en el calendario se visualizará la primera imagen adjunta igual que si se
+fase en el calendario se visualizará la primera imagen adjunta como enlace
+clicable que abre la imagen original en una nueva pestaña, igual que si se
 hubiera cargado manualmente. La columna inicial del calendario muestra únicamente el nombre de cada
 persona y permanece fija a la izquierda para que siempre sea visible. La fecha
 de material confirmado también se visualiza en la ventana emergente al pulsar

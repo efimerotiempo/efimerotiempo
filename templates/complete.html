@@ -568,9 +568,11 @@
         html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
         html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
         if (info.image) {
-          html += `<div><img src="${STATIC_URL}${info.image}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
+          const imgUrl = `${STATIC_URL}${info.image}`;
+          html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
         } else if (info.kanban_attachments && info.kanban_attachments.length) {
-          html += `<div><img src="${info.kanban_attachments[0].url}" style="max-width:200px;display:block;margin-top:4px;"></div>`;
+          const attUrl = info.kanban_attachments[0].url;
+          html += `<div><a href="${attUrl}" target="_blank"><img src="${attUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
         }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
