@@ -45,9 +45,10 @@ generará ningún proyecto.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
- hito y la descripción se muestra en rojo, en negrita y con un tamaño de letra
- el doble de grande dentro de su celda. Existe una pestaña **Hitos** que
- muestra la lista completa y permite eliminarlos con una **X** roja.
+ hito y la descripción se muestra en rojo y en negrita al final del calendario,
+ con un tamaño de letra la mitad de grande que el resto de celdas. Si hay varios
+ hitos para el mismo día, se apilan en líneas separadas. Existe una pestaña
+ **Hitos** que muestra la lista completa y permite eliminarlos con una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
 parte superior se muestran el formulario de hitos y la lista de conflictos.

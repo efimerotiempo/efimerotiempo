@@ -43,20 +43,6 @@
         {% endif %}
         {% endfor %}
     </tr>
-    <tr class="milestones-row">
-        <td class="resource-col"></td>
-        {% for c in cols %}
-        {% if c.type == 'day' %}
-        {% set d = c.dates[0] %}
-        {% set ms = milestones.get(d.isoformat()) %}
-        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
-            {% if ms %}<span class="milestone-label">{{ ms|join(', ') }}</span>{% endif %}
-        </td>
-        {% else %}
-        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
-        {% endif %}
-        {% endfor %}
-    </tr>
     </thead>
     <tbody>
 {% for worker, days_data in schedule.items() %}
@@ -100,6 +86,24 @@
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
         {% else %}
         <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    <tr class="milestones-row">
+        <td class="resource-col"></td>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set ms = milestones.get(d.isoformat()) %}
+        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
+            {% if ms %}
+                {% for m in ms %}
+                <div class="milestone-label">{{ m }}</div>
+                {% endfor %}
+            {% endif %}
+        </td>
+        {% else %}
+        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
         {% endif %}
         {% endfor %}
     </tr>
