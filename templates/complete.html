@@ -171,7 +171,7 @@
             <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for g in unplanned_with %}
-            <div class="unplanned-folder">
+            <div class="unplanned-folder" data-pid="{{ g.pid }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
@@ -193,7 +193,7 @@
             <hr class="unplanned-divider" />
             {% endif %}
             {% for g in unplanned_without %}
-            <div class="unplanned-folder">
+            <div class="unplanned-folder" data-pid="{{ g.pid }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
@@ -489,6 +489,7 @@
   });
 
   const tasks = document.querySelectorAll('.task');
+  const folders = document.querySelectorAll('.unplanned-folder');
   const popup = document.getElementById('info-popup');
   let lastDrag = null;
   tasks.forEach(t => {
@@ -514,6 +515,13 @@
         } else {
           o.classList.add('dim');
           o.classList.remove('highlight');
+        }
+      });
+      folders.forEach(f => {
+        if (f.dataset.pid === t.dataset.pid) {
+          f.classList.remove('dim');
+        } else {
+          f.classList.add('dim');
         }
       });
       document.querySelectorAll('.projects-table tbody tr[data-pid]').forEach(row => {
@@ -785,6 +793,7 @@
 
   document.addEventListener('click', () => {
     tasks.forEach(o => o.classList.remove('highlight', 'dim'));
+    folders.forEach(f => f.classList.remove('dim'));
     rows.forEach(r => {
       r.classList.remove('proj-highlight', 'proj-dim');
       const sel = r.querySelector('.color-select');

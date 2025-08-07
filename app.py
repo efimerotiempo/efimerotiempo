@@ -982,15 +982,15 @@ def complete():
     today = date.today()
     visible = set(active_workers(today))
     plan_map = planning_status(schedule)
-    unplanned = []
+    unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
             for t in tasks:
                 item = t.copy()
                 item['day'] = day
-                unplanned.append(item)
+                unplanned_raw.append(item)
     groups = {}
-    for item in unplanned:
+    for item in unplanned_raw:
         pid = item['pid']
         phase = item['phase']
         proj = groups.setdefault(
@@ -1002,27 +1002,34 @@ def complete():
                 'phases': {},
             },
         )
-        ph = proj['phases'].setdefault(phase, {
-            'project': item['project'],
-            'client': item['client'],
-            'pid': pid,
-            'phase': phase,
-            'color': item.get('color'),
-            'priority': item.get('priority'),
-            'due_date': item.get('due_date'),
-            'start_date': item.get('start_date'),
-            'day': item.get('day'),
-            'hours': 0,
-            'late': item.get('late', False),
-            'blocked': item.get('blocked', False),
-            'frozen': item.get('frozen', False),
-        })
+        ph = proj['phases'].setdefault(
+            phase,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'pid': pid,
+                'phase': phase,
+                'color': item.get('color'),
+                'priority': item.get('priority'),
+                'due_date': item.get('due_date'),
+                'start_date': item.get('start_date'),
+                'day': item.get('day'),
+                'hours': 0,
+                'late': item.get('late', False),
+                'blocked': item.get('blocked', False),
+                'frozen': item.get('frozen', False),
+            },
+        )
         ph['hours'] += item.get('hours', 0)
         if item.get('day') and (ph['day'] is None or item['day'] < ph['day']):
             ph['day'] = item['day']
-        if item.get('start_date') and (ph['start_date'] is None or item['start_date'] < ph['start_date']):
+        if item.get('start_date') and (
+            ph['start_date'] is None or item['start_date'] < ph['start_date']
+        ):
             ph['start_date'] = item['start_date']
-        if item.get('due_date') and (ph['due_date'] is None or item['due_date'] < ph['due_date']):
+        if item.get('due_date') and (
+            ph['due_date'] is None or item['due_date'] < ph['due_date']
+        ):
             ph['due_date'] = item['due_date']
         if item.get('late'):
             ph['late'] = True
@@ -1030,19 +1037,17 @@ def complete():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
-    unplanned = []
-    for data in groups.values():
-        unplanned.append(
+    unplanned_list = []
+    for pid, data in groups.items():
+        unplanned_list.append(
             {
+                'pid': pid,
                 'project': data['project'],
                 'client': data['client'],
                 'material_date': data.get('material_date'),
                 'tasks': list(data['phases'].values()),
             }
         )
-    unplanned.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned if g.get('material_date')]
-    unplanned_without = [g for g in unplanned if not g.get('material_date')]
     schedule = {w: d for w, d in schedule.items() if w in visible}
     for p in projects:
         if p.get('due_date'):
@@ -1068,14 +1073,22 @@ def complete():
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
                 schedule[worker][day] = [
-                    t for t in tasks
+                    t
+                    for t in tasks
                     if (not project_filter or project_filter.lower() in t['project'].lower())
                     and (not client_filter or client_filter.lower() in t['client'].lower())
                 ]
         filtered_projects = [
-            p for p in projects
+            p
+            for p in projects
             if (not project_filter or project_filter.lower() in p['name'].lower())
             and (not client_filter or client_filter.lower() in p['client'].lower())
+        ]
+        unplanned_list = [
+            g
+            for g in unplanned_list
+            if (not project_filter or project_filter.lower() in g['project'].lower())
+            and (not client_filter or client_filter.lower() in g['client'].lower())
         ]
     else:
         filtered_projects = projects
@@ -1086,6 +1099,10 @@ def complete():
         filtered_projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
 
     filtered_projects = expand_for_display(filtered_projects)
+
+    unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
+    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
+    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     points = split_markers(schedule)
 

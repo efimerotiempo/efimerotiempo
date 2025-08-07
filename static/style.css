@@ -91,6 +91,7 @@ table.schedule td.weekend-cell {
 #unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
+.unplanned-folder.dim { opacity: 0.3; }
 .folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
 .folder-header .folder-toggle { margin-right: 5px; }
 .folder-content { padding-left: 10px; }
