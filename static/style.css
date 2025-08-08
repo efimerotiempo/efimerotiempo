@@ -127,6 +127,11 @@ table.schedule td.resource-col {
     font-weight: bold;
 }
 
+table.schedule td.resource-col {
+    font-size: 3em;
+    line-height: 1;
+}
+
 /* keep projects table width */
 .complete-projects table { width: 100%; }
 
