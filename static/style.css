@@ -132,6 +132,26 @@ table.schedule td.resource-col {
     line-height: 1;
 }
 
+table.pedidos-calendar {
+    border-collapse: collapse;
+}
+table.pedidos-calendar th,
+table.pedidos-calendar td {
+    border: 1px solid #ccc;
+    padding: 4px;
+    width: 180px;
+    vertical-align: top;
+}
+table.pedidos-calendar td.week-label {
+    width: 80px;
+    font-weight: bold;
+    background: #eee;
+}
+.pedidos-calendar .day-number {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
 /* keep projects table width */
 .complete-projects table { width: 100%; }
 

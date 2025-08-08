@@ -801,6 +801,42 @@ def calendar_view():
     )
 
 
+@app.route('/calendario-pedidos')
+def calendar_pedidos():
+    projects = get_projects()
+    schedule, _ = schedule_projects(projects)
+    pedidos = {}
+    for worker, days in schedule.items():
+        if worker == UNPLANNED:
+            continue
+        for day_str, tasks in days.items():
+            d = date.fromisoformat(day_str)
+            for t in tasks:
+                if t.get('phase') == 'pedidos':
+                    pedidos.setdefault(d, []).append(t)
+
+    today = date.today()
+    start = today - timedelta(days=today.weekday())
+    year_end = date(today.year, 12, 31)
+    weeks = []
+    current = start
+    while current <= year_end:
+        week = {'number': current.isocalendar()[1], 'days': []}
+        for i in range(5):
+            day = current + timedelta(days=i)
+            week['days'].append(
+                {
+                    'date': day,
+                    'ordinal': day.timetuple().tm_yday,
+                    'tasks': pedidos.get(day, []),
+                }
+            )
+        weeks.append(week)
+        current += timedelta(weeks=1)
+
+    return render_template('calendar_pedidos.html', weeks=weeks, today=today)
+
+
 @app.route('/projects')
 def project_list():
     projects = get_projects()
