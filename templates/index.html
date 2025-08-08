@@ -591,6 +591,16 @@
     const t = Array.from(tasks).find(o => o.dataset.pid === stored);
     if (t) {
       showTask(t);
+    } else {
+      const folder = Array.from(folders).find(f => f.dataset.pid === stored);
+      if (folder) {
+        folders.forEach(f => {
+          if (f === folder) f.classList.remove('dim');
+          else f.classList.add('dim');
+        });
+      } else {
+        folders.forEach(f => f.classList.add('dim'));
+      }
     }
     sessionStorage.removeItem('highlightPid');
   }
