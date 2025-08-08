@@ -18,7 +18,8 @@
         <td class="week-label">Semana {{ week.number }}</td>
         {% for d in week.days %}
         <td class="{% if d.date == today %}today{% endif %}">
-            <div class="day-number">{{ d.ordinal }}</div>
+            {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
+            <div class="day-number">{{ d.day }}</div>
             {% for t in d.tasks %}
             <div class="task" style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({{ t.hours }}h){% endif %}</div>
             {% endfor %}

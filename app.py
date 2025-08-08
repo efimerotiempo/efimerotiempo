@@ -815,9 +815,35 @@ def calendar_pedidos():
                 if t.get('phase') == 'pedidos':
                     pedidos.setdefault(d, []).append(t)
 
+    compras_raw = {}
+    for entry in load_kanban_cards():
+        card = entry.get('card', {})
+        if card.get('lanename') != 'Seguimiento compras':
+            continue
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
+        if not cid:
+            continue
+        compras_raw[cid] = card
+
+    for card in compras_raw.values():
+        d = parse_kanban_date(card.get('deadline'))
+        if not d:
+            continue
+        pedidos.setdefault(d, []).append(
+            {
+                'project': card.get('title') or '',
+                'color': card.get('tcolor') or '#999999',
+                'hours': None,
+            }
+        )
+
     today = date.today()
     start = today - timedelta(days=today.weekday())
     year_end = date(today.year, 12, 31)
+    MONTHS = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ]
     weeks = []
     current = start
     while current <= year_end:
@@ -827,7 +853,8 @@ def calendar_pedidos():
             week['days'].append(
                 {
                     'date': day,
-                    'ordinal': day.timetuple().tm_yday,
+                    'day': f"{day.day:02d}",
+                    'month': MONTHS[day.month - 1].capitalize() if day.day == 1 else '',
                     'tasks': pedidos.get(day, []),
                 }
             )

@@ -152,6 +152,14 @@ table.pedidos-calendar td.week-label {
     margin-bottom: 2px;
 }
 
+.pedidos-calendar .month-divider {
+    border-top: 2px solid #999;
+    font-size: 0.8em;
+    text-align: center;
+    margin: -4px -4px 2px -4px;
+    padding-top: 2px;
+}
+
 /* keep projects table width */
 .complete-projects table { width: 100%; }
 
