@@ -122,7 +122,9 @@ desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
 y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
 mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
 fecha **Material confirmado** de cada proyecto y una división separa los que
-cuentan con esa fecha de los que no.
+cuentan con esa fecha de los que no. El título de cada carpeta muestra la
+**Fecha límite** del proyecto tras el nombre del cliente, y se actualiza si
+cambia.
 
 La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
 **Fecha material confirmado**, e incluye una columna indicando con un ✔ verde

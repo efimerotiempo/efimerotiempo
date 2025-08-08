@@ -681,6 +681,7 @@ def calendar_view():
                 'project': item['project'],
                 'client': item['client'],
                 'material_date': item.get('material_date'),
+                'due_date': item.get('due_date'),
                 'phases': {},
             },
         )
@@ -727,6 +728,7 @@ def calendar_view():
                 'project': data['project'],
                 'client': data['client'],
                 'material_date': data.get('material_date'),
+                'due_date': data.get('due_date'),
                 'tasks': list(data['phases'].values()),
             }
         )
@@ -1127,6 +1129,7 @@ def complete():
                 'project': item['project'],
                 'client': item['client'],
                 'material_date': item.get('material_date'),
+                'due_date': item.get('due_date'),
                 'phases': {},
             },
         )
@@ -1173,6 +1176,7 @@ def complete():
                 'project': data['project'],
                 'client': data['client'],
                 'material_date': data.get('material_date'),
+                'due_date': data.get('due_date'),
                 'tasks': list(data['phases'].values()),
             }
         )
