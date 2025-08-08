@@ -11,6 +11,7 @@ MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
+EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -24,7 +25,9 @@ PHASE_ORDER = [
 ]
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
-WORKERS = {
+UNPLANNED = 'Sin planificar'
+
+BASE_WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
@@ -38,14 +41,42 @@ WORKERS = {
     'Igor': ['soldar'],
     'Albi': ['recepcionar material', 'soldar', 'montar'],
     'Eneko': ['pintar', 'montar', 'soldar'],
+}
+
+TAIL_WORKERS = {
     'Mecanizar': ['mecanizar'],
     'Tratamiento': ['tratamiento'],
-    'Sin planificar': PHASE_ORDER,
+    UNPLANNED: PHASE_ORDER,
 }
+
+
+def load_extra_workers():
+    if os.path.exists(EXTRA_WORKERS_FILE):
+        with open(EXTRA_WORKERS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_extra_workers(workers):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(EXTRA_WORKERS_FILE, 'w') as f:
+        json.dump(workers, f)
+
+
+def _build_workers(extra=None):
+    workers = BASE_WORKERS.copy()
+    if extra is None:
+        extra = load_extra_workers()
+    for w in extra:
+        workers[w] = BASE_WORKERS['Eneko'][:]
+    workers.update(TAIL_WORKERS)
+    return workers
+
+
+WORKERS = _build_workers()
 
 # Igor deja de aparecer en el calendario a partir del 21 de julio
 IGOR_END = date(2025, 7, 21)
-UNPLANNED = 'Sin planificar'
 
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
@@ -54,6 +85,21 @@ HOURS_LIMITS['Mecanizar'] = float('inf')
 HOURS_LIMITS['Tratamiento'] = float('inf')
 HOURS_LIMITS[UNPLANNED] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
+
+
+def add_worker(name):
+    """Add a new worker that behaves like Eneko."""
+    name = name.strip()
+    if not name or name in WORKERS:
+        return
+    extras = load_extra_workers()
+    if name not in extras:
+        extras.append(name)
+        save_extra_workers(extras)
+    new_workers = _build_workers(extras)
+    WORKERS.clear()
+    WORKERS.update(new_workers)
+    HOURS_LIMITS[name] = HOURS_PER_DAY
 
 
 def load_projects():

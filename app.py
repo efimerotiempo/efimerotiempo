@@ -1016,6 +1016,11 @@ def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     inactive = set(load_inactive_workers())
     if request.method == 'POST':
+        if 'add_worker' in request.form:
+            new_worker = request.form.get('new_worker', '').strip()
+            if new_worker and new_worker not in WORKERS:
+                _schedule_mod.add_worker(new_worker)
+            return redirect(url_for('resources'))
         active = request.form.getlist('worker')
         inactive = [w for w in workers if w not in active]
         save_inactive_workers(inactive)
