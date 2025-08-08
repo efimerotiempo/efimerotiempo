@@ -172,7 +172,7 @@
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
-            <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
+            <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for g in unplanned_with %}
             <div class="unplanned-folder" data-pid="{{ g.pid }}">
@@ -218,7 +218,6 @@
             </div>
         </div>
         </div>
-        <button id="unplanned-show" style="display:none;">Fases sin planificar</button>
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
@@ -301,7 +300,7 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+            <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>
@@ -327,11 +326,13 @@
                         <span class="late">&#10060;</span>
                     {% endif %}
                 </td>
-                <td>
-                    {% if plan_map.get(p.id) %}
-                        <span class="ok">&#10004;</span>
+                <td class="plan-col">
+                    {% if p.plan_state == 'all' %}
+                        <span class="ok">&#9679;</span>
+                    {% elif p.plan_state == 'partial' %}
+                        <span class="unplanned">&#9679;</span>
                     {% else %}
-                        <span class="late">&#10060;</span>
+                        <span class="late">&#9679;</span>
                     {% endif %}
                 </td>
                 <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
@@ -441,6 +442,7 @@
   const materialText = document.getElementById('material-text');
   const materialClose = document.getElementById('material-close');
   const filterForm = document.getElementById('filter-form');
+  const PROJECT_FILTER = {{ project_filter|tojson }};
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
@@ -472,12 +474,36 @@
 
   const wrapper = document.querySelector('.schedule-wrapper');
   const SCROLL_KEY = 'calendarScroll';
-  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
-  if (savedScroll !== null) {
-    wrapper.scrollLeft = parseFloat(savedScroll);
+  if (PROJECT_FILTER) {
+    const projTasks = document.querySelectorAll('.schedule .task');
+    if (projTasks.length) {
+      let earliest = projTasks[0];
+      let earliestDate = new Date(projTasks[0].dataset.day);
+      projTasks.forEach(t => {
+        const dt = new Date(t.dataset.day);
+        if (dt < earliestDate) {
+          earliestDate = dt;
+          earliest = t;
+        }
+      });
+      earliest.scrollIntoView({behavior: 'auto', inline: 'center'});
+    } else {
+      const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+      if (savedScroll !== null) {
+        wrapper.scrollLeft = parseFloat(savedScroll);
+      } else {
+        const todayCell = document.querySelector('th.today');
+        if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+      }
+    }
   } else {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+    if (savedScroll !== null) {
+      wrapper.scrollLeft = parseFloat(savedScroll);
+    } else {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    }
   }
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
@@ -564,7 +590,7 @@
         }
         html += `</div>`;
         html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
+        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
         html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
         if (Array.isArray(info.phases[t.dataset.phase])) {
           html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -641,7 +667,7 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, {
+          fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), {
             method: 'POST',
             credentials: 'same-origin'
           }).then(() => location.reload());
@@ -734,6 +760,13 @@
         } else {
           t.classList.add('dim');
           t.classList.remove('highlight');
+        }
+      });
+      folders.forEach(f => {
+        if (f.dataset.pid === pid) {
+          f.classList.remove('dim');
+        } else {
+          f.classList.add('dim');
         }
       });
     });
@@ -831,6 +864,21 @@
     const t = Array.from(tasks).find(o => o.dataset.pid === stored);
     if (t) {
       showTask(t);
+    } else {
+      const row = Array.from(rows).find(r => r.dataset.pid === stored);
+      if (row) {
+        row.dispatchEvent(new Event('click'));
+      } else {
+        const folder = Array.from(folders).find(f => f.dataset.pid === stored);
+        if (folder) {
+          folders.forEach(f => {
+            if (f === folder) f.classList.remove('dim');
+            else f.classList.add('dim');
+          });
+        } else {
+          folders.forEach(f => f.classList.add('dim'));
+        }
+      }
     }
     sessionStorage.removeItem('highlightPid');
   }
@@ -927,15 +975,12 @@
           materialModal.style.display = 'block';
           materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
         } else {
-          if (data.message) alert(data.message);
           location.reload();
         }
       });
     });
   });
   const unplanPanel = document.getElementById('unplanned-panel');
-  const unplanHide = document.getElementById('unplanned-hide');
-  const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
 
@@ -953,22 +998,6 @@
     if (savedWidth) {
       unplanPanel.style.width = savedWidth + 'px';
     }
-  }
-  if (unplanPanel && unplanHide && unplanShow) {
-    unplanHide.addEventListener('click', () => {
-      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
-      unplanPanel.style.display = 'none';
-      unplanShow.style.display = 'block';
-    });
-    unplanShow.addEventListener('click', () => {
-      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
-      if (saved) {
-        unplanPanel.style.width = saved + 'px';
-      }
-      unplanPanel.style.display = 'block';
-      unplanShow.style.display = 'none';
-      syncUnplannedHeight();
-    });
   }
   if (unplanPanel && unplanResizer) {
     let startX, startWidth;
