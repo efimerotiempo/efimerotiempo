@@ -50,7 +50,6 @@ WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
 find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
-previous_phase_end = _schedule_mod.previous_phase_end
 UNPLANNED = _schedule_mod.UNPLANNED
 if hasattr(_schedule_mod, "phase_start_map"):
     phase_start_map = _schedule_mod.phase_start_map
@@ -404,10 +403,6 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     vac_map = _schedule_mod._build_vacation_map()
     if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
         return None, 'Vacaciones en esa fecha'
-    prev_end = previous_phase_end(projects, pid, phase, part)
-    warning = None
-    if prev_end and new_date <= prev_end:
-        warning = 'ORDEN INADECUADO DE FASES'
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
@@ -431,7 +426,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     if worker:
         proj['planned'] = worker != UNPLANNED
     save_projects(projects)
-    return new_date.isoformat(), warning
+    return new_date.isoformat(), None
 
 
 def get_projects():
@@ -1679,13 +1674,10 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day, msg = move_phase_date(projects, pid, phase, day, worker, part)
+    new_day, err = move_phase_date(projects, pid, phase, day, worker, part)
     if new_day is None:
-        return jsonify({'error': msg or 'No se pudo mover'}), 400
-    response = {'date': new_day, 'pid': pid, 'phase': phase}
-    if msg:
-        response['message'] = msg
-    return jsonify(response)
+        return jsonify({'error': err or 'No se pudo mover'}), 400
+    return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
 
 
 @app.route('/delete_project/<pid>', methods=['POST'])

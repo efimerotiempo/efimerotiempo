@@ -794,28 +794,3 @@ def phase_start_map(projects):
         for worker, day, phase, hours, _ in items:
             result.setdefault(pid, {}).setdefault(phase, day)
     return result
-
-
-def previous_phase_end(projects, pid, phase, part=None):
-    """Return the last scheduled day of the phase immediately before ``phase``."""
-    if isinstance(part, str):
-        if part in ('', 'None'):
-            part = None
-        else:
-            try:
-                part = int(part)
-            except Exception:
-                part = None
-
-    mapping = compute_schedule_map(projects)
-    tasks = mapping.get(pid, [])
-    if not tasks:
-        return None
-    idx = PHASE_ORDER.index(phase)
-    last = None
-    for worker, day, ph, hours, prt in tasks:
-        dt = date.fromisoformat(day)
-        if ph in PHASE_ORDER[:idx]:
-            if not last or dt > last:
-                last = dt
-    return last
