@@ -424,39 +424,7 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     warning = None
     if prev_end and new_date <= prev_end:
         warning = 'ORDEN INADECUADO DE FASES'
-    # Prepare a deep copy to test the new start without modifying real data yet
-    temp = copy.deepcopy(projects)
-    tproj = next((p for p in temp if p['id'] == pid), None)
-    if part is None and not isinstance(tproj['phases'].get(phase), list):
-        seg_starts = tproj.setdefault('segment_starts', {}).setdefault(phase, [None])
-        seg_starts[0] = new_date.isoformat()
-        if worker:
-            tproj.setdefault('assigned', {})[phase] = worker
-    else:
-        seg_starts = tproj.setdefault('segment_starts', {}).setdefault(
-            phase, [None] * len(tproj['phases'][phase])
-        )
-        idx = part if part is not None else 0
-        if idx < len(seg_starts):
-            seg_starts[idx] = new_date.isoformat()
-        if worker:
-            seg_workers = tproj.setdefault('segment_workers', {}).setdefault(
-                phase, [None] * len(tproj['phases'][phase])
-            )
-            if idx >= len(seg_workers):
-                seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
-            seg_workers[idx] = worker
-    if worker:
-        tproj['planned'] = worker != UNPLANNED
-
-    new_map = compute_schedule_map(temp)
-    new_tasks = [t for t in new_map.get(pid, []) if t[2] == phase]
-    if part is not None:
-        new_tasks = [t for t in new_tasks if t[4] == part]
-    if not new_tasks or new_tasks[0][1] != new_date.isoformat():
-        return None, 'El d\u00eda seleccionado no estaba disponible'
-
-    # Apply the change to the real project list now that we know it's valid
+    # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
         seg_starts[0] = new_date.isoformat()
