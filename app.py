@@ -131,6 +131,15 @@ KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
+KANBAN_IGNORE_COLUMNS = {
+    'Material taller',
+    'Material cliente',
+    'Tratamiento final',
+    'Pdte. Verificación',
+    'Material Recepcionado',
+    'Ready to Archive',
+}
+
 
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
@@ -819,6 +828,8 @@ def calendar_pedidos():
     for entry in load_kanban_cards():
         card = entry.get('card', {})
         if card.get('lanename') != 'Seguimiento compras':
+            continue
+        if card.get('columnname') in KANBAN_IGNORE_COLUMNS:
             continue
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
@@ -1907,10 +1918,16 @@ def kanbanize_webhook():
     payload_timestamp = data.get("timestamp")
 
     if card.get("lanename") == "Seguimiento compras":
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cards = load_kanban_cards()
-        cards.append({'timestamp': payload_timestamp, 'card': card})
+        cards = [
+            c for c in cards
+            if (c.get('card', {}).get('taskid') or c.get('card', {}).get('cardId') or c.get('card', {}).get('id')) != cid
+        ]
+        if card.get('columnname') not in KANBAN_IGNORE_COLUMNS:
+            cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
-        return jsonify({"mensaje": "Tarjeta ignorada"}), 200
+        return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
     print("Tarjeta recibida:")
     print(card)

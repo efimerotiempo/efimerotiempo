@@ -40,8 +40,11 @@ define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
 de iniciar la aplicación.
 
 La aplicación también puede recibir tarjetas desde Kanbanize mediante un webhook.
-Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará pero no
-generará ningún proyecto.
+Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará para el
+calendario de pedidos siempre que su columna no sea "Material taller",
+"Material cliente", "Tratamiento final", "Pdte. Verificación",
+"Material Recepcionado" o "Ready to Archive". En ningún caso generará un
+proyecto.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
