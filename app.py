@@ -1987,12 +1987,17 @@ def kanbanize_webhook():
         if existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
             changed = True
+        existing_phases = existing.setdefault('phases', {})
+        existing_assigned = existing.setdefault('assigned', {})
         for ph, hours in new_phases.items():
-            if existing.get('phases', {}).get(ph) != hours:
-                existing.setdefault('phases', {})[ph] = hours
+            if ph not in existing_phases:
+                # Si la fase fue eliminada del proyecto, no la volvemos a añadir
+                continue
+            if existing_phases.get(ph) != hours:
+                existing_phases[ph] = hours
                 changed = True
-            if ph not in existing.get('assigned', {}):
-                existing.setdefault('assigned', {})[ph] = UNPLANNED
+            if ph not in existing_assigned:
+                existing_assigned[ph] = UNPLANNED
                 changed = True
         if changed:
             save_projects(projects)
