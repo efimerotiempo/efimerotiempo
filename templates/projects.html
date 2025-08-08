@@ -41,7 +41,7 @@
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+    <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
         <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
         <td>
@@ -67,11 +67,13 @@
                 <span class="late">&#10060;</span>
             {% endif %}
         </td>
-        <td>
-            {% if p.planned %}
-                <span class="ok">&#10004;</span>
+        <td class="plan-col">
+            {% if p.plan_state == 'all' %}
+                <span class="ok">&#9679;</span>
+            {% elif p.plan_state == 'partial' %}
+                <span class="unplanned">&#9679;</span>
             {% else %}
-                <span class="late">&#10060;</span>
+                <span class="late">&#9679;</span>
             {% endif %}
         </td>
         <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
