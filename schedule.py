@@ -305,6 +305,9 @@ def schedule_projects(projects):
                 continue
 
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                start_overrides = project.get('segment_starts', {}).get(phase)
+                if start_overrides and start_overrides[0]:
+                    current = date.fromisoformat(start_overrides[0])
                 days_needed = sum(
                     1
                     for i in range((date.fromisoformat(val) - current).days + 1)
@@ -394,9 +397,8 @@ def schedule_projects(projects):
                     manual = False
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
-                        if override > current:
-                            current = override
-                            hour = 0
+                        current = override
+                        hour = 0
                         manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
