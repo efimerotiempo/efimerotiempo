@@ -392,7 +392,7 @@
       }
       html += `</div>`;
       html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-      html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
+      html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
       html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
       if (Array.isArray(info.phases[t.dataset.phase])) {
         html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -473,7 +473,7 @@
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, { method: 'POST', credentials: 'same-origin' })
+          fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), { method: 'POST', credentials: 'same-origin' })
             .then(() => location.reload());
         });
       }

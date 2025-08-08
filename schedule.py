@@ -253,16 +253,15 @@ def schedule_projects(projects):
                     'priority': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
-    # Place frozen projects first so other tasks respect their positions
+    # Place frozen phases first so other tasks respect their positions
     for p in projects:
-        if p.get('frozen'):
-            for t in p.get('frozen_tasks', []):
-                w = t['worker']
-                day = t['day']
-                entry = t.copy()
-                entry.pop('worker', None)
-                entry.pop('day', None)
-                worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
+        for t in p.get('frozen_tasks', []):
+            w = t['worker']
+            day = t['day']
+            entry = t.copy()
+            entry.pop('worker', None)
+            entry.pop('day', None)
+            worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
 
     # Sort frozen tasks chronologically
     for w, days in worker_schedule.items():
@@ -271,8 +270,6 @@ def schedule_projects(projects):
 
     conflicts = []
     for project in projects:
-        if project.get('frozen'):
-            continue
         planned = project.get('planned', True)
         if not planned:
             current = date.today()
@@ -284,11 +281,27 @@ def schedule_projects(projects):
                 current = date.today()
                 project['start_date'] = current.isoformat()
         hour = 0
+        frozen_end = {}
+        for t in project.get('frozen_tasks', []):
+            ph = t.get('phase')
+            try:
+                d = date.fromisoformat(t['day'])
+            except Exception:
+                continue
+            if ph in PHASE_ORDER:
+                prev = frozen_end.get(ph)
+                if not prev or d > prev:
+                    frozen_end[ph] = d
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
+                continue
+            if phase in frozen_end:
+                current = next_workday(frozen_end[phase])
+                end_date = max(end_date, frozen_end[phase])
+                hour = 0
                 continue
 
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
@@ -332,7 +345,6 @@ def schedule_projects(projects):
                     project.get('priority'),
                     project['id'],
                     worker,
-                    project_frozen=project.get('frozen', False),
                     project_blocked=project.get('blocked', False),
                     material_date=project.get('material_confirmed_date'),
                 )
@@ -403,7 +415,6 @@ def schedule_projects(projects):
                         hours_map,
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
-                        project_frozen=project.get('frozen', False),
                         project_blocked=project.get('blocked', False),
                         material_date=project.get('material_confirmed_date'),
                     )
