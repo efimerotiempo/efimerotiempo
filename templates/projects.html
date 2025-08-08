@@ -68,8 +68,12 @@
             {% endif %}
         </td>
         <td>
-            {% if not p.planned %}
-                <span class="unplanned">&#10060;</span>
+            {% if p.plan_state == 'all' %}
+                <span class="ok">&#9679;</span>
+            {% elif p.plan_state == 'partial' %}
+                <span class="unplanned">&#9679;</span>
+            {% else %}
+                <span class="late">&#9679;</span>
             {% endif %}
         </td>
         <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>

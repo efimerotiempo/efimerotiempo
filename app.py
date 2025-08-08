@@ -203,22 +203,6 @@ def format_dd_mm(value):
     return ''
 
 
-def planning_status(schedule):
-    """Return mapping pid -> True if fully scheduled."""
-    status = {}
-    unplanned = schedule.get(UNPLANNED, {})
-    for tasks in unplanned.values():
-        for t in tasks:
-            status[t['pid']] = False
-    for worker, days in schedule.items():
-        if worker == UNPLANNED:
-            continue
-        for tasks in days.values():
-            for t in tasks:
-                status.setdefault(t['pid'], True)
-    return status
-
-
 def load_bugs():
     if os.path.exists(BUGS_FILE):
         with open(BUGS_FILE, 'r') as f:
@@ -517,6 +501,18 @@ def get_projects():
                 if worker:
                     p['assigned'][ph] = worker
                     changed = True
+        total = len(p.get('phases', {}))
+        planned = sum(
+            1
+            for ph in p.get('phases', {})
+            if p['assigned'].get(ph) and p['assigned'][ph] != UNPLANNED
+        )
+        if planned == 0:
+            p['plan_state'] = 'none'
+        elif planned == total:
+            p['plan_state'] = 'all'
+        else:
+            p['plan_state'] = 'partial'
         assigned_projects.append(p)
     if changed:
         save_projects(projects)
@@ -1033,7 +1029,6 @@ def complete():
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
     visible = set(active_workers(today))
-    plan_map = planning_status(schedule)
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -1190,7 +1185,6 @@ def complete():
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
-        plan_map=plan_map,
         split_points=points,
         palette=COLORS,
         unplanned_with=unplanned_with,
