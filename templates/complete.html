@@ -444,6 +444,7 @@
   const orderText = document.getElementById('order-text');
   const orderClose = document.getElementById('order-close');
   const filterForm = document.getElementById('filter-form');
+  const PROJECT_FILTER = {{ project_filter|tojson }};
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
@@ -480,12 +481,36 @@
 
   const wrapper = document.querySelector('.schedule-wrapper');
   const SCROLL_KEY = 'calendarScroll';
-  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
-  if (savedScroll !== null) {
-    wrapper.scrollLeft = parseFloat(savedScroll);
+  if (PROJECT_FILTER) {
+    const projTasks = document.querySelectorAll('.schedule .task');
+    if (projTasks.length) {
+      let earliest = projTasks[0];
+      let earliestDate = new Date(projTasks[0].dataset.day);
+      projTasks.forEach(t => {
+        const dt = new Date(t.dataset.day);
+        if (dt < earliestDate) {
+          earliestDate = dt;
+          earliest = t;
+        }
+      });
+      earliest.scrollIntoView({behavior: 'auto', inline: 'center'});
+    } else {
+      const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+      if (savedScroll !== null) {
+        wrapper.scrollLeft = parseFloat(savedScroll);
+      } else {
+        const todayCell = document.querySelector('th.today');
+        if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+      }
+    }
   } else {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+    if (savedScroll !== null) {
+      wrapper.scrollLeft = parseFloat(savedScroll);
+    } else {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    }
   }
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
