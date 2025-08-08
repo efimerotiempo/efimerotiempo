@@ -18,6 +18,7 @@ table.schedule td.weekend-cell {
 }
 .ok { color: green; }
 .late { color: red; }
+.unplanned { color: orange; }
 .split-dot {
     font-weight: bold;
     margin-right: 2px;
