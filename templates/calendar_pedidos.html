@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Calendario pedidos</h2>
+<table class="pedidos-calendar">
+    <thead>
+    <tr>
+        <th>Semana</th>
+        <th>Lun</th>
+        <th>Mar</th>
+        <th>Mié</th>
+        <th>Jue</th>
+        <th>Vie</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for week in weeks %}
+    <tr>
+        <td class="week-label">Semana {{ week.number }}</td>
+        {% for d in week.days %}
+        <td class="{% if d.date == today %}today{% endif %}">
+            <div class="day-number">{{ d.ordinal }}</div>
+            {% for t in d.tasks %}
+            <div class="task" style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({{ t.hours }}h){% endif %}</div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
