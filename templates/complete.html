@@ -283,18 +283,11 @@
                 <th>En plazo</th>
                 <th>Planificado</th>
                 <th>Origen</th>
-                <th>Prioridad</th>
                 <th>Color</th>
-                {% for ph in phases %}
-                    {% if ph == 'pedidos' %}
-                        <th>Plazo acopio</th>
-                    {% else %}
-                        <th>{{ ph }}</th>
-                    {% endif %}
+                {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
+                    <th>{{ ph }}</th>
                 {% endfor %}
-                <th>Cambiar</th>
                 <th>Imagen</th>
-                <th>Imagen kanbanize</th>
                 <th></th>
                 <th>Actualizar</th>
             </tr>
@@ -337,7 +330,6 @@
                     {% endif %}
                 </td>
                 <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
-                <td>{{ p.priority }}</td>
                 <td>
                     <select class="color-select" style="display:none">
                         {% for c in palette %}
@@ -345,17 +337,13 @@
                         {% endfor %}
                     </select>
                 </td>
-                {% for ph in phases %}
+                {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <td>
                     {% set val = p.phases.get(ph, 0) %}
-                    {% if ph == 'pedidos' %}
-                        {{ val }}<br>
+                    {% if val is sequence %}
+                        {{ val|map('int')|sum }}h<br>
                     {% else %}
-                        {% if val is sequence %}
-                            {{ val|map('int')|sum }}h<br>
-                        {% else %}
-                            {{ val|int }}h<br>
-                        {% endif %}
+                        {{ val|int }}h<br>
                     {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
@@ -380,16 +368,6 @@
                     </td>
                 {% endfor %}
                 <td>
-                    <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
-                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                        <select name="priority">
-                            {% for pr in priorities %}
-                                <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
-                            {% endfor %}
-                        </select>
-                    </form>
-                </td>
-                <td>
                     {% if p.image %}
                         {{ p.image.rsplit('/', 1)[-1] }}
                     {% else %}
@@ -399,15 +377,6 @@
                         <input type="hidden" name="next" value="{{ url_for('complete') }}">
                         <input type="file" name="image" accept="image/*">
                     </form>
-                </td>
-                <td>
-                    {% if p.kanban_attachments %}
-                        {% for att in p.kanban_attachments %}
-                            <a href="{{ att.url }}" target="_blank">{{ att.name }}</a>{% if not loop.last %}, {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        &mdash;
-                    {% endif %}
                 </td>
                 <td>
                     <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}" class="delete-form">
@@ -816,8 +785,6 @@
           data.start_date = fd.get('start_date') || fd.get('date');
         } else if (f.classList.contains('due-form')) {
           data.due_date = fd.get('due_date');
-        } else if (f.action.includes('update_priority')) {
-          data.priority = fd.get('priority');
         }
       });
       const colorSel = row.querySelector('.color-select');
