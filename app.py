@@ -149,15 +149,44 @@ PHASE_FIELD_MAP = {
 }
 
 
-def _sync_kanban_fields(kanban_id, fields):
-    """Send field updates to Kanbanize, ignoring network errors."""
-    if not kanban_id or not fields:
+def _sync_project_to_kanbanize(proj, changed):
+    """Send project updates to Kanbanize according to ``changed`` fields."""
+    kanban_id = proj.get('kanban_id')
+    if not kanban_id or not changed:
         return
+
+    payload = {}
+    custom = {}
+
+    if 'client' in changed:
+        payload['title'] = proj.get('client', '')
+    if 'priority' in changed:
+        payload['priority'] = proj.get('priority')
+    if 'due_date' in changed:
+        due = proj.get('due_date')
+        if due:
+            payload['deadline'] = due
+            custom['Fecha Cliente'] = due
+    if 'material_confirmed_date' in changed:
+        mdate = proj.get('material_confirmed_date')
+        if mdate:
+            custom['Fecha material confirmado'] = mdate
+
+    phases = proj.get('phases', {})
+    for ph in changed:
+        field = PHASE_FIELD_MAP.get(ph)
+        if field and ph in phases:
+            custom[field] = phases[ph]
+
+    if custom:
+        payload['customFields'] = custom
+    if not payload:
+        return
+
     url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{kanban_id}"
-    payload = json.dumps({'customFields': fields}).encode('utf-8')
     req = Request(
         url,
-        data=payload,
+        data=json.dumps(payload).encode('utf-8'),
         headers={'apikey': KANBANIZE_API_KEY, 'Content-Type': 'application/json'},
         method='PUT',
     )
@@ -166,19 +195,6 @@ def _sync_kanban_fields(kanban_id, fields):
             resp.read()
     except Exception as e:
         print('Kanbanize sync error:', e)
-
-
-def sync_phase_hours(kanban_id, phase, hours):
-    """Update the given phase hours in Kanbanize."""
-    field = PHASE_FIELD_MAP.get(phase)
-    if field:
-        _sync_kanban_fields(kanban_id, {field: hours})
-
-
-def sync_due_date(kanban_id, due_date):
-    """Update the project's due date in Kanbanize."""
-    if due_date:
-        _sync_kanban_fields(kanban_id, {'Fecha Cliente': due_date})
 
 
 def active_workers(today=None):
@@ -1493,8 +1509,7 @@ def update_due_date():
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj['due_date'] = new_date.isoformat()
     save_projects(projects)
-    if proj.get('kanban_id'):
-        sync_due_date(proj['kanban_id'], proj['due_date'])
+    _sync_project_to_kanbanize(proj, {'due_date'})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -1561,8 +1576,7 @@ def update_phase_hours():
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
-    if proj.get('kanban_id'):
-        sync_phase_hours(proj['kanban_id'], phase, hours)
+    _sync_project_to_kanbanize(proj, {phase})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -1579,6 +1593,9 @@ def update_project_row():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
 
+    changed = set()
+    modified = set()
+
     if 'start_date' in data:
         sd = parse_input_date(data['start_date'])
         if sd:
@@ -1586,14 +1603,21 @@ def update_project_row():
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])
         proj['due_date'] = dd.isoformat() if dd else ''
-        if proj.get('kanban_id') and dd:
-            sync_due_date(proj['kanban_id'], proj['due_date'])
+        if dd:
+            changed.add('due_date')
     if 'priority' in data:
         proj['priority'] = data['priority']
+        changed.add('priority')
+    if 'client' in data:
+        proj['client'] = data['client']
+        changed.add('client')
+    if 'material_confirmed_date' in data:
+        md = parse_input_date(data['material_confirmed_date'])
+        proj['material_confirmed_date'] = md.isoformat() if md else ''
+        if md:
+            changed.add('material_confirmed_date')
     if 'color' in data:
         proj['color'] = data['color']
-
-    modified = set()
 
     for ph, val in (data.get('phases') or {}).items():
         try:
@@ -1606,8 +1630,6 @@ def update_project_row():
         prev = proj['phases'].get(ph)
         was_list = isinstance(prev, list)
         proj['phases'][ph] = hours
-        if proj.get('kanban_id'):
-            sync_phase_hours(proj['kanban_id'], ph, hours)
         if was_list:
             if proj.get('segment_starts'):
                 proj['segment_starts'].pop(ph, None)
@@ -1618,6 +1640,7 @@ def update_project_row():
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
         modified.add(ph)
+        changed.add(ph)
 
     if data.get('phase_starts'):
         seg = proj.setdefault('segment_starts', {})
@@ -1638,6 +1661,7 @@ def update_project_row():
 
     schedule_projects(projects)
     save_projects(projects)
+    _sync_project_to_kanbanize(proj, changed)
     return jsonify({'status': 'ok'})
 
 
