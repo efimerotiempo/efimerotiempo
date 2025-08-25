@@ -40,8 +40,17 @@ define la variable de entorno `EFIMERO_DATA_DIR` con la ruta a tu carpeta antes
 de iniciar la aplicación.
 
 La aplicación también puede recibir tarjetas desde Kanbanize mediante un webhook.
-Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará pero no
-generará ningún proyecto.
+Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará para el
+calendario de pedidos siempre que su columna no sea "Material taller",
+"Material cliente", "Tratamiento final", "Pdte. Verificación",
+"Material Recepcionado" o "Ready to Archive". En ningún caso generará un
+proyecto. Si una tarjeta de proyecto pasa a la columna "Ready to Archive",
+el Planificador mostrará un aviso para eliminarlo.
+
+Si modificas en el Planificador el cliente, la prioridad, la fecha límite,
+la fecha de material confirmado o las horas de alguna de sus fases, estos
+valores se envían de vuelta a la tarjeta correspondiente en Kanbanize para
+mantener sincronizada la información.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
@@ -64,9 +73,11 @@ Los fines de semana se representan con una franja negra que agrupa el sábado y 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
 automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
-eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
-lista de conflictos aparece un aviso indicando la eliminación y los cambios que
-ha producido.
+ eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
+ lista de conflictos aparece un aviso indicando la eliminación y los cambios que
+ ha producido. Si desde el calendario se eliminan todas las fases de un proyecto,
+ este también desaparece automáticamente de las listas de proyectos en todas las
+ pestañas.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
 de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
@@ -119,7 +130,9 @@ desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
 y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
 mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
 fecha **Material confirmado** de cada proyecto y una división separa los que
-cuentan con esa fecha de los que no.
+cuentan con esa fecha de los que no. El título de cada carpeta muestra la
+**Fecha límite** del proyecto tras el nombre del cliente, y se actualiza si
+cambia.
 
 La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
 **Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
@@ -176,22 +189,22 @@ una tarea en el calendario.
 
 Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
-permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
+permanecen en su sitio. Si se borran todas las fases de un proyecto, este se
+elimina automáticamente. Además, el recuadro incluye el botón **Sin planificar**
 que asigna la fase seleccionada al día actual dentro de la columna *Fases sin
 planificar* para reprogramarla más adelante.
-Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
-la aplicación divide la duración de esa fase en dos mitades aunque la fecha
-elegida no coincida exactamente con su mitad. La segunda parte se mantiene
-como un tramo independiente y en las tablas de **Proyectos** aparece una
-línea adicional con el mismo nombre, cliente y fecha límite mostrando las
-horas restantes de esa fase.
+Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo se abre
+una ventana donde puedes indicar cuántas horas dedicar a la primera y a la
+segunda parte de la fase. Cada tramo se guarda como independiente y en las
+tablas de **Proyectos** aparece una línea adicional con el mismo nombre,
+cliente y fecha límite mostrando las horas restantes de esa fase.
 Si posteriormente quieres revertir la operación, el mismo recuadro muestra
-un botón **Deshacer división** que vuelve a unir ambas mitades sumando sus
+un botón **Deshacer división** que vuelve a unir ambas partes sumando sus
 horas. Se conserva el trabajador asignado a la parte mayor.
 Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
 simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
-mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
-final de la fase anterior.
+mantener un orden cronológico entre sí y, al mover la segunda, se respeta
+exactamente la fecha que selecciones aunque haya huecos libres antes.
 Otro formulario permite editar la **fecha límite** del proyecto desde esa misma
 ventana emergente o desde las tablas de proyectos, mostrando igualmente un
 aviso si la nueva fecha no es correcta.

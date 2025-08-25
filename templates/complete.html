@@ -125,7 +125,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
             </div>
             {% endif %}
             {% endfor %}
@@ -172,11 +172,11 @@
         </div>
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
-            <h3>Fases sin planificar <button type="button" id="unplanned-hide">&#187;</button></h3>
+            <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for g in unplanned_with %}
             <div class="unplanned-folder" data-pid="{{ g.pid }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - {{ g.due_date }}{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
@@ -187,7 +187,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -198,7 +198,7 @@
             {% endif %}
             {% for g in unplanned_without %}
             <div class="unplanned-folder" data-pid="{{ g.pid }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - {{ g.due_date }}{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
@@ -209,7 +209,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({{ t.hours }}h){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -218,10 +218,10 @@
             </div>
         </div>
         </div>
-        <button id="unplanned-show" style="display:none;">Fases sin planificar</button>
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
+<div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -301,7 +301,7 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+            <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>
@@ -327,11 +327,13 @@
                         <span class="late">&#10060;</span>
                     {% endif %}
                 </td>
-                <td>
-                    {% if plan_map.get(p.id) %}
-                        <span class="ok">&#10004;</span>
+                <td class="plan-col">
+                    {% if p.plan_state == 'all' %}
+                        <span class="ok">&#9679;</span>
+                    {% elif p.plan_state == 'partial' %}
+                        <span class="unplanned">&#9679;</span>
                     {% else %}
-                        <span class="late">&#10060;</span>
+                        <span class="late">&#9679;</span>
                     {% endif %}
                 </td>
                 <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
@@ -440,7 +442,13 @@
   const materialModal = document.getElementById('material-modal');
   const materialText = document.getElementById('material-text');
   const materialClose = document.getElementById('material-close');
+  const splitModal = document.getElementById('split-modal');
+  const splitForm = document.getElementById('split-form');
+  const splitPart1 = document.getElementById('split-part1');
+  const splitPart2 = document.getElementById('split-part2');
+  const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
+  const PROJECT_FILTER = {{ project_filter|tojson }};
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
@@ -472,12 +480,36 @@
 
   const wrapper = document.querySelector('.schedule-wrapper');
   const SCROLL_KEY = 'calendarScroll';
-  const savedScroll = sessionStorage.getItem(SCROLL_KEY);
-  if (savedScroll !== null) {
-    wrapper.scrollLeft = parseFloat(savedScroll);
+  if (PROJECT_FILTER) {
+    const projTasks = document.querySelectorAll('.schedule .task');
+    if (projTasks.length) {
+      let earliest = projTasks[0];
+      let earliestDate = new Date(projTasks[0].dataset.day);
+      projTasks.forEach(t => {
+        const dt = new Date(t.dataset.day);
+        if (dt < earliestDate) {
+          earliestDate = dt;
+          earliest = t;
+        }
+      });
+      earliest.scrollIntoView({behavior: 'auto', inline: 'center'});
+    } else {
+      const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+      if (savedScroll !== null) {
+        wrapper.scrollLeft = parseFloat(savedScroll);
+      } else {
+        const todayCell = document.querySelector('th.today');
+        if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+      }
+    }
   } else {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+    if (savedScroll !== null) {
+      wrapper.scrollLeft = parseFloat(savedScroll);
+    } else {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
+    }
   }
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
@@ -564,7 +596,7 @@
         }
         html += `</div>`;
         html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" style="color:red;font-weight:bold">${info.frozen ? 'Descongelar' : 'Congelar'}</button></div>`;
+        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
         html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
         if (Array.isArray(info.phases[t.dataset.phase])) {
           html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -615,13 +647,12 @@
       if (split) {
         split.addEventListener('click', ev => {
           ev.stopPropagation();
-          if (confirm('¿Dividir fase a partir de este d\u00eda?')) {
-            fetch(SPLIT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pid: split.dataset.pid, phase: split.dataset.phase, date: split.dataset.date })
-            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
-          }
+          splitModal.dataset.pid = split.dataset.pid;
+          splitModal.dataset.phase = split.dataset.phase;
+          splitModal.dataset.date = split.dataset.date;
+          splitPart1.value = '';
+          splitPart2.value = '';
+          splitModal.style.display = 'block';
         });
       }
       const unsplit = document.getElementById('unsplit-btn');
@@ -637,11 +668,31 @@
           }
         });
       }
+      if (splitForm) {
+        splitForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          fetch(SPLIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pid: splitModal.dataset.pid,
+              phase: splitModal.dataset.phase,
+              date: splitModal.dataset.date,
+              part1: splitPart1.value,
+              part2: splitPart2.value
+            })
+          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+        });
+      }
+      if (splitCancel) {
+        splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
+      }
       const freeze = document.getElementById('freeze-btn');
       if (freeze) {
         freeze.addEventListener('click', ev => {
           ev.stopPropagation();
-          fetch('/toggle_freeze/' + freeze.dataset.pid, {
+          fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), {
             method: 'POST',
             credentials: 'same-origin'
           }).then(() => location.reload());
@@ -734,6 +785,13 @@
         } else {
           t.classList.add('dim');
           t.classList.remove('highlight');
+        }
+      });
+      folders.forEach(f => {
+        if (f.dataset.pid === pid) {
+          f.classList.remove('dim');
+        } else {
+          f.classList.add('dim');
         }
       });
     });
@@ -831,6 +889,21 @@
     const t = Array.from(tasks).find(o => o.dataset.pid === stored);
     if (t) {
       showTask(t);
+    } else {
+      const row = Array.from(rows).find(r => r.dataset.pid === stored);
+      if (row) {
+        row.dispatchEvent(new Event('click'));
+      } else {
+        const folder = Array.from(folders).find(f => f.dataset.pid === stored);
+        if (folder) {
+          folders.forEach(f => {
+            if (f === folder) f.classList.remove('dim');
+            else f.classList.add('dim');
+          });
+        } else {
+          folders.forEach(f => f.classList.add('dim'));
+        }
+      }
     }
     sessionStorage.removeItem('highlightPid');
   }
@@ -927,15 +1000,12 @@
           materialModal.style.display = 'block';
           materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
         } else {
-          if (data.message) alert(data.message);
           location.reload();
         }
       });
     });
   });
   const unplanPanel = document.getElementById('unplanned-panel');
-  const unplanHide = document.getElementById('unplanned-hide');
-  const unplanShow = document.getElementById('unplanned-show');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
 
@@ -953,22 +1023,6 @@
     if (savedWidth) {
       unplanPanel.style.width = savedWidth + 'px';
     }
-  }
-  if (unplanPanel && unplanHide && unplanShow) {
-    unplanHide.addEventListener('click', () => {
-      localStorage.setItem(UNPLAN_WIDTH_KEY, unplanPanel.offsetWidth);
-      unplanPanel.style.display = 'none';
-      unplanShow.style.display = 'block';
-    });
-    unplanShow.addEventListener('click', () => {
-      const saved = localStorage.getItem(UNPLAN_WIDTH_KEY);
-      if (saved) {
-        unplanPanel.style.width = saved + 'px';
-      }
-      unplanPanel.style.display = 'block';
-      unplanShow.style.display = 'none';
-      syncUnplannedHeight();
-    });
   }
   if (unplanPanel && unplanResizer) {
     let startX, startWidth;
