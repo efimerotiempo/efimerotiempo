@@ -622,19 +622,24 @@ def _kanban_card_to_project(card):
         except Exception:
             return 0
 
+    prep = h('Horas Preparación')
+    mont = h('Horas Montaje')
+    sold = h('Horas Soldadura')
+    pint = h('Horas Acabado')
     phases = {}
-    val = h('Horas Acabado')
-    if val:
-        phases['pintar'] = val
-    val = h('Horas Montaje')
-    if val:
-        phases['montar'] = val
-    val = h('Horas Preparación')
-    if val:
-        phases['recepcionar material'] = val
-    val = h('Horas Soldadura')
-    if val:
-        phases['soldar'] = val
+    auto_hours = {}
+    if prep <= 0 and mont <= 0 and sold <= 0 and pint <= 0:
+        phases['recepcionar material'] = 1
+        auto_hours['recepcionar material'] = True
+    else:
+        if pint:
+            phases['pintar'] = pint
+        if mont:
+            phases['montar'] = mont
+        if prep:
+            phases['recepcionar material'] = prep
+        if sold:
+            phases['soldar'] = sold
 
     project = {
         'id': str(uuid.uuid4()),
@@ -648,6 +653,7 @@ def _kanban_card_to_project(card):
         # Ensure each phase is explicitly set to the unplanned worker so the
         # calendar always displays the tasks as soon as the project is created.
         'assigned': {ph: UNPLANNED for ph in phases},
+        'auto_hours': auto_hours,
         'image': None,
         'kanban_attachments': [],
         'planned': False,
@@ -2009,16 +2015,29 @@ def kanbanize_webhook():
             return 0
 
     prep_hours = obtener_duracion('Horas Preparación')
+    mont_hours = obtener_duracion('Horas Montaje')
+    sold_hours = obtener_duracion('Horas Soldadura')
+    pint_hours = obtener_duracion('Horas Acabado')
     auto_prep = False
-    if prep_hours <= 0:
+    if (
+        prep_hours <= 0
+        and mont_hours <= 0
+        and sold_hours <= 0
+        and pint_hours <= 0
+    ):
         prep_hours = 1
         auto_prep = True
-    fases = [
-        {'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep},
-        {'nombre': 'montar', 'duracion': obtener_duracion('Horas Montaje')},
-        {'nombre': 'soldar', 'duracion': obtener_duracion('Horas Soldadura')},
-        {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
-    ]
+    fases = []
+    if auto_prep or prep_hours > 0:
+        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep})
+    else:
+        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
+    if mont_hours > 0:
+        fases.append({'nombre': 'montar', 'duracion': mont_hours})
+    if sold_hours > 0:
+        fases.append({'nombre': 'soldar', 'duracion': sold_hours})
+    if pint_hours > 0:
+        fases.append({'nombre': 'pintar', 'duracion': pint_hours})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
