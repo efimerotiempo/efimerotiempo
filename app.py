@@ -140,6 +140,46 @@ KANBAN_IGNORE_COLUMNS = {
     'Ready to Archive',
 }
 
+# Mapping between local phase names and Kanbanize custom field names
+PHASE_FIELD_MAP = {
+    'recepcionar material': 'Horas Preparación',
+    'montar': 'Horas Montaje',
+    'soldar': 'Horas Soldadura',
+    'pintar': 'Horas Acabado',
+}
+
+
+def _sync_kanban_fields(kanban_id, fields):
+    """Send field updates to Kanbanize, ignoring network errors."""
+    if not kanban_id or not fields:
+        return
+    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{kanban_id}"
+    payload = json.dumps({'customFields': fields}).encode('utf-8')
+    req = Request(
+        url,
+        data=payload,
+        headers={'apikey': KANBANIZE_API_KEY, 'Content-Type': 'application/json'},
+        method='PUT',
+    )
+    try:
+        with urlopen(req, timeout=10) as resp:
+            resp.read()
+    except Exception as e:
+        print('Kanbanize sync error:', e)
+
+
+def sync_phase_hours(kanban_id, phase, hours):
+    """Update the given phase hours in Kanbanize."""
+    field = PHASE_FIELD_MAP.get(phase)
+    if field:
+        _sync_kanban_fields(kanban_id, {field: hours})
+
+
+def sync_due_date(kanban_id, due_date):
+    """Update the project's due date in Kanbanize."""
+    if due_date:
+        _sync_kanban_fields(kanban_id, {'Fecha Cliente': due_date})
+
 
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
@@ -1453,6 +1493,8 @@ def update_due_date():
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj['due_date'] = new_date.isoformat()
     save_projects(projects)
+    if proj.get('kanban_id'):
+        sync_due_date(proj['kanban_id'], proj['due_date'])
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -1519,6 +1561,8 @@ def update_phase_hours():
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
+    if proj.get('kanban_id'):
+        sync_phase_hours(proj['kanban_id'], phase, hours)
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -1542,6 +1586,8 @@ def update_project_row():
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])
         proj['due_date'] = dd.isoformat() if dd else ''
+        if proj.get('kanban_id') and dd:
+            sync_due_date(proj['kanban_id'], proj['due_date'])
     if 'priority' in data:
         proj['priority'] = data['priority']
     if 'color' in data:
@@ -1560,6 +1606,8 @@ def update_project_row():
         prev = proj['phases'].get(ph)
         was_list = isinstance(prev, list)
         proj['phases'][ph] = hours
+        if proj.get('kanban_id'):
+            sync_phase_hours(proj['kanban_id'], ph, hours)
         if was_list:
             if proj.get('segment_starts'):
                 proj['segment_starts'].pop(ph, None)

@@ -47,6 +47,10 @@ calendario de pedidos siempre que su columna no sea "Material taller",
 proyecto. Si una tarjeta de proyecto pasa a la columna "Ready to Archive",
 el Planificador mostrará un aviso para eliminarlo.
 
+Si modificas en el Planificador la fecha límite de un proyecto o las horas de
+alguna de sus fases, los valores se envían de vuelta a la tarjeta correspondiente
+en Kanbanize para mantener sincronizada la información.
+
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del
  hito y la descripción se muestra en rojo y en negrita al final del calendario,
