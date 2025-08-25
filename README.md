@@ -182,7 +182,8 @@ una tarea en el calendario.
 
 Se ofrece un botón rojo **Borrar fase** que elimina ese tramo de
 la planificación tras una confirmación. Las demás fases de ese proyecto
-permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
+permanecen en su sitio. Si se borran todas las fases de un proyecto, este se
+elimina automáticamente. Además, el recuadro incluye el botón **Sin planificar**
 que asigna la fase seleccionada al día actual dentro de la columna *Fases sin
 planificar* para reprogramarla más adelante.
 Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo se abre

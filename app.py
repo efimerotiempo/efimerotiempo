@@ -1650,7 +1650,10 @@ def delete_phase():
                 p['phases'].pop(phase, None)
                 if p.get('assigned'):
                     p['assigned'].pop(phase, None)
-                save_projects(projects)
+                if not p.get('phases'):
+                    remove_project_and_preserve_schedule(projects, pid)
+                else:
+                    save_projects(projects)
             break
     return '', 204
 
@@ -1756,45 +1759,48 @@ def move_phase():
     return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
 
 
-@app.route('/delete_project/<pid>', methods=['POST'])
-def delete_project(pid):
-    projects = get_projects()
+def remove_project_and_preserve_schedule(projects, pid):
+    """Remove a project and keep other projects' schedules intact."""
     mapping = compute_schedule_map(projects)
     removed = None
     for p in projects:
         if p['id'] == pid:
             removed = p
             break
-    if removed:
-        projects.remove(removed)
-        # Preserve current positions for all remaining projects so their
-        # phases stay exactly where they were before deleting this project.
-        for proj in projects:
-            tasks = mapping.get(proj['id'])
-            if not tasks:
-                continue
-            starts = {}
-            for worker, day, phase, hours, part in tasks:
-                key = (phase, part)
-                if key not in starts or day < starts[key][1]:
-                    starts[key] = (worker, day)
-            seg_starts = proj.setdefault('segment_starts', {})
-            assigned = proj.setdefault('assigned', {})
-            seg_workers = proj.setdefault('segment_workers', {})
-            for (phase, part), (worker, day) in starts.items():
-                if part is None:
-                    seg_starts.setdefault(phase, [None])[0] = day
-                    assigned[phase] = worker
-                else:
-                    lst = seg_starts.setdefault(phase, [])
-                    while len(lst) <= part:
-                        lst.append(None)
-                    lst[part] = day
-                    wl = seg_workers.setdefault(phase, [])
-                    while len(wl) <= part:
-                        wl.append(None)
-                    wl[part] = worker
-        save_projects(projects)
+    if not removed:
+        return
+    projects.remove(removed)
+    for proj in projects:
+        tasks = mapping.get(proj['id'])
+        if not tasks:
+            continue
+        starts = {}
+        for worker, day, phase, hours, part in tasks:
+            key = (phase, part)
+            if key not in starts or day < starts[key][1]:
+                starts[key] = (worker, day)
+        seg_starts = proj.setdefault('segment_starts', {})
+        assigned = proj.setdefault('assigned', {})
+        seg_workers = proj.setdefault('segment_workers', {})
+        for (phase, part), (worker, day) in starts.items():
+            if part is None:
+                seg_starts.setdefault(phase, [None])[0] = day
+                assigned[phase] = worker
+            else:
+                lst = seg_starts.setdefault(phase, [])
+                while len(lst) <= part:
+                    lst.append(None)
+                lst[part] = day
+                wl = seg_workers.setdefault(phase, [])
+                while len(wl) <= part:
+                    wl.append(None)
+                wl[part] = worker
+    save_projects(projects)
+
+@app.route('/delete_project/<pid>', methods=['POST'])
+def delete_project(pid):
+    projects = get_projects()
+    remove_project_and_preserve_schedule(projects, pid)
     next_url = request.args.get('next') or url_for('project_list')
     return redirect(next_url)
 
