@@ -702,6 +702,7 @@ def calendar_view():
                 'late': item.get('late', False),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'auto': item.get('auto', False),
             },
         )
         ph['hours'] += item.get('hours', 0)
@@ -721,6 +722,8 @@ def calendar_view():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+        if item.get('auto'):
+            ph['auto'] = True
     unplanned_list = []
     for pid, data in groups.items():
         unplanned_list.append(
@@ -1150,6 +1153,7 @@ def complete():
                 'late': item.get('late', False),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'auto': item.get('auto', False),
             },
         )
         ph['hours'] += item.get('hours', 0)
@@ -1169,6 +1173,8 @@ def complete():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+        if item.get('auto'):
+            ph['auto'] = True
     unplanned_list = []
     for pid, data in groups.items():
         unplanned_list.append(
@@ -1962,12 +1968,18 @@ def kanbanize_webhook():
         except Exception:
             return 0
 
+    prep_hours = obtener_duracion('Horas Preparación')
+    auto_prep = False
+    if prep_hours <= 0:
+        prep_hours = 1
+        auto_prep = True
     fases = [
-        {'nombre': 'recepcionar material', 'duracion': obtener_duracion('Horas Preparación')},
+        {'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep},
         {'nombre': 'montar', 'duracion': obtener_duracion('Horas Montaje')},
         {'nombre': 'soldar', 'duracion': obtener_duracion('Horas Soldadura')},
         {'nombre': 'pintar', 'duracion': obtener_duracion('Horas Acabado')},
     ]
+    auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
     nombre_proyecto = (
@@ -2011,6 +2023,7 @@ def kanbanize_webhook():
     )
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
+    new_auto = {f['nombre']: True for f in fases if f.get('auto')}
 
     if existing:
         changed = False
@@ -2043,6 +2056,7 @@ def kanbanize_webhook():
             changed = True
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
+        existing_auto = existing.setdefault('auto_hours', {})
         for ph, hours in new_phases.items():
             if ph not in existing_phases:
                 # Si la fase fue eliminada del proyecto, no la volvemos a añadir
@@ -2052,6 +2066,12 @@ def kanbanize_webhook():
                 changed = True
             if ph not in existing_assigned:
                 existing_assigned[ph] = UNPLANNED
+                changed = True
+            if new_auto.get(ph):
+                if not existing_auto.get(ph):
+                    existing_auto[ph] = True
+                    changed = True
+            elif existing_auto.pop(ph, None) is not None:
                 changed = True
         if changed:
             save_projects(projects)
@@ -2067,6 +2087,7 @@ def kanbanize_webhook():
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
+            'auto_hours': new_auto,
             'image': image_path,
             'kanban_attachments': kanban_files,
             'planned': False,

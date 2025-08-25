@@ -419,6 +419,7 @@ def schedule_projects(projects):
                         manual=manual,
                         project_blocked=project.get('blocked', False),
                         material_date=project.get('material_confirmed_date'),
+                        auto=project.get('auto_hours', {}).get(phase),
                     )
         project['end_date'] = end_date.isoformat()
         if project.get('due_date'):
@@ -459,6 +460,7 @@ def assign_phase(
     project_frozen=False,
     project_blocked=False,
     material_date=None,
+    auto=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -516,6 +518,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -567,6 +570,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -605,6 +609,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
