@@ -464,6 +464,7 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_archived', False)
         if 'kanban_image' in p and not p['kanban_attachments']:
             old = p.pop('kanban_image')
             if isinstance(old, str) and old:
@@ -525,6 +526,22 @@ def get_projects():
     if changed:
         save_projects(projects)
     return projects
+
+
+@app.context_processor
+def inject_archived_projects():
+    projects = load_projects()
+    changed = False
+    flagged = []
+    for p in projects:
+        if 'kanban_archived' not in p:
+            p['kanban_archived'] = False
+            changed = True
+        if p.get('kanban_archived'):
+            flagged.append({'id': p['id'], 'name': p.get('name', '')})
+    if changed:
+        save_projects(projects)
+    return {'archived_projects': flagged}
 
 
 def expand_for_display(projects):
@@ -1776,6 +1793,20 @@ def delete_project(pid):
     return redirect(next_url)
 
 
+@app.route('/dismiss_archive/<pid>', methods=['POST'])
+def dismiss_archive(pid):
+    projects = load_projects()
+    changed = False
+    for p in projects:
+        if p['id'] == pid:
+            if p.pop('kanban_archived', None):
+                changed = True
+            break
+    if changed:
+        save_projects(projects)
+    return '', 204
+
+
 @app.route('/delete_conflict/<path:key>', methods=['POST'])
 def delete_conflict(key):
     dismissed = load_dismissed()
@@ -1921,9 +1952,9 @@ def kanbanize_webhook():
 
     card = data.get("card", {})
     payload_timestamp = data.get("timestamp")
+    cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
     if card.get("lanename") == "Seguimiento compras":
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cards = load_kanban_cards()
         cards = [
             c for c in cards
@@ -1933,6 +1964,15 @@ def kanbanize_webhook():
             cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
+
+    if card.get('columnname') == 'Ready to Archive':
+        projects = load_projects()
+        for p in projects:
+            if p.get('kanban_id') == cid:
+                p['kanban_archived'] = True
+                save_projects(projects)
+                break
+        return jsonify({"mensaje": "Proyecto archivado"}), 200
 
     print("Tarjeta recibida:")
     print(card)

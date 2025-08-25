@@ -44,7 +44,8 @@ Si la tarjeta pertenece a la lane "Seguimiento compras", se guardará para el
 calendario de pedidos siempre que su columna no sea "Material taller",
 "Material cliente", "Tratamiento final", "Pdte. Verificación",
 "Material Recepcionado" o "Ready to Archive". En ningún caso generará un
-proyecto.
+proyecto. Si una tarjeta de proyecto pasa a la columna "Ready to Archive",
+el Planificador mostrará un aviso para eliminarlo.
 
  También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día del

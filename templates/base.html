@@ -20,6 +20,15 @@
     </nav>
     <hr/>
     {% block content %}{% endblock %}
+    <div id="archive-modal" class="conflict-modal">
+        <div class="conflict-content">
+            <div style="color:orange;font-weight:bold">Este proyecto se ha archivado en kanbanize, ¿quieres eliminarlo del Planificador?</div>
+            <div style="margin-top:10px;">
+                <button id="archive-yes">Sí</button>
+                <button id="archive-no">No</button>
+            </div>
+        </div>
+    </div>
     <script>
       const SCROLL_KEY_GENERIC = 'scroll:' + location.pathname;
       const saved = sessionStorage.getItem(SCROLL_KEY_GENERIC);
@@ -31,6 +40,24 @@
       }
       window.addEventListener('scroll', storeScroll);
       window.addEventListener('beforeunload', storeScroll);
+
+      const ARCHIVED_PROJECTS = {{ archived_projects|tojson }};
+      if (ARCHIVED_PROJECTS.length) {
+        const modal = document.getElementById('archive-modal');
+        const yesBtn = document.getElementById('archive-yes');
+        const noBtn = document.getElementById('archive-no');
+        const proj = ARCHIVED_PROJECTS[0];
+        modal.style.display = 'flex';
+        yesBtn.onclick = async () => {
+          await fetch(`/delete_project/${proj.id}`, {method: 'POST'});
+          modal.style.display = 'none';
+          location.reload();
+        };
+        noBtn.onclick = async () => {
+          await fetch(`/dismiss_archive/${proj.id}`, {method: 'POST'});
+          modal.style.display = 'none';
+        };
+      }
     </script>
 </body>
 </html>
