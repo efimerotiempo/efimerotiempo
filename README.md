@@ -68,9 +68,11 @@ Los fines de semana se representan con una franja negra que agrupa el sábado y 
 En la pestaña **Proyectos** puedes ver las horas de cada fase y seleccionar la
 persona asignada desde un desplegable. Cualquier cambio se guarda
 automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
-eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
-lista de conflictos aparece un aviso indicando la eliminación y los cambios que
-ha producido.
+ eliminarlo. Al borrar un proyecto se vuelve a calcular la planificación y en la
+ lista de conflictos aparece un aviso indicando la eliminación y los cambios que
+ ha producido. Si desde el calendario se eliminan todas las fases de un proyecto,
+ este también desaparece automáticamente de las listas de proyectos en todas las
+ pestañas.
 Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
 lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
 de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada

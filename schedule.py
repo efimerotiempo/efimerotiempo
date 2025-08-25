@@ -105,7 +105,11 @@ def add_worker(name):
 def load_projects():
     if os.path.exists(PROJECTS_FILE):
         with open(PROJECTS_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+        filtered = [p for p in data if p.get('phases')]
+        if len(filtered) != len(data):
+            save_projects(filtered)
+        return filtered
     return []
 
 
