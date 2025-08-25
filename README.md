@@ -194,8 +194,8 @@ un botón **Deshacer división** que vuelve a unir ambas partes sumando sus
 horas. Se conserva el trabajador asignado a la parte mayor.
 Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
 simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
-mantener un orden cronológico entre sí, pero la fecha elegida debe respetar el
-final de la fase anterior.
+mantener un orden cronológico entre sí y, al mover la segunda, se respeta
+exactamente la fecha que selecciones aunque haya huecos libres antes.
 Otro formulario permite editar la **fecha límite** del proyecto desde esa misma
 ventana emergente o desde las tablas de proyectos, mostrando igualmente un
 aviso si la nueva fecha no es correcta.

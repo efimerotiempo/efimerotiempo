@@ -426,8 +426,9 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
             phase, [None] * len(proj['phases'][phase])
         )
         idx = part if part is not None else 0
-        if idx < len(seg_starts):
-            seg_starts[idx] = new_date.isoformat()
+        while len(seg_starts) <= idx:
+            seg_starts.append(None)
+        seg_starts[idx] = new_date.isoformat()
         if worker:
             seg_workers = proj.setdefault('segment_workers', {}).setdefault(
                 phase, [None] * len(proj['phases'][phase])
