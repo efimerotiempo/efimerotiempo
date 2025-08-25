@@ -1631,35 +1631,29 @@ def split_phase_route():
     pid = data.get('pid')
     phase = data.get('phase')
     date_str = data.get('date')
-    if not pid or not phase or not date_str:
+    part1_str = data.get('part1')
+    part2_str = data.get('part2')
+    if not pid or not phase or not date_str or part1_str is None or part2_str is None:
         return '', 400
     try:
-        cut = date.fromisoformat(date_str)
+        date.fromisoformat(date_str)
     except Exception:
         return '', 400
+    try:
+        part1 = int(part1_str)
+        part2 = int(part2_str)
+    except Exception:
+        return '', 400
+
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj or phase not in proj.get('phases', {}):
         return '', 400
 
-    mapping = compute_schedule_map(projects)
-    tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
-    part1 = (
-        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) < cut)
-        if tasks
-        else 0
-    )
-    part2 = (
-        sum(h for _, d, _, h, _ in tasks if date.fromisoformat(d) >= cut)
-        if tasks
-        else 0
-    )
-
-    if part1 == 0 or part2 == 0:
-        val = proj['phases'][phase]
-        total = sum(int(v) for v in val) if isinstance(val, list) else int(val)
-        part1 = total // 2
-        part2 = total - part1
+    val = proj['phases'][phase]
+    total = sum(int(v) for v in val) if isinstance(val, list) else int(val)
+    if part1 + part2 != total:
+        return jsonify({'error': 'Las horas no coinciden con el total'}), 400
 
     proj['phases'][phase] = [part1, part2]
     proj.setdefault('segment_starts', {}).setdefault(phase, [None, None])

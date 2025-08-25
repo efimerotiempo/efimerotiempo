@@ -184,14 +184,13 @@ la planificación tras una confirmación. Las demás fases de ese proyecto
 permanecen en su sitio. Además, el recuadro incluye el botón **Sin planificar**
 que asigna la fase seleccionada al día actual dentro de la columna *Fases sin
 planificar* para reprogramarla más adelante.
-Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo,
-la aplicación divide la duración de esa fase en dos mitades aunque la fecha
-elegida no coincida exactamente con su mitad. La segunda parte se mantiene
-como un tramo independiente y en las tablas de **Proyectos** aparece una
-línea adicional con el mismo nombre, cliente y fecha límite mostrando las
-horas restantes de esa fase.
+Del mismo modo, el recuadro incluye **Dividir fase aquí**. Al pulsarlo se abre
+una ventana donde puedes indicar cuántas horas dedicar a la primera y a la
+segunda parte de la fase. Cada tramo se guarda como independiente y en las
+tablas de **Proyectos** aparece una línea adicional con el mismo nombre,
+cliente y fecha límite mostrando las horas restantes de esa fase.
 Si posteriormente quieres revertir la operación, el mismo recuadro muestra
-un botón **Deshacer división** que vuelve a unir ambas mitades sumando sus
+un botón **Deshacer división** que vuelve a unir ambas partes sumando sus
 horas. Se conserva el trabajador asignado a la parte mayor.
 Tras dividir una fase puedes arrastrar cada mitad a un trabajador distinto
 simplemente soltándola en la celda deseada. Las dos partes no tienen por qué
