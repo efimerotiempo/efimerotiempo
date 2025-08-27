@@ -17,11 +17,11 @@
     <tr>
         <td class="week-label">Semana {{ week.number }}</td>
         {% for d in week.days %}
-        <td class="{% if d.date == today %}today{% endif %}">
+        <td data-date="{{ d.date.isoformat() }}" class="{% if d.date == today %}today{% endif %}">
             {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
             <div class="day-number">{{ d.day }}</div>
             {% for t in d.tasks %}
-            <div class="task" style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}</div>
+            <div class="task" draggable="{{ 'true' if t.get('pid') else 'false' }}" data-pid="{{ t.get('pid') }}" data-phase="pedidos" data-day="{{ d.date.isoformat() }}" data-worker="{{ t.get('worker') }}"{% if t.get('part') %} data-part="{{ t.get('part') }}"{% endif %} style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}</div>
             {% endfor %}
         </td>
         {% endfor %}
@@ -29,4 +29,37 @@
     {% endfor %}
     </tbody>
 </table>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label)');
+  let maxH = 0;
+  cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
+  cells.forEach(c => c.style.height = maxH + 'px');
+
+  const tasks = document.querySelectorAll('.pedidos-calendar .task[draggable="true"]');
+  tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      const data = {pid: t.dataset.pid, phase: 'pedidos', part: t.dataset.part, worker: t.dataset.worker};
+      e.dataTransfer.setData('text/plain', JSON.stringify(data));
+    });
+  });
+
+  const dayCells = document.querySelectorAll('.pedidos-calendar td[data-date]');
+  dayCells.forEach(cell => {
+    cell.addEventListener('dragover', e => e.preventDefault());
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { return; }
+      if (!data.pid) return;
+      fetch("{{ url_for('move_phase') }}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
+      }).then(resp => { if (resp.ok) location.reload(); });
+    });
+  });
+});
+</script>
 {% endblock %}

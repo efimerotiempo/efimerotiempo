@@ -903,12 +903,17 @@ def calendar_pedidos():
             d = date.fromisoformat(day_str)
             for t in tasks:
                 if t.get('phase') == 'pedidos':
-                    pedidos.setdefault(d, []).append(t)
+                    entry = t.copy()
+                    entry['worker'] = worker
+                    pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
     for entry in load_kanban_cards():
         card = entry.get('card', {})
         if card.get('lanename') != 'Seguimiento compras':
+            continue
+        column = card.get('columnname') or card.get('columnName')
+        if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
@@ -928,24 +933,30 @@ def calendar_pedidos():
         )
 
     today = date.today()
-    start = today - timedelta(days=today.weekday())
-    year_end = date(today.year, 12, 31)
+    month_start = date(today.year, today.month, 1)
+    start = month_start - timedelta(days=month_start.weekday())
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
     MONTHS = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
     ]
     weeks = []
     current = start
-    while current <= year_end:
+    while current <= month_end:
         week = {'number': current.isocalendar()[1], 'days': []}
         for i in range(5):
             day = current + timedelta(days=i)
+            month_label = ''
+            if day.day == 1 or (day.weekday() == 0 and 1 < day.day <= 7):
+                month_label = MONTHS[day.month - 1].capitalize()
+            tasks = pedidos.get(day, []) if month_start <= day <= month_end else []
             week['days'].append(
                 {
                     'date': day,
                     'day': f"{day.day:02d}",
-                    'month': MONTHS[day.month - 1].capitalize() if day.day == 1 else '',
-                    'tasks': pedidos.get(day, []),
+                    'month': month_label,
+                    'tasks': tasks,
                 }
             )
         weeks.append(week)
