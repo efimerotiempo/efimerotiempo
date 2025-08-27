@@ -911,6 +911,7 @@ def calendar_pedidos():
                 if t.get('phase') == 'pedidos':
                     entry = t.copy()
                     entry['worker'] = worker
+                    entry.setdefault('color', '#999999')
                     pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
@@ -924,7 +925,8 @@ def calendar_pedidos():
         if not cid:
             continue
         compras_raw[cid] = card
-        column_colors.setdefault(column, _next_api_color())
+        if column not in column_colors:
+            column_colors[column] = _next_api_color()
 
     for card in compras_raw.values():
         title = card.get('title') or ''
