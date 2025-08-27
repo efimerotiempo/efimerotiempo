@@ -36,10 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
   cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
   cells.forEach(c => c.style.height = maxH + 'px');
 
+  let dragged = null;
   const tasks = document.querySelectorAll('.pedidos-calendar .task');
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
-      if (!t.dataset.pid) { e.preventDefault(); return; }
+      dragged = t;
       const data = { pid: t.dataset.pid, phase: 'pedidos', part: t.dataset.part, worker: t.dataset.worker };
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
     });
@@ -51,14 +52,17 @@ document.addEventListener('DOMContentLoaded', () => {
     cell.addEventListener('drop', e => {
       e.preventDefault();
       let data;
-      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { return; }
-      if (!data.pid) return;
-      fetch("{{ url_for('move_phase') }}", {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        credentials: 'same-origin',
-        body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
-      }).then(resp => { if (resp.ok) location.reload(); });
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
+      if (data.pid) {
+        fetch("{{ url_for('move_phase') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
+        }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (dragged) {
+        cell.appendChild(dragged);
+      }
     });
   });
 });

@@ -458,14 +458,19 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return None, 'Proyecto no encontrado'
-    if any(
+    if phase != 'pedidos' and any(
         t['phase'] == phase and (part is None or t.get('part') == part)
         for t in proj.get('frozen_tasks', [])
     ):
         return None, 'Fase congelada'
 
     vac_map = _schedule_mod._build_vacation_map()
-    if worker and worker != 'Irene' and new_date in vac_map.get(worker, set()):
+    if (
+        phase != 'pedidos'
+        and worker
+        and worker != 'Irene'
+        and new_date in vac_map.get(worker, set())
+    ):
         return None, 'Vacaciones en esa fecha'
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
@@ -908,6 +913,7 @@ def calendar_pedidos():
                     pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
+    column_colors = {}
     for entry in load_kanban_cards():
         card = entry.get('card', {})
         if card.get('lanename') != 'Seguimiento compras':
@@ -919,15 +925,17 @@ def calendar_pedidos():
         if not cid:
             continue
         compras_raw[cid] = card
+        column_colors.setdefault(column, _next_api_color())
 
     for card in compras_raw.values():
         d = parse_kanban_date(card.get('deadline'))
         if not d:
             continue
+        column = card.get('columnname') or card.get('columnName')
         pedidos.setdefault(d, []).append(
             {
                 'project': card.get('title') or '',
-                'color': card.get('tcolor') or '#999999',
+                'color': column_colors.get(column, '#999999'),
                 'hours': None,
             }
         )
