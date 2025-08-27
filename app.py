@@ -998,7 +998,7 @@ def project_list():
         projects=projects,
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
-        all_workers=active_workers() + [UNPLANNED],
+        all_workers=[UNPLANNED] + active_workers(),
         project_filter=project_filter,
         client_filter=client_filter,
         sort_option=sort_option,
