@@ -86,7 +86,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.path.startswith("/static") or request.path == "/kanbanize-webhook":
+    if request.path.startswith("/static") or request.path.startswith("/kanbanize-webhook"):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -132,14 +132,9 @@ KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
-KANBAN_IGNORE_COLUMNS = {
-    'Material taller',
-    'Material cliente',
-    'Tratamiento final',
-    'Pdte. Verificación',
-    'Material Recepcionado',
-    'Ready to Archive',
-}
+# Lanes that require confirmation before deletion when a card reaches
+# "Ready to Archive".
+ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
 
 # Mapping between local phase names and Kanbanize custom field names
 PHASE_FIELD_MAP = {
@@ -914,8 +909,6 @@ def calendar_pedidos():
     for entry in load_kanban_cards():
         card = entry.get('card', {})
         if card.get('lanename') != 'Seguimiento compras':
-            continue
-        if card.get('columnname') in KANBAN_IGNORE_COLUMNS:
             continue
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
@@ -2036,28 +2029,62 @@ def kanbanize_webhook():
     print("Payload recibido:", data)
 
     card = data.get("card", {})
-    payload_timestamp = data.get("timestamp")
-    cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
-    if card.get("lanename") == "Seguimiento compras":
+    payload_timestamp = data.get("timestamp")
+    def pick(d, *keys):
+        for k in keys:
+            if k in d and d[k] is not None:
+                return d[k]
+        low = {k.lower(): v for k, v in d.items()}
+        for k in keys:
+            if k.lower() in low and low[k.lower()] is not None:
+                return low[k.lower()]
+        return None
+
+    def norm(s):
+        return re.sub(r'\s+', ' ', s or '').strip().lower()
+
+    cid = pick(card, 'taskid', 'cardId', 'id')
+    lane = pick(card, 'lanename', 'laneName', 'lane')
+    column = pick(card, 'columnname', 'columnName', 'column')
+
+    print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
+
+
+    if lane == "Seguimiento compras":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
             if (c.get('card', {}).get('taskid') or c.get('card', {}).get('cardId') or c.get('card', {}).get('id')) != cid
         ]
-        if card.get('columnname') not in KANBAN_IGNORE_COLUMNS:
-            cards.append({'timestamp': payload_timestamp, 'card': card})
+        cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
-    if card.get('columnname') == 'Ready to Archive':
+    ARCHIVE_LANES_N = {norm(x) for x in ARCHIVE_LANES}
+    if norm(column) == 'ready to archive' and norm(lane) in ARCHIVE_LANES_N:
         projects = load_projects()
+        name_candidates = [
+            pick(card, 'customCardId', 'effectiveCardId'),
+            pick(card, 'title'),
+        ]
+        name_candidates = [n for n in name_candidates if n]
+
+        flagged = False
         for p in projects:
-            if p.get('kanban_id') == cid:
+            if p.get('kanban_id') == cid or (name_candidates and p.get('name') in name_candidates):
                 p['kanban_archived'] = True
-                save_projects(projects)
+                if cid and not p.get('kanban_id'):
+                    p['kanban_id'] = cid
+                flagged = True
                 break
-        return jsonify({"mensaje": "Proyecto archivado"}), 200
+        if flagged:
+            save_projects(projects)
+            return jsonify({"mensaje": "Proyecto marcado como archivado"}), 200
+        else:
+            print("Aviso: no se encontró proyecto para cid/nombre:", cid, name_candidates)
+            return jsonify({"mensaje": "Evento recibido, proyecto no encontrado"}), 200
+
 
     print("Tarjeta recibida:")
     print(card)
