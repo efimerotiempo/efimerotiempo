@@ -21,7 +21,7 @@
             {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
             <div class="day-number">{{ d.day }}</div>
             {% for t in d.tasks %}
-            <div class="task" draggable="{{ 'true' if t.get('pid') else 'false' }}" data-pid="{{ t.get('pid') }}" data-phase="pedidos" data-day="{{ d.date.isoformat() }}" data-worker="{{ t.get('worker') }}"{% if t.get('part') %} data-part="{{ t.get('part') }}"{% endif %} style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}</div>
+            <div class="task" draggable="true" data-pid="{{ t.get('pid') }}" data-phase="pedidos" data-day="{{ d.date.isoformat() }}" data-worker="{{ t.get('worker') }}"{% if t.get('part') %} data-part="{{ t.get('part') }}"{% endif %} style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}</div>
             {% endfor %}
         </td>
         {% endfor %}
@@ -36,10 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
   cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
   cells.forEach(c => c.style.height = maxH + 'px');
 
-  const tasks = document.querySelectorAll('.pedidos-calendar .task[draggable="true"]');
+  const tasks = document.querySelectorAll('.pedidos-calendar .task');
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
-      const data = {pid: t.dataset.pid, phase: 'pedidos', part: t.dataset.part, worker: t.dataset.worker};
+      if (!t.dataset.pid) { e.preventDefault(); return; }
+      const data = { pid: t.dataset.pid, phase: 'pedidos', part: t.dataset.part, worker: t.dataset.worker };
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
     });
   });
