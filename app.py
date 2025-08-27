@@ -132,6 +132,10 @@ KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
+# Lanes that require confirmation before deletion when a card reaches
+# "Ready to Archive".
+ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
+
 # Mapping between local phase names and Kanbanize custom field names
 PHASE_FIELD_MAP = {
     'recepcionar material': 'Horas Preparación',
@@ -2041,9 +2045,7 @@ def kanbanize_webhook():
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
-    if column == 'Ready to Archive' and lane in (
-        'Acero al Carbono', 'Inoxidable - Aluminio'
-    ):
+    if column == 'Ready to Archive' and lane in ARCHIVE_LANES:
         projects = load_projects()
         for p in projects:
             if p.get('kanban_id') == cid:
