@@ -920,8 +920,6 @@ def calendar_pedidos():
         if card.get('lanename') != 'Seguimiento compras':
             continue
         column = card.get('columnname') or card.get('columnName')
-        if column in {'Pdte. Verificación', 'Material Recepcionado'}:
-            continue
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
@@ -942,6 +940,8 @@ def calendar_pedidos():
         if not d:
             continue
         column = card.get('columnname') or card.get('columnName')
+        if column in {'Pdte. Verificación', 'Material Recepcionado'}:
+            continue
         pedidos.setdefault(d, []).append(
             {
                 'project': title,
