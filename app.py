@@ -65,6 +65,7 @@ WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False
 
 # Basic HTTP authentication setup
 AUTH_USER = os.environ.get("EFIMERO_USER", "admin")
@@ -2194,11 +2195,16 @@ def kanbanize_webhook():
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
         existing_auto = existing.setdefault('auto_hours', {})
+        restricted = {'recepcionar material', 'montar', 'soldar', 'pintar'}
         for ph, hours in new_phases.items():
             if ph not in existing_phases:
                 # Si la fase fue eliminada del proyecto, no la volvemos a añadir
                 continue
-            if existing_phases.get(ph) != hours:
+            if ph in restricted:
+                if existing_phases.get(ph) in [0, '', None] and existing_phases.get(ph) != hours:
+                    existing_phases[ph] = hours
+                    changed = True
+            elif existing_phases.get(ph) != hours:
                 existing_phases[ph] = hours
                 changed = True
             if ph not in existing_assigned:
@@ -2257,10 +2263,12 @@ def kanbanize_webhook():
 
 @app.route('/bugs')
 def bug_list():
-    """Show table with all recorded bugs."""
     bugs = load_bugs()
     return render_template('bugs.html', bugs=bugs)
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=6000)
+    print("Rutas registradas:")
+    for rule in app.url_map.iter_rules():
+        print(f"{sorted(rule.methods)}  {rule.rule}")
+    app.run(debug=True, host='0.0.0.0', port=9000)
