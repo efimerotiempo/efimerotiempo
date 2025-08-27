@@ -954,8 +954,13 @@ def calendar_pedidos():
 
     month_start = date(today.year, today.month, 1)
     start = month_start - timedelta(days=month_start.weekday())
-    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    month_end = next_month - timedelta(days=1)
+
+    # Show the current month and the next eleven months
+    months_to_show = 12
+    end_month = month_start
+    for _ in range(months_to_show - 1):
+        end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    month_end = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
     MONTHS = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
