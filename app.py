@@ -2028,17 +2028,10 @@ def kanbanize_webhook():
     payload_timestamp = data.get("timestamp")
     cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
+    lane = card.get('lanename')
     column = card.get('columnname')
-    if column == 'Ready to Archive':
-        projects = load_projects()
-        for p in projects:
-            if p.get('kanban_id') == cid:
-                p['kanban_archived'] = True
-                save_projects(projects)
-                break
-        return jsonify({"mensaje": "Proyecto archivado"}), 200
 
-    if card.get("lanename") == "Seguimiento compras":
+    if lane == "Seguimiento compras":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
@@ -2047,6 +2040,17 @@ def kanbanize_webhook():
         cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
+
+    if column == 'Ready to Archive' and lane in (
+        'Acero al Carbono', 'Inoxidable - Aluminio'
+    ):
+        projects = load_projects()
+        for p in projects:
+            if p.get('kanban_id') == cid:
+                p['kanban_archived'] = True
+                save_projects(projects)
+                break
+        return jsonify({"mensaje": "Proyecto archivado"}), 200
 
     print("Tarjeta recibida:")
     print(card)
