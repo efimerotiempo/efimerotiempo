@@ -86,7 +86,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.path.startswith("/static") or request.path == "/kanbanize-webhook":
+    if request.path.startswith("/static") or request.path.startswith("/kanbanize-webhook"):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -2029,11 +2029,27 @@ def kanbanize_webhook():
     print("Payload recibido:", data)
 
     card = data.get("card", {})
-    payload_timestamp = data.get("timestamp")
-    cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
-    lane = card.get('lanename')
-    column = card.get('columnname')
+    payload_timestamp = data.get("timestamp")
+    def pick(d, *keys):
+        for k in keys:
+            if k in d and d[k] is not None:
+                return d[k]
+        low = {k.lower(): v for k, v in d.items()}
+        for k in keys:
+            if k.lower() in low and low[k.lower()] is not None:
+                return low[k.lower()]
+        return None
+
+    def norm(s):
+        return re.sub(r'\s+', ' ', s or '').strip().lower()
+
+    cid = pick(card, 'taskid', 'cardId', 'id')
+    lane = pick(card, 'lanename', 'laneName', 'lane')
+    column = pick(card, 'columnname', 'columnName', 'column')
+
+    print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
+
 
     if lane == "Seguimiento compras":
         cards = load_kanban_cards()
@@ -2045,14 +2061,30 @@ def kanbanize_webhook():
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
-    if column == 'Ready to Archive' and lane in ARCHIVE_LANES:
+    ARCHIVE_LANES_N = {norm(x) for x in ARCHIVE_LANES}
+    if norm(column) == 'ready to archive' and norm(lane) in ARCHIVE_LANES_N:
         projects = load_projects()
+        name_candidates = [
+            pick(card, 'customCardId', 'effectiveCardId'),
+            pick(card, 'title'),
+        ]
+        name_candidates = [n for n in name_candidates if n]
+
+        flagged = False
         for p in projects:
-            if p.get('kanban_id') == cid:
+            if p.get('kanban_id') == cid or (name_candidates and p.get('name') in name_candidates):
                 p['kanban_archived'] = True
-                save_projects(projects)
+                if cid and not p.get('kanban_id'):
+                    p['kanban_id'] = cid
+                flagged = True
                 break
-        return jsonify({"mensaje": "Proyecto archivado"}), 200
+        if flagged:
+            save_projects(projects)
+            return jsonify({"mensaje": "Proyecto marcado como archivado"}), 200
+        else:
+            print("Aviso: no se encontró proyecto para cid/nombre:", cid, name_candidates)
+            return jsonify({"mensaje": "Evento recibido, proyecto no encontrado"}), 200
+
 
     print("Tarjeta recibida:")
     print(card)
