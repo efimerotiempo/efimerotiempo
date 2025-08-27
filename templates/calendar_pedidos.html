@@ -81,6 +81,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'a' || e.key === 'A') {
+      const todayCell = document.querySelector('.pedidos-calendar td.today');
+      if (todayCell) {
+        todayCell.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    }
+  });
 });
 </script>
 {% endblock %}
