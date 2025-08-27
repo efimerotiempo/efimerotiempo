@@ -899,6 +899,7 @@ def calendar_view():
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
     projects = get_projects()
+    today = date.today()
     schedule, _ = schedule_projects(projects)
     pedidos = {}
     for worker, days in schedule.items():
@@ -928,19 +929,27 @@ def calendar_pedidos():
         column_colors.setdefault(column, _next_api_color())
 
     for card in compras_raw.values():
-        d = parse_kanban_date(card.get('deadline'))
+        title = card.get('title') or ''
+        m = re.search(r"\((\d{2})/(\d{2})\)", title)
+        if m:
+            day, month = int(m.group(1)), int(m.group(2))
+            try:
+                d = date(today.year, month, day)
+            except ValueError:
+                d = parse_kanban_date(card.get('deadline'))
+        else:
+            d = parse_kanban_date(card.get('deadline'))
         if not d:
             continue
         column = card.get('columnname') or card.get('columnName')
         pedidos.setdefault(d, []).append(
             {
-                'project': card.get('title') or '',
+                'project': title,
                 'color': column_colors.get(column, '#999999'),
                 'hours': None,
             }
         )
 
-    today = date.today()
     month_start = date(today.year, today.month, 1)
     start = month_start - timedelta(days=month_start.weekday())
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)

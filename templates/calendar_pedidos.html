@@ -27,7 +27,7 @@
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
-                 {% if t.get('color') %}style="background-color: {{ t.color }};"{% endif %}>
+                 {% if t.get('color') %}style="background-color: {{ t.get('color') }};"{% endif %}>
                 {{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
             </div>
             {% endfor %}
