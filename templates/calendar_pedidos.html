@@ -21,7 +21,15 @@
             {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
             <div class="day-number">{{ d.day }}</div>
             {% for t in d.tasks %}
-            <div class="task" draggable="true" data-pid="{{ t.get('pid') }}" data-phase="pedidos" data-day="{{ d.date.isoformat() }}" data-worker="{{ t.get('worker') }}"{% if t.get('part') %} data-part="{{ t.get('part') }}"{% endif %} style="background-color: {{ t.color }};">{{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}</div>
+            <div class="task" draggable="true"
+                 data-pid="{{ t.get('pid') or '' }}"
+                 data-phase="pedidos"
+                 data-day="{{ d.date.isoformat() }}"
+                 data-worker="{{ t.get('worker') or '' }}"
+                 {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
+                 {% if t.get('color') %}style="background-color: {{ t.color }};"{% endif %}>
+                {{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+            </div>
             {% endfor %}
         </td>
         {% endfor %}
@@ -41,9 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       dragged = t;
-      const data = { pid: t.dataset.pid, phase: 'pedidos', part: t.dataset.part, worker: t.dataset.worker };
+      const data = {
+        pid: t.dataset.pid,
+        phase: 'pedidos',
+        part: t.dataset.part,
+        worker: t.dataset.worker
+      };
+      e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
     });
+    t.addEventListener('dragend', () => { dragged = null; });
   });
 
   const dayCells = document.querySelectorAll('.pedidos-calendar td[data-date]');
@@ -62,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(resp => { if (resp.ok) location.reload(); });
       } else if (dragged) {
         cell.appendChild(dragged);
+        dragged = null;
       }
     });
   });
