@@ -2194,11 +2194,16 @@ def kanbanize_webhook():
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
         existing_auto = existing.setdefault('auto_hours', {})
+        restricted = {'recepcionar material', 'montar', 'soldar', 'pintar'}
         for ph, hours in new_phases.items():
             if ph not in existing_phases:
                 # Si la fase fue eliminada del proyecto, no la volvemos a añadir
                 continue
-            if existing_phases.get(ph) != hours:
+            if ph in restricted:
+                if existing_phases.get(ph) in [0, '', None] and existing_phases.get(ph) != hours:
+                    existing_phases[ph] = hours
+                    changed = True
+            elif existing_phases.get(ph) != hours:
                 existing_phases[ph] = hours
                 changed = True
             if ph not in existing_assigned:
