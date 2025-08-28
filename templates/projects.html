@@ -71,7 +71,7 @@
         </td>
         <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
         <td>
-            <select class="color-select" style="display:none">
+            <select class="color-select" style="display:none" data-current="{{ p.color }}">
                 {% for c in palette %}
                     <option value="{{ c }}" {% if p.color == c %}selected{% endif %} style="background-color: {{ c }};">{{ c }}</option>
                 {% endfor %}
@@ -275,7 +275,7 @@
         }
       });
       const colorSel = row.querySelector('.color-select');
-      if (colorSel) {
+      if (colorSel && colorSel.value !== colorSel.dataset.current) {
         data.color = colorSel.value;
       }
       const imgForm = row.querySelector('.image-form');
