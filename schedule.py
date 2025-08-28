@@ -736,11 +736,7 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, h
                 ok = False
                 break
             used = sum(t['hours'] for t in sched.get(test.isoformat(), []))
-            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-            if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
-                day_limit = (hours_map or {}).get(test.isoformat(), HOURS_PER_DAY)
-                limit = min(limit, day_limit)
-            if used >= limit:
+            if used > 0:
                 ok = False
                 break
             remaining -= 1
