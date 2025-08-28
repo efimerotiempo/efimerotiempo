@@ -253,6 +253,13 @@ def parse_kanban_date(value):
         return parse_input_date(value)
 
 
+def _sort_cell_tasks(schedule):
+    """Sort tasks in each day so started phases appear before unstarted ones."""
+    for days in schedule.values():
+        for tasks in days.values():
+            tasks.sort(key=lambda t: (not t.get('start_date'), t.get('start', 0)))
+
+
 def format_dd_mm(value):
     """Return 'dd-mm' string for a date or date string."""
     if not value:
@@ -872,6 +879,9 @@ def calendar_view():
             and (not client_filter or client_filter.lower() in g['client'].lower())
         ]
 
+    # Ensure started phases appear before unstarted ones within each cell
+    _sort_cell_tasks(schedule)
+
     points = split_markers(schedule)
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
@@ -1365,6 +1375,9 @@ def complete():
         ]
     else:
         filtered_projects = projects
+
+    # Order phases within each day: started ones first
+    _sort_cell_tasks(schedule)
 
     if sort_option == 'name':
         filtered_projects.sort(key=lambda p: p['name'].lower())
