@@ -316,13 +316,19 @@ def clear_prefill_project():
 
 def _decode_json(value):
     """Try to parse *value* as JSON, ignoring trailing text."""
-    while isinstance(value, (bytes, str)):
+    if isinstance(value, bytes):
         try:
-            if isinstance(value, bytes):
-                value = value.decode('utf-8')
-            value, idx = json.JSONDecoder().raw_decode(value)
+            value = value.decode('utf-8', errors='ignore')
         except Exception:
-            break
+            return value
+    if isinstance(value, str):
+        # Quita posibles %encoding y espacios
+        value = urllib.parse.unquote(value).strip()
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(value)
+            return obj
+        except Exception:
+            return value
     return value
 
 
@@ -2052,11 +2058,11 @@ def kanbanize_webhook():
     if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
         try:
             payload_str = data["kanbanize_payload"]
-            # Cortar el string justo después del último cierre de llave
-            last_brace = payload_str.rfind("}")
-            if last_brace != -1:
-                payload_str = payload_str[:last_brace + 1]
-            data = json.loads(payload_str)
+            # Decodifica SOLO el primer objeto JSON e ignora lo que venga detrás
+            inner = _decode_json(payload_str)
+            if not isinstance(inner, dict):
+                raise ValueError("Contenido interno no es un objeto JSON")
+            data = inner
         except Exception as e:
             print("Error decodificando kanbanize_payload interno:", e)
             return jsonify({'error': 'JSON interno inválido'}), 400
