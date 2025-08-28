@@ -2348,9 +2348,28 @@ def kanbanize_webhook():
             'montaje final',
             'soldadura interior',
         }
+        # Si la fase de recepcionar material fue generada automáticamente
+        # (1h en rojo) y ahora la tarjeta tiene horas reales, eliminarla o
+        # actualizarla según corresponda.
+        had_auto_prep = existing_auto.get('recepcionar material')
+        incoming_auto_prep = new_auto.get('recepcionar material')
+        incoming_prep_hours = new_phases.get('recepcionar material')
+        if had_auto_prep and not incoming_auto_prep:
+            if incoming_prep_hours and incoming_prep_hours > 0:
+                existing_phases['recepcionar material'] = incoming_prep_hours
+            else:
+                existing_phases.pop('recepcionar material', None)
+                existing_assigned.pop('recepcionar material', None)
+            existing_auto.pop('recepcionar material', None)
+            changed = True
         for ph, hours in new_phases.items():
             if ph not in existing_phases:
-                # Si la fase fue eliminada del proyecto, no la volvemos a añadir
+                if hours > 0:
+                    existing_phases[ph] = hours
+                    existing_assigned[ph] = UNPLANNED
+                    if new_auto.get(ph):
+                        existing_auto[ph] = True
+                    changed = True
                 continue
             if ph in restricted:
                 if existing_phases.get(ph) in [0, '', None] and existing_phases.get(ph) != hours:
