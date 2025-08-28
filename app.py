@@ -1178,6 +1178,12 @@ def delete_note(nid):
     return redirect(next_url)
 
 
+@app.route('/observaciones')
+def observation_list():
+    projects = [p for p in get_projects() if p.get('observations')]
+    return render_template('observations.html', projects=projects)
+
+
 @app.route('/vacations', methods=['GET', 'POST'])
 def vacation_list():
     vacations = load_vacations()

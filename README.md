@@ -59,6 +59,9 @@ mantener sincronizada la información.
  notas para el mismo día, se apilan en líneas separadas. Existe una pestaña
  **Notas** que muestra la lista completa y permite eliminarlas con una **X** roja.
 
+La pestaña **Observaciones** lista todos los proyectos que contienen texto en ese
+campo y desde ella se pueden editar o borrar esas observaciones.
+
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
 parte superior se muestran el formulario de notas y la lista de conflictos.
 Debajo aparecen el calendario y, al final,
