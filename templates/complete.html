@@ -972,6 +972,30 @@
       });
     });
   });
+  const unplanList = document.querySelector('.unplanned-list');
+  if (unplanList) {
+    unplanList.addEventListener('dragover', e => { e.preventDefault(); });
+    unplanList.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const today = new Date().toISOString().slice(0,10);
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
+      }).then(resp => {
+        if (resp.ok) {
+          location.reload();
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
+    });
+  }
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
