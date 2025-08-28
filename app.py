@@ -2095,9 +2095,11 @@ def kanbanize_webhook():
         cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
+    allowed_lanes_n = {norm(x) for x in ARCHIVE_LANES}
+    if norm(lane) not in allowed_lanes_n:
+        return jsonify({"mensaje": "Lane ignorada"}), 200
 
-    ARCHIVE_LANES_N = {norm(x) for x in ARCHIVE_LANES}
-    if norm(column) == 'ready to archive' and norm(lane) in ARCHIVE_LANES_N:
+    if norm(column) == 'ready to archive' and norm(lane) in allowed_lanes_n:
         projects = load_projects()
         name_candidates = [
             pick(card, 'customCardId', 'effectiveCardId'),
