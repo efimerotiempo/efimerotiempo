@@ -939,14 +939,15 @@ def calendar_pedidos():
     updated_colors = False
     for entry in load_kanban_cards():
         card = entry.get('card', {})
-        if card.get('lanename') != 'Seguimiento Pedidos':
+        lane = (card.get('lanename') or '').strip().lower()
+        if lane != 'seguimiento compras':
             continue
-        column = card.get('columnname') or card.get('columnName')
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
         compras_raw[cid] = card
-        if column not in column_colors:
+        if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
 
@@ -966,7 +967,7 @@ def calendar_pedidos():
             d = parse_kanban_date(card.get('deadline'))
         if not d:
             continue
-        column = card.get('columnname') or card.get('columnName')
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
         if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
         pedidos.setdefault(d, []).append(
@@ -2111,7 +2112,7 @@ def kanbanize_webhook():
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
 
-    if lane == "Seguimiento Pedidos":
+    if norm(lane) == "seguimiento compras":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
