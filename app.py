@@ -143,6 +143,8 @@ PHASE_FIELD_MAP = {
     'montar': 'Horas Montaje',
     'soldar': 'Horas Soldadura',
     'pintar': 'Horas Acabado',
+    'montaje final': 'Horas Montaje Final',
+    'soldadura interior': 'Horas Soldadura Interior',
 }
 
 
@@ -711,18 +713,31 @@ def _kanban_card_to_project(card):
     mont = h('Horas Montaje')
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
+    mont_final = h('Horas Montaje Final')
+    sold_int = h('Horas Soldadura Interior')
     phases = {}
     auto_hours = {}
-    if prep <= 0 and mont <= 0 and sold <= 0 and pint <= 0:
+    if (
+        prep <= 0
+        and mont <= 0
+        and sold <= 0
+        and pint <= 0
+        and mont_final <= 0
+        and sold_int <= 0
+    ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
     else:
         if pint:
             phases['pintar'] = pint
+        if mont_final:
+            phases['montaje final'] = mont_final
         if mont:
             phases['montar'] = mont
         if prep:
             phases['recepcionar material'] = prep
+        if sold_int:
+            phases['soldadura interior'] = sold_int
         if sold:
             phases['soldar'] = sold
 
@@ -2219,12 +2234,16 @@ def kanbanize_webhook():
     mont_hours = obtener_duracion('Horas Montaje')
     sold_hours = obtener_duracion('Horas Soldadura')
     pint_hours = obtener_duracion('Horas Acabado')
+    mont_final_hours = obtener_duracion('Horas Montaje Final')
+    sold_int_hours = obtener_duracion('Horas Soldadura Interior')
     auto_prep = False
     if (
         prep_hours <= 0
         and mont_hours <= 0
         and sold_hours <= 0
         and pint_hours <= 0
+        and mont_final_hours <= 0
+        and sold_int_hours <= 0
     ):
         prep_hours = 1
         auto_prep = True
@@ -2237,8 +2256,12 @@ def kanbanize_webhook():
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
     if sold_hours > 0:
         fases.append({'nombre': 'soldar', 'duracion': sold_hours})
+    if sold_int_hours > 0:
+        fases.append({'nombre': 'soldadura interior', 'duracion': sold_int_hours})
     if pint_hours > 0:
         fases.append({'nombre': 'pintar', 'duracion': pint_hours})
+    if mont_final_hours > 0:
+        fases.append({'nombre': 'montaje final', 'duracion': mont_final_hours})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -2317,7 +2340,14 @@ def kanbanize_webhook():
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
         existing_auto = existing.setdefault('auto_hours', {})
-        restricted = {'recepcionar material', 'montar', 'soldar', 'pintar'}
+        restricted = {
+            'recepcionar material',
+            'montar',
+            'soldar',
+            'pintar',
+            'montaje final',
+            'soldadura interior',
+        }
         for ph, hours in new_phases.items():
             if ph not in existing_phases:
                 # Si la fase fue eliminada del proyecto, no la volvemos a añadir
