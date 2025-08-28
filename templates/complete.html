@@ -221,6 +221,7 @@
         <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
+<div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
@@ -411,10 +412,19 @@
   const materialModal = document.getElementById('material-modal');
   const materialText = document.getElementById('material-text');
   const materialClose = document.getElementById('material-close');
+  const deadlineModal = document.getElementById('deadline-modal');
+  const deadlineText = document.getElementById('deadline-text');
+  const deadlineClose = document.getElementById('deadline-close');
+  const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  function showDeadline() {
+    deadlineText.textContent = DEADLINE_MSG;
+    deadlineModal.style.display = 'block';
+    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; };
+  }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
@@ -609,7 +619,13 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
-          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }).then(resp => {
+            if (resp.ok) location.reload();
+            else resp.json().then(d => {
+              if (d.error === DEADLINE_MSG) showDeadline();
+              else alert(d.error || 'Error');
+            });
+          });
         });
       }
       const obsBtn = document.getElementById('obs-btn');
@@ -892,7 +908,17 @@
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
-        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+        }).then(resp => {
+          if (resp.ok) {
+            sessionStorage.removeItem('undoMove');
+            location.reload();
+          } else {
+            resp.json().then(d => {
+              if (d.error === DEADLINE_MSG) showDeadline();
+              else alert(d.error || 'Error');
+            });
+          }
+        });
       }
     }
   });
@@ -948,7 +974,8 @@
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
       .then(({ok, data}) => {
         if (!ok) {
-          alert(data.error || 'Error');
+          if (data.error === DEADLINE_MSG) showDeadline();
+          else alert(data.error || 'Error');
           return;
         }
         localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
@@ -982,7 +1009,10 @@
         if (resp.ok) {
           location.reload();
         } else {
-          resp.json().then(d => alert(d.error || 'Error'));
+          resp.json().then(d => {
+            if (d.error === DEADLINE_MSG) showDeadline();
+            else alert(d.error || 'Error');
+          });
         }
       });
     });

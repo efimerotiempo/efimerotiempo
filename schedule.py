@@ -400,9 +400,29 @@ def schedule_projects(projects):
                         })
                         continue
 
-                    manual = False
+                    override = None
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
+                    test_start = override or current
+                    test_end = test_start
+                    for _ in range(days_needed - 1):
+                        test_end = next_workday(test_end)
+                    if (
+                        project.get('due_confirmed')
+                        and project.get('due_date')
+                        and test_end > date.fromisoformat(project['due_date'])
+                    ):
+                        msg = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
+                        conflicts.append({
+                            'id': len(conflicts) + 1,
+                            'project': project['name'],
+                            'client': project['client'],
+                            'message': msg,
+                            'key': f"{project['name']}|{msg}",
+                        })
+                        continue
+                    manual = False
+                    if override:
                         current = override
                         hour = 0
                         manual = True

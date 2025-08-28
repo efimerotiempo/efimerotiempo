@@ -63,6 +63,7 @@ else:
         return result
 WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
+next_workday = _schedule_mod.next_workday
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -501,6 +502,24 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
         and new_date in vac_map.get(worker, set())
     ):
         return None, 'Vacaciones en esa fecha'
+    if proj.get('due_confirmed') and proj.get('due_date'):
+        try:
+            due_dt = date.fromisoformat(proj['due_date'])
+            phase_hours = proj['phases'].get(phase)
+            if isinstance(phase_hours, list):
+                if part is None or part >= len(phase_hours):
+                    return None, 'Fase no encontrada'
+                hours = int(phase_hours[part])
+            else:
+                hours = int(phase_hours)
+            days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+            test_end = new_date
+            for _ in range(days_needed - 1):
+                test_end = next_workday(test_end)
+            if test_end > due_dt:
+                return None, 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
+        except Exception:
+            pass
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
@@ -552,6 +571,7 @@ def get_projects():
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_archived', False)
         p.setdefault('observations', '')
+        p.setdefault('due_confirmed', False)
         if 'kanban_image' in p and not p['kanban_attachments']:
             old = p.pop('kanban_image')
             if isinstance(old, str) and old:
@@ -2327,6 +2347,7 @@ def kanbanize_webhook():
             changed = True
         if due_date_obj and existing.get('due_date') != due_date_obj.isoformat():
             existing['due_date'] = due_date_obj.isoformat()
+            existing['due_confirmed'] = True
             changed = True
         if material_date_obj and existing.get('material_confirmed_date') != material_date_obj.isoformat():
             existing['material_confirmed_date'] = material_date_obj.isoformat()
@@ -2407,6 +2428,7 @@ def kanbanize_webhook():
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
+            'due_confirmed': bool(due_date_obj),
         }
         projects.append(project)
         save_projects(projects)
