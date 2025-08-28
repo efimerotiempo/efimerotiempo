@@ -52,15 +52,15 @@ la fecha de material confirmado o las horas de alguna de sus fases, estos
 valores se envían de vuelta a la tarjeta correspondiente en Kanbanize para
 mantener sincronizada la información.
 
- También puedes añadir **Hitos** indicando una descripción y una fecha. En ambas
- vistas de calendario aparece una gruesa línea roja a la derecha del día del
- hito y la descripción se muestra en rojo y en negrita al final del calendario,
- con un tamaño de letra la mitad de grande que el resto de celdas. Si hay varios
- hitos para el mismo día, se apilan en líneas separadas. Existe una pestaña
- **Hitos** que muestra la lista completa y permite eliminarlos con una **X** roja.
+ También puedes añadir **Notas** indicando una descripción y una fecha. En ambas
+ vistas de calendario aparece una gruesa línea roja a la derecha del día de la
+ nota y la descripción se muestra en rojo y en negrita al final del calendario,
+ con un tamaño de letra la mitad de grande que el resto de celdas. Si hay varias
+ notas para el mismo día, se apilan en líneas separadas. Existe una pestaña
+ **Notas** que muestra la lista completa y permite eliminarlas con una **X** roja.
 
 La pestaña **Completo** reúne todas las vistas en una sola página. En la
-parte superior se muestran el formulario de hitos y la lista de conflictos.
+parte superior se muestran el formulario de notas y la lista de conflictos.
 Debajo aparecen el calendario y, al final,
 la lista de proyectos. Cada sección se expande por completo y la página ofrece una barra de desplazamiento vertical para consultar la información cómodamente sin necesidad de reducir el zoom. Puedes desplazarte horizontalmente por el calendario
 mientras mantienes pulsada la tecla **Shift** y giras la rueda del ratón

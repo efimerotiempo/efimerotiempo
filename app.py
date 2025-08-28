@@ -36,8 +36,8 @@ load_dismissed = _schedule_mod.load_dismissed
 save_dismissed = _schedule_mod.save_dismissed
 load_extra_conflicts = _schedule_mod.load_extra_conflicts
 save_extra_conflicts = _schedule_mod.save_extra_conflicts
-load_milestones = _schedule_mod.load_milestones
-save_milestones = _schedule_mod.save_milestones
+load_notes = _schedule_mod.load_notes
+save_notes = _schedule_mod.save_notes
 load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
@@ -549,6 +549,7 @@ def get_projects():
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_archived', False)
+        p.setdefault('observations', '')
         if 'kanban_image' in p and not p['kanban_attachments']:
             old = p.pop('kanban_image')
             if isinstance(old, str) and old:
@@ -853,7 +854,7 @@ def calendar_view():
                 p['met'] = False
         else:
             p['met'] = False
-    milestones = load_milestones()
+    notes = load_notes()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
@@ -892,9 +893,9 @@ def calendar_view():
     unplanned_with = [g for g in unplanned_list if g.get('material_date')]
     unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
-    milestone_map = {}
-    for m in milestones:
-        milestone_map.setdefault(m['date'], []).append(m['description'])
+    note_map = {}
+    for n in notes:
+        note_map.setdefault(n['date'], []).append(n['description'])
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
@@ -914,7 +915,7 @@ def calendar_view():
         today=today,
         project_filter=project_filter,
         client_filter=client_filter,
-        milestones=milestone_map,
+        notes=note_map,
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
@@ -1147,33 +1148,33 @@ def add_project():
     )
 
 
-@app.route('/add_milestone', methods=['POST'])
-def add_milestone():
-    """Add a milestone with a unique id."""
-    milestones = load_milestones()
-    mdate = parse_input_date(request.form['date'])
-    milestones.append({
+@app.route('/add_note', methods=['POST'])
+def add_note():
+    """Add a note with a unique id."""
+    notes = load_notes()
+    ndate = parse_input_date(request.form['date'])
+    notes.append({
         'id': str(uuid.uuid4()),
         'description': request.form['description'],
-        'date': mdate.isoformat() if mdate else '',
+        'date': ndate.isoformat() if ndate else '',
     })
-    save_milestones(milestones)
+    save_notes(notes)
     next_url = request.form.get('next') or url_for('complete')
     return redirect(next_url)
 
 
-@app.route('/milestones')
-def milestone_list():
-    milestones = load_milestones()
-    return render_template('milestones.html', milestones=milestones)
+@app.route('/notes')
+def note_list():
+    notes = load_notes()
+    return render_template('notes.html', notes=notes)
 
 
-@app.route('/delete_milestone/<mid>', methods=['POST'])
-def delete_milestone(mid):
-    milestones = load_milestones()
-    milestones = [m for m in milestones if m.get('id') != mid]
-    save_milestones(milestones)
-    next_url = request.form.get('next') or url_for('milestone_list')
+@app.route('/delete_note/<nid>', methods=['POST'])
+def delete_note(nid):
+    notes = load_notes()
+    notes = [n for n in notes if n.get('id') != nid]
+    save_notes(notes)
+    next_url = request.form.get('next') or url_for('note_list')
     return redirect(next_url)
 
 
@@ -1340,7 +1341,7 @@ def complete():
                 p['met'] = False
         else:
             p['met'] = False
-    milestones = load_milestones()
+    notes = load_notes()
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
@@ -1397,9 +1398,9 @@ def complete():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
-    milestone_map = {}
-    for m in milestones:
-        milestone_map.setdefault(m['date'], []).append(m['description'])
+    note_map = {}
+    for n in notes:
+        note_map.setdefault(n['date'], []).append(n['description'])
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
@@ -1424,7 +1425,7 @@ def complete():
         priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=active_workers(today) + [UNPLANNED],
-        milestones=milestone_map,
+        notes=note_map,
         project_data=project_map,
         start_map=start_map,
         hours=hours_map,
@@ -1731,6 +1732,18 @@ def update_project_row():
     save_projects(projects)
     _sync_project_to_kanbanize(proj, changed)
     return jsonify({'status': 'ok'})
+
+
+@app.route('/update_observations/<pid>', methods=['POST'])
+def update_observations(pid):
+    data = request.get_json() or {}
+    projects = get_projects()
+    for p in projects:
+        if p['id'] == pid:
+            p['observations'] = data.get('observations', '')
+            save_projects(projects)
+            return jsonify({'status': 'ok'})
+    return jsonify({'error': 'Proyecto no encontrado'}), 404
 
 
 @app.route('/update_image/<pid>', methods=['POST'])

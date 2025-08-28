@@ -7,7 +7,7 @@ DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
-MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
+NOTES_FILE = os.path.join(DATA_DIR, 'notes.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
@@ -145,16 +145,16 @@ def save_extra_conflicts(conflicts):
         json.dump(conflicts, f)
 
 
-def load_milestones():
-    if os.path.exists(MILESTONES_FILE):
-        with open(MILESTONES_FILE, 'r') as f:
+def load_notes():
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, 'r') as f:
             return json.load(f)
     return []
 
 
-def save_milestones(data):
+def save_notes(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(MILESTONES_FILE, 'w') as f:
+    with open(NOTES_FILE, 'w') as f:
         json.dump(data, f)
 
 
