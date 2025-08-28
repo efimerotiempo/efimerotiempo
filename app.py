@@ -125,6 +125,7 @@ DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
+KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
@@ -286,6 +287,19 @@ def load_kanban_cards():
 def save_kanban_cards(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(KANBAN_CARDS_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def load_column_colors():
+    if os.path.exists(KANBAN_COLUMN_COLORS_FILE):
+        with open(KANBAN_COLUMN_COLORS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_column_colors(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(KANBAN_COLUMN_COLORS_FILE, 'w') as f:
         json.dump(data, f)
 
 
@@ -921,10 +935,11 @@ def calendar_pedidos():
                     pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
-    column_colors = {}
+    column_colors = load_column_colors()
+    updated_colors = False
     for entry in load_kanban_cards():
         card = entry.get('card', {})
-        if card.get('lanename') != 'Seguimiento compras':
+        if card.get('lanename') != 'Seguimiento Pedidos':
             continue
         column = card.get('columnname') or card.get('columnName')
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -933,6 +948,10 @@ def calendar_pedidos():
         compras_raw[cid] = card
         if column not in column_colors:
             column_colors[column] = _next_api_color()
+            updated_colors = True
+
+    if updated_colors:
+        save_column_colors(column_colors)
 
     for card in compras_raw.values():
         title = card.get('title') or ''
@@ -2092,7 +2111,7 @@ def kanbanize_webhook():
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
 
-    if lane == "Seguimiento compras":
+    if lane == "Seguimiento Pedidos":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
