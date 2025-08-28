@@ -312,13 +312,7 @@
                         <input type="date" name="start_date" value="{{ p.start_date }}">
                     </form>
                 </td>
-                <td>{{ p.due_date }}
-                    <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
-                        <input type="hidden" name="pid" value="{{ p.id }}">
-                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                        <input type="date" name="due_date" value="{{ p.due_date }}">
-                    </form>
-                </td>
+                <td>{{ p.due_date }}</td>
                 <td>{{ p.material_confirmed_date }}</td>
                 <td>
                     {% if p.met %}
@@ -405,7 +399,6 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
@@ -549,9 +542,8 @@
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
         const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Límite: ${info.due_date}</div>`;
       html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
-      html += `<div>Prioridad: ${info.priority}</div>`;
         let phaseText = '';
         const phVal = info.phases[t.dataset.phase];
         let hoursVal = 0;
@@ -728,23 +720,6 @@
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
-      const dueForm = document.getElementById('due-form');
-      if (dueForm) {
-        dueForm.addEventListener('submit', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const btn = document.getElementById('due-btn');
-          const val = document.getElementById('due-input').value;
-          fetch(DUE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
-          }).then(resp => {
-            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
-          });
-        });
-      }
     });
   });
   const rows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
@@ -801,8 +776,6 @@
           data.workers[phase] = fd.get('worker');
         } else if (f.classList.contains('proj-start-form')) {
           data.start_date = fd.get('start_date') || fd.get('date');
-        } else if (f.classList.contains('due-form')) {
-          data.due_date = fd.get('due_date');
         }
       });
       const colorSel = row.querySelector('.color-select');
@@ -1137,16 +1110,6 @@
             }
           }
           location.reload();
-        });
-    });
-  });
-  document.querySelectorAll('.due-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(DUE_URL, { method: 'POST', body: data, credentials: 'same-origin' })
-        .then(resp => {
-          if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
         });
     });
   });

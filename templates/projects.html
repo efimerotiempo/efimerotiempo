@@ -45,13 +45,7 @@
                 <input type="date" name="start_date" value="{{ p.start_date }}">
             </form>
         </td>
-        <td>{{ p.due_date }}
-            <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
-                <input type="hidden" name="pid" value="{{ p.id }}">
-                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                <input type="date" name="due_date" value="{{ p.due_date }}">
-            </form>
-        </td>
+        <td>{{ p.due_date }}</td>
         <td>{{ p.material_confirmed_date }}</td>
         <td>
             {% if p.met %}
@@ -134,7 +128,6 @@
 </table>
 <script>
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -143,24 +136,6 @@
       ev.preventDefault();
       const data = new FormData(f);
       fetch(START_URL, {
-        method: 'POST',
-        body: data,
-        credentials: 'same-origin'
-      })
-        .then(resp => {
-          if (resp.ok) {
-            location.reload();
-          } else {
-            resp.json().then(d => alert(d.error || 'Error'));
-          }
-        });
-    });
-  });
-  document.querySelectorAll('.due-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(DUE_URL, {
         method: 'POST',
         body: data,
         credentials: 'same-origin'
@@ -270,8 +245,6 @@
           data.workers[phase] = fd.get('worker');
         } else if (f.classList.contains('proj-start-form')) {
           data.start_date = fd.get('start_date') || fd.get('date');
-        } else if (f.classList.contains('due-form')) {
-          data.due_date = fd.get('due_date');
         }
       });
       const colorSel = row.querySelector('.color-select');
