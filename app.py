@@ -2055,6 +2055,13 @@ def move_phase():
     date_str = data.get('date')
     worker = data.get('worker')
     part = data.get('part')
+    if part in (None, '', 'None'):
+        part = None
+    else:
+        try:
+            part = int(part)
+        except Exception:
+            part = None
     mode = data.get('mode', 'split')
     if not pid or not phase or not date_str:
         return '', 400
@@ -2077,6 +2084,13 @@ def check_move():
     date_str = data.get('date')
     worker = data.get('worker')
     part = data.get('part')
+    if part in (None, '', 'None'):
+        part = None
+    else:
+        try:
+            part = int(part)
+        except Exception:
+            part = None
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2084,27 +2098,54 @@ def check_move():
     except Exception:
         return '', 400
     projects = get_projects()
+    before = compute_schedule_map(projects)
     temp = copy.deepcopy(projects)
     new_day, err = move_phase_date(
         temp, pid, phase, day, worker, part, save=False, mode="split"
     )
     if new_day is None:
         return jsonify({'error': err or 'No se pudo mover'}), 400
-    mapping = compute_schedule_map(temp)
-    items = [
-        date.fromisoformat(t[1])
-        for t in mapping.get(pid, [])
-        if t[2] == phase and (part is None or t[4] == part)
-    ]
-    items.sort()
-    split = False
-    if items:
-        prev = items[0]
-        for d in items[1:]:
+    after = compute_schedule_map(temp)
+
+    def build_map(mapping):
+        res = {}
+        for opid, items in mapping.items():
+            for w, day_str, ph, hrs, prt in items:
+                key = (opid, w, ph, prt)
+                res.setdefault(key, []).append(date.fromisoformat(day_str))
+        return res
+
+    before_map = build_map(before)
+    after_map = build_map(after)
+
+    def is_contiguous(days):
+        if not days:
+            return True
+        days.sort()
+        prev = days[0]
+        for d in days[1:]:
             if d != next_workday(prev):
+                return False
+            prev = d
+        return True
+
+    split = False
+    moved_key = (pid, worker, phase, part)
+    if moved_key not in after_map:
+        for key in after_map:
+            if key[0] == pid and key[2] == phase and key[3] == part:
+                moved_key = key
+                break
+    if moved_key in after_map and not is_contiguous(after_map[moved_key]):
+        split = True
+    if not split:
+        for key, days_before in before_map.items():
+            if not is_contiguous(days_before):
+                continue
+            days_after = after_map.get(key, [])
+            if days_after and not is_contiguous(days_after):
                 split = True
                 break
-            prev = d
     return jsonify({'split': split})
 
 
