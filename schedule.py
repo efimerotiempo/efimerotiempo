@@ -7,7 +7,7 @@ DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
-MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
+NOTES_FILE = os.path.join(DATA_DIR, 'notes.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
@@ -19,7 +19,9 @@ PHASE_ORDER = [
     'recepcionar material',
     'montar',
     'soldar',
+    'soldadura interior',
     'pintar',
+    'montaje final',
     'mecanizar',
     'tratamiento',
 ]
@@ -31,16 +33,16 @@ BASE_WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Mikel': ['montar', 'soldar'],
-    'Iban': ['montar', 'soldar'],
-    'Joseba 2': ['montar', 'soldar'],
-    'Naparra': ['montar', 'soldar'],
-    'Unai': ['montar', 'soldar'],
-    'Fabio': ['soldar'],
-    'Beltxa': ['soldar', 'montar'],
-    'Igor': ['soldar'],
-    'Albi': ['recepcionar material', 'soldar', 'montar'],
-    'Eneko': ['pintar', 'montar', 'soldar'],
+    'Mikel': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Iban': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Joseba 2': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Naparra': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Unai': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Fabio': ['soldar', 'soldadura interior'],
+    'Beltxa': ['soldar', 'soldadura interior', 'montar', 'montaje final'],
+    'Igor': ['soldar', 'soldadura interior'],
+    'Albi': ['recepcionar material', 'soldar', 'soldadura interior', 'montar', 'montaje final'],
+    'Eneko': ['pintar', 'montar', 'montaje final', 'soldar', 'soldadura interior'],
 }
 
 TAIL_WORKERS = {
@@ -145,16 +147,16 @@ def save_extra_conflicts(conflicts):
         json.dump(conflicts, f)
 
 
-def load_milestones():
-    if os.path.exists(MILESTONES_FILE):
-        with open(MILESTONES_FILE, 'r') as f:
+def load_notes():
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, 'r') as f:
             return json.load(f)
     return []
 
 
-def save_milestones(data):
+def save_notes(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(MILESTONES_FILE, 'w') as f:
+    with open(NOTES_FILE, 'w') as f:
         json.dump(data, f)
 
 
@@ -398,9 +400,21 @@ def schedule_projects(projects):
                         })
                         continue
 
-                    manual = False
+                    override = None
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
+                    test_start = override or current
+                    test_end = test_start
+                    for _ in range(days_needed - 1):
+                        test_end = next_workday(test_end)
+                    if (
+                        project.get('due_confirmed')
+                        and project.get('due_date')
+                        and test_end > date.fromisoformat(project['due_date'])
+                    ):
+                        continue
+                    manual = False
+                    if override:
                         current = override
                         hour = 0
                         manual = True
@@ -734,11 +748,7 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, h
                 ok = False
                 break
             used = sum(t['hours'] for t in sched.get(test.isoformat(), []))
-            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-            if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
-                day_limit = (hours_map or {}).get(test.isoformat(), HOURS_PER_DAY)
-                limit = min(limit, day_limit)
-            if used >= limit:
+            if used > 0:
                 ok = False
                 break
             remaining -= 1

@@ -55,8 +55,10 @@
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
-        <td data-date="{{ d.isoformat() }}" class="{% if milestones.get(d.isoformat()) %}milestone-day{% endif %}{% if d == today %} today{% endif %}">
-            {% set tasks = days_data.get(d.isoformat(), []) %}
+        {% set tasks = days_data.get(d.isoformat(), []) %}
+        {% set total = tasks|sum(attribute='hours') %}
+        {% set limit = hours.get(d.isoformat(), 8) %}
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today{% endif %}">
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
@@ -93,16 +95,16 @@
         {% endif %}
         {% endfor %}
     </tr>
-    <tr class="milestones-row">
+    <tr class="notes-row">
         <td class="resource-col"></td>
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
-        {% set ms = milestones.get(d.isoformat()) %}
-        <td data-date="{{ d.isoformat() }}" class="milestone-cell{% if d == today %} today{% endif %}">
+        {% set ms = notes.get(d.isoformat()) %}
+        <td data-date="{{ d.isoformat() }}" class="note-cell{% if d == today %} today{% endif %}">
             {% if ms %}
                 {% for m in ms %}
-                <div class="milestone-label">{{ m }}</div>
+                <div class="note-label">{{ m }}</div>
                 {% endfor %}
             {% endif %}
         </td>
@@ -165,6 +167,7 @@
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
+<div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
@@ -182,7 +185,7 @@
                     <option value="Completo">Completo</option>
                     <option value="Calendario" selected>Calendario</option>
                     <option value="Proyectos">Proyectos</option>
-                    <option value="Hitos">Hitos</option>
+                    <option value="Notas">Notas</option>
                     <option value="Vacaciones">Vacaciones</option>
                 </select>
             </label><br>
@@ -202,6 +205,13 @@
                 <button type="button" id="bug-cancel">Cancelar</button>
             </div>
         </form>
+    </div>
+</div>
+<div id="obs-modal" class="modal">
+    <div class="modal-content">
+        <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
+        <button id="obs-save" type="button">Guardar</button>
+        <button id="obs-cancel" type="button">Cancelar</button>
     </div>
 </div>
 
@@ -242,7 +252,6 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const DUE_URL = "{{ url_for('update_due_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
@@ -253,10 +262,19 @@
   const materialModal = document.getElementById('material-modal');
   const materialText = document.getElementById('material-text');
   const materialClose = document.getElementById('material-close');
+  const deadlineModal = document.getElementById('deadline-modal');
+  const deadlineText = document.getElementById('deadline-text');
+  const deadlineClose = document.getElementById('deadline-close');
+  const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  function showDeadline() {
+    deadlineText.textContent = DEADLINE_MSG;
+    deadlineModal.style.display = 'block';
+    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; };
+  }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
@@ -375,9 +393,8 @@
       const info = PROJECT_DATA[t.dataset.pid];
       let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<div>Límite: ${info.due_date} <form id="due-form" style="display:inline"><input type="date" id="due-input" value="${info.due_date}" required><button type="submit" id="due-btn" data-pid="${t.dataset.pid}">Actualizar límite</button></form></div>`;
+      html += `<div>Límite: ${info.due_date}</div>`;
       html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
-      html += `<div>Prioridad: ${info.priority}</div>`;
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
       let hoursVal = 0;
@@ -406,6 +423,7 @@
       html += `</div>`;
       html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
       html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
+      html += `<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`;
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
         html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
@@ -444,7 +462,23 @@
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(body)
-          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }).then(resp => {
+            if (resp.ok) location.reload();
+            else resp.json().then(d => {
+              if (d.error === DEADLINE_MSG) showDeadline();
+              else alert(d.error || 'Error');
+            });
+          });
+        });
+      }
+      const obsBtn = document.getElementById('obs-btn');
+      if (obsBtn && obsModal) {
+        obsBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const pid = obsBtn.dataset.pid;
+          obsModal.dataset.pid = pid;
+          obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
+          obsModal.style.display = 'block';
         });
       }
       const split = document.getElementById('split-btn');
@@ -558,23 +592,6 @@
           });
         });
       }
-      const dueForm = document.getElementById('due-form');
-      if (dueForm) {
-        dueForm.addEventListener('submit', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const btn = document.getElementById('due-btn');
-          const val = document.getElementById('due-input').value;
-          fetch(DUE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, due_date: val })
-          }).then(resp => {
-            if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); }
-          });
-        });
-      }
     });
   });
   document.addEventListener('click', () => {
@@ -645,7 +662,17 @@
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
-        }).then(() => { sessionStorage.removeItem('undoMove'); location.reload(); });
+        }).then(resp => {
+          if (resp.ok) {
+            sessionStorage.removeItem('undoMove');
+            location.reload();
+          } else {
+            resp.json().then(d => {
+              if (d.error === DEADLINE_MSG) showDeadline();
+              else alert(d.error || 'Error');
+            });
+          }
+        });
       }
     }
   });
@@ -701,7 +728,8 @@
       .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
       .then(({ok, data}) => {
         if (!ok) {
-          alert(data.error || 'Error');
+          if (data.error === DEADLINE_MSG) showDeadline();
+          else alert(data.error || 'Error');
           return;
         }
         localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
@@ -716,6 +744,33 @@
       });
       });
     });
+  const unplanList = document.querySelector('.unplanned-list');
+  if (unplanList) {
+    unplanList.addEventListener('dragover', e => { e.preventDefault(); });
+    unplanList.addEventListener('drop', e => {
+      e.preventDefault();
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const today = new Date().toISOString().slice(0,10);
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
+      }).then(resp => {
+        if (resp.ok) {
+          location.reload();
+        } else {
+          resp.json().then(d => {
+            if (d.error === DEADLINE_MSG) showDeadline();
+            else alert(d.error || 'Error');
+          });
+        }
+      });
+    });
+  }
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
@@ -784,10 +839,28 @@
   const bugBtn = document.getElementById('bug-btn');
   const bugModal = document.getElementById('bug-modal');
   const bugCancel = document.getElementById('bug-cancel');
+  const obsModal = document.getElementById('obs-modal');
+  const obsText = document.getElementById('obs-text');
+  const obsSave = document.getElementById('obs-save');
+  const obsCancel = document.getElementById('obs-cancel');
   if (bugBtn && bugModal) {
     bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
     bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
     bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
+  }
+  if (obsModal) {
+    obsCancel.addEventListener('click', () => { obsModal.style.display = 'none'; });
+    obsModal.addEventListener('click', e => { if (e.target === obsModal) obsModal.style.display = 'none'; });
+    obsSave.addEventListener('click', () => {
+      const pid = obsModal.dataset.pid;
+      const txt = obsText.value;
+      fetch(`/update_observations/${encodeURIComponent(pid)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ observations: txt })
+      }).then(() => { PROJECT_DATA[pid].observations = txt; obsModal.style.display = 'none'; });
+    });
   }
 const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");

@@ -10,6 +10,9 @@ table.schedule th, table.schedule td {
     vertical-align: top;
     min-width: 300px;
 }
+table.schedule td.incomplete {
+    border: 3px solid #000;
+}
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
 table.schedule td.weekend-cell {
@@ -81,7 +84,7 @@ table.schedule td.weekend-cell {
 .complete-container > div { padding: 5px; }
 .complete-top { display: flex; gap: 10px; }
 .complete-add,
-.complete-milestones { flex: 1; }
+.complete-notes { flex: 1; }
 .complete-conflicts {
     flex: 1;
     overflow-x: auto;
@@ -190,17 +193,17 @@ table.pedidos-calendar td.week-label {
 }
 
 
-.milestone-day {
+.note-day {
     border-right: 2px solid red;
 }
 
-.milestone-cell {
+.note-cell {
     border-right: 2px solid red;
     padding: 2px;
     vertical-align: top;
 }
 
-.milestone-label {
+.note-label {
     font-size: 0.8em;
     font-weight: bold;
     color: red;
@@ -247,14 +250,14 @@ tr.collapsed td:not(:first-child) { display: none; }
     width: 100%;
     box-sizing: border-box;
 }
-.milestone-form {
+.note-form {
     border-collapse: collapse;
 }
-.milestone-form td {
+.note-form td {
     border: 1px solid #ccc;
     padding: 4px;
 }
-.milestone-form input {
+.note-form input {
     width: 100%;
     box-sizing: border-box;
 }
