@@ -10,6 +10,7 @@
         <th>Mié</th>
         <th>Jue</th>
         <th>Vie</th>
+        <th rowspan="{{ weeks|length + 1 }}" class="unconfirmed-header">Sin fecha de entrega confirmada</th>
     </tr>
     </thead>
     <tbody>
@@ -36,13 +37,27 @@
             {% endfor %}
         </td>
         {% endfor %}
+        {% if loop.first %}
+        <td class="unconfirmed" rowspan="{{ weeks|length }}">
+            {% for t in unconfirmed %}
+            <div class="task" draggable="true"
+                 data-pid="{{ t.get('pid') or '' }}"
+                 data-phase="pedidos"
+                 data-worker="{{ t.get('worker') or '' }}"
+                 style="background-color: {{ t.get('color', '#999999') }};">
+                <span class="task-main">{{ t.project }}</span>
+                {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
+            </div>
+            {% endfor %}
+        </td>
+        {% endif %}
     </tr>
     {% endfor %}
     </tbody>
 </table>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label)');
+  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
   let maxH = 0;
   cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
   cells.forEach(c => c.style.height = maxH + 'px');
@@ -84,6 +99,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  const unconfirmedCell = document.querySelector('.pedidos-calendar td.unconfirmed');
+  if (unconfirmedCell) {
+    unconfirmedCell.addEventListener('dragover', e => e.preventDefault());
+    unconfirmedCell.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragged) {
+        unconfirmedCell.appendChild(dragged);
+        dragged = null;
+      }
+    });
+  }
 
   document.addEventListener('keydown', e => {
     if (e.key === 'a' || e.key === 'A') {

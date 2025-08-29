@@ -1048,6 +1048,7 @@ def calendar_pedidos():
     today = date.today()
     schedule, _ = schedule_projects(projects)
     pedidos = {}
+    unconfirmed = []
     for worker, days in schedule.items():
         if worker == UNPLANNED:
             continue
@@ -1091,18 +1092,19 @@ def calendar_pedidos():
                 d = parse_kanban_date(card.get('deadline'))
         else:
             d = parse_kanban_date(card.get('deadline'))
-        if not d:
-            continue
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
-        pedidos.setdefault(d, []).append(
-            {
-                'project': title,
-                'color': column_colors.get(column, '#999999'),
-                'hours': None,
-            }
-        )
+        entry = {
+            'project': title,
+            'color': column_colors.get(column, '#999999'),
+            'hours': None,
+        }
+        if column in {'Planf. TAU', 'Tratamiento'} or not d:
+            unconfirmed.append(entry)
+            continue
+        if d:
+            pedidos.setdefault(d, []).append(entry)
 
     month_start = date(today.year, today.month, 1)
     start = month_start - timedelta(days=month_start.weekday())
@@ -1138,7 +1140,7 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
-    return render_template('calendar_pedidos.html', weeks=weeks, today=today)
+    return render_template('calendar_pedidos.html', weeks=weeks, today=today, unconfirmed=unconfirmed)
 
 
 @app.route('/projects')

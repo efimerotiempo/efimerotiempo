@@ -162,6 +162,11 @@ table.pedidos-calendar td.week-label {
     font-weight: bold;
     background: #eee;
 }
+.pedidos-calendar .unconfirmed-header,
+.pedidos-calendar td.unconfirmed {
+    width: 200px;
+    background: #f9f9f9;
+}
 .pedidos-calendar .day-number {
     font-weight: bold;
     margin-bottom: 2px;
