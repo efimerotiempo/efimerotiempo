@@ -21,6 +21,9 @@ table.schedule td.weekend-cell {
 }
 .ok { color: green; }
 .late { color: red; }
+.due-ok { color: green; }
+.due-before { color: #e6b800; }
+.due-after { color: red; }
 .unplanned { color: orange; }
 .projects-table td.plan-col span {
     font-size: 3em;

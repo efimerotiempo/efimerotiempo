@@ -65,10 +65,12 @@
             {% else %}
             <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
                 <span class="task-main">
-                {% if t.late %}
-                    <span class="late">&#10060;</span>
-                {% else %}
-                    <span class="ok">&#10004;</span>
+                {% if t.due_status == 'after' %}
+                    <span class="due-after">&#10060;</span>
+                {% elif t.due_status == 'before' %}
+                    <span class="due-before">&#10060;</span>
+                {% elif t.due_status == 'met' %}
+                    <span class="due-ok">&#10004;</span>
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -132,10 +134,12 @@
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
-                    {% if t.late %}
-                        <span class="late">&#10060;</span>
-                    {% else %}
-                        <span class="ok">&#10004;</span>
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -159,10 +163,12 @@
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
-                    {% if t.late %}
-                        <span class="late">&#10060;</span>
-                    {% else %}
-                        <span class="ok">&#10004;</span>
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}

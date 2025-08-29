@@ -512,6 +512,13 @@ def assign_phase(
         hour = 0
     remaining = hours
     last_day = day
+    phase_entries = []
+    due_dt = None
+    if due_date:
+        try:
+            due_dt = date.fromisoformat(due_date)
+        except ValueError:
+            due_dt = None
     # Unplanned tasks ignore the daily limit but still split into 8h blocks.
     if worker == UNPLANNED:
         while remaining > 0:
@@ -522,13 +529,8 @@ def assign_phase(
             tasks = schedule.get(day_str, [])
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
-            late = False
-            if due_confirmed and due_date:
-                try:
-                    late = day > date.fromisoformat(due_date)
-                except ValueError:
-                    late = False
-            tasks.append({
+            late = bool(due_dt and day > due_dt)
+            task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
@@ -545,13 +547,24 @@ def assign_phase(
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
-            })
+            }
+            tasks.append(task)
+            phase_entries.append((task, day))
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day
             day = next_workday(day)
             hour = 0
+        project_late = bool(due_dt and last_day > due_dt)
+        for task, t_day in phase_entries:
+            if due_dt:
+                if project_late:
+                    task['due_status'] = 'after' if t_day > due_dt else 'before'
+                else:
+                    task['due_status'] = 'met'
+            else:
+                task['due_status'] = None
         return day, hour, last_day
 
     while remaining > 0:
@@ -574,13 +587,8 @@ def assign_phase(
             # each project aporta como mucho ocho horas diarias. Tras asignar
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
-            late = False
-            if due_confirmed and due_date:
-                try:
-                    late = day > date.fromisoformat(due_date)
-                except ValueError:
-                    late = False
-            tasks.append({
+            late = bool(due_dt and day > due_dt)
+            task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
@@ -597,7 +605,9 @@ def assign_phase(
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
-            })
+            }
+            tasks.append(task)
+            phase_entries.append((task, day))
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
             remaining -= allocate
@@ -613,13 +623,8 @@ def assign_phase(
         available = limit - start if limit != float('inf') else HOURS_PER_DAY
         if available > 0:
             allocate = min(remaining, available)
-            late = False
-            if due_confirmed and due_date:
-                try:
-                    late = day > date.fromisoformat(due_date)
-                except ValueError:
-                    late = False
-            tasks.append({
+            late = bool(due_dt and day > due_dt)
+            task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
@@ -636,7 +641,9 @@ def assign_phase(
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
-            })
+            }
+            tasks.append(task)
+            phase_entries.append((task, day))
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
             remaining -= allocate
@@ -648,6 +655,15 @@ def assign_phase(
         else:
             day = next_workday(day)
             hour = 0
+    project_late = bool(due_dt and last_day > due_dt)
+    for task, t_day in phase_entries:
+        if due_dt:
+            if project_late:
+                task['due_status'] = 'after' if t_day > due_dt else 'before'
+            else:
+                task['due_status'] = 'met'
+        else:
+            task['due_status'] = None
     next_day = day
     next_hour = hour
     return next_day, next_hour, last_day
@@ -678,6 +694,13 @@ def assign_pedidos(
     ):
         day = next_workday(day)
     last_day = day
+    phase_entries = []
+    due_dt = None
+    if due_date:
+        try:
+            due_dt = date.fromisoformat(due_date)
+        except ValueError:
+            due_dt = None
     while day <= end_day:
         if day.weekday() in WEEKEND or (
             any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), []))
@@ -686,13 +709,8 @@ def assign_pedidos(
             continue
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
-        late = False
-        if due_confirmed and due_date:
-            try:
-                late = day > date.fromisoformat(due_date)
-            except ValueError:
-                late = False
-        tasks.append({
+        late = bool(due_dt and day > due_dt)
+        task = {
             'project': project_name,
             'client': client,
             'phase': 'pedidos',
@@ -706,10 +724,21 @@ def assign_pedidos(
             'frozen': project_frozen,
             'blocked': project_blocked,
             'material_date': material_date,
-        })
+        }
+        tasks.append(task)
+        phase_entries.append((task, day))
         schedule[day_str] = tasks
         last_day = day
         day += timedelta(days=1)
+    project_late = bool(due_dt and last_day > due_dt)
+    for task, t_day in phase_entries:
+        if due_dt:
+            if project_late:
+                task['due_status'] = 'after' if t_day > due_dt else 'before'
+            else:
+                task['due_status'] = 'met'
+        else:
+            task['due_status'] = None
     return next_workday(last_day), 0, last_day
 
 
