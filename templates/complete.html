@@ -307,8 +307,6 @@
                 <th>Fecha material confirmado</th>
                 <th>En plazo</th>
                 <th>Planificado</th>
-                <th>Origen</th>
-                <th>Color</th>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <th>{{ ph }}</th>
                 {% endfor %}
@@ -347,14 +345,6 @@
                     {% else %}
                         <span class="late">&#9679;</span>
                     {% endif %}
-                </td>
-                <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
-                <td>
-                    <select class="color-select" style="display:none">
-                        {% for c in palette %}
-                            <option value="{{ c }}" {% if p.color == c %}selected{% endif %} style="background-color: {{ c }};">{{ c }}</option>
-                        {% endfor %}
-                    </select>
                 </td>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <td>
@@ -772,13 +762,9 @@
         if (r.dataset.pid === pid) {
           r.classList.add('proj-highlight');
           r.classList.remove('proj-dim');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'inline';
         } else {
           r.classList.add('proj-dim');
           r.classList.remove('proj-highlight');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'none';
         }
       });
       tasks.forEach(t => {
@@ -819,10 +805,6 @@
           data.start_date = fd.get('start_date') || fd.get('date');
         }
       });
-      const colorSel = row.querySelector('.color-select');
-      if (colorSel) {
-        data.color = colorSel.value;
-      }
       Object.keys(data.workers).forEach(ph => {
         if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
           delete data.workers[ph];
@@ -870,8 +852,6 @@
     folders.forEach(f => f.classList.remove('dim'));
     rows.forEach(r => {
       r.classList.remove('proj-highlight', 'proj-dim');
-      const sel = r.querySelector('.color-select');
-      if (sel) sel.style.display = 'none';
     });
     popup.style.display = 'none';
   });
