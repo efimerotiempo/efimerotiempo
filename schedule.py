@@ -412,14 +412,6 @@ def schedule_projects(projects):
                         and project.get('due_date')
                         and test_end > date.fromisoformat(project['due_date'])
                     ):
-                        msg = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
-                        conflicts.append({
-                            'id': len(conflicts) + 1,
-                            'project': project['name'],
-                            'client': project['client'],
-                            'message': msg,
-                            'key': f"{project['name']}|{msg}",
-                        })
                         continue
                     manual = False
                     if override:
