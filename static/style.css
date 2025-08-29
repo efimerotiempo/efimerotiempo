@@ -10,6 +10,9 @@ table.schedule th, table.schedule td {
     vertical-align: top;
     min-width: 300px;
 }
+table.schedule td.incomplete {
+    border: 3px solid #000;
+}
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
 table.schedule td.weekend-cell {

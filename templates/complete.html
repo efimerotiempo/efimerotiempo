@@ -111,8 +111,10 @@
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
-        <td data-date="{{ d.isoformat() }}" class="{% if notes.get(d.isoformat()) %}note-day{% endif %}{% if d == today %} today{% endif %}">
-            {% set tasks = days_data.get(d.isoformat(), []) %}
+        {% set tasks = days_data.get(d.isoformat(), []) %}
+        {% set total = tasks|sum(attribute='hours') %}
+        {% set limit = hours.get(d.isoformat(), 8) %}
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today{% endif %}">
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
