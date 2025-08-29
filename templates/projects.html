@@ -95,7 +95,7 @@
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                    <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
+                    <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="0">
                 </form>
                 <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">

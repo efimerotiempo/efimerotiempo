@@ -1732,9 +1732,22 @@ def update_project_row():
     for ph, val in (data.get('phases') or {}).items():
         try:
             hours = int(val)
-            if hours <= 0:
-                continue
         except Exception:
+            continue
+        if hours <= 0:
+            if ph in proj.get('phases', {}):
+                proj['phases'].pop(ph, None)
+                if proj.get('assigned'):
+                    proj['assigned'].pop(ph, None)
+                if proj.get('segment_starts'):
+                    proj['segment_starts'].pop(ph, None)
+                    if not proj['segment_starts']:
+                        proj.pop('segment_starts')
+                if proj.get('segment_workers'):
+                    proj['segment_workers'].pop(ph, None)
+                    if not proj['segment_workers']:
+                        proj.pop('segment_workers')
+                modified.add(ph)
             continue
         proj.setdefault('phases', {})
         prev = proj['phases'].get(ph)
@@ -1765,6 +1778,10 @@ def update_project_row():
         for ph, w in data['workers'].items():
             ass[ph] = w
             modified.add(ph)
+
+    if not proj.get('phases'):
+        remove_project_and_preserve_schedule(projects, pid)
+        return jsonify({'status': 'ok'})
 
     if modified:
         proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] not in modified]
