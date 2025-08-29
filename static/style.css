@@ -10,6 +10,9 @@ table.schedule th, table.schedule td {
     vertical-align: top;
     min-width: 300px;
 }
+table.schedule td.incomplete {
+    border: 3px solid #000;
+}
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
 table.schedule td.weekend-cell {
@@ -18,6 +21,11 @@ table.schedule td.weekend-cell {
 }
 .ok { color: green; }
 .late { color: red; }
+.unplanned { color: orange; }
+.projects-table td.plan-col span {
+    font-size: 3em;
+    line-height: 1;
+}
 .split-dot {
     font-weight: bold;
     margin-right: 2px;
@@ -42,6 +50,7 @@ table.schedule td.weekend-cell {
     border: 3px solid blue !important;
 }
 .blocked-sign { color: red; font-weight: bold; margin-left: 2px; }
+.auto-hour { color: red; font-weight: bold; }
 #info-popup { position: absolute; background: #fff; border: 1px solid #000; padding: 4px; display: none; z-index: 1000; }
 #split-btn { margin-top: 4px; }
 .phase-delete-btn {
@@ -75,7 +84,7 @@ table.schedule td.weekend-cell {
 .complete-container > div { padding: 5px; }
 .complete-top { display: flex; gap: 10px; }
 .complete-add,
-.complete-milestones { flex: 1; }
+.complete-notes { flex: 1; }
 .complete-conflicts {
     flex: 1;
     overflow-x: auto;
@@ -95,9 +104,8 @@ table.schedule td.weekend-cell {
     flex-direction: column;
     box-sizing: border-box;
 }
-.unplanned-panel h3 { display: flex; justify-content: space-between; align-items: center; }
+.unplanned-panel h3 { margin: 0; }
 .unplanned-list { overflow-y: auto; flex: 1; }
-#unplanned-show { display: none; position: fixed; right: 0; top: 100px; z-index: 1000; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
 .unplanned-folder.dim { opacity: 0.3; }
@@ -121,6 +129,39 @@ table.schedule td.resource-col {
     width: 150px;
     border: 3px solid #000;
     font-weight: bold;
+}
+
+table.schedule td.resource-col {
+    font-size: 1.5em;
+    line-height: 1;
+}
+
+table.pedidos-calendar {
+    border-collapse: collapse;
+}
+table.pedidos-calendar th,
+table.pedidos-calendar td {
+    border: 1px solid #ccc;
+    padding: 4px;
+    width: 180px;
+    vertical-align: top;
+}
+table.pedidos-calendar td.week-label {
+    width: 80px;
+    font-weight: bold;
+    background: #eee;
+}
+.pedidos-calendar .day-number {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.pedidos-calendar .month-divider {
+    border-top: 2px solid #999;
+    font-size: 0.8em;
+    text-align: center;
+    margin: -4px -4px 2px -4px;
+    padding-top: 2px;
 }
 
 /* keep projects table width */
@@ -152,17 +193,17 @@ table.schedule td.resource-col {
 }
 
 
-.milestone-day {
+.note-day {
     border-right: 2px solid red;
 }
 
-.milestone-cell {
+.note-cell {
     border-right: 2px solid red;
     padding: 2px;
     vertical-align: top;
 }
 
-.milestone-label {
+.note-label {
     font-size: 0.8em;
     font-weight: bold;
     color: red;
@@ -175,7 +216,6 @@ table.schedule td.resource-col {
     background: #000;
 }
 
-.worker-toggle { cursor: pointer; margin-right: 4px; }
 tr.collapsed td:not(:first-child) { display: none; }
 
 
@@ -210,14 +250,14 @@ tr.collapsed td:not(:first-child) { display: none; }
     width: 100%;
     box-sizing: border-box;
 }
-.milestone-form {
+.note-form {
     border-collapse: collapse;
 }
-.milestone-form td {
+.note-form td {
     border: 1px solid #ccc;
     padding: 4px;
 }
-.milestone-form input {
+.note-form input {
     width: 100%;
     box-sizing: border-box;
 }

@@ -22,26 +22,17 @@
         <th>Fecha material confirmado</th>
         <th>En plazo</th>
         <th>Planificado</th>
-        <th>Origen</th>
-        <th>Prioridad</th>
-        <th>Color</th>
-        {% for ph in phases %}
-            {% if ph == 'pedidos' %}
-                <th>Plazo acopio</th>
-            {% else %}
-                <th>{{ ph }}</th>
-            {% endif %}
+        {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
+            <th>{{ ph }}</th>
         {% endfor %}
-        <th>Cambiar</th>
         <th>Imagen</th>
-        <th>Imagen kanbanize</th>
         <th></th>
         <th>Actualizar</th>
     </tr>
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr data-pid="{{ p.id }}" class="{% if p.frozen %}frozen{% endif %}" style="background-color: {{ p.color }};">
+    <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
         <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
         <td>
@@ -52,13 +43,7 @@
                 <input type="date" name="start_date" value="{{ p.start_date }}">
             </form>
         </td>
-        <td>{{ p.due_date }}
-            <form class="due-form" method="post" action="{{ url_for('update_due_date') }}">
-                <input type="hidden" name="pid" value="{{ p.id }}">
-                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                <input type="date" name="due_date" value="{{ p.due_date }}">
-            </form>
-        </td>
+        <td>{{ p.due_date }}</td>
         <td>{{ p.material_confirmed_date }}</td>
         <td>
             {% if p.met %}
@@ -67,39 +52,32 @@
                 <span class="late">&#10060;</span>
             {% endif %}
         </td>
-        <td>
-            {% if p.planned %}
-                <span class="ok">&#10004;</span>
+        <td class="plan-col">
+            {% if p.plan_state == 'all' %}
+                <span class="ok">&#9679;</span>
+            {% elif p.plan_state == 'partial' %}
+                <span class="unplanned">&#9679;</span>
             {% else %}
-                <span class="late">&#10060;</span>
+                <span class="late">&#9679;</span>
             {% endif %}
         </td>
-        <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
-        <td>{{ p.priority }}</td>
-        <td>
-            <select class="color-select" style="display:none">
-                {% for c in palette %}
-                    <option value="{{ c }}" {% if p.color == c %}selected{% endif %} style="background-color: {{ c }};">{{ c }}</option>
-                {% endfor %}
-            </select>
-        </td>
-        {% for ph in phases %}
+        {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
             <td>
             {% set val = p.phases.get(ph, 0) %}
-            {% if ph == 'pedidos' %}
-                {{ val }}<br>
+            {% set auto = p.auto_hours.get(ph) if p.auto_hours else False %}
+            {% if val is sequence %}
+                {% set total = val|map('int')|sum %}
+                {% if auto %}<span class="auto-hour">{{ total }}h</span>{% else %}{{ total }}h{% endif %}<br>
             {% else %}
-                {% if val is sequence %}
-                    {{ val|map('int')|sum }}h<br>
-                {% else %}
-                    {{ val|int }}h<br>
-                {% endif %}
+                {% set total = val|int %}
+                {% if auto %}<span class="auto-hour">{{ total }}h</span>{% else %}{{ total }}h{% endif %}<br>
             {% endif %}
                 <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
+                    {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
                     <select name="worker">
                         {% for w in all_workers %}
-                            <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                            <option value="{{ w }}" {% if assigned == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
                     </select>
                 </form>
@@ -107,7 +85,7 @@
                     <input type="hidden" name="pid" value="{{ p.id }}">
                     <input type="hidden" name="phase" value="{{ ph }}">
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                    <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
+                    <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="0">
                 </form>
                 <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
                     <input type="hidden" name="pid" value="{{ p.id }}">
@@ -118,16 +96,6 @@
             </td>
         {% endfor %}
         <td>
-            <form method="post" action="{{ url_for('update_priority', pid=p.id) }}">
-                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                <select name="priority">
-                    {% for pr in priorities %}
-                        <option value="{{ pr }}" {% if pr == p.priority %}selected{% endif %}>{{ pr }}</option>
-                    {% endfor %}
-                </select>
-            </form>
-        </td>
-        <td>
             {% if p.image %}
                 {{ p.image.rsplit('/', 1)[-1] }}
             {% else %}
@@ -137,15 +105,6 @@
                 <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                 <input type="file" name="image" accept="image/*">
             </form>
-        </td>
-        <td>
-            {% if p.kanban_attachments %}
-                {% for att in p.kanban_attachments %}
-                    <a href="{{ att.url }}" target="_blank">{{ att.url }}</a>{% if not loop.last %}, {% endif %}
-                {% endfor %}
-            {% else %}
-                &mdash;
-            {% endif %}
         </td>
         <td>
             <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
@@ -159,7 +118,6 @@
 </table>
 <script>
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const DUE_URL = "{{ url_for('update_due_date') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -168,24 +126,6 @@
       ev.preventDefault();
       const data = new FormData(f);
       fetch(START_URL, {
-        method: 'POST',
-        body: data,
-        credentials: 'same-origin'
-      })
-        .then(resp => {
-          if (resp.ok) {
-            location.reload();
-          } else {
-            resp.json().then(d => alert(d.error || 'Error'));
-          }
-        });
-    });
-  });
-  document.querySelectorAll('.due-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(DUE_URL, {
         method: 'POST',
         body: data,
         credentials: 'same-origin'
@@ -266,13 +206,9 @@
         if (r.dataset.pid === pid) {
           r.classList.add('proj-highlight');
           r.classList.remove('proj-dim');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'inline';
         } else {
           r.classList.add('proj-dim');
           r.classList.remove('proj-highlight');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'none';
         }
       });
     });
@@ -295,16 +231,18 @@
           data.workers[phase] = fd.get('worker');
         } else if (f.classList.contains('proj-start-form')) {
           data.start_date = fd.get('start_date') || fd.get('date');
-        } else if (f.classList.contains('due-form')) {
-          data.due_date = fd.get('due_date');
-        } else if (f.action.includes('update_priority')) {
-          data.priority = fd.get('priority');
         }
       });
-      const colorSel = row.querySelector('.color-select');
-      if (colorSel) {
-        data.color = colorSel.value;
-      }
+      Object.keys(data.workers).forEach(ph => {
+        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
+          delete data.workers[ph];
+        }
+      });
+      Object.keys(data.phase_starts).forEach(ph => {
+        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
+          delete data.phase_starts[ph];
+        }
+      });
       const imgForm = row.querySelector('.image-form');
       let imgPromise = Promise.resolve();
       if (imgForm) {
@@ -339,8 +277,6 @@
   document.addEventListener('click', () => {
     rows.forEach(r => {
       r.classList.remove('proj-highlight', 'proj-dim');
-      const sel = r.querySelector('.color-select');
-      if (sel) sel.style.display = 'none';
     });
   });
 </script>

@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Calendario pedidos</h2>
+<table class="pedidos-calendar">
+    <thead>
+    <tr>
+        <th>Semana</th>
+        <th>Lun</th>
+        <th>Mar</th>
+        <th>Mié</th>
+        <th>Jue</th>
+        <th>Vie</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for week in weeks %}
+    <tr>
+        <td class="week-label">Semana {{ week.number }}</td>
+        {% for d in week.days %}
+        <td data-date="{{ d.date.isoformat() }}" class="{% if d.date == today %}today{% endif %}">
+            {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
+            <div class="day-number">{{ d.day }}</div>
+            {% for t in d.tasks %}
+            <div class="task" draggable="true"
+                 data-pid="{{ t.get('pid') or '' }}"
+                 data-phase="pedidos"
+                 data-day="{{ d.date.isoformat() }}"
+                 data-worker="{{ t.get('worker') or '' }}"
+                 {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
+                 style="background-color: {{ t.get('color', '#999999') }};">
+                {{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+            </div>
+            {% endfor %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label)');
+  let maxH = 0;
+  cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
+  cells.forEach(c => c.style.height = maxH + 'px');
+
+  let dragged = null;
+  const tasks = document.querySelectorAll('.pedidos-calendar .task');
+  tasks.forEach(t => {
+    t.addEventListener('dragstart', e => {
+      dragged = t;
+      const data = {
+        pid: t.dataset.pid,
+        phase: 'pedidos',
+        part: t.dataset.part,
+        worker: t.dataset.worker
+      };
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify(data));
+    });
+    t.addEventListener('dragend', () => { dragged = null; });
+  });
+
+  const dayCells = document.querySelectorAll('.pedidos-calendar td[data-date]');
+  dayCells.forEach(cell => {
+    cell.addEventListener('dragover', e => e.preventDefault());
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
+      if (data.pid) {
+        fetch("{{ url_for('move_phase') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
+        }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (dragged) {
+        cell.appendChild(dragged);
+        dragged = null;
+      }
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'a' || e.key === 'A') {
+      const todayCell = document.querySelector('.pedidos-calendar td.today');
+      if (todayCell) {
+        todayCell.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

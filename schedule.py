@@ -7,10 +7,11 @@ DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
-MILESTONES_FILE = os.path.join(DATA_DIR, 'milestones.json')
+NOTES_FILE = os.path.join(DATA_DIR, 'notes.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
+EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -18,34 +19,66 @@ PHASE_ORDER = [
     'recepcionar material',
     'montar',
     'soldar',
+    'soldadura interior',
     'pintar',
+    'montaje final',
     'mecanizar',
     'tratamiento',
 ]
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
-WORKERS = {
+UNPLANNED = 'Sin planificar'
+
+BASE_WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Mikel': ['montar', 'soldar'],
-    'Iban': ['montar', 'soldar'],
-    'Joseba 2': ['montar', 'soldar'],
-    'Naparra': ['montar', 'soldar'],
-    'Unai': ['montar', 'soldar'],
-    'Fabio': ['soldar'],
-    'Beltxa': ['soldar', 'montar'],
-    'Igor': ['soldar'],
-    'Albi': ['recepcionar material', 'soldar', 'montar'],
-    'Eneko': ['pintar', 'montar', 'soldar'],
+    'Mikel': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Iban': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Joseba 2': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Naparra': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Unai': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Fabio': ['soldar', 'soldadura interior'],
+    'Beltxa': ['soldar', 'soldadura interior', 'montar', 'montaje final'],
+    'Igor': ['soldar', 'soldadura interior'],
+    'Albi': ['recepcionar material', 'soldar', 'soldadura interior', 'montar', 'montaje final'],
+    'Eneko': ['pintar', 'montar', 'montaje final', 'soldar', 'soldadura interior'],
+}
+
+TAIL_WORKERS = {
     'Mecanizar': ['mecanizar'],
     'Tratamiento': ['tratamiento'],
-    'Sin planificar': PHASE_ORDER,
+    UNPLANNED: PHASE_ORDER,
 }
+
+
+def load_extra_workers():
+    if os.path.exists(EXTRA_WORKERS_FILE):
+        with open(EXTRA_WORKERS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+
+def save_extra_workers(workers):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(EXTRA_WORKERS_FILE, 'w') as f:
+        json.dump(workers, f)
+
+
+def _build_workers(extra=None):
+    workers = BASE_WORKERS.copy()
+    if extra is None:
+        extra = load_extra_workers()
+    for w in extra:
+        workers[w] = BASE_WORKERS['Eneko'][:]
+    workers.update(TAIL_WORKERS)
+    return workers
+
+
+WORKERS = _build_workers()
 
 # Igor deja de aparecer en el calendario a partir del 21 de julio
 IGOR_END = date(2025, 7, 21)
-UNPLANNED = 'Sin planificar'
 
 HOURS_PER_DAY = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
@@ -56,10 +89,29 @@ HOURS_LIMITS[UNPLANNED] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
 
+def add_worker(name):
+    """Add a new worker that behaves like Eneko."""
+    name = name.strip()
+    if not name or name in WORKERS:
+        return
+    extras = load_extra_workers()
+    if name not in extras:
+        extras.append(name)
+        save_extra_workers(extras)
+    new_workers = _build_workers(extras)
+    WORKERS.clear()
+    WORKERS.update(new_workers)
+    HOURS_LIMITS[name] = HOURS_PER_DAY
+
+
 def load_projects():
     if os.path.exists(PROJECTS_FILE):
         with open(PROJECTS_FILE, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+        filtered = [p for p in data if p.get('phases')]
+        if len(filtered) != len(data):
+            save_projects(filtered)
+        return filtered
     return []
 
 
@@ -95,16 +147,16 @@ def save_extra_conflicts(conflicts):
         json.dump(conflicts, f)
 
 
-def load_milestones():
-    if os.path.exists(MILESTONES_FILE):
-        with open(MILESTONES_FILE, 'r') as f:
+def load_notes():
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, 'r') as f:
             return json.load(f)
     return []
 
 
-def save_milestones(data):
+def save_notes(data):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(MILESTONES_FILE, 'w') as f:
+    with open(NOTES_FILE, 'w') as f:
         json.dump(data, f)
 
 
@@ -207,16 +259,15 @@ def schedule_projects(projects):
                     'priority': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
-    # Place frozen projects first so other tasks respect their positions
+    # Place frozen phases first so other tasks respect their positions
     for p in projects:
-        if p.get('frozen'):
-            for t in p.get('frozen_tasks', []):
-                w = t['worker']
-                day = t['day']
-                entry = t.copy()
-                entry.pop('worker', None)
-                entry.pop('day', None)
-                worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
+        for t in p.get('frozen_tasks', []):
+            w = t['worker']
+            day = t['day']
+            entry = t.copy()
+            entry.pop('worker', None)
+            entry.pop('day', None)
+            worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
 
     # Sort frozen tasks chronologically
     for w, days in worker_schedule.items():
@@ -225,8 +276,6 @@ def schedule_projects(projects):
 
     conflicts = []
     for project in projects:
-        if project.get('frozen'):
-            continue
         planned = project.get('planned', True)
         if not planned:
             current = date.today()
@@ -238,14 +287,33 @@ def schedule_projects(projects):
                 current = date.today()
                 project['start_date'] = current.isoformat()
         hour = 0
+        frozen_end = {}
+        for t in project.get('frozen_tasks', []):
+            ph = t.get('phase')
+            try:
+                d = date.fromisoformat(t['day'])
+            except Exception:
+                continue
+            if ph in PHASE_ORDER:
+                prev = frozen_end.get(ph)
+                if not prev or d > prev:
+                    frozen_end[ph] = d
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
                 continue
+            if phase in frozen_end:
+                current = next_workday(frozen_end[phase])
+                end_date = max(end_date, frozen_end[phase])
+                hour = 0
+                continue
 
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+                start_overrides = project.get('segment_starts', {}).get(phase)
+                if start_overrides and start_overrides[0]:
+                    current = date.fromisoformat(start_overrides[0])
                 days_needed = sum(
                     1
                     for i in range((date.fromisoformat(val) - current).days + 1)
@@ -286,7 +354,6 @@ def schedule_projects(projects):
                     project.get('priority'),
                     project['id'],
                     worker,
-                    project_frozen=project.get('frozen', False),
                     project_blocked=project.get('blocked', False),
                     material_date=project.get('material_confirmed_date'),
                 )
@@ -333,12 +400,23 @@ def schedule_projects(projects):
                         })
                         continue
 
-                    manual = False
+                    override = None
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
-                        if override > current:
-                            current = override
-                            hour = 0
+                    test_start = override or current
+                    test_end = test_start
+                    for _ in range(days_needed - 1):
+                        test_end = next_workday(test_end)
+                    if (
+                        project.get('due_confirmed')
+                        and project.get('due_date')
+                        and test_end > date.fromisoformat(project['due_date'])
+                    ):
+                        continue
+                    manual = False
+                    if override:
+                        current = override
+                        hour = 0
                         manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
@@ -357,9 +435,9 @@ def schedule_projects(projects):
                         hours_map,
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
-                        project_frozen=project.get('frozen', False),
                         project_blocked=project.get('blocked', False),
                         material_date=project.get('material_confirmed_date'),
+                        auto=project.get('auto_hours', {}).get(phase),
                     )
         project['end_date'] = end_date.isoformat()
         if project.get('due_date'):
@@ -400,6 +478,7 @@ def assign_phase(
     project_frozen=False,
     project_blocked=False,
     material_date=None,
+    auto=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -457,6 +536,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -508,6 +588,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -546,6 +627,7 @@ def assign_phase(
                 'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
+                'auto': auto,
             })
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -666,11 +748,7 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, h
                 ok = False
                 break
             used = sum(t['hours'] for t in sched.get(test.isoformat(), []))
-            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-            if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento'):
-                day_limit = (hours_map or {}).get(test.isoformat(), HOURS_PER_DAY)
-                limit = min(limit, day_limit)
-            if used >= limit:
+            if used > 0:
                 ok = False
                 break
             remaining -= 1
@@ -748,28 +826,3 @@ def phase_start_map(projects):
         for worker, day, phase, hours, _ in items:
             result.setdefault(pid, {}).setdefault(phase, day)
     return result
-
-
-def previous_phase_end(projects, pid, phase, part=None):
-    """Return the last scheduled day of the phase immediately before ``phase``."""
-    if isinstance(part, str):
-        if part in ('', 'None'):
-            part = None
-        else:
-            try:
-                part = int(part)
-            except Exception:
-                part = None
-
-    mapping = compute_schedule_map(projects)
-    tasks = mapping.get(pid, [])
-    if not tasks:
-        return None
-    idx = PHASE_ORDER.index(phase)
-    last = None
-    for worker, day, ph, hours, prt in tasks:
-        dt = date.fromisoformat(day)
-        if ph in PHASE_ORDER[:idx]:
-            if not last or dt > last:
-                last = dt
-    return last
