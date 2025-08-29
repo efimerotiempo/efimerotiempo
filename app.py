@@ -1662,8 +1662,6 @@ def update_phase_hours():
         return jsonify({'error': 'Datos incompletos'}), 400
     try:
         hours = int(hours_val)
-        if hours <= 0:
-            raise ValueError
     except Exception:
         return jsonify({'error': 'Horas inválidas'}), 400
     projects = get_projects()
@@ -1671,19 +1669,39 @@ def update_phase_hours():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
-    prev_val = proj['phases'].get(phase)
-    was_list = isinstance(prev_val, list)
-    proj['phases'][phase] = hours
-    if was_list:
-        if proj.get('segment_starts'):
-            proj['segment_starts'].pop(phase, None)
-            if not proj['segment_starts']:
-                proj.pop('segment_starts')
-        if proj.get('segment_workers'):
-            proj['segment_workers'].pop(phase, None)
-            if not proj['segment_workers']:
-                proj.pop('segment_workers')
-    proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+    if hours <= 0:
+        if phase in proj['phases']:
+            proj['phases'].pop(phase, None)
+            if proj.get('assigned'):
+                proj['assigned'].pop(phase, None)
+            if proj.get('segment_starts'):
+                proj['segment_starts'].pop(phase, None)
+                if not proj['segment_starts']:
+                    proj.pop('segment_starts')
+            if proj.get('segment_workers'):
+                proj['segment_workers'].pop(phase, None)
+                if not proj['segment_workers']:
+                    proj.pop('segment_workers')
+            if not proj.get('phases'):
+                remove_project_and_preserve_schedule(projects, pid)
+                if request.is_json:
+                    return '', 204
+                return redirect(next_url)
+            proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+    else:
+        prev_val = proj['phases'].get(phase)
+        was_list = isinstance(prev_val, list)
+        proj['phases'][phase] = hours
+        if was_list:
+            if proj.get('segment_starts'):
+                proj['segment_starts'].pop(phase, None)
+                if not proj['segment_starts']:
+                    proj.pop('segment_starts')
+            if proj.get('segment_workers'):
+                proj['segment_workers'].pop(phase, None)
+                if not proj['segment_workers']:
+                    proj.pop('segment_workers')
+        proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
     _sync_project_to_kanbanize(proj, {phase})

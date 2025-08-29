@@ -251,6 +251,16 @@
       if (colorSel && colorSel.value !== colorSel.dataset.current) {
         data.color = colorSel.value;
       }
+      Object.keys(data.workers).forEach(ph => {
+        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
+          delete data.workers[ph];
+        }
+      });
+      Object.keys(data.phase_starts).forEach(ph => {
+        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
+          delete data.phase_starts[ph];
+        }
+      });
       const imgForm = row.querySelector('.image-form');
       let imgPromise = Promise.resolve();
       if (imgForm) {
