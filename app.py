@@ -2139,11 +2139,21 @@ def check_move():
     if moved_key in after_map and not is_contiguous(after_map[moved_key]):
         split = True
     if not split:
-        for key, days_before in before_map.items():
-            if not is_contiguous(days_before):
-                continue
-            days_after = after_map.get(key, [])
-            if days_after and not is_contiguous(days_after):
+        # Check if moving this phase would alter any other task on the target
+        # worker, either by shifting it to different days or by adding/removing
+        # tasks on that worker.
+        related = set(
+            k
+            for k in before_map
+            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
+        )
+        related.update(
+            k
+            for k in after_map
+            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
+        )
+        for key in related:
+            if before_map.get(key, []) != after_map.get(key, []):
                 split = True
                 break
     return jsonify({'split': split})
