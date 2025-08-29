@@ -563,7 +563,9 @@ def move_phase_date(
 
     if mode == "push" and worker and worker != UNPLANNED:
         # Move other tasks for the worker after this phase so it stays
-        # contiguous without splitting.
+        # contiguous without splitting. Gather the worker's tasks starting on or
+        # after the new date (excluding the moved phase) and relocate them one
+        # by one after the inserted block.
         phase_val = proj['phases'].get(phase)
         if isinstance(phase_val, list):
             hours = int(phase_val[part or 0])
@@ -588,9 +590,12 @@ def move_phase_date(
                 key = (opid, ph, prt)
                 if key not in seen or d < seen[key]:
                     seen[key] = d
-        for d, opid, oph, oprt in sorted(
+        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+        for _, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
+            while next_start in vac_days:
+                next_start = next_workday(next_start)
             move_phase_date(
                 projects,
                 opid,
