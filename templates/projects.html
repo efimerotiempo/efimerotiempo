@@ -25,9 +25,9 @@
         {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
             <th>{{ ph }}</th>
         {% endfor %}
-        <th>Imagen</th>
-        <th></th>
         <th>Actualizar</th>
+        <th>X</th>
+        <th>Imagen</th>
     </tr>
     </thead>
     <tbody>
@@ -96,6 +96,12 @@
                 </form>
             </td>
         {% endfor %}
+        <td><button class="row-update-btn">ACTUALIZAR</button></td>
+        <td>
+            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
+                <button class="delete-btn" type="submit">&#10060;</button>
+            </form>
+        </td>
         <td>
             {% if p.image %}
                 {{ p.image.rsplit('/', 1)[-1] }}
@@ -107,12 +113,6 @@
                 <input type="file" name="image" accept="image/*">
             </form>
         </td>
-        <td>
-            <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('project_list')) }}" class="delete-form">
-                <button class="delete-btn" type="submit">&#10060;</button>
-            </form>
-        </td>
-        <td><button class="row-update-btn">ACTUALIZAR</button></td>
     </tr>
     {% endfor %}
     </tbody>
