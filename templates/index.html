@@ -417,6 +417,16 @@
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<div>Límite: ${info.due_date}</div>`;
       html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
+      const phaseLines = [];
+      PHASES.forEach(ph => {
+        if (ph === 'dibujo' || ph === 'pedidos') return;
+        const val = info.phases[ph];
+        let total = 0;
+        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        else total = parseInt(val) || 0;
+        if (total > 0) phaseLines.push(`<div>${ph}: ${total}h</div>`);
+      });
+      html += phaseLines.join('');
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
       let hoursVal = 0;
