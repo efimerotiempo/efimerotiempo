@@ -120,6 +120,7 @@
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
             <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
+                <span class="task-main">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -127,7 +128,11 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                </span>
+                {% if t.hours %}
+                <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                {% endif %}
             </div>
             {% endif %}
             {% endfor %}
@@ -182,6 +187,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                    <span class="task-main">
                     {% if t.late %}
                         <span class="late">&#10060;</span>
                     {% else %}
@@ -189,7 +195,11 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -204,6 +214,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                    <span class="task-main">
                     {% if t.late %}
                         <span class="late">&#10060;</span>
                     {% else %}
@@ -211,7 +222,11 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -225,6 +240,7 @@
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Mantener los demás proyectos donde están y dividir el proyecto que acabas de mover, o desplazar los demás proyectos para así no dividir las horas del proyecto que acabas de mover?</p><button id="move-split">Dividir</button> <button id="move-shift">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -292,14 +308,12 @@
                 <th>Fecha material confirmado</th>
                 <th>En plazo</th>
                 <th>Planificado</th>
-                <th>Origen</th>
-                <th>Color</th>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <th>{{ ph }}</th>
                 {% endfor %}
-                <th>Imagen</th>
-                <th></th>
                 <th>Actualizar</th>
+                <th>X</th>
+                <th>Imagen</th>
             </tr>
             </thead>
             <tbody>
@@ -333,14 +347,6 @@
                         <span class="late">&#9679;</span>
                     {% endif %}
                 </td>
-                <td>{{ 'API' if p.source == 'api' else 'Manual' }}</td>
-                <td>
-                    <select class="color-select" style="display:none">
-                        {% for c in palette %}
-                            <option value="{{ c }}" {% if p.color == c %}selected{% endif %} style="background-color: {{ c }};">{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                </td>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <td>
                     {% set val = p.phases.get(ph, 0) %}
@@ -351,9 +357,11 @@
                     {% endif %}
                         <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
+                            {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
                             <select name="worker">
+                                <option value="Sin planificar" {% if assigned == 'Sin planificar' %}selected{% endif %}>Sin planificar</option>
                                 {% for w in all_workers %}
-                                    <option value="{{ w }}" {% if p.assigned and p.assigned.get(ph) == w %}selected{% endif %}>{{ w }}</option>
+                                    <option value="{{ w }}" {% if assigned == w %}selected{% endif %}>{{ w }}</option>
                                 {% endfor %}
                             </select>
                         </form>
@@ -371,6 +379,12 @@
                         </form>
                     </td>
                 {% endfor %}
+                <td><button class="row-update-btn">ACTUALIZAR</button></td>
+                <td>
+                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}" class="delete-form">
+                        <button class="delete-btn" type="submit">&#10060;</button>
+                    </form>
+                </td>
                 <td>
                     {% if p.image %}
                         {{ p.image.rsplit('/', 1)[-1] }}
@@ -382,12 +396,6 @@
                         <input type="file" name="image" accept="image/*">
                     </form>
                 </td>
-                <td>
-                    <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}" class="delete-form">
-                        <button class="delete-btn" type="submit">&#10060;</button>
-                    </form>
-                </td>
-                <td><button class="row-update-btn">ACTUALIZAR</button></td>
             </tr>
             {% endfor %}
             </tbody>
@@ -405,6 +413,7 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -422,6 +431,11 @@
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  const moveModal = document.getElementById('move-modal');
+  const moveSplit = document.getElementById('move-split');
+  const moveShift = document.getElementById('move-shift');
+  const moveCancel = document.getElementById('move-cancel');
+  let pendingMove = null;
   function showDeadline() {
     deadlineText.textContent = DEADLINE_MSG;
     deadlineModal.style.display = 'block';
@@ -553,9 +567,19 @@
       });
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
-        const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<div>Límite: ${info.due_date}</div>`;
       html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
+        const phaseLines = [];
+        PHASES.forEach(ph => {
+          if (ph === 'dibujo' || ph === 'pedidos') return;
+          const val = info.phases[ph];
+          let total = 0;
+          if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+          else total = parseInt(val) || 0;
+          if (total > 0) phaseLines.push(`<div>${ph}: ${total}h</div>`);
+        });
+        html += phaseLines.join('');
         let phaseText = '';
         const phVal = info.phases[t.dataset.phase];
         let hoursVal = 0;
@@ -588,9 +612,17 @@
         if (info.image) {
           const imgUrl = `${STATIC_URL}${info.image}`;
           html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
-        } else if (info.kanban_attachments && info.kanban_attachments.length) {
-          const attUrl = info.kanban_attachments[0].url;
-          html += `<div><a href="${attUrl}" target="_blank"><img src="${attUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+        }
+        if (info.kanban_attachments && info.kanban_attachments.length) {
+          info.kanban_attachments.forEach(att => {
+            const url = att.url;
+            const name = (att.name || '').toLowerCase();
+            if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+              html += `<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+            } else {
+              html += `<div><a href="${url}" target="_blank">${att.name || url}</a></div>`;
+            }
+          });
         }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
@@ -749,13 +781,9 @@
         if (r.dataset.pid === pid) {
           r.classList.add('proj-highlight');
           r.classList.remove('proj-dim');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'inline';
         } else {
           r.classList.add('proj-dim');
           r.classList.remove('proj-highlight');
-          const sel = r.querySelector('.color-select');
-          if (sel) sel.style.display = 'none';
         }
       });
       tasks.forEach(t => {
@@ -796,10 +824,6 @@
           data.start_date = fd.get('start_date') || fd.get('date');
         }
       });
-      const colorSel = row.querySelector('.color-select');
-      if (colorSel) {
-        data.color = colorSel.value;
-      }
       Object.keys(data.workers).forEach(ph => {
         if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
           delete data.workers[ph];
@@ -847,8 +871,6 @@
     folders.forEach(f => f.classList.remove('dim'));
     rows.forEach(r => {
       r.classList.remove('proj-highlight', 'proj-dim');
-      const sel = r.querySelector('.color-select');
-      if (sel) sel.style.display = 'none';
     });
     popup.style.display = 'none';
   });
@@ -977,31 +999,73 @@
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      fetch(MOVE_URL, {
+      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part };
+      fetch(CHECK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
-      })
-      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
-      .then(({ok, data}) => {
-        if (!ok) {
-          if (data.error === DEADLINE_MSG) showDeadline();
-          else alert(data.error || 'Error');
-          return;
-        }
-        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-        if (beforeMaterial) {
-          materialText.textContent = 'SIN MATERIAL';
-          materialModal.style.display = 'block';
-          materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+        body: JSON.stringify(moveData)
+      }).then(resp => resp.json()).then(res => {
+        if (res.split) {
+          pendingMove = { data: moveData, beforeMaterial };
+          moveModal.style.display = 'block';
         } else {
-          location.reload();
+          doMove(moveData, 'split', beforeMaterial);
         }
       });
     });
   });
+  function doMove(moveData, mode, beforeMaterial) {
+    moveData.mode = mode;
+    fetch(MOVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(moveData)
+    })
+    .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+    .then(({ok, data}) => {
+      if (!ok) {
+        if (data.error === DEADLINE_MSG) showDeadline();
+        else alert(data.error || 'Error');
+        return;
+      }
+      const date = moveData.date;
+      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+      if (beforeMaterial) {
+        materialText.textContent = 'SIN MATERIAL';
+        materialModal.style.display = 'block';
+        materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+      } else {
+        location.reload();
+      }
+    });
+  }
+  if (moveSplit) {
+    moveSplit.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'split', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveShift) {
+    moveShift.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveCancel) {
+    moveCancel.addEventListener('click', () => {
+      moveModal.style.display = 'none';
+      pendingMove = null;
+    });
+  }
   const unplanList = document.querySelector('.unplanned-list');
   if (unplanList) {
     unplanList.addEventListener('dragover', e => { e.preventDefault(); });

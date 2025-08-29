@@ -64,6 +64,7 @@
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
             <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
+                <span class="task-main">
                 {% if t.late %}
                     <span class="late">&#10060;</span>
                 {% else %}
@@ -71,7 +72,11 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                </span>
+                {% if t.hours %}
+                <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                {% endif %}
             </div>
             {% endif %}
             {% endfor %}
@@ -126,6 +131,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                    <span class="task-main">
                     {% if t.late %}
                         <span class="late">&#10060;</span>
                     {% else %}
@@ -133,7 +139,11 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -148,6 +158,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="background-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                    <span class="task-main">
                     {% if t.late %}
                         <span class="late">&#10060;</span>
                     {% else %}
@@ -155,7 +166,11 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client }} - {{ t.phase }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 </div>
@@ -169,6 +184,7 @@
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Mantener los demás proyectos donde están y dividir el proyecto que acabas de mover, o desplazar los demás proyectos para así no dividir las horas del proyecto que acabas de mover?</p><button id="move-split">Dividir</button> <button id="move-shift">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
         <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -254,6 +270,7 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const START_DATA = {{ start_map|tojson }};
@@ -270,6 +287,11 @@
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  const moveModal = document.getElementById('move-modal');
+  const moveSplit = document.getElementById('move-split');
+  const moveShift = document.getElementById('move-shift');
+  const moveCancel = document.getElementById('move-cancel');
+  let pendingMove = null;
   function showDeadline() {
     deadlineText.textContent = DEADLINE_MSG;
     deadlineModal.style.display = 'block';
@@ -395,6 +417,16 @@
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       html += `<div>Límite: ${info.due_date}</div>`;
       html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
+      const phaseLines = [];
+      PHASES.forEach(ph => {
+        if (ph === 'dibujo' || ph === 'pedidos') return;
+        const val = info.phases[ph];
+        let total = 0;
+        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        else total = parseInt(val) || 0;
+        if (total > 0) phaseLines.push(`<div>${ph}: ${total}h</div>`);
+      });
+      html += phaseLines.join('');
       let phaseText = '';
       const phVal = info.phases[t.dataset.phase];
       let hoursVal = 0;
@@ -427,9 +459,17 @@
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
         html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
-      } else if (info.kanban_attachments && info.kanban_attachments.length) {
-        const attUrl = info.kanban_attachments[0].url;
-        html += `<div><a href="${attUrl}" target="_blank"><img src="${attUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+      }
+      if (info.kanban_attachments && info.kanban_attachments.length) {
+        info.kanban_attachments.forEach(att => {
+          const url = att.url;
+          const name = (att.name || '').toLowerCase();
+          if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+            html += `<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+          } else {
+            html += `<div><a href="${url}" target="_blank">${att.name || url}</a></div>`;
+          }
+        });
       }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
@@ -719,31 +759,73 @@
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      fetch(MOVE_URL, {
+      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part };
+      fetch(CHECK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
-      })
-      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
-      .then(({ok, data}) => {
-        if (!ok) {
-          if (data.error === DEADLINE_MSG) showDeadline();
-          else alert(data.error || 'Error');
-          return;
-        }
-        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-        if (beforeMaterial) {
-          materialText.textContent = 'SIN MATERIAL';
-          materialModal.style.display = 'block';
-          materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+        body: JSON.stringify(moveData)
+      }).then(resp => resp.json()).then(res => {
+        if (res.split) {
+          pendingMove = { data: moveData, beforeMaterial };
+          moveModal.style.display = 'block';
         } else {
-          location.reload();
+          doMove(moveData, 'split', beforeMaterial);
         }
-      });
       });
     });
+  });
+  function doMove(moveData, mode, beforeMaterial) {
+    moveData.mode = mode;
+    fetch(MOVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(moveData)
+    })
+    .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+    .then(({ok, data}) => {
+      if (!ok) {
+        if (data.error === DEADLINE_MSG) showDeadline();
+        else alert(data.error || 'Error');
+        return;
+      }
+      const date = moveData.date;
+      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+      if (beforeMaterial) {
+        materialText.textContent = 'SIN MATERIAL';
+        materialModal.style.display = 'block';
+        materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+      } else {
+        location.reload();
+      }
+    });
+  }
+  if (moveSplit) {
+    moveSplit.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'split', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveShift) {
+    moveShift.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveCancel) {
+    moveCancel.addEventListener('click', () => {
+      moveModal.style.display = 'none';
+      pendingMove = null;
+    });
+  }
   const unplanList = document.querySelector('.unplanned-list');
   if (unplanList) {
     unplanList.addEventListener('dragover', e => { e.preventDefault(); });
