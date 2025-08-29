@@ -76,6 +76,7 @@
                     <input type="hidden" name="next" value="{{ url_for('project_list') }}">
                     {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
                     <select name="worker">
+                        <option value="Sin planificar" {% if assigned == 'Sin planificar' %}selected{% endif %}>Sin planificar</option>
                         {% for w in all_workers %}
                             <option value="{{ w }}" {% if assigned == w %}selected{% endif %}>{{ w }}</option>
                         {% endfor %}
