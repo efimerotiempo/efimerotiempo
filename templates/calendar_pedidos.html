@@ -28,7 +28,10 @@
                  data-worker="{{ t.get('worker') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="background-color: {{ t.get('color', '#999999') }};">
-                {{ t.project }}{% if t.hours %} ({% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}){% endif %}
+                <span class="task-main">{{ t.project }}</span>
+                {% if t.hours %}
+                <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                {% endif %}
             </div>
             {% endfor %}
         </td>

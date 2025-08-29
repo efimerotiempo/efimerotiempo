@@ -32,11 +32,22 @@ table.schedule td.weekend-cell {
 }
 .task {
     margin-bottom: 2px;
+    cursor: grab;
+    display: flex;
+}
+.task-main {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    cursor: grab;
+    flex: 1;
+}
+.task-hours {
+    margin-left: 4px;
+    white-space: nowrap;
+}
+.task.vacation {
+    display: block;
 }
 .task.dim { opacity: 0.3; }
 .task.highlight {
