@@ -240,6 +240,7 @@
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Mantener los demás proyectos donde están y dividir el proyecto que acabas de mover, o desplazar los demás proyectos para así no dividir las horas del proyecto que acabas de mover?</p><button id="move-split">Dividir</button> <button id="move-shift">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -412,6 +413,7 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -429,6 +431,11 @@
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  const moveModal = document.getElementById('move-modal');
+  const moveSplit = document.getElementById('move-split');
+  const moveShift = document.getElementById('move-shift');
+  const moveCancel = document.getElementById('move-cancel');
+  let pendingMove = null;
   function showDeadline() {
     deadlineText.textContent = DEADLINE_MSG;
     deadlineModal.style.display = 'block';
@@ -982,31 +989,73 @@
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      fetch(MOVE_URL, {
+      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part };
+      fetch(CHECK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part })
-      })
-      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
-      .then(({ok, data}) => {
-        if (!ok) {
-          if (data.error === DEADLINE_MSG) showDeadline();
-          else alert(data.error || 'Error');
-          return;
-        }
-        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-        if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-        if (beforeMaterial) {
-          materialText.textContent = 'SIN MATERIAL';
-          materialModal.style.display = 'block';
-          materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+        body: JSON.stringify(moveData)
+      }).then(resp => resp.json()).then(res => {
+        if (res.split) {
+          pendingMove = { data: moveData, beforeMaterial };
+          moveModal.style.display = 'block';
         } else {
-          location.reload();
+          doMove(moveData, 'split', beforeMaterial);
         }
       });
     });
   });
+  function doMove(moveData, mode, beforeMaterial) {
+    moveData.mode = mode;
+    fetch(MOVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(moveData)
+    })
+    .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+    .then(({ok, data}) => {
+      if (!ok) {
+        if (data.error === DEADLINE_MSG) showDeadline();
+        else alert(data.error || 'Error');
+        return;
+      }
+      const date = moveData.date;
+      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
+      if (beforeMaterial) {
+        materialText.textContent = 'SIN MATERIAL';
+        materialModal.style.display = 'block';
+        materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
+      } else {
+        location.reload();
+      }
+    });
+  }
+  if (moveSplit) {
+    moveSplit.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'split', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveShift) {
+    moveShift.addEventListener('click', () => {
+      if (pendingMove) {
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveCancel) {
+    moveCancel.addEventListener('click', () => {
+      moveModal.style.display = 'none';
+      pendingMove = null;
+    });
+  }
   const unplanList = document.querySelector('.unplanned-list');
   if (unplanList) {
     unplanList.addEventListener('dragover', e => { e.preventDefault(); });

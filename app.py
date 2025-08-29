@@ -462,8 +462,25 @@ def build_calendar(start, end):
     return days, cols, week_spans
 
 
-def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
+def move_phase_date(
+    projects,
+    pid,
+    phase,
+    new_date,
+    worker=None,
+    part=None,
+    *,
+    save=True,
+    mode="split",
+):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
+
+    ``mode`` controls how existing work is handled:
+
+    * ``"split"`` (default) keeps other tasks in place, allowing the phase to
+      be divided around them.
+    * ``"push"`` shifts subsequent tasks for the same worker so the phase can
+      remain continuous.
 
     Return tuple ``(day, error)`` where ``day`` is the first day of the phase
     after rescheduling, or ``None`` if it could not be moved. ``error`` provides
@@ -543,7 +560,59 @@ def move_phase_date(projects, pid, phase, new_date, worker=None, part=None):
             seg_workers[idx] = worker
     if worker:
         proj['planned'] = worker != UNPLANNED
-    save_projects(projects)
+
+    if mode == "push" and worker and worker != UNPLANNED:
+        # Move other tasks for the worker after this phase so it stays
+        # contiguous without splitting.
+        phase_val = proj['phases'].get(phase)
+        if isinstance(phase_val, list):
+            hours = int(phase_val[part or 0])
+        else:
+            hours = int(phase_val)
+        days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+        next_start = new_date
+        for _ in range(days_needed):
+            next_start = next_workday(next_start)
+
+        mapping = compute_schedule_map(projects)
+        seen = {}
+        for opid, items in mapping.items():
+            for w, day_str, ph, hrs, prt in items:
+                if w != worker:
+                    continue
+                d = date.fromisoformat(day_str)
+                if d < new_date:
+                    continue
+                if opid == pid and ph == phase and (part is None or prt == part):
+                    continue
+                key = (opid, ph, prt)
+                if key not in seen or d < seen[key]:
+                    seen[key] = d
+        for d, opid, oph, oprt in sorted(
+            (v, k[0], k[1], k[2]) for k, v in seen.items()
+        ):
+            move_phase_date(
+                projects,
+                opid,
+                oph,
+                next_start,
+                worker,
+                oprt,
+                save=False,
+                mode="split",
+            )
+            other_proj = next(p for p in projects if p['id'] == opid)
+            val = other_proj['phases'][oph]
+            if isinstance(val, list):
+                h = int(val[oprt])
+            else:
+                h = int(val)
+            d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+            for _ in range(d_needed):
+                next_start = next_workday(next_start)
+
+    if save:
+        save_projects(projects)
     return new_date.isoformat(), None
 
 
@@ -1986,6 +2055,7 @@ def move_phase():
     date_str = data.get('date')
     worker = data.get('worker')
     part = data.get('part')
+    mode = data.get('mode', 'split')
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -1993,10 +2063,49 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day, err = move_phase_date(projects, pid, phase, day, worker, part)
+    new_day, err = move_phase_date(projects, pid, phase, day, worker, part, mode=mode)
     if new_day is None:
         return jsonify({'error': err or 'No se pudo mover'}), 400
     return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
+
+
+@app.route('/check_move', methods=['POST'])
+def check_move():
+    data = request.get_json() or {}
+    pid = data.get('pid')
+    phase = data.get('phase')
+    date_str = data.get('date')
+    worker = data.get('worker')
+    part = data.get('part')
+    if not pid or not phase or not date_str:
+        return '', 400
+    try:
+        day = date.fromisoformat(date_str)
+    except Exception:
+        return '', 400
+    projects = get_projects()
+    temp = copy.deepcopy(projects)
+    new_day, err = move_phase_date(
+        temp, pid, phase, day, worker, part, save=False, mode="split"
+    )
+    if new_day is None:
+        return jsonify({'error': err or 'No se pudo mover'}), 400
+    mapping = compute_schedule_map(temp)
+    items = [
+        date.fromisoformat(t[1])
+        for t in mapping.get(pid, [])
+        if t[2] == phase and (part is None or t[4] == part)
+    ]
+    items.sort()
+    split = False
+    if items:
+        prev = items[0]
+        for d in items[1:]:
+            if d != next_workday(prev):
+                split = True
+                break
+            prev = d
+    return jsonify({'split': split})
 
 
 def remove_project_and_preserve_schedule(projects, pid):
