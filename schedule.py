@@ -352,6 +352,7 @@ def schedule_projects(projects):
                     project['name'],
                     project['client'],
                     project['due_date'],
+                    project.get('due_confirmed'),
                     project.get('color', '#ddd'),
                     project['start_date'],
                     project.get('priority'),
@@ -443,6 +444,7 @@ def schedule_projects(projects):
                         project_blocked=project.get('blocked', False),
                         material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
+                        due_confirmed=project.get('due_confirmed'),
                     )
         project['end_date'] = end_date.isoformat()
         if project.get('due_date'):
@@ -484,6 +486,7 @@ def assign_phase(
     project_blocked=False,
     material_date=None,
     auto=False,
+    due_confirmed=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -520,7 +523,7 @@ def assign_phase(
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
             late = False
-            if due_date:
+            if due_confirmed and due_date:
                 try:
                     late = day > date.fromisoformat(due_date)
                 except ValueError:
@@ -572,7 +575,7 @@ def assign_phase(
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
             late = False
-            if due_date:
+            if due_confirmed and due_date:
                 try:
                     late = day > date.fromisoformat(due_date)
                 except ValueError:
@@ -611,7 +614,7 @@ def assign_phase(
         if available > 0:
             allocate = min(remaining, available)
             late = False
-            if due_date:
+            if due_confirmed and due_date:
                 try:
                     late = day > date.fromisoformat(due_date)
                 except ValueError:
@@ -657,6 +660,7 @@ def assign_pedidos(
     project_name,
     client,
     due_date,
+    due_confirmed,
     color,
     start_date,
     priority,
@@ -683,7 +687,7 @@ def assign_pedidos(
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
         late = False
-        if due_date:
+        if due_confirmed and due_date:
             try:
                 late = day > date.fromisoformat(due_date)
             except ValueError:

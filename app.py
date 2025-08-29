@@ -2446,8 +2446,14 @@ def kanbanize_webhook():
         custom.pop(k, None)
     card['customFields'] = custom
 
-    due_str = card.get('deadline') or custom.get('Fecha Cliente')
-    due_date_obj = parse_kanban_date(due_str)
+    deadline_str = card.get('deadline')
+    pedido_str = custom.get('Fecha pedido')
+    if deadline_str:
+        due_date_obj = parse_kanban_date(deadline_str)
+        due_confirmed_flag = True
+    else:
+        due_date_obj = parse_kanban_date(pedido_str)
+        due_confirmed_flag = False
     mat_str = custom.get('Fecha material confirmado')
     material_date_obj = parse_kanban_date(mat_str)
 
@@ -2558,9 +2564,15 @@ def kanbanize_webhook():
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
             changed = True
-        if due_date_obj and existing.get('due_date') != due_date_obj.isoformat():
-            existing['due_date'] = due_date_obj.isoformat()
-            existing['due_confirmed'] = True
+        if due_date_obj:
+            iso = due_date_obj.isoformat()
+            if existing.get('due_date') != iso or existing.get('due_confirmed') != due_confirmed_flag:
+                existing['due_date'] = iso
+                existing['due_confirmed'] = due_confirmed_flag
+                changed = True
+        elif existing.get('due_date') or existing.get('due_confirmed'):
+            existing['due_date'] = ''
+            existing['due_confirmed'] = False
             changed = True
         if material_date_obj and existing.get('material_confirmed_date') != material_date_obj.isoformat():
             existing['material_confirmed_date'] = material_date_obj.isoformat()
@@ -2641,7 +2653,7 @@ def kanbanize_webhook():
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
-            'due_confirmed': bool(due_date_obj),
+            'due_confirmed': due_confirmed_flag,
         }
         projects.append(project)
         save_projects(projects)
