@@ -240,7 +240,8 @@ def _build_vacation_map():
 def schedule_projects(projects):
     """Return schedule and conflicts after assigning all phases."""
     projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
-    worker_schedule = {w: {} for w in WORKERS}
+    inactive = set(load_inactive_workers())
+    worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
     for worker, days in vac_map.items():
@@ -320,6 +321,8 @@ def schedule_projects(projects):
                     if (current + timedelta(days=i)).weekday() not in WEEKEND
                 )
                 worker = assigned.get(phase) if planned else UNPLANNED
+                if worker in inactive:
+                    worker = UNPLANNED
                 if planned and not worker:
                     worker = find_worker_for_phase(
                         phase,
@@ -372,6 +375,8 @@ def schedule_projects(projects):
                             worker = seg_workers[idx]
                         if not worker:
                             worker = assigned.get(phase)
+                        if worker in inactive:
+                            worker = UNPLANNED
                         if not worker:
                             worker = find_worker_for_phase(
                                 phase,
@@ -773,9 +778,10 @@ def find_worker_for_phase(
     Unai is always excluded from automatic assignments so that he can only
     be seleccionado manualmente desde la vista de proyectos.
     """
+    inactive = set(load_inactive_workers())
     candidates = []
     for worker in WORKERS:
-        if worker in ('Unai', UNPLANNED):
+        if worker in ('Unai', UNPLANNED) or worker in inactive:
             continue
         start = start_day or date.today()
         if worker == 'Igor' and start >= IGOR_END:

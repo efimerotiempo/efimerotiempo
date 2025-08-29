@@ -552,6 +552,7 @@ def get_projects():
     changed = False
     color_index = 0
     assigned_projects = []
+    inactive = set(load_inactive_workers())
     for p in projects:
         if p.get('source') == 'api':
             color = p.get('color')
@@ -596,9 +597,14 @@ def get_projects():
                 if val and not isinstance(val, list):
                     segs[ph] = [val]
 
-        p.setdefault('assigned', {})
+        assigned = p.setdefault('assigned', {})
+        for ph, w in list(assigned.items()):
+            if w in inactive:
+                assigned[ph] = UNPLANNED
+                changed = True
+
         # Update planned flag based on assigned workers
-        if any(w != UNPLANNED for w in p['assigned'].values()):
+        if any(w != UNPLANNED for w in assigned.values()):
             if not p.get('planned', False):
                 p['planned'] = True
                 changed = True
@@ -1292,6 +1298,7 @@ def resources():
         active = request.form.getlist('worker')
         inactive = [w for w in workers if w not in active]
         save_inactive_workers(inactive)
+        get_projects()
         return redirect(url_for('resources'))
     return render_template('resources.html', workers=workers, inactive=inactive)
 
@@ -1554,7 +1561,10 @@ def update_worker(pid, phase):
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            p.setdefault('assigned', {})[phase] = request.form['worker']
+            worker = request.form['worker']
+            if worker in set(load_inactive_workers()):
+                worker = UNPLANNED
+            p.setdefault('assigned', {})[phase] = worker
             break
     save_projects(projects)
     next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
@@ -1793,8 +1803,9 @@ def update_project_row():
 
     if data.get('workers'):
         ass = proj.setdefault('assigned', {})
+        inactive = set(load_inactive_workers())
         for ph, w in data['workers'].items():
-            ass[ph] = w
+            ass[ph] = w if w not in inactive else UNPLANNED
             modified.add(ph)
 
     if not proj.get('phases'):
