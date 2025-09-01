@@ -125,6 +125,7 @@ table.schedule td.weekend-cell {
 .unplanned-folder.dim { opacity: 0.3; }
 .folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
 .folder-header .folder-toggle { margin-right: 5px; }
+.folder-header .folder-due { color: deeppink; font-weight: bold; }
 .folder-content { padding-left: 10px; }
 .unplanned-divider { border: none; border-top: 2px solid #000; margin: 10px 0; }
 
