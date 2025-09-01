@@ -188,28 +188,13 @@
       ev.stopPropagation();
       const row = btn.closest('tr');
       const pid = row.dataset.pid;
-      const data = {pid, workers:{}, phases:{}, phase_starts:{}};
+      const data = {pid, phases:{}};
       row.querySelectorAll('form:not(.delete-form):not(.image-form)').forEach(f => {
         const fd = new FormData(f);
         if (f.classList.contains('phase-hours-form')) {
           data.phases[fd.get('phase')] = fd.get('hours');
-        } else if (f.classList.contains('start-form')) {
-          data.phase_starts[fd.get('phase')] = fd.get('date');
-        } else if (f.action.includes('update_worker')) {
-          const phase = f.action.split('/').pop();
-          data.workers[phase] = fd.get('worker');
         } else if (f.classList.contains('proj-start-form')) {
           data.start_date = fd.get('start_date') || fd.get('date');
-        }
-      });
-      Object.keys(data.workers).forEach(ph => {
-        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
-          delete data.workers[ph];
-        }
-      });
-      Object.keys(data.phase_starts).forEach(ph => {
-        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
-          delete data.phase_starts[ph];
         }
       });
       const imgForm = row.querySelector('.image-form');

@@ -361,28 +361,15 @@
                     {% else %}
                         {{ val|int }}h<br>
                     {% endif %}
-                        <form method="post" action="{{ url_for('update_worker', pid=p.id, phase=ph) }}">
-                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                            {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
-                            <select name="worker">
-                                <option value="Sin planificar" {% if assigned == 'Sin planificar' %}selected{% endif %}>Sin planificar</option>
-                                {% for w in all_workers %}
-                                    <option value="{{ w }}" {% if assigned == w %}selected{% endif %}>{{ w }}</option>
-                                {% endfor %}
-                            </select>
-                        </form>
+                        {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
+                        <span>{{ assigned }}</span>
                         <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
                             <input type="hidden" name="pid" value="{{ p.id }}">
                             <input type="hidden" name="phase" value="{{ ph }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
                             <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
                         </form>
-                        <form class="start-form" method="post" action="{{ url_for('update_phase_start') }}">
-                            <input type="hidden" name="pid" value="{{ p.id }}">
-                            <input type="hidden" name="phase" value="{{ ph }}">
-                            <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                            <input type="date" name="date" value="{{ start_map.get(p.id, {}).get(ph, '') }}">
-                        </form>
+                        <span>{{ start_map.get(p.id, {}).get(ph, '') }}</span>
                     </td>
                 {% endfor %}
                 <td><button class="row-update-btn">ACTUALIZAR</button></td>
@@ -810,28 +797,13 @@
       ev.stopPropagation();
       const row = btn.closest('tr');
       const pid = row.dataset.pid;
-      const data = {pid, workers:{}, phases:{}, phase_starts:{}};
+      const data = {pid, phases:{}};
       row.querySelectorAll('form:not(.delete-form):not(.image-form)').forEach(f => {
         const fd = new FormData(f);
         if (f.classList.contains('phase-hours-form')) {
           data.phases[fd.get('phase')] = fd.get('hours');
-        } else if (f.classList.contains('start-form')) {
-          data.phase_starts[fd.get('phase')] = fd.get('date');
-        } else if (f.action.includes('update_worker')) {
-          const phase = f.action.split('/').pop();
-          data.workers[phase] = fd.get('worker');
         } else if (f.classList.contains('proj-start-form')) {
           data.start_date = fd.get('start_date') || fd.get('date');
-        }
-      });
-      Object.keys(data.workers).forEach(ph => {
-        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
-          delete data.workers[ph];
-        }
-      });
-      Object.keys(data.phase_starts).forEach(ph => {
-        if (!data.phases[ph] || Number(data.phases[ph]) <= 0) {
-          delete data.phase_starts[ph];
         }
       });
       const imgForm = row.querySelector('.image-form');
@@ -1192,33 +1164,6 @@
       }).then(() => { PROJECT_DATA[pid].observations = txt; obsModal.style.display = 'none'; });
     });
   }
-  document.querySelectorAll('.start-form').forEach(f => {
-    f.addEventListener('submit', ev => {
-      ev.preventDefault();
-      const data = new FormData(f);
-      fetch(START_URL, { method: 'POST', body: data, credentials: 'same-origin' })
-        .then(resp => {
-          if (!resp.ok) {
-            return resp.json().then(d => { alert(d.error || 'Error'); return null; });
-          }
-          return resp.json();
-        })
-        .then(d => {
-          if (d) {
-            localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.get('pid'), phase: data.get('phase'), date: d.date}));
-            if (d.date !== data.get('date')) localStorage.setItem(SCROLL_KEY2, d.date);
-            const info = PROJECT_DATA[data.get('pid')] || {};
-            if (info.material_confirmed_date && d.date < info.material_confirmed_date) {
-              materialText.textContent = 'SIN MATERIAL';
-              materialModal.style.display = 'block';
-              materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
-              return;
-            }
-          }
-          location.reload();
-        });
-    });
-  });
   document.querySelectorAll('.proj-start-form').forEach(f => {
     f.addEventListener('submit', ev => {
       ev.preventDefault();
