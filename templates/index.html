@@ -421,8 +421,8 @@
       const info = PROJECT_DATA[t.dataset.pid];
       let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      html += `<div>Límite: ${info.due_date}</div>`;
-      html += `<div>Material confirmado: ${info.material_confirmed_date || ''}</div>`;
+      if (info.due_date && info.due_date !== '0') html += `<div>Límite: ${info.due_date}</div>`;
+      if (info.material_confirmed_date && info.material_confirmed_date !== '0') html += `<div>Material confirmado: ${info.material_confirmed_date}</div>`;
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -430,29 +430,21 @@
         let total = 0;
         if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
         else total = parseInt(val) || 0;
-        if (total > 0) phaseLines.push(`<div>${ph}: ${total}h</div>`);
+        if (total > 0) {
+          let line = `<div>${ph}: ${total}h`;
+          if (ph === t.dataset.phase) {
+            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+          }
+          line += `</div>`;
+          phaseLines.push(line);
+        }
       });
       html += phaseLines.join('');
-      let phaseText = '';
-      const phVal = info.phases[t.dataset.phase];
-      let hoursVal = 0;
-      if (phVal) {
-        if (t.dataset.phase === 'pedidos') {
-          phaseText = `Plazo acopio: ${phVal}`;
-        } else if (Array.isArray(phVal)) {
-          hoursVal = phVal.reduce((a,b) => a + parseInt(b), 0);
-          phaseText = `Horas de la fase: ${hoursVal}h`;
-        } else if (parseInt(phVal)) {
-          hoursVal = parseInt(phVal);
-          phaseText = `Horas de la fase: ${phVal}h`;
-        }
+      if (t.dataset.phase === 'pedidos') {
+        const acopio = info.phases['pedidos'];
+        if (acopio && acopio !== '0') html += `<div>Plazo acopio: ${acopio}</div>`;
       }
-      html += `<div>${phaseText}`;
-      if (t.dataset.phase !== 'pedidos') {
-        html += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${hoursVal}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar horas</button></form>`;
-      }
-      html += `</div>`;
-      html += `<div><form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
+      html += `<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
       html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
       html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
       if (Array.isArray(info.phases[t.dataset.phase])) {
