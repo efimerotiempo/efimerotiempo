@@ -431,7 +431,9 @@
         if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
         else total = parseInt(val) || 0;
         if (total > 0) {
-          let line = `<div>${ph}: ${total}h`;
+          const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
+          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : '';
+          let line = `<div${cls}>${ph}: ${total}h`;
           if (ph === t.dataset.phase) {
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
           }
