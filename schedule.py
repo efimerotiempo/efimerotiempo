@@ -418,7 +418,7 @@ def schedule_projects(projects):
                         and project.get('due_date')
                         and test_end > date.fromisoformat(project['due_date'])
                     ):
-                        continue
+                        worker = UNPLANNED
                     manual = False
                     if override:
                         current = override
