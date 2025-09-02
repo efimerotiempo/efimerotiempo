@@ -1046,18 +1046,21 @@ def calendar_pedidos():
                     pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
+    kanban_lanes = {}
     column_colors = load_column_colors()
     updated_colors = False
     for entry in load_kanban_cards():
         card = entry.get('card', {})
-        lane = (card.get('lanename') or '').strip().lower()
-        if lane != 'seguimiento compras':
+        lane_name = (card.get('lanename') or '').strip()
+        lane = lane_name.lower()
+        if lane not in {'acero al carbono', 'inoxidable - aluminio', 'planf. tau', 'tratamiento'}:
             continue
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
         compras_raw[cid] = card
+        kanban_lanes[str(cid)] = lane_name
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
@@ -1079,6 +1082,7 @@ def calendar_pedidos():
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
+        lane_name = (card.get('lanename') or '').strip()
         atts = card.get('attachments') or []
         for att in atts:
             url = att.get('url', '')
@@ -1089,6 +1093,7 @@ def calendar_pedidos():
             'color': column_colors.get(column, '#999999'),
             'hours': None,
             'kanban_attachments': atts,
+            'lane': lane_name,
         }
         if column in {'Planf. TAU', 'Tratamiento'} or not d:
             unconfirmed.append(entry)
@@ -1096,11 +1101,23 @@ def calendar_pedidos():
         if d:
             pedidos.setdefault(d, []).append(entry)
 
-    month_start = date(today.year, today.month, 1)
+    for day_tasks in pedidos.values():
+        for t in day_tasks:
+            pid = t.get('pid')
+            if pid:
+                proj = proj_map.get(pid)
+                if proj:
+                    cid = str(proj.get('kanban_id'))
+                    lane_name = kanban_lanes.get(cid)
+                    if lane_name:
+                        t['lane'] = lane_name
+
+    current_month_start = date(today.year, today.month, 1)
+    month_start = (current_month_start - timedelta(days=1)).replace(day=1)
     start = month_start - timedelta(days=month_start.weekday())
 
-    # Show the current month and the next eleven months
-    months_to_show = 12
+    # Show the previous month and the next twelve months
+    months_to_show = 13
     end_month = month_start
     for _ in range(months_to_show - 1):
         end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -1132,8 +1149,11 @@ def calendar_pedidos():
 
     attachments_table = []
     seen = set()
+    allowed_lanes = {'Acero al Carbono', 'Inoxidable - Aluminio'}
     for day_tasks in pedidos.values():
         for t in day_tasks:
+            if t.get('lane') not in allowed_lanes:
+                continue
             name = t.get('project')
             if name in seen:
                 continue
@@ -1146,6 +1166,8 @@ def calendar_pedidos():
                     atts = proj.get('kanban_attachments', [])
             attachments_table.append({'project': name, 'attachments': atts})
     for t in unconfirmed:
+        if t.get('lane') not in allowed_lanes:
+            continue
         name = t.get('project')
         if name in seen:
             continue
