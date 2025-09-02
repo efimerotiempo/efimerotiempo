@@ -1874,8 +1874,16 @@ def update_phase_hours():
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
+        prev_total = (
+            sum(map(int, prev_val)) if isinstance(prev_val, list)
+            else int(prev_val or 0)
+        )
         proj['phases'][phase] = hours
-        proj.setdefault('assigned', {})[phase] = UNPLANNED
+        assigned = proj.setdefault('assigned', {})
+        if prev_total <= 0:
+            assigned[phase] = UNPLANNED
+        else:
+            assigned.setdefault(phase, UNPLANNED)
         if was_list:
             if proj.get('segment_starts'):
                 proj['segment_starts'].pop(phase, None)
@@ -1959,8 +1967,11 @@ def update_project_row():
         )
         was_list = isinstance(prev, list)
         proj['phases'][ph] = hours
-        if prev_total != hours:
-            proj.setdefault('assigned', {})[ph] = UNPLANNED
+        assigned = proj.setdefault('assigned', {})
+        if prev_total in (None, 0):
+            assigned[ph] = UNPLANNED
+        else:
+            assigned.setdefault(ph, UNPLANNED)
         if was_list:
             if proj.get('segment_starts'):
                 proj['segment_starts'].pop(ph, None)
