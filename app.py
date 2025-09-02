@@ -480,6 +480,7 @@ def move_phase_date(
     push_from=None,
     unblock=False,
     skip_block=False,
+    start_hour=None,
 ):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
@@ -549,6 +550,8 @@ def move_phase_date(
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
         seg_starts[0] = new_date.isoformat()
+        seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(phase, [None])
+        seg_hours[0] = start_hour
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     else:
@@ -559,10 +562,17 @@ def move_phase_date(
         while len(seg_starts) <= idx:
             seg_starts.append(None)
         seg_starts[idx] = new_date.isoformat()
+        seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(
+            phase, [None] * len(proj['phases'][phase])
+        )
+        if idx >= len(seg_hours):
+            seg_hours.extend([None] * (idx + 1 - len(seg_hours)))
+        seg_hours[idx] = start_hour
         if worker:
             seg_workers = proj.setdefault('segment_workers', {}).setdefault(
                 phase, [None] * len(proj['phases'][phase])
             )
+        
             if idx >= len(seg_workers):
                 seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
             seg_workers[idx] = worker
@@ -2197,6 +2207,14 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
+    before = compute_schedule_map(projects)
+    used_hours = 0
+    for opid, items in before.items():
+        for w, day_str, ph, hrs, prt in items:
+            if w == worker and day_str == date_str:
+                if opid == pid and ph == phase and (part is None or prt == part):
+                    continue
+                used_hours += hrs
     new_day, err = move_phase_date(
         projects,
         pid,
@@ -2208,6 +2226,7 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
+        start_hour=used_hours if mode == 'split' else None,
     )
     if new_day is None:
         if isinstance(err, dict):
@@ -2239,9 +2258,16 @@ def check_move():
         return '', 400
     projects = get_projects()
     before = compute_schedule_map(projects)
+    used_hours = 0
+    for opid, items in before.items():
+        for w, day_str, ph, hrs, prt in items:
+            if w == worker and day_str == date_str:
+                if opid == pid and ph == phase and (part is None or prt == part):
+                    continue
+                used_hours += hrs
     temp = copy.deepcopy(projects)
     new_day, err = move_phase_date(
-        temp, pid, phase, day, worker, part, save=False, mode="split"
+        temp, pid, phase, day, worker, part, save=False, mode="split", start_hour=used_hours
     )
     if new_day is None:
         return jsonify({'error': err or 'No se pudo mover'}), 400

@@ -365,6 +365,7 @@ def schedule_projects(projects):
                 segs = val if isinstance(val, list) else [val]
                 seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
                 start_overrides = project.get('segment_starts', {}).get(phase)
+                start_hour_overrides = project.get('segment_start_hours', {}).get(phase)
                 for idx, seg in enumerate(segs):
                     hours = int(seg)
                     days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
@@ -407,8 +408,11 @@ def schedule_projects(projects):
                         continue
 
                     override = None
+                    hour_override = None
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
+                    if start_hour_overrides and idx < len(start_hour_overrides):
+                        hour_override = start_hour_overrides[idx]
                     test_start = override or current
                     test_end = test_start
                     for _ in range(days_needed - 1):
@@ -422,7 +426,7 @@ def schedule_projects(projects):
                     manual = False
                     if override:
                         current = override
-                        hour = 0
+                        hour = hour_override or 0
                         manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
