@@ -552,7 +552,8 @@
 
   const tasks = document.querySelectorAll('.task');
   const folders = document.querySelectorAll('.unplanned-folder');
-  const popup = document.getElementById('info-popup');
+const popup = document.getElementById('info-popup');
+makeDraggable(popup);
   let lastDrag = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
