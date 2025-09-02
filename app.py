@@ -477,6 +477,9 @@ def move_phase_date(
     *,
     save=True,
     mode="split",
+    push_from=None,
+    unblock=False,
+    skip_block=False,
 ):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
@@ -568,9 +571,9 @@ def move_phase_date(
 
     if mode == "push" and worker and worker != UNPLANNED:
         # Move other tasks for the worker after this phase so it stays
-        # contiguous without splitting. Gather the worker's tasks starting on or
-        # after the new date (excluding the moved phase) and relocate them one
-        # by one after the inserted block.
+        # contiguous without splitting. Only phases starting from ``push_from``
+        # (if provided) are shifted; otherwise, all tasks from ``new_date``
+        # onward are moved.
         phase_val = proj['phases'].get(phase)
         if isinstance(phase_val, list):
             hours = int(phase_val[part or 0])
@@ -582,13 +585,25 @@ def move_phase_date(
             next_start = next_workday(next_start)
 
         mapping = compute_schedule_map(projects)
+        start_push = new_date
+        if push_from:
+            pf_pid, pf_phase, pf_part = push_from
+            for w, day_str, ph, hrs, prt in mapping.get(pf_pid, []):
+                if (
+                    w == worker
+                    and ph == pf_phase
+                    and (pf_part is None or prt == pf_part)
+                ):
+                    d = date.fromisoformat(day_str)
+                    if d < start_push:
+                        start_push = d
         seen = {}
         for opid, items in mapping.items():
             for w, day_str, ph, hrs, prt in items:
                 if w != worker:
                     continue
                 d = date.fromisoformat(day_str)
-                if d < new_date:
+                if d < start_push:
                     continue
                 if opid == pid and ph == phase and (part is None or prt == part):
                     continue
@@ -596,9 +611,39 @@ def move_phase_date(
                 if key not in seen or d < seen[key]:
                     seen[key] = d
         vac_days = _schedule_mod._build_vacation_map().get(worker, set())
-        for _, opid, oph, oprt in sorted(
+        for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
+            other_proj = next(p for p in projects if p['id'] == opid)
+            if oph != 'pedidos' and any(
+                t['phase'] == oph and (oprt is None or t.get('part') == oprt)
+                for t in other_proj.get('frozen_tasks', [])
+            ):
+                if not unblock and not skip_block:
+                    return None, {
+                        'pid': opid,
+                        'phase': oph,
+                        'part': oprt,
+                        'name': other_proj.get('name', ''),
+                    }
+                if skip_block:
+                    val = other_proj['phases'][oph]
+                    if isinstance(val, list):
+                        h = int(val[oprt])
+                    else:
+                        h = int(val)
+                    d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+                    ns = start
+                    for _ in range(d_needed):
+                        ns = next_workday(ns)
+                    next_start = ns
+                    continue
+                # unblock
+                other_proj['frozen_tasks'] = [
+                    t
+                    for t in other_proj.get('frozen_tasks', [])
+                    if not (t['phase'] == oph and (oprt is None or t.get('part') == oprt))
+                ]
             while next_start in vac_days:
                 next_start = next_workday(next_start)
             move_phase_date(
@@ -611,7 +656,6 @@ def move_phase_date(
                 save=False,
                 mode="split",
             )
-            other_proj = next(p for p in projects if p['id'] == opid)
             val = other_proj['phases'][oph]
             if isinstance(val, list):
                 h = int(val[oprt])
@@ -2123,6 +2167,14 @@ def move_phase():
         except Exception:
             part = None
     mode = data.get('mode', 'split')
+    push_pid = data.get('push_pid')
+    push_phase = data.get('push_phase')
+    push_part = data.get('push_part')
+    push_from = None
+    if push_pid and push_phase:
+        push_from = (push_pid, push_phase, push_part if push_part not in (None, '', 'None') else None)
+    unblock = str(data.get('unblock')).lower() == 'true'
+    skip_block = str(data.get('skip_block')).lower() == 'true'
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2130,8 +2182,21 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    new_day, err = move_phase_date(projects, pid, phase, day, worker, part, mode=mode)
+    new_day, err = move_phase_date(
+        projects,
+        pid,
+        phase,
+        day,
+        worker,
+        part,
+        mode=mode,
+        push_from=push_from,
+        unblock=unblock,
+        skip_block=skip_block,
+    )
     if new_day is None:
+        if isinstance(err, dict):
+            return jsonify({'blocked': err}), 409
         return jsonify({'error': err or 'No se pudo mover'}), 400
     return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
 
@@ -2216,7 +2281,15 @@ def check_move():
             if before_map.get(key, []) != after_map.get(key, []):
                 split = True
                 break
-    return jsonify({'split': split})
+    options = []
+    if split:
+        for opid, items in before.items():
+            for w, day_str, ph, hrs, prt in items:
+                if w == worker and day_str == date_str:
+                    proj = next((p for p in projects if p['id'] == opid), None)
+                    txt = f"{proj.get('name','')} - {ph}" if proj else ph
+                    options.append({'pid': opid, 'phase': ph, 'part': prt, 'text': txt})
+    return jsonify({'split': split, 'options': options})
 
 
 def remove_project_and_preserve_schedule(projects, pid):

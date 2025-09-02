@@ -190,7 +190,8 @@
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Mantener los demás proyectos donde están y dividir el proyecto que acabas de mover, o desplazar los demás proyectos para así no dividir las horas del proyecto que acabas de mover?</p><button id="move-split">Dividir</button> <button id="move-shift">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label>Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
+<div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
         <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -294,10 +295,16 @@
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
   const moveModal = document.getElementById('move-modal');
-  const moveSplit = document.getElementById('move-split');
-  const moveShift = document.getElementById('move-shift');
+  const moveSelect = document.getElementById('move-select');
+  const moveConfirm = document.getElementById('move-confirm');
   const moveCancel = document.getElementById('move-cancel');
+  const blockModal = document.getElementById('block-modal');
+  const blockText = document.getElementById('block-text');
+  const blockUnfreeze = document.getElementById('block-unfreeze');
+  const blockSkip = document.getElementById('block-skip');
+  const blockCancel = document.getElementById('block-cancel');
   let pendingMove = null;
+  let pendingBlock = null;
   function showDeadline() {
     deadlineText.textContent = DEADLINE_MSG;
     deadlineModal.style.display = 'block';
@@ -767,6 +774,13 @@
         body: JSON.stringify(moveData)
       }).then(resp => resp.json()).then(res => {
         if (res.split) {
+          moveSelect.innerHTML = '';
+          res.options.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = JSON.stringify(opt);
+            o.textContent = opt.text;
+            moveSelect.appendChild(o);
+          });
           pendingMove = { data: moveData, beforeMaterial };
           moveModal.style.display = 'block';
         } else {
@@ -786,6 +800,12 @@
     .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
     .then(({ok, data}) => {
       if (!ok) {
+        if (data.blocked) {
+          pendingBlock = { moveData, mode, beforeMaterial };
+          blockText.textContent = `Hay una fase bloqueada (${data.blocked.name} - ${data.blocked.phase}). ¿Quieres descongelar la fase y que se aplace con el resto o que se atrase lo demás saltándose esa fase?`;
+          blockModal.style.display = 'block';
+          return;
+        }
         if (data.error === DEADLINE_MSG) showDeadline();
         else alert(data.error || 'Error');
         return;
@@ -802,18 +822,15 @@
       }
     });
   }
-  if (moveSplit) {
-    moveSplit.addEventListener('click', () => {
+  if (moveConfirm) {
+    moveConfirm.addEventListener('click', () => {
       if (pendingMove) {
-        moveModal.style.display = 'none';
-        doMove(pendingMove.data, 'split', pendingMove.beforeMaterial);
-        pendingMove = null;
-      }
-    });
-  }
-  if (moveShift) {
-    moveShift.addEventListener('click', () => {
-      if (pendingMove) {
+        const sel = moveSelect.value;
+        if (!sel) return;
+        const opt = JSON.parse(sel);
+        pendingMove.data.push_pid = opt.pid;
+        pendingMove.data.push_phase = opt.phase;
+        pendingMove.data.push_part = opt.part;
         moveModal.style.display = 'none';
         doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
         pendingMove = null;
@@ -824,6 +841,32 @@
     moveCancel.addEventListener('click', () => {
       moveModal.style.display = 'none';
       pendingMove = null;
+    });
+  }
+  if (blockUnfreeze) {
+    blockUnfreeze.addEventListener('click', () => {
+      if (pendingBlock) {
+        blockModal.style.display = 'none';
+        pendingBlock.moveData.unblock = true;
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
+        pendingBlock = null;
+      }
+    });
+  }
+  if (blockSkip) {
+    blockSkip.addEventListener('click', () => {
+      if (pendingBlock) {
+        blockModal.style.display = 'none';
+        pendingBlock.moveData.skip_block = true;
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
+        pendingBlock = null;
+      }
+    });
+  }
+  if (blockCancel) {
+    blockCancel.addEventListener('click', () => {
+      blockModal.style.display = 'none';
+      pendingBlock = null;
     });
   }
   const unplanList = document.querySelector('.unplanned-list');
