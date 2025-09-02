@@ -1028,6 +1028,7 @@ def calendar_view():
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
     projects = get_projects()
+    proj_map = {p['id']: p for p in projects}
     today = date.today()
     schedule, _ = schedule_projects(projects)
     pedidos = {}
@@ -1078,10 +1079,16 @@ def calendar_pedidos():
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
+        atts = card.get('attachments') or []
+        for att in atts:
+            url = att.get('url', '')
+            if url and (url.startswith('/') or not re.match(r'https?://', url)):
+                att['url'] = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
         entry = {
             'project': title,
             'color': column_colors.get(column, '#999999'),
             'hours': None,
+            'kanban_attachments': atts,
         }
         if column in {'Planf. TAU', 'Tratamiento'} or not d:
             unconfirmed.append(entry)
@@ -1123,7 +1130,36 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
-    return render_template('calendar_pedidos.html', weeks=weeks, today=today, unconfirmed=unconfirmed)
+    attachments_table = []
+    seen = set()
+    for day_tasks in pedidos.values():
+        for t in day_tasks:
+            name = t.get('project')
+            if name in seen:
+                continue
+            seen.add(name)
+            atts = []
+            pid = t.get('pid')
+            if pid:
+                proj = proj_map.get(pid)
+                if proj:
+                    atts = proj.get('kanban_attachments', [])
+            attachments_table.append({'project': name, 'attachments': atts})
+    for t in unconfirmed:
+        name = t.get('project')
+        if name in seen:
+            continue
+        seen.add(name)
+        atts = t.get('kanban_attachments', [])
+        attachments_table.append({'project': name, 'attachments': atts})
+
+    return render_template(
+        'calendar_pedidos.html',
+        weeks=weeks,
+        today=today,
+        unconfirmed=unconfirmed,
+        project_attachments=attachments_table,
+    )
 
 
 @app.route('/projects')

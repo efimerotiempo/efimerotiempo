@@ -184,6 +184,33 @@ table.pedidos-calendar td.week-label {
     padding-top: 2px;
 }
 
+.pedidos-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.attachments-table {
+    border-collapse: collapse;
+}
+
+.attachments-table td {
+    border: 1px solid #ccc;
+    padding: 4px;
+    max-width: 200px;
+    word-break: break-word;
+}
+
+.attachments-table td.project-name {
+    font-weight: bold;
+    background: #eee;
+}
+
+.attachments-table img {
+    max-width: 180px;
+    display: block;
+}
+
 /* keep projects table width */
 .complete-projects table { width: 100%; }
 

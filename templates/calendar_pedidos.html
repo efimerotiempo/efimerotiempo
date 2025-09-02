@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario pedidos</h2>
+<div class="pedidos-wrapper">
 <table class="pedidos-calendar">
     <thead>
     <tr>
@@ -55,6 +56,28 @@
     {% endfor %}
     </tbody>
 </table>
+<table class="attachments-table">
+    <tbody>
+    {% for item in project_attachments %}
+        <tr><td class="project-name">{{ item.project }}</td></tr>
+        {% if item.attachments %}
+            {% for att in item.attachments %}
+            {% set lower = (att.name or '').lower() %}
+            <tr><td class="attachment">
+                {% if lower.endswith('.png') or lower.endswith('.jpg') or lower.endswith('.jpeg') or lower.endswith('.gif') or lower.endswith('.webp') or lower.endswith('.bmp') or lower.endswith('.svg') %}
+                    <a href="{{ att.url }}" target="_blank"><img src="{{ att.url }}" alt="{{ att.name }}" style="max-width:100px;"></a>
+                {% else %}
+                    <a href="{{ att.url }}" target="_blank">{{ att.name }}</a>
+                {% endif %}
+            </td></tr>
+            {% endfor %}
+        {% else %}
+        <tr><td class="attachment">Sin adjuntos</td></tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
