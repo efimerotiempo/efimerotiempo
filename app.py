@@ -287,9 +287,15 @@ def save_bugs(data):
 
 
 def load_kanban_cards():
+    """Return stored Kanban cards, skipping malformed entries."""
     if os.path.exists(KANBAN_CARDS_FILE):
         with open(KANBAN_CARDS_FILE, 'r') as f:
-            return json.load(f)
+            try:
+                data = json.load(f)
+            except Exception:
+                return []
+        # Ensure we always return a list of dictionaries
+        return [c for c in data if isinstance(c, dict)]
     return []
 
 
@@ -1051,7 +1057,11 @@ def calendar_pedidos():
     column_colors = load_column_colors()
     updated_colors = False
     for entry in load_kanban_cards():
-        card = entry.get('card', {})
+        if not isinstance(entry, dict):
+            continue
+        card = entry.get('card') or {}
+        if not isinstance(card, dict):
+            continue
         lane_name = (card.get('lanename') or '').strip()
         lane = lane_name.lower()
         if lane not in {
