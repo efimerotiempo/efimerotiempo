@@ -1106,7 +1106,11 @@ def calendar_pedidos():
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         proj = proj_by_kanban.get(str(cid))
         client = proj.get('client', '') if proj else ''
-        links = card.get('links') or card.get('attachments') or []
+        raw_links = card.get('links') or card.get('attachments') or []
+        if isinstance(raw_links, list):
+            links = [att for att in raw_links if isinstance(att, dict)]
+        else:
+            links = []
         for att in links:
             url = att.get('url', '')
             if url and (url.startswith('/') or not re.match(r'https?://', url)):
