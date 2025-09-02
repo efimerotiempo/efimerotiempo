@@ -63,6 +63,7 @@ else:
         return result
 WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
+HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 
 app = Flask(__name__)
@@ -2265,6 +2266,8 @@ def check_move():
                 if opid == pid and ph == phase and (part is None or prt == part):
                     continue
                 used_hours += hrs
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
     new_day, err = move_phase_date(
         temp, pid, phase, day, worker, part, save=False, mode="split", start_hour=used_hours
@@ -2342,7 +2345,7 @@ def check_move():
                 future.sort()
                 _, opid, ph, prt = future[0]
                 auto = {'pid': opid, 'phase': ph, 'part': prt}
-    return jsonify({'split': split, 'options': options, 'auto': auto})
+    return jsonify({'split': split, 'options': options, 'auto': auto, 'free': free_hours})
 
 
 def remove_project_and_preserve_schedule(projects, pid):
