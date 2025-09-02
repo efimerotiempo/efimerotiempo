@@ -1111,8 +1111,6 @@ def calendar_pedidos():
         if lane not in {
             'acero al carbono',
             'inoxidable - aluminio',
-            'planf. tau',
-            'tratamiento',
             'seguimiento compras',
         }:
             continue
@@ -1170,13 +1168,12 @@ def calendar_pedidos():
         if lane_name in allowed_links_lanes and title not in seen_links:
             links_table.append({'project': title, 'links': links, 'client': client})
             seen_links.add(title)
-        if lane_name.lower() in {'planf. tau', 'tratamiento'} or not d:
-            unconfirmed.append(entry)
-            continue
         if lane_name.lower() != 'seguimiento compras':
             continue
-        if d:
-            pedidos.setdefault(d, []).append(entry)
+        if not d:
+            unconfirmed.append(entry)
+            continue
+        pedidos.setdefault(d, []).append(entry)
 
     for day_tasks in pedidos.values():
         for t in day_tasks:

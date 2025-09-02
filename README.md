@@ -43,9 +43,11 @@ La aplicación también puede recibir tarjetas desde Kanbanize mediante un webho
 Si la tarjeta pertenece a la lane "Seguimiento Compras", se guardará para el
 calendario de pedidos siempre que su columna no sea "Material taller",
 "Material cliente", "Tratamiento final", "Pdte. Verificación",
-"Material Recepcionado" o "Ready to Archive". En ningún caso generará un
-proyecto. Si una tarjeta de proyecto pasa a la columna "Ready to Archive",
-el Planificador eliminará automáticamente el proyecto y sus fases.
+"Material Recepcionado" o "Ready to Archive". Las tarjetas sin `deadline`
+aparecen en la columna lateral **Sin fecha de entrega confirmada**, y sólo se
+visualizan proyectos de esta misma lane. En ningún caso generará un proyecto.
+Si una tarjeta de proyecto pasa a la columna "Ready to Archive", el
+Planificador eliminará automáticamente el proyecto y sus fases.
 
 Si modificas en el Planificador el cliente, la prioridad, la fecha límite,
 la fecha de material confirmado o las horas de alguna de sus fases, estos
