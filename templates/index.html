@@ -317,6 +317,33 @@
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
 
+  function makeDraggable(el) {
+    let startX, startY, startLeft, startTop;
+    el.addEventListener('mousedown', e => {
+      if (e.target.closest('input, textarea, select, button')) return;
+      const rect = el.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      el.style.position = 'absolute';
+      el.style.margin = '0';
+      el.style.left = startLeft + 'px';
+      el.style.top = startTop + 'px';
+      function onMove(ev) {
+        el.style.left = startLeft + ev.clientX - startX + 'px';
+        el.style.top = startTop + ev.clientY - startY + 'px';
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+  document.querySelectorAll('.modal-content, .conflict-content').forEach(makeDraggable);
+
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');
   const SCROLL_KEY = 'calendarScroll';

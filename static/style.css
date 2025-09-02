@@ -370,6 +370,7 @@ tr.collapsed td:not(:first-child) { display: none; }
     padding: 20px;
     margin: 10% auto;
     max-width: 400px;
+    cursor: move;
 }
 
 
@@ -411,6 +412,7 @@ tr.collapsed td:not(:first-child) { display: none; }
     margin: 20% auto;
     border: 1px solid #000;
     text-align: center;
+    cursor: move;
 }
 .projects-table tr.proj-dim { opacity: 0.4; }
 .projects-table tr.proj-highlight {
