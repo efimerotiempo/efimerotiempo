@@ -134,8 +134,7 @@ KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 
-# Lanes that require confirmation before deletion when a card reaches
-# "Ready to Archive".
+# Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
 
 # Mapping between local phase names and Kanbanize custom field names
@@ -644,7 +643,6 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
-        p.setdefault('kanban_archived', False)
         p.setdefault('observations', '')
         p.setdefault('due_confirmed', False)
         if 'kanban_image' in p and not p['kanban_attachments']:
@@ -713,22 +711,6 @@ def get_projects():
     if changed:
         save_projects(projects)
     return projects
-
-
-@app.context_processor
-def inject_archived_projects():
-    projects = load_projects()
-    changed = False
-    flagged = []
-    for p in projects:
-        if 'kanban_archived' not in p:
-            p['kanban_archived'] = False
-            changed = True
-        if p.get('kanban_archived'):
-            flagged.append({'id': p['id'], 'name': p.get('name', '')})
-    if changed:
-        save_projects(projects)
-    return {'archived_projects': flagged}
 
 
 def expand_for_display(projects):
@@ -2214,20 +2196,6 @@ def delete_project(pid):
     return redirect(next_url)
 
 
-@app.route('/dismiss_archive/<pid>', methods=['POST'])
-def dismiss_archive(pid):
-    projects = load_projects()
-    changed = False
-    for p in projects:
-        if p['id'] == pid:
-            if p.pop('kanban_archived', None):
-                changed = True
-            break
-    if changed:
-        save_projects(projects)
-    return '', 204
-
-
 @app.route('/delete_conflict/<path:key>', methods=['POST'])
 def delete_conflict(key):
     dismissed = load_dismissed()
@@ -2407,7 +2375,7 @@ def kanbanize_webhook():
     if norm(lane) not in allowed_lanes_n:
         return jsonify({"mensaje": "Lane ignorada"}), 200
 
-    if norm(column) == 'ready to archive' and norm(lane) in allowed_lanes_n:
+    if norm(column) == 'ready to archive':
         projects = load_projects()
         name_candidates = [
             pick(card, 'customCardId', 'effectiveCardId'),
@@ -2415,17 +2383,17 @@ def kanbanize_webhook():
         ]
         name_candidates = [n for n in name_candidates if n]
 
-        flagged = False
+        pid = None
         for p in projects:
             if p.get('kanban_id') == cid or (name_candidates and p.get('name') in name_candidates):
-                p['kanban_archived'] = True
                 if cid and not p.get('kanban_id'):
                     p['kanban_id'] = cid
-                flagged = True
+                pid = p['id']
                 break
-        if flagged:
+        if pid:
+            remove_project_and_preserve_schedule(projects, pid)
             save_projects(projects)
-            return jsonify({"mensaje": "Proyecto marcado como archivado"}), 200
+            return jsonify({"mensaje": "Proyecto eliminado"}), 200
         else:
             print("Aviso: no se encontró proyecto para cid/nombre:", cid, name_candidates)
             return jsonify({"mensaje": "Evento recibido, proyecto no encontrado"}), 200
