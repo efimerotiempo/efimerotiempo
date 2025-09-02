@@ -246,7 +246,7 @@
 <div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p>Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label>Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label id="move-label">Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
@@ -427,6 +427,8 @@
   const splitPart2 = document.getElementById('split-part2');
   const moveModal = document.getElementById('move-modal');
   const moveSelect = document.getElementById('move-select');
+  const moveLabel = document.getElementById('move-label');
+  const moveText = document.getElementById('move-text');
   const moveConfirm = document.getElementById('move-confirm');
   const moveCancel = document.getElementById('move-cancel');
   const blockModal = document.getElementById('block-modal');
@@ -987,12 +989,24 @@
       }).then(resp => resp.json()).then(res => {
         if (res.split) {
           moveSelect.innerHTML = '';
-          res.options.forEach(opt => {
-            const o = document.createElement('option');
-            o.value = JSON.stringify(opt);
-            o.textContent = opt.text;
-            moveSelect.appendChild(o);
-          });
+          if (res.options && res.options.length) {
+            moveLabel.style.display = '';
+            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
+            res.options.forEach(opt => {
+              const o = document.createElement('option');
+              o.value = JSON.stringify(opt);
+              o.textContent = opt.text;
+              moveSelect.appendChild(o);
+            });
+          } else {
+            moveLabel.style.display = 'none';
+            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
+            if (res.auto) {
+              moveData.push_pid = res.auto.pid;
+              moveData.push_phase = res.auto.phase;
+              moveData.push_part = res.auto.part;
+            }
+          }
           pendingMove = { data: moveData, beforeMaterial };
           moveModal.style.display = 'block';
         } else {
@@ -1037,12 +1051,14 @@
   if (moveConfirm) {
     moveConfirm.addEventListener('click', () => {
       if (pendingMove) {
-        const sel = moveSelect.value;
-        if (!sel) return;
-        const opt = JSON.parse(sel);
-        pendingMove.data.push_pid = opt.pid;
-        pendingMove.data.push_phase = opt.phase;
-        pendingMove.data.push_part = opt.part;
+        if (moveLabel.style.display !== 'none') {
+          const sel = moveSelect.value;
+          if (!sel) return;
+          const opt = JSON.parse(sel);
+          pendingMove.data.push_pid = opt.pid;
+          pendingMove.data.push_phase = opt.phase;
+          pendingMove.data.push_part = opt.part;
+        }
         moveModal.style.display = 'none';
         doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
         pendingMove = null;

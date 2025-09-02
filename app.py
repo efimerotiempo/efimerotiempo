@@ -2300,6 +2300,7 @@ def check_move():
                 split = True
                 break
     options = []
+    auto = None
     if split:
         for opid, items in before.items():
             for w, day_str, ph, hrs, prt in items:
@@ -2307,7 +2308,18 @@ def check_move():
                     proj = next((p for p in projects if p['id'] == opid), None)
                     txt = f"{proj.get('name','')} - {ph}" if proj else ph
                     options.append({'pid': opid, 'phase': ph, 'part': prt, 'text': txt})
-    return jsonify({'split': split, 'options': options})
+        if not options:
+            future = []
+            for opid, items in before.items():
+                for w, day_str, ph, hrs, prt in items:
+                    d = date.fromisoformat(day_str)
+                    if w == worker and d > day:
+                        future.append((d, opid, ph, prt))
+            if future:
+                future.sort()
+                _, opid, ph, prt = future[0]
+                auto = {'pid': opid, 'phase': ph, 'part': prt}
+    return jsonify({'split': split, 'options': options, 'auto': auto})
 
 
 def remove_project_and_preserve_schedule(projects, pid):
