@@ -13,6 +13,10 @@ table.schedule th, table.schedule td {
 table.schedule td.incomplete {
     border: 3px solid #000;
 }
+
+table.schedule td.vacation-day {
+    border: 3px solid #000;
+}
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
 table.schedule td.weekend-cell {
@@ -37,6 +41,8 @@ table.schedule td.weekend-cell {
     margin-bottom: 2px;
     cursor: grab;
     display: flex;
+    border: 3px solid transparent;
+    background: #fff;
 }
 .task-main {
     display: -webkit-box;
@@ -60,7 +66,11 @@ table.schedule td.weekend-cell {
 .task.moved {
     border: 3px solid #000;
 }
-.task.frozen, .projects-table tr.frozen {
+.task.frozen {
+    background: #cce5ff;
+}
+
+.projects-table tr.frozen {
     border: 3px solid blue !important;
 }
 .blocked-sign { color: red; font-weight: bold; margin-left: 2px; }
