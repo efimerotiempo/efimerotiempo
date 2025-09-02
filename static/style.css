@@ -190,25 +190,30 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
-.attachments-table {
+.links-table {
     border-collapse: collapse;
 }
 
-.attachments-table td {
+.links-table td {
     border: 1px solid #ccc;
     padding: 4px;
     max-width: 200px;
     word-break: break-word;
 }
 
-.attachments-table td.project-name {
+.links-table td.project-name {
     font-weight: bold;
     background: #eee;
 }
 
-.attachments-table img {
-    max-width: 180px;
-    display: block;
+.links-table ul {
+    list-style: none;
+    margin: 4px 0 0 0;
+    padding-left: 0;
+}
+
+.links-table li {
+    margin-bottom: 2px;
 }
 
 /* keep projects table width */

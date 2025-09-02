@@ -1029,6 +1029,7 @@ def calendar_view():
 def calendar_pedidos():
     projects = get_projects()
     proj_map = {p['id']: p for p in projects}
+    proj_by_kanban = {str(p.get('kanban_id')): p for p in projects if p.get('kanban_id')}
     today = date.today()
     schedule, _ = schedule_projects(projects)
     pedidos = {}
@@ -1053,7 +1054,13 @@ def calendar_pedidos():
         card = entry.get('card', {})
         lane_name = (card.get('lanename') or '').strip()
         lane = lane_name.lower()
-        if lane not in {'acero al carbono', 'inoxidable - aluminio', 'planf. tau', 'tratamiento'}:
+        if lane not in {
+            'acero al carbono',
+            'inoxidable - aluminio',
+            'planf. tau',
+            'tratamiento',
+            'seguimiento compras',
+        }:
             continue
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -1068,6 +1075,9 @@ def calendar_pedidos():
     if updated_colors:
         save_column_colors(column_colors)
 
+    links_table = []
+    seen_links = set()
+    allowed_links_lanes = {'Acero al Carbono', 'Inoxidable - Aluminio'}
     for card in compras_raw.values():
         title = card.get('title') or ''
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -1083,8 +1093,11 @@ def calendar_pedidos():
         if column in {'Pdte. Verificación', 'Material Recepcionado'}:
             continue
         lane_name = (card.get('lanename') or '').strip()
-        atts = card.get('attachments') or []
-        for att in atts:
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
+        proj = proj_by_kanban.get(str(cid))
+        client = proj.get('client', '') if proj else ''
+        links = card.get('links') or card.get('attachments') or []
+        for att in links:
             url = att.get('url', '')
             if url and (url.startswith('/') or not re.match(r'https?://', url)):
                 att['url'] = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
@@ -1092,11 +1105,17 @@ def calendar_pedidos():
             'project': title,
             'color': column_colors.get(column, '#999999'),
             'hours': None,
-            'kanban_attachments': atts,
+            'links': links,
             'lane': lane_name,
+            'client': client,
         }
-        if column in {'Planf. TAU', 'Tratamiento'} or not d:
+        if lane_name in allowed_links_lanes and title not in seen_links:
+            links_table.append({'project': title, 'links': links, 'client': client})
+            seen_links.add(title)
+        if lane_name.lower() in {'planf. tau', 'tratamiento'} or not d:
             unconfirmed.append(entry)
+            continue
+        if lane_name.lower() != 'seguimiento compras':
             continue
         if d:
             pedidos.setdefault(d, []).append(entry)
@@ -1111,6 +1130,12 @@ def calendar_pedidos():
                     lane_name = kanban_lanes.get(cid)
                     if lane_name:
                         t['lane'] = lane_name
+                        t['client'] = proj.get('client', '')
+
+    for day in list(pedidos.keys()):
+        pedidos[day] = [t for t in pedidos[day] if t.get('lane') == 'Seguimiento Compras']
+        if not pedidos[day]:
+            del pedidos[day]
 
     current_month_start = date(today.year, today.month, 1)
     month_start = (current_month_start - timedelta(days=1)).replace(day=1)
@@ -1147,40 +1172,12 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
-    attachments_table = []
-    seen = set()
-    allowed_lanes = {'Acero al Carbono', 'Inoxidable - Aluminio'}
-    for day_tasks in pedidos.values():
-        for t in day_tasks:
-            if t.get('lane') not in allowed_lanes:
-                continue
-            name = t.get('project')
-            if name in seen:
-                continue
-            seen.add(name)
-            atts = []
-            pid = t.get('pid')
-            if pid:
-                proj = proj_map.get(pid)
-                if proj:
-                    atts = proj.get('kanban_attachments', [])
-            attachments_table.append({'project': name, 'attachments': atts})
-    for t in unconfirmed:
-        if t.get('lane') not in allowed_lanes:
-            continue
-        name = t.get('project')
-        if name in seen:
-            continue
-        seen.add(name)
-        atts = t.get('kanban_attachments', [])
-        attachments_table.append({'project': name, 'attachments': atts})
-
     return render_template(
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
         unconfirmed=unconfirmed,
-        project_attachments=attachments_table,
+        project_links=links_table,
     )
 
 

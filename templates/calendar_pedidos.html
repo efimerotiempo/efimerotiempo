@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario pedidos</h2>
+<input type="text" id="filter-input" placeholder="Filtrar por título o cliente">
 <div class="pedidos-wrapper">
 <table class="pedidos-calendar">
     <thead>
@@ -28,6 +29,8 @@
                  data-phase="pedidos"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-project="{{ t.project }}"
+                 data-client="{{ t.get('client') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="background-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -45,6 +48,8 @@
                  data-pid="{{ t.get('pid') or '' }}"
                  data-phase="pedidos"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-project="{{ t.project }}"
+                 data-client="{{ t.get('client') or '' }}"
                  style="background-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
@@ -56,24 +61,23 @@
     {% endfor %}
     </tbody>
 </table>
-<table class="attachments-table">
+<table class="links-table">
     <tbody>
-    {% for item in project_attachments %}
-        <tr><td class="project-name">{{ item.project }}</td></tr>
-        {% if item.attachments %}
-            {% for att in item.attachments %}
-            {% set lower = (att.name or '').lower() %}
-            <tr><td class="attachment">
-                {% if lower.endswith('.png') or lower.endswith('.jpg') or lower.endswith('.jpeg') or lower.endswith('.gif') or lower.endswith('.webp') or lower.endswith('.bmp') or lower.endswith('.svg') %}
-                    <a href="{{ att.url }}" target="_blank"><img src="{{ att.url }}" alt="{{ att.name }}" style="max-width:100px;"></a>
+    {% for item in project_links %}
+        <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
+            <td class="project-name">
+                {{ item.project }}
+                {% if item.links %}
+                    <ul>
+                    {% for link in item.links %}
+                        <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
+                    {% endfor %}
+                    </ul>
                 {% else %}
-                    <a href="{{ att.url }}" target="_blank">{{ att.name }}</a>
+                    <div>Sin links</div>
                 {% endif %}
-            </td></tr>
-            {% endfor %}
-        {% else %}
-        <tr><td class="attachment">Sin adjuntos</td></tr>
-        {% endif %}
+            </td>
+        </tr>
     {% endfor %}
     </tbody>
 </table>
@@ -142,6 +146,21 @@ document.addEventListener('DOMContentLoaded', () => {
         todayCell.scrollIntoView({behavior: 'smooth', block: 'center'});
       }
     }
+  });
+
+  const filterInput = document.getElementById('filter-input');
+  filterInput.addEventListener('input', () => {
+    const q = filterInput.value.toLowerCase();
+    document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
+      const proj = (t.dataset.project || '').toLowerCase();
+      const cli = (t.dataset.client || '').toLowerCase();
+      t.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('.links-table .project-row').forEach(row => {
+      const proj = (row.dataset.project || '').toLowerCase();
+      const cli = (row.dataset.client || '').toLowerCase();
+      row.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
+    });
   });
 });
 </script>
