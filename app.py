@@ -1188,17 +1188,21 @@ def calendar_pedidos():
             'client': client,
             'column': column,
         }
-        if title not in seen_links:
-            links_table.append({'project': title, 'client': client})
-            seen_links.add(title)
-        if lane_name.lower() != 'seguimiento compras':
-            continue
-        if not d:
-            if column in PEDIDOS_UNCONFIRMED_COLUMNS:
+        # --- FILTRO PARA EL CALENDARIO ---
+        if lane_name.strip() == "Seguimiento Compras" and column in PEDIDOS_ALLOWED_COLUMNS:
+            if d:  # con fecha
+                pedidos.setdefault(d, []).append(entry)
+
+        # --- FILTRO PARA SIN FECHA CONFIRMADA ---
+        if lane_name.strip() == "Seguimiento Compras" and column in PEDIDOS_UNCONFIRMED_COLUMNS:
+            if not d:  # sin fecha
                 unconfirmed.append(entry)
-            continue
-        if column in PEDIDOS_ALLOWED_COLUMNS:
-            pedidos.setdefault(d, []).append(entry)
+
+        # --- FILTRO PARA TABLA DERECHA ---
+        if lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"] and column not in ["Ready to Archive", "Hacer Albaran"]:
+            if title not in seen_links:
+                links_table.append({'project': title, 'client': client})
+                seen_links.add(title)
 
     for day_tasks in pedidos.values():
         for t in day_tasks:
@@ -1215,15 +1219,6 @@ def calendar_pedidos():
                     if column_name:
                         t['column'] = column_name
 
-    for day in list(pedidos.keys()):
-        pedidos[day] = [
-            t
-            for t in pedidos[day]
-            if t.get('lane') == 'Seguimiento Compras'
-            and t.get('column') in PEDIDOS_ALLOWED_COLUMNS
-        ]
-        if not pedidos[day]:
-            del pedidos[day]
 
     current_month_start = date(today.year, today.month, 1)
     month_start = (current_month_start - timedelta(days=1)).replace(day=1)
