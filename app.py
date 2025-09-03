@@ -378,6 +378,18 @@ def clear_prefill_project():
         except Exception:
             pass
 
+def normalize_card(c):
+    return {
+        "taskid": c.get("card_id"),
+        "title": c.get("title"),
+        "customid": c.get("custom_id"),
+        # De momento solo guardamos IDs de columna/lane
+        "columnid": c.get("column_id"),
+        "laneid": c.get("lane_id"),
+        "boardid": c.get("board_id"),
+        "workflowid": c.get("workflow_id"),
+    }
+
 
 def sync_all_cards():
     headers = {
@@ -396,7 +408,7 @@ def sync_all_cards():
     cards = r.json()["data"]["data"]  # 👈 tus tarjetas están dentro de data.data
 
     now = datetime.utcnow().isoformat()
-    payload = [{"timestamp": now, "card": c} for c in cards]
+    payload = [{"timestamp": now, "card": normalize_card(c)} for c in cards]
 
     save_kanban_cards(payload)
     print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
