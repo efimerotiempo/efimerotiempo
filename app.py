@@ -1126,9 +1126,6 @@ def calendar_pedidos():
     updated_colors = False
 
     for entry in load_kanban_cards():
-
-        print("RECIBIDO:", entry)
-
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
@@ -1136,9 +1133,6 @@ def calendar_pedidos():
             continue
 
         lane_name = (card.get('lanename') or '').strip()
-
-        print("CARD:", card.get("title"), "| Lane:", lane_name, "| Column:", card.get("columnname"))
-
         if lane_name.lower() != 'seguimiento compras':
             continue
 
@@ -1191,19 +1185,28 @@ def calendar_pedidos():
         # --- CALENDARIO PRINCIPAL ---
         if (
             lane_name.strip().lower() == "seguimiento compras"
-            and column in PEDIDOS_ALLOWED_COLUMNS
             and column not in PEDIDOS_HIDDEN_COLUMNS
+            and (
+                column in PEDIDOS_ALLOWED_COLUMNS
+                or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            )
         ):
             if d:  # con fecha
                 pedidos.setdefault(d, []).append(entry)
 
         # --- LISTA SIN FECHA CONFIRMADA ---
-        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_UNCONFIRMED_COLUMNS:
-            if not d:  # sin fecha
-                unconfirmed.append(entry)
+        if (
+            lane_name.strip() == "Seguimiento compras"
+            and column in PEDIDOS_UNCONFIRMED_COLUMNS
+            and not d
+        ):
+            unconfirmed.append(entry)
 
         # --- TABLA DERECHA (otros lanes archivables) ---
-        if lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"] and column not in ["Ready to Archive", "Hacer Albaran"]:
+        if (
+            lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
+            and column not in ["Ready to Archive", "Hacer Albaran"]
+        ):
             if title not in seen_links:
                 links_table.append({'project': title, 'client': ''})
                 seen_links.add(title)
@@ -1252,7 +1255,6 @@ def calendar_pedidos():
         unconfirmed=unconfirmed,
         project_links=links_table,
     )
-
 
 @app.route('/projects')
 def project_list():
