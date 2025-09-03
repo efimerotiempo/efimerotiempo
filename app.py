@@ -13,6 +13,7 @@ import urllib.parse
 import sys
 import importlib.util
 import random
+import requests
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -134,6 +135,7 @@ KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
+KANBANIZE_URL = f"{KANBANIZE_BASE_URL}/api/v2/cards"
 
 # Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
@@ -371,6 +373,23 @@ def clear_prefill_project():
             os.remove(KANBAN_PREFILL_FILE)
         except Exception:
             pass
+
+
+def sync_all_cards():
+    headers = {
+        "apikey": KANBANIZE_API_KEY,
+        "Content-Type": "application/json",
+    }
+    params = {"boardid": KANBANIZE_BOARD_ID}
+    r = requests.get(KANBANIZE_URL, headers=headers, params=params)
+    r.raise_for_status()
+    cards = r.json()
+
+    now = datetime.utcnow().isoformat()
+    payload = [{"timestamp": now, "card": c} for c in cards]
+
+    save_kanban_cards(payload)
+    print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
 
 
 def _decode_json(value):
@@ -2881,6 +2900,7 @@ def bug_list():
 
 
 if __name__ == '__main__':
+    sync_all_cards()
     print("Rutas registradas:")
     for rule in app.url_map.iter_rules():
         print(f"{sorted(rule.methods)}  {rule.rule}")
