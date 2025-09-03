@@ -1111,45 +1111,39 @@ def calendar_view():
 
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
-    projects = get_projects()
-    proj_map = {p['id']: p for p in projects}
-    proj_by_kanban = {str(p.get('kanban_id')): p for p in projects if p.get('kanban_id')}
     today = date.today()
-    schedule, _ = schedule_projects(projects)
-    pedidos = {}
-    unconfirmed = []
-    for worker, days in schedule.items():
-        if worker == UNPLANNED:
-            continue
-        for day_str, tasks in days.items():
-            d = date.fromisoformat(day_str)
-            for t in tasks:
-                entry = t.copy()
-                entry['worker'] = worker
-                entry.setdefault('color', '#999999')
-                pedidos.setdefault(d, []).append(entry)
 
+    # --- CARGAR TARJETAS DE KANBANIZE ---
     compras_raw = {}
-    kanban_lanes = {}
     kanban_columns = {}
     column_colors = load_column_colors()
     updated_colors = False
+
     for entry in load_kanban_cards():
+
+        print("RECIBIDO:", entry)
+
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
         if not isinstance(card, dict):
             continue
+
         lane_name = (card.get('lanename') or '').strip()
+
+        print("CARD:", card.get("title"), "| Lane:", lane_name, "| Column:", card.get("columnname"))
+
         if lane_name.lower() != 'seguimiento compras':
             continue
+
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
+
         compras_raw[cid] = card
-        kanban_lanes[str(cid)] = lane_name
         kanban_columns[str(cid)] = column
+
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
@@ -1157,10 +1151,15 @@ def calendar_pedidos():
     if updated_colors:
         save_column_colors(column_colors)
 
+    # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
+    pedidos = {}
+    unconfirmed = []
     links_table = []
     seen_links = set()
+
     for card in compras_raw.values():
         title = card.get('title') or ''
+        # Buscar fecha (dd/mm) en el título o usar deadline
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
         if m:
             day, month = int(m.group(1)), int(m.group(2))
@@ -1170,70 +1169,56 @@ def calendar_pedidos():
                 d = parse_kanban_date(card.get('deadline'))
         else:
             d = parse_kanban_date(card.get('deadline'))
+
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or '').strip()
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-        proj = proj_by_kanban.get(str(cid))
-        client = proj.get('client', '') if proj else ''
+
         entry = {
             'project': title,
             'color': column_colors.get(column, '#999999'),
             'hours': None,
             'lane': lane_name,
-            'client': client,
+            'client': '',
             'column': column,
         }
-        # --- FILTRO PARA EL CALENDARIO ---
-        if lane_name.strip() == "Seguimiento Compras" and column in PEDIDOS_ALLOWED_COLUMNS:
+
+        # --- CALENDARIO PRINCIPAL ---
+        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_ALLOWED_COLUMNS:
             if d:  # con fecha
                 pedidos.setdefault(d, []).append(entry)
 
-        # --- FILTRO PARA SIN FECHA CONFIRMADA ---
-        if lane_name.strip() == "Seguimiento Compras" and column in PEDIDOS_UNCONFIRMED_COLUMNS:
+        # --- LISTA SIN FECHA CONFIRMADA ---
+        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_UNCONFIRMED_COLUMNS:
             if not d:  # sin fecha
                 unconfirmed.append(entry)
 
-        # --- FILTRO PARA TABLA DERECHA ---
+        # --- TABLA DERECHA (otros lanes archivables) ---
         if lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"] and column not in ["Ready to Archive", "Hacer Albaran"]:
             if title not in seen_links:
-                links_table.append({'project': title, 'client': client})
+                links_table.append({'project': title, 'client': ''})
                 seen_links.add(title)
 
-    for day_tasks in pedidos.values():
-        for t in day_tasks:
-            pid = t.get('pid')
-            if pid:
-                proj = proj_map.get(pid)
-                if proj:
-                    cid = str(proj.get('kanban_id'))
-                    lane_name = kanban_lanes.get(cid)
-                    column_name = kanban_columns.get(cid)
-                    if lane_name:
-                        t['lane'] = lane_name
-                        t['client'] = proj.get('client', '')
-                    if column_name:
-                        t['column'] = column_name
-
-
+    # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
     month_start = (current_month_start - timedelta(days=1)).replace(day=1)
     start = month_start - timedelta(days=month_start.weekday())
 
-    # Show the previous month and the next twelve months
     months_to_show = 13
     end_month = month_start
     for _ in range(months_to_show - 1):
         end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
     month_end = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
     MONTHS = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
     ]
+
     weeks = []
     current = start
     while current <= month_end:
         week = {'number': current.isocalendar()[1], 'days': []}
-        for i in range(5):
+        for i in range(5):  # solo lunes-viernes
             day = current + timedelta(days=i)
             month_label = ''
             if day.day == 1 or (day.weekday() == 0 and 1 < day.day <= 7):
