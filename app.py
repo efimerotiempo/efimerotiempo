@@ -138,6 +138,33 @@ KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
 # Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
 
+# Column and lane filters for the orders calendar and associated tables
+PEDIDOS_ALLOWED_COLUMNS = {
+    'Plegado/Curvado',
+    'Planif. Bekola',
+    'Planif. AZ',
+    'Comerciales varios',
+    'Tubo/perfil/llanta/chapa',
+    'Oxicorte',
+    'Laser',
+    'Plegado/curvado - Fabricación',
+    'Material Incompleto',
+    'Material NO CONFORME',
+}
+
+PEDIDOS_UNCONFIRMED_COLUMNS = {
+    'Tau',
+    'Bekola',
+    'AZ',
+    'OTROS',
+    'Tratamiento',
+    'Planf. TAU',
+    'Planif. OTROS',
+}
+
+LINKS_ALLOWED_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
+LINKS_EXCLUDED_COLUMNS = {'Ready to Archive', 'Hacer Albaran'}
+
 # Mapping between local phase names and Kanbanize custom field names
 PHASE_FIELD_MAP = {
     'recepcionar material': 'Horas Preparación',
@@ -1095,28 +1122,6 @@ def calendar_pedidos():
     schedule, _ = schedule_projects(projects)
     pedidos = {}
     unconfirmed = []
-    allowed_calendar_columns = {
-        'Plegado/Curvado',
-        'Planif. Bekola',
-        'Planif. AZ',
-        'Comerciales varios',
-        'Tubo/perfil/llanta/chapa',
-        'Oxicorte',
-        'Laser',
-        'Plegado/curvado - Fabricación',
-        'Material Incompleto',
-        'Material NO CONFORME',
-    }
-    allowed_unconfirmed_columns = {
-        'Tau',
-        'Bekola',
-        'AZ',
-        'OTROS',
-        'Tratamiento',
-        'Planf. TAU',
-        'Planif. OTROS',
-    }
-    excluded_link_columns = {'Ready to Archive', 'Hacer Albaran'}
     for worker, days in schedule.items():
         if worker == UNPLANNED:
             continue
@@ -1164,7 +1169,6 @@ def calendar_pedidos():
 
     links_table = []
     seen_links = set()
-    allowed_links_lanes = {'Acero al Carbono', 'Inoxidable - Aluminio'}
     for card in compras_raw.values():
         title = card.get('title') or ''
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -1202,8 +1206,8 @@ def calendar_pedidos():
             'column': column,
         }
         if (
-            lane_name in allowed_links_lanes
-            and column not in excluded_link_columns
+            lane_name in LINKS_ALLOWED_LANES
+            and column not in LINKS_EXCLUDED_COLUMNS
             and title not in seen_links
         ):
             links_table.append({'project': title, 'links': links, 'client': client})
@@ -1211,10 +1215,10 @@ def calendar_pedidos():
         if lane_name.lower() != 'seguimiento compras':
             continue
         if not d:
-            if column in allowed_unconfirmed_columns:
+            if column in PEDIDOS_UNCONFIRMED_COLUMNS:
                 unconfirmed.append(entry)
             continue
-        if column in allowed_calendar_columns:
+        if column in PEDIDOS_ALLOWED_COLUMNS:
             pedidos.setdefault(d, []).append(entry)
 
     for day_tasks in pedidos.values():
@@ -1237,7 +1241,7 @@ def calendar_pedidos():
             t
             for t in pedidos[day]
             if t.get('lane') == 'Seguimiento Compras'
-            and t.get('column') in allowed_calendar_columns
+            and t.get('column') in PEDIDOS_ALLOWED_COLUMNS
         ]
         if not pedidos[day]:
             del pedidos[day]
