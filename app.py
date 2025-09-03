@@ -1180,26 +1180,16 @@ def calendar_pedidos():
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         proj = proj_by_kanban.get(str(cid))
         client = proj.get('client', '') if proj else ''
-        raw_links = card.get('links') or card.get('attachments') or []
-        if isinstance(raw_links, list):
-            links = [att for att in raw_links if isinstance(att, dict)]
-        else:
-            links = []
-        for att in links:
-            url = att.get('url', '')
-            if url and (url.startswith('/') or not re.match(r'https?://', url)):
-                att['url'] = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
         entry = {
             'project': title,
             'color': column_colors.get(column, '#999999'),
             'hours': None,
-            'links': links,
             'lane': lane_name,
             'client': client,
             'column': column,
         }
         if title not in seen_links:
-            links_table.append({'project': title, 'links': links, 'client': client})
+            links_table.append({'project': title, 'client': client})
             seen_links.add(title)
         if lane_name.lower() != 'seguimiento compras':
             continue

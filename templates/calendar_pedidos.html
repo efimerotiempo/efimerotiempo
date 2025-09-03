@@ -65,18 +65,7 @@
     <tbody>
     {% for item in project_links %}
         <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <td class="project-name">
-                {{ item.project }}
-                {% if item.links %}
-                    <ul>
-                    {% for link in item.links %}
-                        <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
-                    {% endfor %}
-                    </ul>
-                {% else %}
-                    <div>Sin links</div>
-                {% endif %}
-            </td>
+            <td class="project-name">{{ item.project }}</td>
         </tr>
     {% endfor %}
     </tbody>
