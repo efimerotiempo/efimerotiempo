@@ -161,10 +161,6 @@ PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Planf. TAU',
     'Planif. OTROS',
 }
-
-LINKS_ALLOWED_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
-LINKS_EXCLUDED_COLUMNS = {'Ready to Archive', 'Hacer Albaran'}
-
 # Mapping between local phase names and Kanbanize custom field names
 PHASE_FIELD_MAP = {
     'recepcionar material': 'Horas Preparación',
@@ -1180,8 +1176,6 @@ def calendar_pedidos():
         else:
             d = parse_kanban_date(card.get('deadline'))
         column = (card.get('columnname') or card.get('columnName') or '').strip()
-        if column in {'Pdte. Verificación', 'Material Recepcionado'}:
-            continue
         lane_name = (card.get('lanename') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         proj = proj_by_kanban.get(str(cid))
@@ -1204,11 +1198,7 @@ def calendar_pedidos():
             'client': client,
             'column': column,
         }
-        if (
-            lane_name in LINKS_ALLOWED_LANES
-            and column not in LINKS_EXCLUDED_COLUMNS
-            and title not in seen_links
-        ):
+        if title not in seen_links:
             links_table.append({'project': title, 'links': links, 'client': client})
             seen_links.add(title)
         if lane_name.lower() != 'seguimiento compras':
