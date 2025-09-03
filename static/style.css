@@ -15,7 +15,7 @@ table.schedule td.incomplete {
 }
 
 table.schedule td.vacation-day {
-    border: 3px solid #000;
+    border: 1px solid #ccc;
 }
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
@@ -216,15 +216,6 @@ table.pedidos-calendar td.week-label {
     background: #eee;
 }
 
-.links-table ul {
-    list-style: none;
-    margin: 4px 0 0 0;
-    padding-left: 0;
-}
-
-.links-table li {
-    margin-bottom: 2px;
-}
 
 /* keep projects table width */
 .complete-projects table { width: 100%; }
