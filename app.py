@@ -135,6 +135,10 @@ KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
 KANBANIZE_BOARD_ID = os.getenv("1")
+KANBANIZE_API_KEY = "jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE"
+KANBANIZE_SUBDOMAIN = "caldereriacpk"
+KANBANIZE_BOARD_ID = "58"
+
 KANBANIZE_URL = "https://caldereriacpk.kanbanize.com/api/v2/cards"
 
 # Lanes from Kanbanize that the webhook listens to for project events.
@@ -377,19 +381,28 @@ def clear_prefill_project():
 
 def sync_all_cards():
     headers = {
-        "apikey": KANBANIZE_API_KEY,
-        "Content-Type": "application/json",
+        "apikey": KANBANIZE_API_KEY,   # 👈 en minúsculas
+        "accept": "application/json"
     }
-    params = {"boardid": KANBANIZE_BOARD_ID}
-    r = requests.get(KANBANIZE_URL, headers=headers, params=params)
+    params = {
+        "boardid": KANBANIZE_BOARD_ID
+    }
+    url = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/cards"
+
+    r = requests.get(url, headers=headers, params=params)
+    print("Status:", r.status_code)
+    print("Response (primeros 500 chars):", r.text[:500])
     r.raise_for_status()
-    cards = r.json()
+    cards = r.json()["data"]["data"]  # 👈 tus tarjetas están dentro de data.data
 
     now = datetime.utcnow().isoformat()
     payload = [{"timestamp": now, "card": c} for c in cards]
 
     save_kanban_cards(payload)
     print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
+
+
+
 
 
 def _decode_json(value):
