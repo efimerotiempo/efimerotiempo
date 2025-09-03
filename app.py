@@ -131,11 +131,11 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 
 # Kanbanize integration constants
-KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
+KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
-KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
-KANBANIZE_URL = f"{KANBANIZE_BASE_URL}/api/v2/cards"
+KANBANIZE_BOARD_ID = os.getenv("1")
+KANBANIZE_URL = "https://caldereriacpk.kanbanize.com/api/v2/cards"
 
 # Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
