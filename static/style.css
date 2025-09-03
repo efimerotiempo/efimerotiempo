@@ -15,7 +15,7 @@ table.schedule td.incomplete {
 }
 
 table.schedule td.vacation-day {
-    border: 3px solid #000;
+    border: 1px solid #ccc;
 }
 table.schedule th.weekend,
 table.schedule th.weekend-cell,
