@@ -2581,8 +2581,11 @@ def kanbanize_webhook():
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
+    lane_norm = norm(lane)
+    column_norm = norm(column)
 
-    if norm(lane) == "seguimiento compras":
+    # Guardar tarjetas del lane Seguimiento compras
+    if lane_norm == "seguimiento compras":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
@@ -2591,11 +2594,13 @@ def kanbanize_webhook():
         cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
-    allowed_lanes_n = {norm(x) for x in ARCHIVE_LANES}
-    if norm(lane) not in allowed_lanes_n:
-        return jsonify({"mensaje": "Lane ignorada"}), 200
 
-    if norm(column) == 'ready to archive':
+    # Lanes válidos para proyectos
+    allowed_lanes_n = {norm(x) for x in ARCHIVE_LANES}
+    if lane_norm not in allowed_lanes_n:
+        return jsonify({"mensaje": f"Lane ignorada ({lane})"}), 200
+
+    if column_norm == 'ready to archive':
         projects = load_projects()
         name_candidates = [
             pick(card, 'customCardId', 'effectiveCardId'),
