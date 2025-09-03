@@ -1128,11 +1128,10 @@ def calendar_pedidos():
         for day_str, tasks in days.items():
             d = date.fromisoformat(day_str)
             for t in tasks:
-                if t.get('phase') == 'pedidos':
-                    entry = t.copy()
-                    entry['worker'] = worker
-                    entry.setdefault('color', '#999999')
-                    pedidos.setdefault(d, []).append(entry)
+                entry = t.copy()
+                entry['worker'] = worker
+                entry.setdefault('color', '#999999')
+                pedidos.setdefault(d, []).append(entry)
 
     compras_raw = {}
     kanban_lanes = {}

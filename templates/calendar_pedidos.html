@@ -26,7 +26,7 @@
             {% for t in d.tasks %}
             <div class="task" draggable="true"
                  data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="pedidos"
+                 data-phase="{{ t.get('phase') or '' }}"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
                  data-project="{{ t.project }}"
@@ -46,7 +46,7 @@
             {% for t in unconfirmed %}
             <div class="task" draggable="true"
                  data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="pedidos"
+                 data-phase="{{ t.get('phase') or '' }}"
                  data-worker="{{ t.get('worker') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
       dragged = t;
       const data = {
         pid: t.dataset.pid,
-        phase: 'pedidos',
+        phase: t.dataset.phase,
         part: t.dataset.part,
         worker: t.dataset.worker
       };
