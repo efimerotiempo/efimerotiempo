@@ -1095,6 +1095,28 @@ def calendar_pedidos():
     schedule, _ = schedule_projects(projects)
     pedidos = {}
     unconfirmed = []
+    allowed_calendar_columns = {
+        'Plegado/Curvado',
+        'Planif. Bekola',
+        'Planif. AZ',
+        'Comerciales varios',
+        'Tubo/perfil/llanta/chapa',
+        'Oxicorte',
+        'Laser',
+        'Plegado/curvado - Fabricación',
+        'Material Incompleto',
+        'Material NO CONFORME',
+    }
+    allowed_unconfirmed_columns = {
+        'Tau',
+        'Bekola',
+        'AZ',
+        'OTROS',
+        'Tratamiento',
+        'Planf. TAU',
+        'Planif. OTROS',
+    }
+    excluded_link_columns = {'Ready to Archive', 'Hacer Albaran'}
     for worker, days in schedule.items():
         if worker == UNPLANNED:
             continue
@@ -1109,6 +1131,7 @@ def calendar_pedidos():
 
     compras_raw = {}
     kanban_lanes = {}
+    kanban_columns = {}
     column_colors = load_column_colors()
     updated_colors = False
     for entry in load_kanban_cards():
@@ -1131,6 +1154,7 @@ def calendar_pedidos():
             continue
         compras_raw[cid] = card
         kanban_lanes[str(cid)] = lane_name
+        kanban_columns[str(cid)] = column
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
@@ -1175,16 +1199,23 @@ def calendar_pedidos():
             'links': links,
             'lane': lane_name,
             'client': client,
+            'column': column,
         }
-        if lane_name in allowed_links_lanes and title not in seen_links:
+        if (
+            lane_name in allowed_links_lanes
+            and column not in excluded_link_columns
+            and title not in seen_links
+        ):
             links_table.append({'project': title, 'links': links, 'client': client})
             seen_links.add(title)
         if lane_name.lower() != 'seguimiento compras':
             continue
         if not d:
-            unconfirmed.append(entry)
+            if column in allowed_unconfirmed_columns:
+                unconfirmed.append(entry)
             continue
-        pedidos.setdefault(d, []).append(entry)
+        if column in allowed_calendar_columns:
+            pedidos.setdefault(d, []).append(entry)
 
     for day_tasks in pedidos.values():
         for t in day_tasks:
@@ -1194,12 +1225,20 @@ def calendar_pedidos():
                 if proj:
                     cid = str(proj.get('kanban_id'))
                     lane_name = kanban_lanes.get(cid)
+                    column_name = kanban_columns.get(cid)
                     if lane_name:
                         t['lane'] = lane_name
                         t['client'] = proj.get('client', '')
+                    if column_name:
+                        t['column'] = column_name
 
     for day in list(pedidos.keys()):
-        pedidos[day] = [t for t in pedidos[day] if t.get('lane') == 'Seguimiento Compras']
+        pedidos[day] = [
+            t
+            for t in pedidos[day]
+            if t.get('lane') == 'Seguimiento Compras'
+            and t.get('column') in allowed_calendar_columns
+        ]
         if not pedidos[day]:
             del pedidos[day]
 
