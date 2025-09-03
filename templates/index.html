@@ -58,8 +58,8 @@
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set total = tasks|sum(attribute='hours') %}
         {% set limit = hours.get(d.isoformat(), 8) %}
-        {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) %}
-        <td data-date="{{ d.isoformat() }}" class="{% if total < limit %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
+        {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
