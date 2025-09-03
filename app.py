@@ -2515,34 +2515,47 @@ def toggle_block(pid):
     return redirect(request.referrer or url_for('calendar_view'))
 
 
-@app.route('/kanbanize-webhook', methods=['POST']) 
+@app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
     """Convert incoming Kanbanize card data into a new project."""
 
     raw_body = request.get_data()
     print("Raw body:", raw_body)
 
-    try:
-        data = _parse_kanban_payload(request)
-    except Exception as e:
-        print("Error procesando payload:", e)
-        return jsonify({'error': 'Error al procesar datos'}), 400
+    data = None
 
-    if not data:
-        return jsonify({'error': 'Error al procesar datos'}), 400
-
-    # Si es un payload anidado dentro de "kanbanize_payload", decodificarlo
-    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+    # 1. Intentar JSON directo
+    if request.is_json:
         try:
-            payload_str = data["kanbanize_payload"]
-            # Decodifica SOLO el primer objeto JSON e ignora lo que venga detrás
-            inner = _decode_json(payload_str)
-            if not isinstance(inner, dict):
-                raise ValueError("Contenido interno no es un objeto JSON")
-            data = inner
+            data = request.get_json()
         except Exception as e:
-            print("Error decodificando kanbanize_payload interno:", e)
-            return jsonify({'error': 'JSON interno inválido'}), 400
+            print("Error leyendo JSON directo:", e)
+
+    # 2. Intentar si vino como form-data o querystring
+    if not data:
+        payload = (
+            request.form.get('kanbanize_payload')
+            or request.form.get('payload')
+            or request.form.get('data')
+            or request.args.get('kanbanize_payload')
+            or request.args.get('payload')
+            or request.args.get('data')
+        )
+        if payload:
+            data = _decode_json(payload)
+
+    # 3. Último recurso: decodificar el body crudo
+    if not data and raw_body:
+        data = _decode_json(raw_body)
+
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Error al procesar datos'}), 400
+
+    # Si es un payload anidado dentro de "kanbanize_payload"
+    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+        inner = _decode_json(data["kanbanize_payload"])
+        if isinstance(inner, dict):
+            data = inner
 
     print("Payload recibido:", data)
 
