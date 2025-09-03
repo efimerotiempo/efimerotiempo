@@ -1141,12 +1141,7 @@ def calendar_pedidos():
         if not isinstance(card, dict):
             continue
         lane_name = (card.get('lanename') or '').strip()
-        lane = lane_name.lower()
-        if lane not in {
-            'acero al carbono',
-            'inoxidable - aluminio',
-            'seguimiento compras',
-        }:
+        if lane_name.lower() != 'seguimiento compras':
             continue
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
