@@ -152,6 +152,12 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Material NO CONFORME',
 }
 
+PEDIDOS_HIDDEN_COLUMNS = [
+    "Ready to Archive",
+    "Material recepcionado",
+    "Pdte. Verificación",
+]
+
 PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tau',
     'Bekola',
@@ -1183,7 +1189,11 @@ def calendar_pedidos():
         }
 
         # --- CALENDARIO PRINCIPAL ---
-        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_ALLOWED_COLUMNS:
+        if (
+            lane_name.strip().lower() == "seguimiento compras"
+            and column in PEDIDOS_ALLOWED_COLUMNS
+            and column not in PEDIDOS_HIDDEN_COLUMNS
+        ):
             if d:  # con fecha
                 pedidos.setdefault(d, []).append(entry)
 
