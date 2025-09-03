@@ -13,6 +13,7 @@ import urllib.parse
 import sys
 import importlib.util
 import random
+import requests
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -130,10 +131,15 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 
 # Kanbanize integration constants
-KANBANIZE_API_KEY = os.environ.get('KANBANIZE_API_KEY', 'jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE')
+KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
-KANBANIZE_BOARD_ID = os.environ.get('KANBANIZE_BOARD_ID', '1')
+KANBANIZE_BOARD_ID = os.getenv("1")
+KANBANIZE_API_KEY = "jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE"
+KANBANIZE_SUBDOMAIN = "caldereriacpk"
+KANBANIZE_BOARD_ID = "58"
+
+KANBANIZE_URL = "https://caldereriacpk.kanbanize.com/api/v2/cards"
 
 # Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
@@ -151,6 +157,12 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Material Incompleto',
     'Material NO CONFORME',
 }
+
+PEDIDOS_HIDDEN_COLUMNS = [
+    "Ready to Archive",
+    "Material recepcionado",
+    "Pdte. Verificación",
+]
 
 PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tau',
@@ -365,6 +377,32 @@ def clear_prefill_project():
             os.remove(KANBAN_PREFILL_FILE)
         except Exception:
             pass
+
+
+def sync_all_cards():
+    headers = {
+        "apikey": KANBANIZE_API_KEY,   # 👈 en minúsculas
+        "accept": "application/json"
+    }
+    params = {
+        "boardid": KANBANIZE_BOARD_ID
+    }
+    url = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/cards"
+
+    r = requests.get(url, headers=headers, params=params)
+    print("Status:", r.status_code)
+    print("Response (primeros 500 chars):", r.text[:500])
+    r.raise_for_status()
+    cards = r.json()["data"]["data"]  # 👈 tus tarjetas están dentro de data.data
+
+    now = datetime.utcnow().isoformat()
+    payload = [{"timestamp": now, "card": c} for c in cards]
+
+    save_kanban_cards(payload)
+    print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
+
+
+
 
 
 def _decode_json(value):
@@ -1120,9 +1158,6 @@ def calendar_pedidos():
     updated_colors = False
 
     for entry in load_kanban_cards():
-
-        print("RECIBIDO:", entry)
-
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
@@ -1130,9 +1165,6 @@ def calendar_pedidos():
             continue
 
         lane_name = (card.get('lanename') or '').strip()
-
-        print("CARD:", card.get("title"), "| Lane:", lane_name, "| Column:", card.get("columnname"))
-
         if lane_name.lower() != 'seguimiento compras':
             continue
 
@@ -1183,17 +1215,30 @@ def calendar_pedidos():
         }
 
         # --- CALENDARIO PRINCIPAL ---
-        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_ALLOWED_COLUMNS:
+        if (
+            lane_name.strip().lower() == "seguimiento compras"
+            and column not in PEDIDOS_HIDDEN_COLUMNS
+            and (
+                column in PEDIDOS_ALLOWED_COLUMNS
+                or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            )
+        ):
             if d:  # con fecha
                 pedidos.setdefault(d, []).append(entry)
 
         # --- LISTA SIN FECHA CONFIRMADA ---
-        if lane_name.strip() == "Seguimiento compras" and column in PEDIDOS_UNCONFIRMED_COLUMNS:
-            if not d:  # sin fecha
-                unconfirmed.append(entry)
+        if (
+            lane_name.strip() == "Seguimiento compras"
+            and column in PEDIDOS_UNCONFIRMED_COLUMNS
+            and not d
+        ):
+            unconfirmed.append(entry)
 
         # --- TABLA DERECHA (otros lanes archivables) ---
-        if lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"] and column not in ["Ready to Archive", "Hacer Albaran"]:
+        if (
+            lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
+            and column not in ["Ready to Archive", "Hacer Albaran"]
+        ):
             if title not in seen_links:
                 links_table.append({'project': title, 'client': ''})
                 seen_links.add(title)
@@ -1242,7 +1287,6 @@ def calendar_pedidos():
         unconfirmed=unconfirmed,
         project_links=links_table,
     )
-
 
 @app.route('/projects')
 def project_list():
@@ -2503,34 +2547,47 @@ def toggle_block(pid):
     return redirect(request.referrer or url_for('calendar_view'))
 
 
-@app.route('/kanbanize-webhook', methods=['POST']) 
+@app.route('/kanbanize-webhook', methods=['POST'])
 def kanbanize_webhook():
     """Convert incoming Kanbanize card data into a new project."""
 
     raw_body = request.get_data()
     print("Raw body:", raw_body)
 
-    try:
-        data = _parse_kanban_payload(request)
-    except Exception as e:
-        print("Error procesando payload:", e)
-        return jsonify({'error': 'Error al procesar datos'}), 400
+    data = None
 
-    if not data:
-        return jsonify({'error': 'Error al procesar datos'}), 400
-
-    # Si es un payload anidado dentro de "kanbanize_payload", decodificarlo
-    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+    # 1. Intentar JSON directo
+    if request.is_json:
         try:
-            payload_str = data["kanbanize_payload"]
-            # Decodifica SOLO el primer objeto JSON e ignora lo que venga detrás
-            inner = _decode_json(payload_str)
-            if not isinstance(inner, dict):
-                raise ValueError("Contenido interno no es un objeto JSON")
-            data = inner
+            data = request.get_json()
         except Exception as e:
-            print("Error decodificando kanbanize_payload interno:", e)
-            return jsonify({'error': 'JSON interno inválido'}), 400
+            print("Error leyendo JSON directo:", e)
+
+    # 2. Intentar si vino como form-data o querystring
+    if not data:
+        payload = (
+            request.form.get('kanbanize_payload')
+            or request.form.get('payload')
+            or request.form.get('data')
+            or request.args.get('kanbanize_payload')
+            or request.args.get('payload')
+            or request.args.get('data')
+        )
+        if payload:
+            data = _decode_json(payload)
+
+    # 3. Último recurso: decodificar el body crudo
+    if not data and raw_body:
+        data = _decode_json(raw_body)
+
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Error al procesar datos'}), 400
+
+    # Si es un payload anidado dentro de "kanbanize_payload"
+    if "kanbanize_payload" in data and isinstance(data["kanbanize_payload"], str):
+        inner = _decode_json(data["kanbanize_payload"])
+        if isinstance(inner, dict):
+            data = inner
 
     print("Payload recibido:", data)
 
@@ -2556,8 +2613,11 @@ def kanbanize_webhook():
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
+    lane_norm = norm(lane)
+    column_norm = norm(column)
 
-    if norm(lane) == "seguimiento compras":
+    # Guardar tarjetas del lane Seguimiento compras
+    if lane_norm == "seguimiento compras":
         cards = load_kanban_cards()
         cards = [
             c for c in cards
@@ -2566,11 +2626,13 @@ def kanbanize_webhook():
         cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
-    allowed_lanes_n = {norm(x) for x in ARCHIVE_LANES}
-    if norm(lane) not in allowed_lanes_n:
-        return jsonify({"mensaje": "Lane ignorada"}), 200
 
-    if norm(column) == 'ready to archive':
+    # Lanes válidos para proyectos
+    allowed_lanes_n = {norm(x) for x in ARCHIVE_LANES}
+    if lane_norm not in allowed_lanes_n:
+        return jsonify({"mensaje": f"Lane ignorada ({lane})"}), 200
+
+    if column_norm == 'ready to archive':
         projects = load_projects()
         name_candidates = [
             pick(card, 'customCardId', 'effectiveCardId'),
@@ -2851,6 +2913,7 @@ def bug_list():
 
 
 if __name__ == '__main__':
+    sync_all_cards()
     print("Rutas registradas:")
     for rule in app.url_map.iter_rules():
         print(f"{sorted(rule.methods)}  {rule.rule}")
