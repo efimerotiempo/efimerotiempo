@@ -1031,6 +1031,7 @@ const popup = document.getElementById('info-popup');
         body: JSON.stringify(moveData)
       }).then(resp => resp.json()).then(res => {
         const proceed = () => {
+          if (res.warning) moveData.ack_warning = true;
           if (res.split) {
             moveSelect.innerHTML = '';
             if (res.options && res.options.length) {

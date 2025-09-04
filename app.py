@@ -2327,6 +2327,7 @@ def move_phase():
         push_from = (push_pid, push_phase, push_part if push_part not in (None, '', 'None') else None)
     unblock = str(data.get('unblock')).lower() == 'true'
     skip_block = str(data.get('skip_block')).lower() == 'true'
+    ack_warning = str(data.get('ack_warning')).lower() == 'true'
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2360,7 +2361,7 @@ def move_phase():
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
     resp = {'date': new_day, 'pid': pid, 'phase': phase}
-    if warn:
+    if warn and not ack_warning:
         resp['warning'] = warn
     return jsonify(resp)
 
