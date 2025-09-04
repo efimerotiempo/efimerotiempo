@@ -571,6 +571,7 @@ const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
 let dragInfo = null;
+let draggedTask = null;
 let previewTimer = null;
 let previewTarget = null;
 let previewCell = null;
@@ -588,9 +589,10 @@ let previewStart = null;
         part: t.dataset.part
       };
       dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
+      draggedTask = t;
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; clearPreview(); });
+    t.addEventListener('dragend', () => { dragInfo = null; draggedTask = null; clearPreview(); });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -1036,7 +1038,7 @@ let previewStart = null;
     const tasks = Array.from(cell.querySelectorAll('.task'));
     for (const t of tasks) {
       if (t.classList.contains('preview-task')) continue;
-      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
+      if (t === draggedTask) continue;
       const rect = t.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) break;
       hours += parseFloat(t.dataset.hours || '0');
