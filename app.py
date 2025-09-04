@@ -1229,7 +1229,11 @@ def calendar_pedidos():
     seen_links = set()
 
     for card in compras_raw.values():
-        title = card.get('title') or ''
+        title = (card.get('title') or '').strip()
+        project_name = title
+        client_name = ''
+        if ' - ' in title:
+            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
         # Buscar fecha (dd/mm) en el título o usar deadline
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
         if m:
@@ -1249,7 +1253,7 @@ def calendar_pedidos():
             'color': column_colors.get(column, '#999999'),
             'hours': None,
             'lane': lane_name,
-            'client': '',
+            'client': client_name,
             'column': column,
         }
 
@@ -1278,9 +1282,18 @@ def calendar_pedidos():
             lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
             and column not in ["Ready to Archive", "Hacer Albaran"]
         ):
-            if title not in seen_links:
-                links_table.append({'project': title, 'client': ''})
-                seen_links.add(title)
+            if project_name not in seen_links:
+                child_links = []
+                links_info = card.get('links') or {}
+                children = links_info.get('children') if isinstance(links_info, dict) else []
+                if isinstance(children, list):
+                    for ch in children:
+                        if isinstance(ch, dict):
+                            t = ch.get('title')
+                            if t:
+                                child_links.append(t)
+                links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                seen_links.add(project_name)
 
     # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
