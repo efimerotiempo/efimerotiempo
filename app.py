@@ -2366,7 +2366,7 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=start_hour if (mode == 'split' and start_hour is not None) else (used_hours if mode == 'split' else None),
+        start_hour=start_hour if start_hour is not None else (used_hours if mode == 'split' else None),
     )
     if new_day is None:
         if isinstance(warn, dict):
@@ -2432,7 +2432,15 @@ def check_move():
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
-    after = compute_schedule_map(temp)
+
+    schedule_after, _ = schedule_projects(copy.deepcopy(temp))
+    after = {}
+    for w, days in schedule_after.items():
+        for dstr, tasks in days.items():
+            for t in tasks:
+                after.setdefault(t['pid'], []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
+    for lst in after.values():
+        lst.sort()
 
     def build_map(mapping):
         res = {}
@@ -2446,30 +2454,28 @@ def check_move():
     after_map = build_map(after)
 
     preview = []
-    for opid, items in after.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                proj = next((p for p in temp if p['id'] == opid), None)
-                if not proj:
-                    continue
-                frozen = any(
-                    ft.get('phase') == ph and (prt is None or ft.get('part') == prt)
-                    for ft in proj.get('frozen_tasks', [])
-                )
-                preview.append(
-                    {
-                        'pid': opid,
-                        'phase': ph,
-                        'part': prt,
-                        'project': proj.get('name', ''),
-                        'client': proj.get('client', ''),
-                        'color': proj.get('color', ''),
-                        'priority': proj.get('priority', ''),
-                        'due_date': proj.get('due_date', ''),
-                        'start_date': proj.get('start_date', ''),
-                        'frozen': frozen,
-                    }
-                )
+    for t in schedule_after.get(worker, {}).get(date_str, []):
+        proj = next((p for p in temp if p['id'] == t['pid']), None)
+        if not proj:
+            continue
+        frozen = any(
+            ft.get('phase') == t['phase'] and (t.get('part') is None or ft.get('part') == t.get('part'))
+            for ft in proj.get('frozen_tasks', [])
+        )
+        preview.append(
+            {
+                'pid': t['pid'],
+                'phase': t['phase'],
+                'part': t.get('part'),
+                'project': proj.get('name', ''),
+                'client': proj.get('client', ''),
+                'color': proj.get('color', ''),
+                'priority': proj.get('priority', ''),
+                'due_date': proj.get('due_date', ''),
+                'start_date': proj.get('start_date', ''),
+                'frozen': frozen,
+            }
+        )
 
     def is_contiguous(days):
         if not days:
