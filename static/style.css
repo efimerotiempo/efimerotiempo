@@ -71,6 +71,11 @@ table.schedule td.weekend-cell {
     background: #cce5ff;
 }
 
+.task.preview-task {
+    opacity: 0.5;
+    cursor: default;
+}
+
 .projects-table tr.frozen {
     border: 3px solid blue !important;
 }

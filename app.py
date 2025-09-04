@@ -2421,6 +2421,32 @@ def check_move():
     before_map = build_map(before)
     after_map = build_map(after)
 
+    preview = []
+    for opid, items in after.items():
+        for w, day_str, ph, hrs, prt in items:
+            if w == worker and day_str == date_str:
+                proj = next((p for p in temp if p['id'] == opid), None)
+                if not proj:
+                    continue
+                frozen = any(
+                    ft.get('phase') == ph and (prt is None or ft.get('part') == prt)
+                    for ft in proj.get('frozen_tasks', [])
+                )
+                preview.append(
+                    {
+                        'pid': opid,
+                        'phase': ph,
+                        'part': prt,
+                        'project': proj.get('name', ''),
+                        'client': proj.get('client', ''),
+                        'color': proj.get('color', ''),
+                        'priority': proj.get('priority', ''),
+                        'due_date': proj.get('due_date', ''),
+                        'start_date': proj.get('start_date', ''),
+                        'frozen': frozen,
+                    }
+                )
+
     def is_contiguous(days):
         if not days:
             return True
@@ -2483,7 +2509,7 @@ def check_move():
                 future.sort()
                 _, opid, ph, prt = future[0]
                 auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours}
+    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)
