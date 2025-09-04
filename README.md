@@ -153,6 +153,12 @@ el calendario como en la columna de fases sin planificar. Si se programa una
 fase en una fecha anterior a la de material confirmado, la planificación se
 realiza igualmente sin mostrar avisos adicionales.
 
+Si una tarjeta tiene su **fecha límite** confirmada (campo "fecha tope"),
+al planificar una fase que exceda esa fecha se mostrará una ventana
+emergente en naranja con el aviso **FECHA LÍMITE CONFIRMADA A CLIENTE, NO
+SOBREPASAR.** junto con el proyecto, el cliente y el día límite, aunque la
+planificación continúa.
+
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
 después del último montaje programado para ese trabajador y aprovecha las

@@ -280,6 +280,7 @@
   const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -305,14 +306,29 @@
   const blockCancel = document.getElementById('block-cancel');
   let pendingMove = null;
   let pendingBlock = null;
-  function showDeadline() {
-    deadlineText.textContent = DEADLINE_MSG;
+  function showDeadline(text = DEADLINE_MSG, after = null) {
+    deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineModal.style.display = 'block';
-    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; };
+    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
+
+  for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
+    if (proj.due_warning) {
+      const text = `${DEADLINE_MSG}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
+      showDeadline(text, () => {
+        fetch(CLEAR_DEADLINE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid })
+        }).then(() => location.reload());
+      });
+      break;
+    }
+  }
 
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
@@ -536,13 +552,17 @@ let lastDrag = null;
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(body)
-          }).then(resp => {
-            if (resp.ok) location.reload();
-            else resp.json().then(d => {
-              if (d.error === DEADLINE_MSG) showDeadline();
-              else alert(d.error || 'Error');
+          })
+            .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                if (data.error === DEADLINE_MSG) showDeadline();
+                else alert(data.error || 'Error');
+                return;
+              }
+              if (data.warning) showDeadline(data.warning, () => location.reload());
+              else location.reload();
             });
-          });
         });
       }
       const obsBtn = document.getElementById('obs-btn');
@@ -730,17 +750,18 @@ let lastDrag = null;
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
           body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
-        }).then(resp => {
-          if (resp.ok) {
+        })
+          .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+          .then(({ ok, data }) => {
+            if (!ok) {
+              if (data.error === DEADLINE_MSG) showDeadline();
+              else alert(data.error || 'Error');
+              return;
+            }
             sessionStorage.removeItem('undoMove');
-            location.reload();
-          } else {
-            resp.json().then(d => {
-              if (d.error === DEADLINE_MSG) showDeadline();
-              else alert(d.error || 'Error');
-            });
-          }
-        });
+            if (data.warning) showDeadline(data.warning, () => location.reload());
+            else location.reload();
+          });
       }
     }
   });
@@ -794,6 +815,7 @@ let lastDrag = null;
         credentials: 'same-origin',
         body: JSON.stringify(moveData)
       }).then(resp => resp.json()).then(res => {
+        if (res.warning) showDeadline(res.warning);
         if (res.split) {
           moveSelect.innerHTML = '';
           if (res.options && res.options.length) {
@@ -847,8 +869,8 @@ let lastDrag = null;
       const date = moveData.date;
       localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
       if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-      // previously warned when moving before material confirmation, now simply reload
-      location.reload();
+      if (data.warning) showDeadline(data.warning, () => location.reload());
+      else location.reload();
     });
   }
   if (moveConfirm) {
@@ -924,16 +946,17 @@ let lastDrag = null;
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
-      }).then(resp => {
-        if (resp.ok) {
-          location.reload();
-        } else {
-          resp.json().then(d => {
-            if (d.error === DEADLINE_MSG) showDeadline();
-            else alert(d.error || 'Error');
-          });
-        }
-      });
+      })
+        .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            if (data.error === DEADLINE_MSG) showDeadline();
+            else alert(data.error || 'Error');
+            return;
+          }
+          if (data.warning) showDeadline(data.warning, () => location.reload());
+          else location.reload();
+        });
     });
   }
   const unplanPanel = document.getElementById('unplanned-panel');
