@@ -161,6 +161,10 @@ emergente en naranja con el aviso **FECHA LÍMITE CONFIRMADA A CLIENTE, NO
 SOBREPASAR.** junto con el proyecto, el cliente y el día límite, aunque la
 planificación continúa.
 
+Si la fecha límite proviene del campo "fecha cliente", el movimiento se
+permite igualmente pero se mostrará una ventana emergente en negro con el
+mensaje "Fecha cliente sobrepasada." junto con los mismos datos.
+
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
 después del último montaje programado para ese trabajador y aprovecha las

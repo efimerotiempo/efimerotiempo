@@ -67,6 +67,7 @@ HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
+CLIENT_DEADLINE_MSG = 'Fecha cliente sobrepasada.'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -631,7 +632,7 @@ def move_phase_date(
     ):
         return None, 'Vacaciones en esa fecha'
     warning = None
-    if proj.get('due_confirmed') and proj.get('due_date'):
+    if proj.get('due_date'):
         try:
             due_dt = date.fromisoformat(proj['due_date'])
             phase_hours = proj['phases'].get(phase)
@@ -646,7 +647,8 @@ def move_phase_date(
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
-                warning = f"{DEADLINE_MSG}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
+                msg = DEADLINE_MSG if proj.get('due_confirmed') else CLIENT_DEADLINE_MSG
+                warning = f"{msg}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
         except Exception:
             pass
     # Apply the change to the real project list
@@ -2763,12 +2765,12 @@ def kanbanize_webhook():
     card['customFields'] = custom
 
     deadline_str = card.get('deadline')
-    pedido_str = custom.get('Fecha pedido')
+    client_str = custom.get('Fecha cliente') or custom.get('Fecha Cliente')
     if deadline_str:
         due_date_obj = parse_kanban_date(deadline_str)
         due_confirmed_flag = True
     else:
-        due_date_obj = parse_kanban_date(pedido_str)
+        due_date_obj = parse_kanban_date(client_str)
         due_confirmed_flag = False
     mat_str = custom.get('Fecha material confirmado')
     material_date_obj = parse_kanban_date(mat_str)
