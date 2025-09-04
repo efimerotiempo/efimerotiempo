@@ -2332,6 +2332,14 @@ def move_phase():
     unblock = str(data.get('unblock')).lower() == 'true'
     skip_block = str(data.get('skip_block')).lower() == 'true'
     ack_warning = str(data.get('ack_warning')).lower() == 'true'
+    start = data.get('start')
+    if start in (None, '', 'None'):
+        start_hour = None
+    else:
+        try:
+            start_hour = float(start)
+        except Exception:
+            start_hour = None
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2358,7 +2366,7 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=used_hours if mode == 'split' else None,
+        start_hour=start_hour if (mode == 'split' and start_hour is not None) else (used_hours if mode == 'split' else None),
     )
     if new_day is None:
         if isinstance(warn, dict):
@@ -2385,6 +2393,14 @@ def check_move():
             part = int(part)
         except Exception:
             part = None
+    start = data.get('start')
+    if start in (None, '', 'None'):
+        start_hour = None
+    else:
+        try:
+            start_hour = float(start)
+        except Exception:
+            start_hour = None
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2404,7 +2420,15 @@ def check_move():
     free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
     new_day, warn = move_phase_date(
-        temp, pid, phase, day, worker, part, save=False, mode="split", start_hour=used_hours
+        temp,
+        pid,
+        phase,
+        day,
+        worker,
+        part,
+        save=False,
+        mode="split",
+        start_hour=start_hour if start_hour is not None else used_hours,
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
