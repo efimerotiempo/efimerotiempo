@@ -2436,7 +2436,9 @@ def check_move():
                 break
     if moved_key in after_map and not is_contiguous(after_map[moved_key]):
         split = True
-    if not split and (used_hours > 0 or new_day != day):
+    if not split and used_hours > 0:
+        # Only flag a conflict if the target day already contains hours from
+        # other phases; otherwise allow the move silently.
         split = True
     if not split:
         # Check if moving this phase would alter any other task on the target
