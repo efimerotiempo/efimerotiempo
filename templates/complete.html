@@ -418,7 +418,8 @@
   const deadlineModal = document.getElementById('deadline-modal');
   const deadlineText = document.getElementById('deadline-text');
   const deadlineClose = document.getElementById('deadline-close');
-  const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
+  const DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
+  const CLIENT_DEADLINE_MSG = 'Fecha cliente soprepasada.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
@@ -439,6 +440,7 @@
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
   }
@@ -448,7 +450,8 @@
 
   for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
     if (proj.due_warning) {
-      const text = `${DEADLINE_MSG}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
+      const msg = proj.due_confirmed ? CLIENT_DEADLINE_MSG : DEADLINE_MSG;
+      const text = `${msg}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
       showDeadline(text, () => {
         fetch(CLEAR_DEADLINE_URL, {
           method: 'POST',
@@ -694,7 +697,7 @@ const popup = document.getElementById('info-popup');
             .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
             .then(({ ok, data }) => {
               if (!ok) {
-                if (data.error === DEADLINE_MSG) showDeadline();
+                if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
                 else alert(data.error || 'Error');
                 return;
               }
@@ -966,7 +969,7 @@ const popup = document.getElementById('info-popup');
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
             if (!ok) {
-              if (data.error === DEADLINE_MSG) showDeadline();
+              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
               else alert(data.error || 'Error');
               return;
             }
@@ -1074,7 +1077,7 @@ const popup = document.getElementById('info-popup');
           blockModal.style.display = 'block';
           return;
         }
-        if (data.error === DEADLINE_MSG) showDeadline();
+        if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
         else alert(data.error || 'Error');
         return;
       }
@@ -1162,7 +1165,7 @@ const popup = document.getElementById('info-popup');
         .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
         .then(({ ok, data }) => {
           if (!ok) {
-            if (data.error === DEADLINE_MSG) showDeadline();
+            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
             else alert(data.error || 'Error');
             return;
           }
