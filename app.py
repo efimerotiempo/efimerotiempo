@@ -1195,6 +1195,11 @@ def calendar_pedidos():
     kanban_columns = {}
     column_colors = load_column_colors()
     updated_colors = False
+    allowed_lanes = [
+        'seguimiento compras',
+        'acero al carbono',
+        'inoxidable - aluminio',
+    ]
 
     for entry in load_kanban_cards():
         if not isinstance(entry, dict):
@@ -1204,7 +1209,7 @@ def calendar_pedidos():
             continue
 
         lane_name = (card.get('lanename') or '').strip()
-        if lane_name.lower() != 'seguimiento compras':
+        if lane_name.lower() not in allowed_lanes:
             continue
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
