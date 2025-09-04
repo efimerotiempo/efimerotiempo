@@ -729,7 +729,11 @@ def move_phase_date(
         for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
-            other_proj = next(p for p in projects if p['id'] == opid)
+            other_proj = next((p for p in projects if p['id'] == opid), None)
+            if not other_proj:
+                while next_start in vac_days:
+                    next_start = next_workday(next_start)
+                continue
             if oph != 'pedidos' and any(
                 t['phase'] == oph and (oprt is None or t.get('part') == oprt)
                 for t in other_proj.get('frozen_tasks', [])
