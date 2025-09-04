@@ -971,14 +971,16 @@ let lastDrag = null;
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
-  function calcMinUnplanWidth() {
+  function calcTitleWidth() {
     let max = 0;
     document.querySelectorAll('.folder-header').forEach(h => {
       if (h.scrollWidth > max) max = h.scrollWidth;
     });
-    return Math.max(100, max + 20);
+    return max;
   }
-  const MIN_UNPLAN_WIDTH = calcMinUnplanWidth();
+  const TITLE_WIDTH = calcTitleWidth();
+  const MIN_UNPLAN_WIDTH = TITLE_WIDTH;
+  const MAX_UNPLAN_WIDTH = Math.max(100, TITLE_WIDTH + 20);
 
   function syncUnplannedHeight() {
     const wrap = document.querySelector('.schedule-wrapper');
@@ -991,18 +993,15 @@ let lastDrag = null;
   window.addEventListener('resize', syncUnplannedHeight);
   if (unplanPanel) {
     const savedWidth = parseInt(localStorage.getItem(UNPLAN_WIDTH_KEY), 10);
-    if (savedWidth) {
-      unplanPanel.style.width = Math.max(savedWidth, MIN_UNPLAN_WIDTH) + 'px';
-    } else {
-      unplanPanel.style.width = Math.max(unplanPanel.offsetWidth, MIN_UNPLAN_WIDTH) + 'px';
-    }
+    const initWidth = savedWidth || unplanPanel.offsetWidth;
+    unplanPanel.style.width = Math.max(initWidth, MIN_UNPLAN_WIDTH) + 'px';
   }
   if (unplanPanel && unplanResizer) {
-    let startX, startWidth, maxWidth;
+    let startX, startWidth;
     const onMouseMove = (e) => {
       const dx = startX - e.clientX;
-      let newWidth = Math.max(MIN_UNPLAN_WIDTH, startWidth + dx);
-      newWidth = Math.min(newWidth, maxWidth);
+      let newWidth = startWidth + dx;
+      newWidth = Math.max(MIN_UNPLAN_WIDTH, Math.min(newWidth, MAX_UNPLAN_WIDTH));
       unplanPanel.style.width = newWidth + 'px';
     };
     const onMouseUp = () => {
@@ -1013,7 +1012,6 @@ let lastDrag = null;
     unplanResizer.addEventListener('mousedown', (e) => {
       startX = e.clientX;
       startWidth = unplanPanel.offsetWidth;
-      maxWidth = startWidth * 1.25;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });

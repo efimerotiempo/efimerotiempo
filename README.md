@@ -132,8 +132,10 @@ el total pendiente. La columna comienza con 2500 px de ancho y se sitúa a la
 derecha del todo, fuera del área desplazable del calendario, pero puede
 arrastrarse por su borde izquierdo para dejarla a la vista. Al reducirse, el
 arrastre se detiene cuando el borde alcanza las letras de los títulos de las
-carpetas, de modo que nunca se ocultan. Al ampliarla, sólo puede crecer hasta
-un 25 % más de su ancho actual. El ancho elegido se mantiene al cambiar de
+carpetas, de modo que nunca se ocultan. Ese ancho marca también el mínimo
+permitido. Al ampliarla, únicamente puede crecer hasta el límite que antes
+actuaba como mínimo —unos píxeles más que los títulos—, evitando que aumente sin
+control. El ancho elegido se mantiene al cambiar de
 pestaña y volver a **Completo**. Un botón «Fases sin planificar» flotante
 permite mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan
 por la
