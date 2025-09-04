@@ -1174,6 +1174,14 @@ const popup = document.getElementById('info-popup');
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+  function calcMinUnplanWidth() {
+    let max = 0;
+    document.querySelectorAll('.folder-header').forEach(h => {
+      if (h.scrollWidth > max) max = h.scrollWidth;
+    });
+    return Math.max(100, max + 20);
+  }
+  const MIN_UNPLAN_WIDTH = calcMinUnplanWidth();
 
   function syncUnplannedHeight() {
     const wrap = document.querySelector('.schedule-wrapper');
@@ -1185,16 +1193,18 @@ const popup = document.getElementById('info-popup');
   syncUnplannedHeight();
   window.addEventListener('resize', syncUnplannedHeight);
   if (unplanPanel) {
-    const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
+    const savedWidth = parseInt(localStorage.getItem(UNPLAN_WIDTH_KEY), 10);
     if (savedWidth) {
-      unplanPanel.style.width = savedWidth + 'px';
+      unplanPanel.style.width = Math.max(savedWidth, MIN_UNPLAN_WIDTH) + 'px';
+    } else {
+      unplanPanel.style.width = Math.max(unplanPanel.offsetWidth, MIN_UNPLAN_WIDTH) + 'px';
     }
   }
   if (unplanPanel && unplanResizer) {
     let startX, startWidth;
     const onMouseMove = (e) => {
       const dx = startX - e.clientX;
-      const newWidth = Math.max(100, startWidth + dx);
+      const newWidth = Math.max(MIN_UNPLAN_WIDTH, startWidth + dx);
       unplanPanel.style.width = newWidth + 'px';
     };
     const onMouseUp = () => {
