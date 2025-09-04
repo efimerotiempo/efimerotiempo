@@ -1210,10 +1210,11 @@ const popup = document.getElementById('info-popup');
     }
   }
   if (unplanPanel && unplanResizer) {
-    let startX, startWidth;
+    let startX, startWidth, maxWidth;
     const onMouseMove = (e) => {
       const dx = startX - e.clientX;
-      const newWidth = Math.max(MIN_UNPLAN_WIDTH, startWidth + dx);
+      let newWidth = Math.max(MIN_UNPLAN_WIDTH, startWidth + dx);
+      newWidth = Math.min(newWidth, maxWidth);
       unplanPanel.style.width = newWidth + 'px';
     };
     const onMouseUp = () => {
@@ -1224,6 +1225,7 @@ const popup = document.getElementById('info-popup');
     unplanResizer.addEventListener('mousedown', (e) => {
       startX = e.clientX;
       startWidth = unplanPanel.offsetWidth;
+      maxWidth = startWidth * 1.25;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });

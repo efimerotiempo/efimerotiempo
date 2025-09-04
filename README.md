@@ -132,8 +132,9 @@ el total pendiente. La columna comienza con 2500 px de ancho y se sitúa a la
 derecha del todo, fuera del área desplazable del calendario, pero puede
 arrastrarse por su borde izquierdo para dejarla a la vista. Al reducirse, el
 arrastre se detiene cuando el borde alcanza las letras de los títulos de las
-carpetas, de modo que nunca se ocultan. El ancho elegido se mantiene al cambiar
-de pestaña y volver a **Completo**. Un botón «Fases sin planificar» flotante
+carpetas, de modo que nunca se ocultan. Al ampliarla, sólo puede crecer hasta
+un 25 % más de su ancho actual. El ancho elegido se mantiene al cambiar de
+pestaña y volver a **Completo**. Un botón «Fases sin planificar» flotante
 permite mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan
 por la
 fecha **Material confirmado** de cada proyecto y una división separa los que
