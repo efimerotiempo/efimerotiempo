@@ -137,7 +137,7 @@ KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44
 KANBANIZE_BOARD_ID = os.getenv("1")
 KANBANIZE_API_KEY = "jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE"
 KANBANIZE_SUBDOMAIN = "caldereriacpk"
-KANBANIZE_BOARD_ID = "58"
+KANBANIZE_BOARD_ID = "1"
 
 KANBANIZE_URL = "https://caldereriacpk.kanbanize.com/api/v2/cards"
 
@@ -378,25 +378,64 @@ def clear_prefill_project():
         except Exception:
             pass
 
+def normalize_card(c):
+    return {
+        "taskid": c.get("card_id"),
+        "title": c.get("title"),
+        "customid": c.get("custom_id"),
+        "columnid": c.get("column_id"),
+        "laneid": c.get("lane_id"),
+        "boardid": c.get("board_id"),
+        "workflowid": c.get("workflow_id"),
+        "columnname": c.get("column_name"),
+        "lanename": c.get("lane_name"),
+    }
+
 
 def sync_all_cards():
-    headers = {
-        "apikey": KANBANIZE_API_KEY,   # 👈 en minúsculas
-        "accept": "application/json"
-    }
-    params = {
-        "boardid": KANBANIZE_BOARD_ID
-    }
-    url = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/cards"
+    headers = {"apikey": KANBANIZE_API_KEY, "accept": "application/json"}
+    url_cards = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/cards"
+    url_columns = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/boards/{KANBANIZE_BOARD_ID}/columns"
+    url_lanes = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/boards/{KANBANIZE_BOARD_ID}/lanes"
 
-    r = requests.get(url, headers=headers, params=params)
-    print("Status:", r.status_code)
-    print("Response (primeros 500 chars):", r.text[:500])
+    # columnas
+    resp_cols = requests.get(url_columns, headers=headers)
+    print("Columns response:", resp_cols.status_code, resp_cols.text[:200])
+    cols_json = resp_cols.json()
+    cols = cols_json.get("data", [])
+    column_names = {c["column_id"]: c["name"] for c in cols}
+
+    # lanes
+    resp_lanes = requests.get(url_lanes, headers=headers)
+    print("Lanes response:", resp_lanes.status_code, resp_lanes.text[:200])
+    lanes_json = resp_lanes.json()
+    lanes = lanes_json.get("data", [])
+    lane_names = {l["lane_id"]: l["name"] for l in lanes}
+
+    # tarjetas
+    params = {"boardid": KANBANIZE_BOARD_ID}
+    r = requests.get(url_cards, headers=headers, params=params)
+    print("Cards response:", r.status_code, r.text[:200])
     r.raise_for_status()
-    cards = r.json()["data"]["data"]  # 👈 tus tarjetas están dentro de data.data
+    cards = r.json()["data"]["data"]
 
     now = datetime.utcnow().isoformat()
-    payload = [{"timestamp": now, "card": c} for c in cards]
+    payload = []
+    for c in cards:
+        payload.append({
+            "timestamp": now,
+            "card": {
+                "taskid": c.get("card_id"),
+                "title": c.get("title"),
+                "customid": c.get("custom_id"),
+                "columnid": c.get("column_id"),
+                "laneid": c.get("lane_id"),
+                "boardid": c.get("board_id"),
+                "workflowid": c.get("workflow_id"),
+                "columnname": column_names.get(c.get("column_id")),
+                "lanename": lane_names.get(c.get("lane_id")),
+            }
+        })
 
     save_kanban_cards(payload)
     print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
