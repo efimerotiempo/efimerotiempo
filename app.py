@@ -1319,8 +1319,13 @@ def calendar_pedidos():
         for i in range(5):  # solo lunes-viernes
             day = current + timedelta(days=i)
             month_label = ''
-            if day.day == 1 or (day.weekday() == 0 and 1 < day.day <= 7):
-                month_label = MONTHS[day.month - 1].capitalize()
+            first_weekday = date(day.year, day.month, 1).weekday()
+            if first_weekday < 5:
+                if day.day == 1:
+                    month_label = MONTHS[day.month - 1].capitalize()
+            else:
+                if day.weekday() == 0 and 1 < day.day <= 7:
+                    month_label = MONTHS[day.month - 1].capitalize()
             tasks = pedidos.get(day, []) if month_start <= day <= month_end else []
             week['days'].append(
                 {
