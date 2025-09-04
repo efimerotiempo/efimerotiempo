@@ -66,6 +66,7 @@ WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
+DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -629,6 +630,7 @@ def move_phase_date(
         and new_date in vac_map.get(worker, set())
     ):
         return None, 'Vacaciones en esa fecha'
+    warning = None
     if proj.get('due_confirmed') and proj.get('due_date'):
         try:
             due_dt = date.fromisoformat(proj['due_date'])
@@ -644,7 +646,7 @@ def move_phase_date(
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
-                return None, 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
+                warning = f"{DEADLINE_MSG}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
         except Exception:
             pass
     # Apply the change to the real project list
@@ -778,7 +780,7 @@ def move_phase_date(
 
     if save:
         save_projects(projects)
-    return new_date.isoformat(), None
+    return new_date.isoformat(), warning
 
 
 def get_projects():
@@ -806,6 +808,7 @@ def get_projects():
         p.setdefault('kanban_attachments', [])
         p.setdefault('observations', '')
         p.setdefault('due_confirmed', False)
+        p.setdefault('due_warning', False)
         if 'kanban_image' in p and not p['kanban_attachments']:
             old = p.pop('kanban_image')
             if isinstance(old, str) and old:
@@ -1195,6 +1198,11 @@ def calendar_pedidos():
     kanban_columns = {}
     column_colors = load_column_colors()
     updated_colors = False
+    allowed_lanes = [
+        'seguimiento compras',
+        'acero al carbono',
+        'inoxidable - aluminio',
+    ]
 
     for entry in load_kanban_cards():
         if not isinstance(entry, dict):
@@ -1204,7 +1212,7 @@ def calendar_pedidos():
             continue
 
         lane_name = (card.get('lanename') or '').strip()
-        if lane_name.lower() != 'seguimiento compras':
+        if lane_name.lower() not in allowed_lanes:
             continue
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
@@ -1229,7 +1237,11 @@ def calendar_pedidos():
     seen_links = set()
 
     for card in compras_raw.values():
-        title = card.get('title') or ''
+        title = (card.get('title') or '').strip()
+        project_name = title
+        client_name = ''
+        if ' - ' in title:
+            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
         # Buscar fecha (dd/mm) en el título o usar deadline
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
         if m:
@@ -1249,7 +1261,7 @@ def calendar_pedidos():
             'color': column_colors.get(column, '#999999'),
             'hours': None,
             'lane': lane_name,
-            'client': '',
+            'client': client_name,
             'column': column,
         }
 
@@ -1278,16 +1290,26 @@ def calendar_pedidos():
             lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
             and column not in ["Ready to Archive", "Hacer Albaran"]
         ):
-            if title not in seen_links:
-                links_table.append({'project': title, 'client': ''})
-                seen_links.add(title)
+            if project_name not in seen_links:
+                child_links = []
+                links_info = card.get('links') or {}
+                children = links_info.get('children') if isinstance(links_info, dict) else []
+                if isinstance(children, list):
+                    for ch in children:
+                        if isinstance(ch, dict):
+                            t = ch.get('title')
+                            if t:
+                                child_links.append(t)
+                links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                seen_links.add(project_name)
 
     # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
     month_start = (current_month_start - timedelta(days=1)).replace(day=1)
     start = month_start - timedelta(days=month_start.weekday())
 
-    months_to_show = 13
+    # Mostrar mes anterior, mes actual y dos meses siguientes
+    months_to_show = 4
     end_month = month_start
     for _ in range(months_to_show - 1):
         end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -1305,8 +1327,13 @@ def calendar_pedidos():
         for i in range(5):  # solo lunes-viernes
             day = current + timedelta(days=i)
             month_label = ''
-            if day.day == 1 or (day.weekday() == 0 and 1 < day.day <= 7):
-                month_label = MONTHS[day.month - 1].capitalize()
+            first_weekday = date(day.year, day.month, 1).weekday()
+            if first_weekday < 5:
+                if day.day == 1:
+                    month_label = MONTHS[day.month - 1].capitalize()
+            else:
+                if day.weekday() == 0 and 1 < day.day <= 7:
+                    month_label = MONTHS[day.month - 1].capitalize()
             tasks = pedidos.get(day, []) if month_start <= day <= month_end else []
             week['days'].append(
                 {
@@ -1889,11 +1916,28 @@ def update_due_date():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj['due_date'] = new_date.isoformat()
+    proj['due_confirmed'] = True
+    proj['due_warning'] = True
     save_projects(projects)
     _sync_project_to_kanbanize(proj, {'due_date'})
     if request.is_json:
         return '', 204
     return redirect(next_url)
+
+
+@app.route('/clear_deadline', methods=['POST'])
+def clear_deadline():
+    data = request.get_json() or {}
+    pid = data.get('pid')
+    if not pid:
+        return '', 400
+    projects = load_projects()
+    for p in projects:
+        if p['id'] == pid:
+            p['due_warning'] = False
+            save_projects(projects)
+            break
+    return '', 204
 
 
 @app.route('/update_start_date', methods=['POST'])
@@ -2296,7 +2340,7 @@ def move_phase():
                 if opid == pid and ph == phase and (part is None or prt == part):
                     continue
                 used_hours += hrs
-    new_day, err = move_phase_date(
+    new_day, warn = move_phase_date(
         projects,
         pid,
         phase,
@@ -2310,10 +2354,13 @@ def move_phase():
         start_hour=used_hours if mode == 'split' else None,
     )
     if new_day is None:
-        if isinstance(err, dict):
-            return jsonify({'blocked': err}), 409
-        return jsonify({'error': err or 'No se pudo mover'}), 400
-    return jsonify({'date': new_day, 'pid': pid, 'phase': phase})
+        if isinstance(warn, dict):
+            return jsonify({'blocked': warn}), 409
+        return jsonify({'error': warn or 'No se pudo mover'}), 400
+    resp = {'date': new_day, 'pid': pid, 'phase': phase}
+    if warn:
+        resp['warning'] = warn
+    return jsonify(resp)
 
 
 @app.route('/check_move', methods=['POST'])
@@ -2349,11 +2396,11 @@ def check_move():
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
-    new_day, err = move_phase_date(
+    new_day, warn = move_phase_date(
         temp, pid, phase, day, worker, part, save=False, mode="split", start_hour=used_hours
     )
     if new_day is None:
-        return jsonify({'error': err or 'No se pudo mover'}), 400
+        return jsonify({'error': warn or 'No se pudo mover'}), 400
     after = compute_schedule_map(temp)
 
     def build_map(mapping):
@@ -2425,7 +2472,10 @@ def check_move():
                 future.sort()
                 _, opid, ph, prt = future[0]
                 auto = {'pid': opid, 'phase': ph, 'part': prt}
-    return jsonify({'split': split, 'options': options, 'auto': auto, 'free': free_hours})
+    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours}
+    if warn:
+        resp['warning'] = warn
+    return jsonify(resp)
 
 
 def remove_project_and_preserve_schedule(projects, pid):
@@ -2835,6 +2885,7 @@ def kanbanize_webhook():
             if existing.get('due_date') != iso or existing.get('due_confirmed') != due_confirmed_flag:
                 existing['due_date'] = iso
                 existing['due_confirmed'] = due_confirmed_flag
+                existing['due_warning'] = True
                 changed = True
         elif existing.get('due_date') or existing.get('due_confirmed'):
             existing['due_date'] = ''
@@ -2920,6 +2971,7 @@ def kanbanize_webhook():
             'source': 'api',
             'kanban_id': task_id,
             'due_confirmed': due_confirmed_flag,
+            'due_warning': bool(due_date_obj),
         }
         projects.append(project)
         save_projects(projects)

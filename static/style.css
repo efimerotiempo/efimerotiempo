@@ -216,6 +216,11 @@ table.pedidos-calendar td.week-label {
     background: #eee;
 }
 
+.links-table td.project-links .link-title {
+    display: inline-block;
+    margin-right: 6px;
+}
+
 
 /* keep projects table width */
 .complete-projects table { width: 100%; }
