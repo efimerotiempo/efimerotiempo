@@ -1287,7 +1287,8 @@ def calendar_pedidos():
     month_start = (current_month_start - timedelta(days=1)).replace(day=1)
     start = month_start - timedelta(days=month_start.weekday())
 
-    months_to_show = 13
+    # Mostrar mes anterior, mes actual y dos meses siguientes
+    months_to_show = 4
     end_month = month_start
     for _ in range(months_to_show - 1):
         end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
