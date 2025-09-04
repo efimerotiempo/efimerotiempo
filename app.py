@@ -66,8 +66,8 @@ WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
-DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
-CLIENT_DEADLINE_MSG = 'Fecha cliente soprepasada.'
+DEADLINE_MSG = 'Fecha cliente soprepasada.'
+CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
