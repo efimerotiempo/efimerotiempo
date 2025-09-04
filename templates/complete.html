@@ -625,7 +625,7 @@ const popup = document.getElementById('info-popup');
           else total = parseInt(val) || 0;
           if (total > 0) {
             const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-            const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : '';
+            const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
             let line = `<div${cls}>${ph}: ${total}h`;
             if (ph === t.dataset.phase) {
               line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
@@ -1030,33 +1030,36 @@ const popup = document.getElementById('info-popup');
         credentials: 'same-origin',
         body: JSON.stringify(moveData)
       }).then(resp => resp.json()).then(res => {
-        if (res.warning) showDeadline(res.warning);
-        if (res.split) {
-          moveSelect.innerHTML = '';
-          if (res.options && res.options.length) {
-            moveLabel.style.display = '';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
-            res.options.forEach(opt => {
-              const o = document.createElement('option');
-              o.value = JSON.stringify(opt);
-              o.textContent = opt.text;
-              moveSelect.appendChild(o);
-            });
-          } else {
-            moveLabel.style.display = 'none';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
-            if (res.auto) {
-              moveData.push_pid = res.auto.pid;
-              moveData.push_phase = res.auto.phase;
-              moveData.push_part = res.auto.part;
+        const proceed = () => {
+          if (res.split) {
+            moveSelect.innerHTML = '';
+            if (res.options && res.options.length) {
+              moveLabel.style.display = '';
+              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
+              res.options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = JSON.stringify(opt);
+                o.textContent = opt.text;
+                moveSelect.appendChild(o);
+              });
+            } else {
+              moveLabel.style.display = 'none';
+              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
+              if (res.auto) {
+                moveData.push_pid = res.auto.pid;
+                moveData.push_phase = res.auto.phase;
+                moveData.push_part = res.auto.part;
+              }
             }
+            if (moveAppend) moveAppend.style.display = res.free > 0 ? '' : 'none';
+            pendingMove = { data: moveData, beforeMaterial };
+            moveModal.style.display = 'block';
+          } else {
+            doMove(moveData, 'split', beforeMaterial);
           }
-          if (moveAppend) moveAppend.style.display = res.free > 0 ? '' : 'none';
-          pendingMove = { data: moveData, beforeMaterial };
-          moveModal.style.display = 'block';
-        } else {
-          doMove(moveData, 'split', beforeMaterial);
-        }
+        };
+        if (res.warning) showDeadline(res.warning, proceed);
+        else proceed();
       });
     });
   });
