@@ -188,7 +188,7 @@
 </div>
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
-<div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text"></div><button id="deadline-close">Cerrar</button></div></div>
+<div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label id="move-label">Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-append">No desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
@@ -288,7 +288,6 @@
   const deadlineText = document.getElementById('deadline-text');
   const deadlineClose = document.getElementById('deadline-close');
   const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
-  const CLIENT_MSG = 'Fecha cliente sobrepasada.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
@@ -308,13 +307,6 @@
   let pendingMove = null;
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
-    if (text.startsWith(DEADLINE_MSG)) {
-      deadlineText.style.color = 'orange';
-      deadlineText.style.fontWeight = 'bold';
-    } else {
-      deadlineText.style.color = 'black';
-      deadlineText.style.fontWeight = 'normal';
-    }
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
@@ -325,8 +317,7 @@
 
   for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
     if (proj.due_warning) {
-      const msg = proj.due_confirmed ? DEADLINE_MSG : CLIENT_MSG;
-      const text = `${msg}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
+      const text = `${DEADLINE_MSG}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
       showDeadline(text, () => {
         fetch(CLEAR_DEADLINE_URL, {
           method: 'POST',
@@ -565,7 +556,7 @@ let lastDrag = null;
             .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
             .then(({ ok, data }) => {
               if (!ok) {
-                if (data.error === DEADLINE_MSG || data.error === CLIENT_MSG) showDeadline(data.error);
+                if (data.error === DEADLINE_MSG) showDeadline();
                 else alert(data.error || 'Error');
                 return;
               }
@@ -763,7 +754,7 @@ let lastDrag = null;
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
             if (!ok) {
-              if (data.error === DEADLINE_MSG || data.error === CLIENT_MSG) showDeadline(data.error);
+              if (data.error === DEADLINE_MSG) showDeadline();
               else alert(data.error || 'Error');
               return;
             }
@@ -871,7 +862,7 @@ let lastDrag = null;
           blockModal.style.display = 'block';
           return;
         }
-        if (data.error === DEADLINE_MSG || data.error === CLIENT_MSG) showDeadline(data.error);
+        if (data.error === DEADLINE_MSG) showDeadline();
         else alert(data.error || 'Error');
         return;
       }
@@ -959,7 +950,7 @@ let lastDrag = null;
         .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
         .then(({ ok, data }) => {
           if (!ok) {
-            if (data.error === DEADLINE_MSG || data.error === CLIENT_MSG) showDeadline(data.error);
+            if (data.error === DEADLINE_MSG) showDeadline();
             else alert(data.error || 'Error');
             return;
           }
@@ -971,16 +962,6 @@ let lastDrag = null;
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
-  function calcTitleWidth() {
-    let max = 0;
-    document.querySelectorAll('.folder-header').forEach(h => {
-      if (h.scrollWidth > max) max = h.scrollWidth;
-    });
-    return max;
-  }
-  const TITLE_WIDTH = calcTitleWidth();
-  const MIN_UNPLAN_WIDTH = TITLE_WIDTH;
-  const MAX_UNPLAN_WIDTH = Math.max(100, TITLE_WIDTH + 20);
 
   function syncUnplannedHeight() {
     const wrap = document.querySelector('.schedule-wrapper');
@@ -992,16 +973,16 @@ let lastDrag = null;
   syncUnplannedHeight();
   window.addEventListener('resize', syncUnplannedHeight);
   if (unplanPanel) {
-    const savedWidth = parseInt(localStorage.getItem(UNPLAN_WIDTH_KEY), 10);
-    const initWidth = savedWidth || unplanPanel.offsetWidth;
-    unplanPanel.style.width = Math.max(initWidth, MIN_UNPLAN_WIDTH) + 'px';
+    const savedWidth = localStorage.getItem(UNPLAN_WIDTH_KEY);
+    if (savedWidth) {
+      unplanPanel.style.width = savedWidth + 'px';
+    }
   }
   if (unplanPanel && unplanResizer) {
     let startX, startWidth;
     const onMouseMove = (e) => {
       const dx = startX - e.clientX;
-      let newWidth = startWidth + dx;
-      newWidth = Math.max(MIN_UNPLAN_WIDTH, Math.min(newWidth, MAX_UNPLAN_WIDTH));
+      const newWidth = Math.max(100, startWidth + dx);
       unplanPanel.style.width = newWidth + 'px';
     };
     const onMouseUp = () => {

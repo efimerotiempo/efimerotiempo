@@ -128,17 +128,12 @@ reúne todas las fases pendientes. Cada proyecto aparece como una carpeta con
 su nombre y cliente; las carpetas están plegadas por defecto y se pueden
 desplegar para ver y arrastrar sus fases al calendario. Dentro de cada proyecto
 las horas de una misma fase se agrupan y se muestran como una única entrada con
-el total pendiente. La columna comienza con 2500 px de ancho y se sitúa a la
-derecha del todo, fuera del área desplazable del calendario, pero puede
-arrastrarse por su borde izquierdo para dejarla a la vista. Al reducirse, el
-arrastre se detiene cuando el borde alcanza las letras de los títulos de las
-carpetas, de modo que nunca se ocultan. Ese ancho marca también el mínimo
-permitido. Al ampliarla, únicamente puede crecer hasta el límite que antes
-actuaba como mínimo —unos píxeles más que los títulos—, evitando que aumente sin
-control. El ancho elegido se mantiene al cambiar de
-pestaña y volver a **Completo**. Un botón «Fases sin planificar» flotante
-permite mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan
-por la
+el total pendiente. La columna comienza con 2500 px de ancho pero puede
+ampliarse o reducirse sin límite arrastrando su borde izquierdo y se sitúa a la
+derecha del todo, fuera del área
+desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
+y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
+mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
 fecha **Material confirmado** de cada proyecto y una división separa los que
 cuentan con esa fecha de los que no. El título de cada carpeta muestra la
 **Fecha límite** del proyecto tras el nombre del cliente, y se actualiza si
@@ -163,10 +158,6 @@ al planificar una fase que exceda esa fecha se mostrará una ventana
 emergente en naranja con el aviso **FECHA LÍMITE CONFIRMADA A CLIENTE, NO
 SOBREPASAR.** junto con el proyecto, el cliente y el día límite, aunque la
 planificación continúa.
-
-Si la fecha límite proviene del campo "fecha cliente", el movimiento se
-permite igualmente pero se mostrará una ventana emergente en negro con el
-mensaje "Fecha cliente sobrepasada." junto con los mismos datos.
 
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
