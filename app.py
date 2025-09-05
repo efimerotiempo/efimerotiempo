@@ -631,6 +631,18 @@ def move_phase_date(
         and new_date in vac_map.get(worker, set())
     ):
         return None, 'Vacaciones en esa fecha'
+
+    # Remember the originally requested day but adjust the actual start if the
+    # provided hour exceeds the daily limit.  The new phase will then begin the
+    # following workday at hour zero.
+    target_day = new_date
+    sched_day = new_date
+    sched_hour = start_hour if start_hour is not None else 0
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    if start_hour is not None and start_hour >= limit:
+        sched_day = next_workday(sched_day)
+        sched_hour = 0
+
     warning = None
     if proj.get('due_date'):
         try:
@@ -643,7 +655,7 @@ def move_phase_date(
             else:
                 hours = int(phase_hours)
             days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            test_end = new_date
+            test_end = sched_day
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
@@ -654,9 +666,9 @@ def move_phase_date(
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
-        seg_starts[0] = new_date.isoformat()
+        seg_starts[0] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(phase, [None])
-        seg_hours[0] = start_hour
+        seg_hours[0] = sched_hour
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     else:
@@ -666,18 +678,18 @@ def move_phase_date(
         idx = part if part is not None else 0
         while len(seg_starts) <= idx:
             seg_starts.append(None)
-        seg_starts[idx] = new_date.isoformat()
+        seg_starts[idx] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(
             phase, [None] * len(proj['phases'][phase])
         )
         if idx >= len(seg_hours):
             seg_hours.extend([None] * (idx + 1 - len(seg_hours)))
-        seg_hours[idx] = start_hour
+        seg_hours[idx] = sched_hour
         if worker:
             seg_workers = proj.setdefault('segment_workers', {}).setdefault(
                 phase, [None] * len(proj['phases'][phase])
             )
-        
+
             if idx >= len(seg_workers):
                 seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
             seg_workers[idx] = worker
@@ -695,14 +707,15 @@ def move_phase_date(
         else:
             hours = int(phase_val)
         days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-        next_start = new_date
+        next_start = sched_day
         for _ in range(days_needed):
             next_start = next_workday(next_start)
 
         mapping = compute_schedule_map(projects)
-        start_push = new_date
+        start_push = next_workday(target_day)
         if push_from:
             pf_pid, pf_phase, pf_part = push_from
+            selected = None
             for w, day_str, ph, hrs, prt in mapping.get(pf_pid, []):
                 if (
                     w == worker
@@ -710,8 +723,10 @@ def move_phase_date(
                     and (pf_part is None or prt == pf_part)
                 ):
                     d = date.fromisoformat(day_str)
-                    if d < start_push:
-                        start_push = d
+                    if d >= start_push and (selected is None or d < selected):
+                        selected = d
+            if selected is not None:
+                start_push = selected
         seen = {}
         for opid, items in mapping.items():
             for w, day_str, ph, hrs, prt in items:
@@ -786,7 +801,7 @@ def move_phase_date(
 
     if save:
         save_projects(projects)
-    return new_date.isoformat(), warning
+    return sched_day.isoformat(), warning
 
 
 def get_projects():
