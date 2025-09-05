@@ -246,7 +246,7 @@
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label id="move-label">Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-append">No desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
+<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una o varias fases para desplazar y hacer hueco.</p><div id="move-options"></div><button id="move-confirm">Desplazar</button> <button id="move-append">No desplazar</button> <button id="move-all">Desplazar todas las fases</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
@@ -425,11 +425,11 @@
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
   const moveModal = document.getElementById('move-modal');
-  const moveSelect = document.getElementById('move-select');
-  const moveLabel = document.getElementById('move-label');
+  const moveOptions = document.getElementById('move-options');
   const moveText = document.getElementById('move-text');
   const moveConfirm = document.getElementById('move-confirm');
   const moveAppend = document.getElementById('move-append');
+  const moveAll = document.getElementById('move-all');
   const moveCancel = document.getElementById('move-cancel');
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
@@ -1121,18 +1121,24 @@ let previewStart = null;
         const proceed = () => {
           if (res.warning) moveData.ack_warning = true;
           if (res.split) {
-            moveSelect.innerHTML = '';
+            moveOptions.innerHTML = '';
             if (res.options && res.options.length) {
-              moveLabel.style.display = '';
-              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
+              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una o varias fases para desplazar y hacer hueco.';
               res.options.forEach(opt => {
-                const o = document.createElement('option');
-                o.value = JSON.stringify(opt);
-                o.textContent = opt.text;
-                moveSelect.appendChild(o);
+                const lbl = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = JSON.stringify(opt);
+                const st = opt.start_time ? opt.start_time.slice(11,16) : '';
+                const en = opt.end_time ? opt.end_time.slice(11,16) : '';
+                lbl.appendChild(cb);
+                lbl.append(` ${opt.text} (${st}-${en})`);
+                moveOptions.appendChild(lbl);
+                moveOptions.appendChild(document.createElement('br'));
               });
+              moveOptions.style.display = '';
             } else {
-              moveLabel.style.display = 'none';
+              moveOptions.style.display = 'none';
               moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
               if (res.auto) {
                 moveData.push_pid = res.auto.pid;
@@ -1184,14 +1190,22 @@ let previewStart = null;
   if (moveConfirm) {
     moveConfirm.addEventListener('click', () => {
       if (pendingMove) {
-        if (moveLabel.style.display !== 'none') {
-          const sel = moveSelect.value;
-          if (!sel) return;
-          const opt = JSON.parse(sel);
-          pendingMove.data.push_pid = opt.pid;
-          pendingMove.data.push_phase = opt.phase;
-          pendingMove.data.push_part = opt.part;
-        }
+        const selected = Array.from(moveOptions.querySelectorAll('input[type="checkbox"]:checked')).map(cb => JSON.parse(cb.value));
+        if (!selected.length) return;
+        selected.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        const first = selected[0];
+        pendingMove.data.push_pid = first.pid;
+        pendingMove.data.push_phase = first.phase;
+        pendingMove.data.push_part = first.part;
+        moveModal.style.display = 'none';
+        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
+        pendingMove = null;
+      }
+    });
+  }
+  if (moveAll) {
+    moveAll.addEventListener('click', () => {
+      if (pendingMove) {
         moveModal.style.display = 'none';
         doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
         pendingMove = null;

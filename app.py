@@ -2423,22 +2423,28 @@ def check_move():
     except Exception:
         return '', 400
     projects = get_projects()
-    before = compute_schedule_map(projects)
+    schedule_before, _ = schedule_projects(copy.deepcopy(projects))
+    before = {}
     used_hours = 0
     today_tasks = []
     future_tasks = []
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w != worker:
-                continue
-            d = date.fromisoformat(day_str)
-            if opid == pid and ph == phase and (part is None or prt == part):
-                continue
-            if d == day:
-                used_hours += hrs
-                today_tasks.append((opid, ph, prt))
-            elif d > day:
-                future_tasks.append((d, opid, ph, prt))
+    for w, days in schedule_before.items():
+        for dstr, tasks in days.items():
+            for t in tasks:
+                pid_t = t['pid']
+                before.setdefault(pid_t, []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
+                if w != worker:
+                    continue
+                d = date.fromisoformat(dstr)
+                if pid_t == pid and t['phase'] == phase and (part is None or t.get('part') == part):
+                    continue
+                if d == day:
+                    used_hours += t['hours']
+                    today_tasks.append((pid_t, t['phase'], t.get('part')))
+                elif d > day:
+                    future_tasks.append((d, pid_t, t['phase'], t.get('part')))
+    for lst in before.values():
+        lst.sort()
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     append_mode = (
@@ -2548,12 +2554,22 @@ def check_move():
     options = []
     auto = None
     if split:
-        for opid, items in before.items():
-            for w, day_str, ph, hrs, prt in items:
-                if w == worker and day_str == date_str:
-                    proj = next((p for p in projects if p['id'] == opid), None)
-                    txt = f"{proj.get('name','')} - {ph}" if proj else ph
-                    options.append({'pid': opid, 'phase': ph, 'part': prt, 'text': txt})
+        for t in schedule_before.get(worker, {}).get(date_str, []):
+            opid = t['pid']
+            ph = t['phase']
+            prt = t.get('part')
+            if opid == pid and ph == phase and (part is None or prt == part):
+                continue
+            proj = next((p for p in projects if p['id'] == opid), None)
+            txt = f"{proj.get('name','')} - {ph}" if proj else ph
+            options.append({
+                'pid': opid,
+                'phase': ph,
+                'part': prt,
+                'text': txt,
+                'start_time': t.get('start_time'),
+                'end_time': t.get('end_time'),
+            })
         if not options:
             future = []
             for opid, items in before.items():
