@@ -3013,6 +3013,26 @@ def kanbanize_webhook():
         return jsonify({"mensaje": "Proyecto actualizado"}), 200
 
 
+@app.route('/hours')
+def hours():
+    projects = get_projects()
+    schedule, _ = schedule_projects(copy.deepcopy(projects))
+    rows = []
+    for days in schedule.values():
+        for tasks in days.values():
+            for t in tasks:
+                if t.get('phase') == 'vacaciones':
+                    continue
+                rows.append({
+                    'project': t.get('project'),
+                    'phase': t.get('phase'),
+                    'start_time': t.get('start_time'),
+                    'end_time': t.get('end_time'),
+                })
+    rows.sort(key=lambda r: r['start_time'])
+    return render_template('hours.html', rows=rows)
+
+
 @app.route('/bugs')
 def bug_list():
     bugs = load_bugs()
