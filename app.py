@@ -2349,12 +2349,27 @@ def move_phase():
     projects = get_projects()
     before = compute_schedule_map(projects)
     used_hours = 0
+    today_tasks = []
+    future_tasks = []
     for opid, items in before.items():
         for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
-                    continue
-                used_hours += hrs
+            if w == worker:
+                if day_str == date_str:
+                    if opid == pid and ph == phase and (part is None or prt == part):
+                        continue
+                    used_hours += hrs
+                    today_tasks.append((opid, ph, prt))
+                elif date.fromisoformat(day_str) > day:
+                    future_tasks.append((date.fromisoformat(day_str), opid, ph, prt))
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    free_hours = max(0, limit - used_hours)
+    start_hour = used_hours if (
+        mode == 'split' and (
+            start_hour is None or (
+                used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
+            )
+        )
+    ) else (start_hour if start_hour is not None else (used_hours if mode == 'split' else None))
     new_day, warn = move_phase_date(
         projects,
         pid,
@@ -2366,7 +2381,7 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=start_hour if start_hour is not None else (used_hours if mode == 'split' else None),
+        start_hour=start_hour,
     )
     if new_day is None:
         if isinstance(warn, dict):
@@ -2410,12 +2425,18 @@ def check_move():
     projects = get_projects()
     before = compute_schedule_map(projects)
     used_hours = 0
+    today_tasks = []
+    future_tasks = []
     for opid, items in before.items():
         for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
-                    continue
-                used_hours += hrs
+            if w == worker:
+                if day_str == date_str:
+                    if opid == pid and ph == phase and (part is None or prt == part):
+                        continue
+                    used_hours += hrs
+                    today_tasks.append((opid, ph, prt))
+                elif date.fromisoformat(day_str) > day:
+                    future_tasks.append((date.fromisoformat(day_str), opid, ph, prt))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
@@ -2428,7 +2449,9 @@ def check_move():
         part,
         save=False,
         mode="split",
-        start_hour=start_hour if start_hour is not None else used_hours,
+        start_hour=(used_hours if (start_hour is None or (
+            used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
+        )) else start_hour),
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
@@ -2499,8 +2522,9 @@ def check_move():
         split = True
     if not split and used_hours > 0:
         # Only flag a conflict if the target day already contains hours from
-        # other phases; otherwise allow the move silently.
-        split = True
+        # other phases or if there are tasks after the target day.
+        if not (len(today_tasks) == 1 and free_hours > 0 and not future_tasks):
+            split = True
     if not split:
         # Check if moving this phase would alter any other task on the target
         # worker, either by shifting it to different days or by adding/removing
@@ -2539,7 +2563,7 @@ def check_move():
                 future.sort()
                 _, opid, ph, prt = future[0]
                 auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview}
+    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview, 'used': used_hours}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)

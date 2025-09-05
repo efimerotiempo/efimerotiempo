@@ -1144,6 +1144,7 @@ let previewStart = null;
             pendingMove = { data: moveData, beforeMaterial };
             moveModal.style.display = 'block';
           } else {
+            moveData.start = res.used;
             doMove(moveData, 'split', beforeMaterial);
           }
         };
