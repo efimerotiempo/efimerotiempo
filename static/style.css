@@ -12,7 +12,7 @@ table.schedule th, table.schedule td {
 }
 table.schedule td.incomplete {
     border: 1px solid #ccc;
-    border-top: 3px solid red;
+    border-top: 3px solid #000;
 }
 
 table.schedule td.vacation-day {
