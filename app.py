@@ -2365,13 +2365,11 @@ def move_phase():
                 future_tasks.append((d, opid, ph, prt))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
-    start_hour = used_hours if (
-        mode == 'split' and (
-            start_hour is None or (
-                used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
-            )
-        )
-    ) else (start_hour if start_hour is not None else (used_hours if mode == 'split' else None))
+    append_mode = (
+        used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
+    )
+    if mode == 'split' and (append_mode or start_hour is None):
+        start_hour = used_hours
     new_day, warn = move_phase_date(
         projects,
         pid,
@@ -2443,6 +2441,9 @@ def check_move():
                 future_tasks.append((d, opid, ph, prt))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
+    append_mode = (
+        used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
+    )
     temp = copy.deepcopy(projects)
     new_day, warn = move_phase_date(
         temp,
@@ -2453,9 +2454,7 @@ def check_move():
         part,
         save=False,
         mode="split",
-        start_hour=(used_hours if (start_hour is None or (
-            used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
-        )) else start_hour),
+        start_hour=(used_hours if append_mode or start_hour is None else start_hour),
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
@@ -2524,11 +2523,10 @@ def check_move():
                 break
     if moved_key in after_map and not is_contiguous(after_map[moved_key]):
         split = True
-    if not split and used_hours > 0:
+    if not split and used_hours > 0 and not append_mode:
         # Only flag a conflict if the target day already contains hours from
         # other phases or if there are tasks after the target day.
-        if not (len(today_tasks) == 1 and free_hours > 0 and not future_tasks):
-            split = True
+        split = True
     if not split:
         # Check if moving this phase would alter any other task on the target
         # worker, either by shifting it to different days or by adding/removing
