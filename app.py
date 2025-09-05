@@ -2347,29 +2347,22 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    before = compute_schedule_map(projects)
-    used_hours = 0
-    today_tasks = []
-    future_tasks = []
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w != worker:
-                continue
-            d = date.fromisoformat(day_str)
-            if opid == pid and ph == phase and (part is None or prt == part):
-                continue
-            if d == day:
-                used_hours += hrs
-                today_tasks.append((opid, ph, prt))
-            elif d > day:
-                future_tasks.append((d, opid, ph, prt))
+    schedule_before, _ = schedule_projects(copy.deepcopy(projects))
+    end_hour = 0
+    for w, days in schedule_before.items():
+        if w != worker:
+            continue
+        for dstr, tasks in days.items():
+            d = date.fromisoformat(dstr)
+            for t in tasks:
+                if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
+                    continue
+                if d == day:
+                    end_hour = max(end_hour, t.get('start', 0) + t['hours'])
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    free_hours = max(0, limit - used_hours)
-    append_mode = (
-        used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
-    )
-    if mode == 'split' and (append_mode or start_hour is None):
-        start_hour = used_hours
+    free_hours = max(0, limit - end_hour)
+    start_hour = end_hour
+    mode = 'push' if free_hours == 0 else 'split'
     new_day, warn = move_phase_date(
         projects,
         pid,
@@ -2424,9 +2417,7 @@ def check_move():
         return '', 400
     projects = get_projects()
     schedule_before, _ = schedule_projects(copy.deepcopy(projects))
-    used_hours = 0
-    today_tasks = []
-    future_tasks = []
+    end_hour = 0
     for w, days in schedule_before.items():
         if w != worker:
             continue
@@ -2436,15 +2427,10 @@ def check_move():
                 if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
                     continue
                 if d == day:
-                    used_hours += t['hours']
-                    today_tasks.append((t['pid'], t['phase'], t.get('part')))
-                elif d > day:
-                    future_tasks.append((d, t['pid'], t['phase'], t.get('part')))
+                    end_hour = max(end_hour, t.get('start', 0) + t['hours'])
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    free_hours = max(0, limit - used_hours)
-    append_mode = (
-        used_hours > 0 and free_hours > 0 and len(today_tasks) == 1 and not future_tasks
-    )
+    free_hours = max(0, limit - end_hour)
+    start_hour = end_hour
     temp = copy.deepcopy(projects)
     new_day, warn = move_phase_date(
         temp,
@@ -2454,8 +2440,8 @@ def check_move():
         worker,
         part,
         save=False,
-        mode="split",
-        start_hour=(used_hours if append_mode or start_hour is None else start_hour),
+        mode=('push' if free_hours == 0 else 'split'),
+        start_hour=start_hour,
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
@@ -2485,7 +2471,7 @@ def check_move():
             }
         )
 
-    resp = {'split': False, 'options': [], 'auto': None, 'free': free_hours, 'preview': preview, 'used': used_hours}
+    resp = {'split': False, 'options': [], 'auto': None, 'free': free_hours, 'preview': preview, 'used': end_hour}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)
