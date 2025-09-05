@@ -2424,27 +2424,22 @@ def check_move():
         return '', 400
     projects = get_projects()
     schedule_before, _ = schedule_projects(copy.deepcopy(projects))
-    before = {}
     used_hours = 0
     today_tasks = []
     future_tasks = []
     for w, days in schedule_before.items():
+        if w != worker:
+            continue
         for dstr, tasks in days.items():
+            d = date.fromisoformat(dstr)
             for t in tasks:
-                pid_t = t['pid']
-                before.setdefault(pid_t, []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
-                if w != worker:
-                    continue
-                d = date.fromisoformat(dstr)
-                if pid_t == pid and t['phase'] == phase and (part is None or t.get('part') == part):
+                if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
                     continue
                 if d == day:
                     used_hours += t['hours']
-                    today_tasks.append((pid_t, t['phase'], t.get('part')))
+                    today_tasks.append((t['pid'], t['phase'], t.get('part')))
                 elif d > day:
-                    future_tasks.append((d, pid_t, t['phase'], t.get('part')))
-    for lst in before.values():
-        lst.sort()
+                    future_tasks.append((d, t['pid'], t['phase'], t.get('part')))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     append_mode = (
@@ -2466,25 +2461,6 @@ def check_move():
         return jsonify({'error': warn or 'No se pudo mover'}), 400
 
     schedule_after, _ = schedule_projects(copy.deepcopy(temp))
-    after = {}
-    for w, days in schedule_after.items():
-        for dstr, tasks in days.items():
-            for t in tasks:
-                after.setdefault(t['pid'], []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
-    for lst in after.values():
-        lst.sort()
-
-    def build_map(mapping):
-        res = {}
-        for opid, items in mapping.items():
-            for w, day_str, ph, hrs, prt in items:
-                key = (opid, w, ph, prt)
-                res.setdefault(key, []).append(date.fromisoformat(day_str))
-        return res
-
-    before_map = build_map(before)
-    after_map = build_map(after)
-
     preview = []
     for t in schedule_after.get(worker, {}).get(date_str, []):
         proj = next((p for p in temp if p['id'] == t['pid']), None)
@@ -2509,79 +2485,7 @@ def check_move():
             }
         )
 
-    def is_contiguous(days):
-        if not days:
-            return True
-        days.sort()
-        prev = days[0]
-        for d in days[1:]:
-            if d != next_workday(prev):
-                return False
-            prev = d
-        return True
-
-    split = False
-    moved_key = (pid, worker, phase, part)
-    if moved_key not in after_map:
-        for key in after_map:
-            if key[0] == pid and key[2] == phase and key[3] == part:
-                moved_key = key
-                break
-    if moved_key in after_map and not is_contiguous(after_map[moved_key]):
-        split = True
-    if not split and used_hours > 0 and not append_mode:
-        # Only flag a conflict if the target day already contains hours from
-        # other phases or if there are tasks after the target day.
-        split = True
-    if not split:
-        # Check if moving this phase would alter any other task on the target
-        # worker, either by shifting it to different days or by adding/removing
-        # tasks on that worker.
-        related = set(
-            k
-            for k in before_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        related.update(
-            k
-            for k in after_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        for key in related:
-            if before_map.get(key, []) != after_map.get(key, []):
-                split = True
-                break
-    options = []
-    auto = None
-    if split:
-        for t in schedule_before.get(worker, {}).get(date_str, []):
-            opid = t['pid']
-            ph = t['phase']
-            prt = t.get('part')
-            if opid == pid and ph == phase and (part is None or prt == part):
-                continue
-            proj = next((p for p in projects if p['id'] == opid), None)
-            txt = f"{proj.get('name','')} - {ph}" if proj else ph
-            options.append({
-                'pid': opid,
-                'phase': ph,
-                'part': prt,
-                'text': txt,
-                'start_time': t.get('start_time'),
-                'end_time': t.get('end_time'),
-            })
-        if not options:
-            future = []
-            for opid, items in before.items():
-                for w, day_str, ph, hrs, prt in items:
-                    d = date.fromisoformat(day_str)
-                    if w == worker and d > day:
-                        future.append((d, opid, ph, prt))
-            if future:
-                future.sort()
-                _, opid, ph, prt = future[0]
-                auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview, 'used': used_hours}
+    resp = {'split': False, 'options': [], 'auto': None, 'free': free_hours, 'preview': preview, 'used': used_hours}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)
