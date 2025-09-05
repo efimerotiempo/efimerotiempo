@@ -66,7 +66,8 @@ WEEKEND = _schedule_mod.WEEKEND
 HOURS_PER_DAY = _schedule_mod.HOURS_PER_DAY
 HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
-DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.'
+DEADLINE_MSG = 'Fecha cliente soprepasada.'
+CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -631,7 +632,7 @@ def move_phase_date(
     ):
         return None, 'Vacaciones en esa fecha'
     warning = None
-    if proj.get('due_confirmed') and proj.get('due_date'):
+    if proj.get('due_date'):
         try:
             due_dt = date.fromisoformat(proj['due_date'])
             phase_hours = proj['phases'].get(phase)
@@ -646,7 +647,8 @@ def move_phase_date(
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
-                warning = f"{DEADLINE_MSG}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
+                msg = CLIENT_DEADLINE_MSG if proj.get('due_confirmed') else DEADLINE_MSG
+                warning = f"{msg}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
         except Exception:
             pass
     # Apply the change to the real project list
@@ -727,7 +729,11 @@ def move_phase_date(
         for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
-            other_proj = next(p for p in projects if p['id'] == opid)
+            other_proj = next((p for p in projects if p['id'] == opid), None)
+            if not other_proj:
+                while next_start in vac_days:
+                    next_start = next_workday(next_start)
+                continue
             if oph != 'pedidos' and any(
                 t['phase'] == oph and (oprt is None or t.get('part') == oprt)
                 for t in other_proj.get('frozen_tasks', [])
@@ -2325,6 +2331,15 @@ def move_phase():
         push_from = (push_pid, push_phase, push_part if push_part not in (None, '', 'None') else None)
     unblock = str(data.get('unblock')).lower() == 'true'
     skip_block = str(data.get('skip_block')).lower() == 'true'
+    ack_warning = str(data.get('ack_warning')).lower() == 'true'
+    start = data.get('start')
+    if start in (None, '', 'None'):
+        start_hour = None
+    else:
+        try:
+            start_hour = float(start)
+        except Exception:
+            start_hour = None
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2351,14 +2366,14 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=used_hours if mode == 'split' else None,
+        start_hour=start_hour if start_hour is not None else (used_hours if mode == 'split' else None),
     )
     if new_day is None:
         if isinstance(warn, dict):
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
     resp = {'date': new_day, 'pid': pid, 'phase': phase}
-    if warn:
+    if warn and not ack_warning:
         resp['warning'] = warn
     return jsonify(resp)
 
@@ -2378,6 +2393,14 @@ def check_move():
             part = int(part)
         except Exception:
             part = None
+    start = data.get('start')
+    if start in (None, '', 'None'):
+        start_hour = None
+    else:
+        try:
+            start_hour = float(start)
+        except Exception:
+            start_hour = None
     if not pid or not phase or not date_str:
         return '', 400
     try:
@@ -2397,11 +2420,27 @@ def check_move():
     free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
     new_day, warn = move_phase_date(
-        temp, pid, phase, day, worker, part, save=False, mode="split", start_hour=used_hours
+        temp,
+        pid,
+        phase,
+        day,
+        worker,
+        part,
+        save=False,
+        mode="split",
+        start_hour=start_hour if start_hour is not None else used_hours,
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
-    after = compute_schedule_map(temp)
+
+    schedule_after, _ = schedule_projects(copy.deepcopy(temp))
+    after = {}
+    for w, days in schedule_after.items():
+        for dstr, tasks in days.items():
+            for t in tasks:
+                after.setdefault(t['pid'], []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
+    for lst in after.values():
+        lst.sort()
 
     def build_map(mapping):
         res = {}
@@ -2413,6 +2452,30 @@ def check_move():
 
     before_map = build_map(before)
     after_map = build_map(after)
+
+    preview = []
+    for t in schedule_after.get(worker, {}).get(date_str, []):
+        proj = next((p for p in temp if p['id'] == t['pid']), None)
+        if not proj:
+            continue
+        frozen = any(
+            ft.get('phase') == t['phase'] and (t.get('part') is None or ft.get('part') == t.get('part'))
+            for ft in proj.get('frozen_tasks', [])
+        )
+        preview.append(
+            {
+                'pid': t['pid'],
+                'phase': t['phase'],
+                'part': t.get('part'),
+                'project': proj.get('name', ''),
+                'client': proj.get('client', ''),
+                'color': proj.get('color', ''),
+                'priority': proj.get('priority', ''),
+                'due_date': proj.get('due_date', ''),
+                'start_date': proj.get('start_date', ''),
+                'frozen': frozen,
+            }
+        )
 
     def is_contiguous(days):
         if not days:
@@ -2433,6 +2496,10 @@ def check_move():
                 moved_key = key
                 break
     if moved_key in after_map and not is_contiguous(after_map[moved_key]):
+        split = True
+    if not split and used_hours > 0:
+        # Only flag a conflict if the target day already contains hours from
+        # other phases; otherwise allow the move silently.
         split = True
     if not split:
         # Check if moving this phase would alter any other task on the target
@@ -2472,7 +2539,7 @@ def check_move():
                 future.sort()
                 _, opid, ph, prt = future[0]
                 auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours}
+    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)

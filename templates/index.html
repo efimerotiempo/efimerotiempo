@@ -64,7 +64,7 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -287,7 +287,8 @@
   const deadlineModal = document.getElementById('deadline-modal');
   const deadlineText = document.getElementById('deadline-text');
   const deadlineClose = document.getElementById('deadline-close');
-  const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
+  const DEADLINE_MSG = 'Fecha cliente soprepasada.';
+  const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
@@ -308,6 +309,7 @@
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
   }
@@ -317,7 +319,8 @@
 
   for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
     if (proj.due_warning) {
-      const text = `${DEADLINE_MSG}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
+      const msg = proj.due_confirmed ? CLIENT_DEADLINE_MSG : DEADLINE_MSG;
+      const text = `${msg}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
       showDeadline(text, () => {
         fetch(CLEAR_DEADLINE_URL, {
           method: 'POST',
@@ -432,10 +435,16 @@
     }
   });
 
-  const tasks = document.querySelectorAll('.task');
-  const folders = document.querySelectorAll('.unplanned-folder');
+const tasks = document.querySelectorAll('.task');
+const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
+let dragInfo = null;
+let previewTimer = null;
+let previewTarget = null;
+let previewCell = null;
+let previewHTML = null;
+let previewStart = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
@@ -447,8 +456,10 @@ let lastDrag = null;
         worker: row ? row.dataset.worker : '',
         part: t.dataset.part
       };
+      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
+    t.addEventListener('dragend', () => { dragInfo = null; clearPreview(); });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -482,7 +493,7 @@ let lastDrag = null;
         else total = parseInt(val) || 0;
         if (total > 0) {
           const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : '';
+          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
           let line = `<div${cls}>${ph}: ${total}h`;
           if (ph === t.dataset.phase) {
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
@@ -556,7 +567,7 @@ let lastDrag = null;
             .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
             .then(({ ok, data }) => {
               if (!ok) {
-                if (data.error === DEADLINE_MSG) showDeadline();
+                if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
                 else alert(data.error || 'Error');
                 return;
               }
@@ -754,7 +765,7 @@ let lastDrag = null;
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
             if (!ok) {
-              if (data.error === DEADLINE_MSG) showDeadline();
+              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
               else alert(data.error || 'Error');
               return;
             }
@@ -794,12 +805,91 @@ let lastDrag = null;
       }
     });
   });
+
+  function clearPreview() {
+    if (previewTimer) {
+      clearTimeout(previewTimer);
+      previewTimer = null;
+    }
+    previewTarget = null;
+    if (previewCell) {
+      previewCell.innerHTML = previewHTML;
+      previewCell = null;
+      previewHTML = null;
+    }
+    previewStart = null;
+  }
+  function getStartHour(cell, y) {
+    let hours = 0;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    for (const t of tasks) {
+      if (t.classList.contains('preview-task')) continue;
+      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
+      const rect = t.getBoundingClientRect();
+      if (y < rect.top + rect.height / 2) break;
+      hours += parseFloat(t.dataset.hours || '0');
+    }
+    return hours;
+  }
   document.querySelectorAll('tbody td[data-date]').forEach(cell => {
     cell.addEventListener('dragover', e => {
       e.preventDefault();
+      if (!dragInfo) return;
+      let start = getStartHour(cell, e.clientY);
+      if (previewCell) {
+        if (previewCell !== cell || previewStart !== start) {
+          clearPreview();
+          start = getStartHour(cell, e.clientY);
+        } else {
+          return;
+        }
+      }
+      if (previewTimer && (previewTarget !== cell || previewStart !== start)) {
+        clearTimeout(previewTimer);
+        previewTimer = null;
+        previewTarget = null;
+      }
+      if (!previewTimer) {
+        previewTarget = cell;
+        previewStart = start;
+        previewTimer = setTimeout(() => {
+          const date = cell.dataset.date;
+          const worker = cell.closest('tr').dataset.worker;
+          const moveData = { pid: dragInfo.pid, phase: dragInfo.phase, date: date, worker: worker, part: dragInfo.part, start: previewStart };
+          fetch(CHECK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(moveData)
+          }).then(r => r.json()).then(res => {
+            if (!dragInfo || previewCell || previewTarget !== cell || previewStart !== start || !res.preview) return;
+            previewCell = cell;
+            previewHTML = cell.innerHTML;
+            cell.innerHTML = '';
+            res.preview.forEach(t => {
+              const div = document.createElement('div');
+              div.className = 'task preview-task' + (t.frozen ? ' frozen' : '');
+              div.style.borderColor = t.color;
+              div.textContent = `${t.project} - ${t.client} - ${t.phase}`;
+              cell.appendChild(div);
+            });
+          });
+        }, 700);
+      }
+    });
+    cell.addEventListener('dragleave', e => {
+      if (!cell.contains(e.relatedTarget)) {
+        if (previewCell === cell) clearPreview();
+        else if (previewTarget === cell) {
+          clearTimeout(previewTimer);
+          previewTimer = null;
+          previewTarget = null;
+        }
+      }
     });
     cell.addEventListener('drop', e => {
       e.preventDefault();
+      clearPreview();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
@@ -808,40 +898,45 @@ let lastDrag = null;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part };
+      const start = getStartHour(cell, e.clientY);
+      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
       fetch(CHECK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify(moveData)
       }).then(resp => resp.json()).then(res => {
-        if (res.warning) showDeadline(res.warning);
-        if (res.split) {
-          moveSelect.innerHTML = '';
-          if (res.options && res.options.length) {
-            moveLabel.style.display = '';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
-            res.options.forEach(opt => {
-              const o = document.createElement('option');
-              o.value = JSON.stringify(opt);
-              o.textContent = opt.text;
-              moveSelect.appendChild(o);
-            });
-          } else {
-            moveLabel.style.display = 'none';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
-            if (res.auto) {
-              moveData.push_pid = res.auto.pid;
-              moveData.push_phase = res.auto.phase;
-              moveData.push_part = res.auto.part;
+        const proceed = () => {
+          if (res.warning) moveData.ack_warning = true;
+          if (res.split) {
+            moveSelect.innerHTML = '';
+            if (res.options && res.options.length) {
+              moveLabel.style.display = '';
+              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
+              res.options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = JSON.stringify(opt);
+                o.textContent = opt.text;
+                moveSelect.appendChild(o);
+              });
+            } else {
+              moveLabel.style.display = 'none';
+              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
+              if (res.auto) {
+                moveData.push_pid = res.auto.pid;
+                moveData.push_phase = res.auto.phase;
+                moveData.push_part = res.auto.part;
+              }
             }
+            if (moveAppend) moveAppend.style.display = res.free > 0 ? '' : 'none';
+            pendingMove = { data: moveData, beforeMaterial };
+            moveModal.style.display = 'block';
+          } else {
+            doMove(moveData, 'split', beforeMaterial);
           }
-          if (moveAppend) moveAppend.style.display = res.free > 0 ? '' : 'none';
-          pendingMove = { data: moveData, beforeMaterial };
-          moveModal.style.display = 'block';
-        } else {
-          doMove(moveData, 'split', beforeMaterial);
-        }
+        };
+        if (res.warning) showDeadline(res.warning, proceed);
+        else proceed();
       });
     });
   });
@@ -862,7 +957,7 @@ let lastDrag = null;
           blockModal.style.display = 'block';
           return;
         }
-        if (data.error === DEADLINE_MSG) showDeadline();
+        if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
         else alert(data.error || 'Error');
         return;
       }
@@ -950,7 +1045,7 @@ let lastDrag = null;
         .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
         .then(({ ok, data }) => {
           if (!ok) {
-            if (data.error === DEADLINE_MSG) showDeadline();
+            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
             else alert(data.error || 'Error');
             return;
           }

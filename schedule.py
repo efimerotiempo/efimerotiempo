@@ -417,12 +417,13 @@ def schedule_projects(projects):
                     test_end = test_start
                     for _ in range(days_needed - 1):
                         test_end = next_workday(test_end)
-                    if (
-                        project.get('due_confirmed')
-                        and project.get('due_date')
-                        and test_end > date.fromisoformat(project['due_date'])
-                    ):
-                        worker = UNPLANNED
+                    # Allow scheduling even if the phase exceeds a confirmed due date.
+                    # Previously, phases moved past a client deadline were treated as
+                    # unplanned and removed from the calendar. This prevented them
+                    # from being visualized after the move. By removing the forced
+                    # ``UNPLANNED`` assignment, phases remain in the schedule and are
+                    # displayed in the selected cell while still triggering the
+                    # appropriate deadline warning elsewhere.
                     manual = False
                     if override:
                         current = override
