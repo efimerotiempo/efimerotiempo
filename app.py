@@ -706,10 +706,36 @@ def move_phase_date(
             hours = int(phase_val[part or 0])
         else:
             hours = int(phase_val)
-        days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-        next_start = sched_day
-        for _ in range(days_needed):
-            next_start = next_workday(next_start)
+
+        # Determine the exact end of the moved phase taking into account
+        # the worker's daily limit and vacations so subsequent phases can be
+        # appended immediately afterwards.
+        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        end_day = sched_day
+        end_hour = sched_hour
+        remaining = hours
+        while remaining > 0:
+            if end_day in vac_days:
+                end_day = next_workday(end_day)
+                end_hour = 0
+                continue
+            free = limit - end_hour
+            if remaining <= free:
+                end_hour += remaining
+                remaining = 0
+            else:
+                remaining -= free
+                end_day = next_workday(end_day)
+                end_hour = 0
+        if end_hour >= limit:
+            end_day = next_workday(end_day)
+            end_hour = 0
+
+        # `current_day`/`current_hour` mark the next free slot after inserting
+        # the new phase. Pushed phases will be placed sequentially here.
+        current_day = end_day
+        current_hour = end_hour
 
         mapping = compute_schedule_map(projects)
         start_push = next_workday(target_day)
@@ -740,14 +766,15 @@ def move_phase_date(
                 key = (opid, ph, prt)
                 if key not in seen or d < seen[key]:
                     seen[key] = d
-        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+
         for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
             other_proj = next((p for p in projects if p['id'] == opid), None)
             if not other_proj:
-                while next_start in vac_days:
-                    next_start = next_workday(next_start)
+                while current_day in vac_days:
+                    current_day = next_workday(current_day)
+                    current_hour = 0
                 continue
             if oph != 'pedidos' and any(
                 t['phase'] == oph and (oprt is None or t.get('part') == oprt)
@@ -766,11 +793,27 @@ def move_phase_date(
                         h = int(val[oprt])
                     else:
                         h = int(val)
-                    d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-                    ns = start
-                    for _ in range(d_needed):
-                        ns = next_workday(ns)
-                    next_start = ns
+                    rem = h
+                    day = start
+                    hour = 0
+                    while rem > 0:
+                        if day in vac_days:
+                            day = next_workday(day)
+                            hour = 0
+                            continue
+                        free = limit - hour
+                        if rem <= free:
+                            hour += rem
+                            rem = 0
+                        else:
+                            rem -= free
+                            day = next_workday(day)
+                            hour = 0
+                    current_day = day
+                    current_hour = hour
+                    if current_hour >= limit:
+                        current_day = next_workday(current_day)
+                        current_hour = 0
                     continue
                 # unblock
                 other_proj['frozen_tasks'] = [
@@ -778,26 +821,46 @@ def move_phase_date(
                     for t in other_proj.get('frozen_tasks', [])
                     if not (t['phase'] == oph and (oprt is None or t.get('part') == oprt))
                 ]
-            while next_start in vac_days:
-                next_start = next_workday(next_start)
+            while current_day in vac_days:
+                current_day = next_workday(current_day)
+                current_hour = 0
             move_phase_date(
                 projects,
                 opid,
                 oph,
-                next_start,
+                current_day,
                 worker,
                 oprt,
                 save=False,
                 mode="split",
+                start_hour=current_hour,
             )
             val = other_proj['phases'][oph]
             if isinstance(val, list):
                 h = int(val[oprt])
             else:
                 h = int(val)
-            d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            for _ in range(d_needed):
-                next_start = next_workday(next_start)
+            rem = h
+            day = current_day
+            hour = current_hour
+            while rem > 0:
+                if day in vac_days:
+                    day = next_workday(day)
+                    hour = 0
+                    continue
+                free = limit - hour
+                if rem <= free:
+                    hour += rem
+                    rem = 0
+                else:
+                    rem -= free
+                    day = next_workday(day)
+                    hour = 0
+            current_day = day
+            current_hour = hour
+            if current_hour >= limit:
+                current_day = next_workday(current_day)
+                current_hour = 0
 
     if save:
         save_projects(projects)
