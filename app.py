@@ -632,16 +632,22 @@ def move_phase_date(
     ):
         return None, 'Vacaciones en esa fecha'
 
-    # Remember the originally requested day but adjust the actual start if the
-    # provided hour exceeds the daily limit.  The new phase will then begin the
-    # following workday at hour zero.
+    # Remember the originally requested day.  When ``start_hour`` exceeds the
+    # daily limit we normally roll the phase to the next workday, but in push
+    # mode we instead keep the phase on the requested day and start at hour 0 so
+    # subsequent tasks can be shifted after it.
     target_day = new_date
     sched_day = new_date
     sched_hour = start_hour if start_hour is not None else 0
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    push_same_day = False
     if start_hour is not None and start_hour >= limit:
-        sched_day = next_workday(sched_day)
-        sched_hour = 0
+        if mode == "push":
+            sched_hour = 0
+            push_same_day = True
+        else:
+            sched_day = next_workday(sched_day)
+            sched_hour = 0
 
     warning = None
     if proj.get('due_date'):
@@ -738,7 +744,7 @@ def move_phase_date(
         current_hour = end_hour
 
         mapping = compute_schedule_map(projects)
-        start_push = next_workday(target_day)
+        start_push = sched_day if push_same_day else next_workday(target_day)
         if push_from:
             pf_pid, pf_phase, pf_part = push_from
             selected = None
