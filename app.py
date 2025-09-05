@@ -2353,14 +2353,16 @@ def move_phase():
     future_tasks = []
     for opid, items in before.items():
         for w, day_str, ph, hrs, prt in items:
-            if w == worker:
-                if day_str == date_str:
-                    if opid == pid and ph == phase and (part is None or prt == part):
-                        continue
-                    used_hours += hrs
-                    today_tasks.append((opid, ph, prt))
-                elif date.fromisoformat(day_str) > day:
-                    future_tasks.append((date.fromisoformat(day_str), opid, ph, prt))
+            if w != worker:
+                continue
+            d = date.fromisoformat(day_str)
+            if opid == pid and ph == phase and (part is None or prt == part):
+                continue
+            if d == day:
+                used_hours += hrs
+                today_tasks.append((opid, ph, prt))
+            elif d > day:
+                future_tasks.append((d, opid, ph, prt))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     start_hour = used_hours if (
@@ -2429,14 +2431,16 @@ def check_move():
     future_tasks = []
     for opid, items in before.items():
         for w, day_str, ph, hrs, prt in items:
-            if w == worker:
-                if day_str == date_str:
-                    if opid == pid and ph == phase and (part is None or prt == part):
-                        continue
-                    used_hours += hrs
-                    today_tasks.append((opid, ph, prt))
-                elif date.fromisoformat(day_str) > day:
-                    future_tasks.append((date.fromisoformat(day_str), opid, ph, prt))
+            if w != worker:
+                continue
+            d = date.fromisoformat(day_str)
+            if opid == pid and ph == phase and (part is None or prt == part):
+                continue
+            if d == day:
+                used_hours += hrs
+                today_tasks.append((opid, ph, prt))
+            elif d > day:
+                future_tasks.append((d, opid, ph, prt))
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
     free_hours = max(0, limit - used_hours)
     temp = copy.deepcopy(projects)
