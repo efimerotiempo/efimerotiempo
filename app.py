@@ -2618,7 +2618,9 @@ def toggle_freeze(pid, phase):
     if any(t['phase'] == phase for t in frozen):
         proj['frozen_tasks'] = [t for t in frozen if t['phase'] != phase]
     else:
-        schedule, _ = schedule_projects(projects)
+        # Recompute the schedule on a copy so freezing a phase does not
+        # persistently modify the existing planning
+        schedule, _ = schedule_projects(copy.deepcopy(projects))
         for w, days in schedule.items():
             for day, tasks in days.items():
                 for t in tasks:
