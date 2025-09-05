@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 import json
 import os
 import copy
@@ -81,6 +81,7 @@ WORKERS = _build_workers()
 IGOR_END = date(2025, 7, 21)
 
 HOURS_PER_DAY = 8
+WORKDAY_START = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
 HOURS_LIMITS['Mecanizar'] = float('inf')
@@ -222,6 +223,13 @@ def next_workday(d):
     return d
 
 
+def _calc_datetimes(day, start, hours):
+    """Return ISO start and end datetimes for a task."""
+    start_dt = datetime.combine(day, time(hour=WORKDAY_START)) + timedelta(hours=start)
+    end_dt = start_dt + timedelta(hours=hours)
+    return start_dt.isoformat(), end_dt.isoformat()
+
+
 def _build_vacation_map():
     """Return a mapping of worker to set of vacation days."""
     vac_map = {}
@@ -248,11 +256,15 @@ def schedule_projects(projects):
         for day in days:
             if worker in worker_schedule:
                 ds = worker_schedule[worker].setdefault(day.isoformat(), [])
+                start_time, end_time = _calc_datetimes(day, 0, HOURS_PER_DAY)
                 ds.append({
                     'project': 'Vacaciones',
                     'client': '',
                     'phase': 'vacaciones',
                     'hours': HOURS_PER_DAY,
+                    'start': 0,
+                    'start_time': start_time,
+                    'end_time': end_time,
                     'late': False,
                     'color': '#ff9999',
                     'due_date': '',
@@ -268,6 +280,14 @@ def schedule_projects(projects):
             entry = t.copy()
             entry.pop('worker', None)
             entry.pop('day', None)
+            try:
+                day_obj = date.fromisoformat(day)
+            except Exception:
+                day_obj = date.today()
+            start_time, end_time = _calc_datetimes(day_obj, entry.get('start', 0), entry.get('hours', 0))
+            entry.setdefault('start', 0)
+            entry['start_time'] = start_time
+            entry['end_time'] = end_time
             worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
 
     # Sort frozen tasks chronologically
@@ -535,12 +555,15 @@ def assign_phase(
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, used, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': used,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
@@ -593,12 +616,15 @@ def assign_phase(
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, used, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': used,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
@@ -629,12 +655,15 @@ def assign_phase(
         if available > 0:
             allocate = min(remaining, available)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, start, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': start,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
@@ -715,11 +744,15 @@ def assign_pedidos(
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
         late = bool(due_dt and day > due_dt)
+        start_time, end_time = _calc_datetimes(day, 0, 0)
         task = {
             'project': project_name,
             'client': client,
             'phase': 'pedidos',
             'hours': 0,
+            'start': 0,
+            'start_time': start_time,
+            'end_time': end_time,
             'late': late,
             'color': color,
             'due_date': due_date,
