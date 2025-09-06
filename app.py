@@ -631,6 +631,24 @@ def move_phase_date(
         and new_date in vac_map.get(worker, set())
     ):
         return None, 'Vacaciones en esa fecha'
+
+    # Remember the originally requested day.  When ``start_hour`` exceeds the
+    # daily limit we normally roll the phase to the next workday, but in push
+    # mode we instead keep the phase on the requested day and start at hour 0 so
+    # subsequent tasks can be shifted after it.
+    target_day = new_date
+    sched_day = new_date
+    sched_hour = start_hour if start_hour is not None else 0
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    push_same_day = False
+    if start_hour is not None and start_hour >= limit:
+        if mode == "push":
+            sched_hour = 0
+            push_same_day = True
+        else:
+            sched_day = next_workday(sched_day)
+            sched_hour = 0
+
     warning = None
     if proj.get('due_date'):
         try:
@@ -643,7 +661,7 @@ def move_phase_date(
             else:
                 hours = int(phase_hours)
             days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            test_end = new_date
+            test_end = sched_day
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
@@ -654,9 +672,9 @@ def move_phase_date(
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
-        seg_starts[0] = new_date.isoformat()
+        seg_starts[0] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(phase, [None])
-        seg_hours[0] = start_hour
+        seg_hours[0] = sched_hour
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     else:
@@ -666,18 +684,18 @@ def move_phase_date(
         idx = part if part is not None else 0
         while len(seg_starts) <= idx:
             seg_starts.append(None)
-        seg_starts[idx] = new_date.isoformat()
+        seg_starts[idx] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(
             phase, [None] * len(proj['phases'][phase])
         )
         if idx >= len(seg_hours):
             seg_hours.extend([None] * (idx + 1 - len(seg_hours)))
-        seg_hours[idx] = start_hour
+        seg_hours[idx] = sched_hour
         if worker:
             seg_workers = proj.setdefault('segment_workers', {}).setdefault(
                 phase, [None] * len(proj['phases'][phase])
             )
-        
+
             if idx >= len(seg_workers):
                 seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
             seg_workers[idx] = worker
@@ -694,15 +712,42 @@ def move_phase_date(
             hours = int(phase_val[part or 0])
         else:
             hours = int(phase_val)
-        days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-        next_start = new_date
-        for _ in range(days_needed):
-            next_start = next_workday(next_start)
+
+        # Determine the exact end of the moved phase taking into account
+        # the worker's daily limit and vacations so subsequent phases can be
+        # appended immediately afterwards.
+        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        end_day = sched_day
+        end_hour = sched_hour
+        remaining = hours
+        while remaining > 0:
+            if end_day in vac_days:
+                end_day = next_workday(end_day)
+                end_hour = 0
+                continue
+            free = limit - end_hour
+            if remaining <= free:
+                end_hour += remaining
+                remaining = 0
+            else:
+                remaining -= free
+                end_day = next_workday(end_day)
+                end_hour = 0
+        if end_hour >= limit:
+            end_day = next_workday(end_day)
+            end_hour = 0
+
+        # `current_day`/`current_hour` mark the next free slot after inserting
+        # the new phase. Pushed phases will be placed sequentially here.
+        current_day = end_day
+        current_hour = end_hour
 
         mapping = compute_schedule_map(projects)
-        start_push = new_date
+        start_push = sched_day if push_same_day else next_workday(target_day)
         if push_from:
             pf_pid, pf_phase, pf_part = push_from
+            selected = None
             for w, day_str, ph, hrs, prt in mapping.get(pf_pid, []):
                 if (
                     w == worker
@@ -710,8 +755,10 @@ def move_phase_date(
                     and (pf_part is None or prt == pf_part)
                 ):
                     d = date.fromisoformat(day_str)
-                    if d < start_push:
-                        start_push = d
+                    if d >= start_push and (selected is None or d < selected):
+                        selected = d
+            if selected is not None:
+                start_push = selected
         seen = {}
         for opid, items in mapping.items():
             for w, day_str, ph, hrs, prt in items:
@@ -725,14 +772,15 @@ def move_phase_date(
                 key = (opid, ph, prt)
                 if key not in seen or d < seen[key]:
                     seen[key] = d
-        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+
         for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
             other_proj = next((p for p in projects if p['id'] == opid), None)
             if not other_proj:
-                while next_start in vac_days:
-                    next_start = next_workday(next_start)
+                while current_day in vac_days:
+                    current_day = next_workday(current_day)
+                    current_hour = 0
                 continue
             if oph != 'pedidos' and any(
                 t['phase'] == oph and (oprt is None or t.get('part') == oprt)
@@ -751,11 +799,27 @@ def move_phase_date(
                         h = int(val[oprt])
                     else:
                         h = int(val)
-                    d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-                    ns = start
-                    for _ in range(d_needed):
-                        ns = next_workday(ns)
-                    next_start = ns
+                    rem = h
+                    day = start
+                    hour = 0
+                    while rem > 0:
+                        if day in vac_days:
+                            day = next_workday(day)
+                            hour = 0
+                            continue
+                        free = limit - hour
+                        if rem <= free:
+                            hour += rem
+                            rem = 0
+                        else:
+                            rem -= free
+                            day = next_workday(day)
+                            hour = 0
+                    current_day = day
+                    current_hour = hour
+                    if current_hour >= limit:
+                        current_day = next_workday(current_day)
+                        current_hour = 0
                     continue
                 # unblock
                 other_proj['frozen_tasks'] = [
@@ -763,30 +827,50 @@ def move_phase_date(
                     for t in other_proj.get('frozen_tasks', [])
                     if not (t['phase'] == oph and (oprt is None or t.get('part') == oprt))
                 ]
-            while next_start in vac_days:
-                next_start = next_workday(next_start)
+            while current_day in vac_days:
+                current_day = next_workday(current_day)
+                current_hour = 0
             move_phase_date(
                 projects,
                 opid,
                 oph,
-                next_start,
+                current_day,
                 worker,
                 oprt,
                 save=False,
                 mode="split",
+                start_hour=current_hour,
             )
             val = other_proj['phases'][oph]
             if isinstance(val, list):
                 h = int(val[oprt])
             else:
                 h = int(val)
-            d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            for _ in range(d_needed):
-                next_start = next_workday(next_start)
+            rem = h
+            day = current_day
+            hour = current_hour
+            while rem > 0:
+                if day in vac_days:
+                    day = next_workday(day)
+                    hour = 0
+                    continue
+                free = limit - hour
+                if rem <= free:
+                    hour += rem
+                    rem = 0
+                else:
+                    rem -= free
+                    day = next_workday(day)
+                    hour = 0
+            current_day = day
+            current_hour = hour
+            if current_hour >= limit:
+                current_day = next_workday(current_day)
+                current_hour = 0
 
     if save:
         save_projects(projects)
-    return new_date.isoformat(), warning
+    return sched_day.isoformat(), warning
 
 
 def get_projects():
@@ -2347,14 +2431,22 @@ def move_phase():
     except Exception:
         return '', 400
     projects = get_projects()
-    before = compute_schedule_map(projects)
-    used_hours = 0
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
+    schedule_before, _ = schedule_projects(copy.deepcopy(projects))
+    end_hour = 0
+    for w, days in schedule_before.items():
+        if w != worker:
+            continue
+        for dstr, tasks in days.items():
+            d = date.fromisoformat(dstr)
+            for t in tasks:
+                if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
                     continue
-                used_hours += hrs
+                if d == day:
+                    end_hour = max(end_hour, t.get('start', 0) + t['hours'])
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    free_hours = max(0, limit - end_hour)
+    start_hour = end_hour
+    mode = 'push' if free_hours == 0 else 'split'
     new_day, warn = move_phase_date(
         projects,
         pid,
@@ -2366,7 +2458,7 @@ def move_phase():
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=start_hour if start_hour is not None else (used_hours if mode == 'split' else None),
+        start_hour=start_hour,
     )
     if new_day is None:
         if isinstance(warn, dict):
@@ -2408,16 +2500,21 @@ def check_move():
     except Exception:
         return '', 400
     projects = get_projects()
-    before = compute_schedule_map(projects)
-    used_hours = 0
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
+    schedule_before, _ = schedule_projects(copy.deepcopy(projects))
+    end_hour = 0
+    for w, days in schedule_before.items():
+        if w != worker:
+            continue
+        for dstr, tasks in days.items():
+            d = date.fromisoformat(dstr)
+            for t in tasks:
+                if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
                     continue
-                used_hours += hrs
+                if d == day:
+                    end_hour = max(end_hour, t.get('start', 0) + t['hours'])
     limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    free_hours = max(0, limit - used_hours)
+    free_hours = max(0, limit - end_hour)
+    start_hour = end_hour
     temp = copy.deepcopy(projects)
     new_day, warn = move_phase_date(
         temp,
@@ -2427,32 +2524,13 @@ def check_move():
         worker,
         part,
         save=False,
-        mode="split",
-        start_hour=start_hour if start_hour is not None else used_hours,
+        mode=('push' if free_hours == 0 else 'split'),
+        start_hour=start_hour,
     )
     if new_day is None:
         return jsonify({'error': warn or 'No se pudo mover'}), 400
 
     schedule_after, _ = schedule_projects(copy.deepcopy(temp))
-    after = {}
-    for w, days in schedule_after.items():
-        for dstr, tasks in days.items():
-            for t in tasks:
-                after.setdefault(t['pid'], []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
-    for lst in after.values():
-        lst.sort()
-
-    def build_map(mapping):
-        res = {}
-        for opid, items in mapping.items():
-            for w, day_str, ph, hrs, prt in items:
-                key = (opid, w, ph, prt)
-                res.setdefault(key, []).append(date.fromisoformat(day_str))
-        return res
-
-    before_map = build_map(before)
-    after_map = build_map(after)
-
     preview = []
     for t in schedule_after.get(worker, {}).get(date_str, []):
         proj = next((p for p in temp if p['id'] == t['pid']), None)
@@ -2477,69 +2555,7 @@ def check_move():
             }
         )
 
-    def is_contiguous(days):
-        if not days:
-            return True
-        days.sort()
-        prev = days[0]
-        for d in days[1:]:
-            if d != next_workday(prev):
-                return False
-            prev = d
-        return True
-
-    split = False
-    moved_key = (pid, worker, phase, part)
-    if moved_key not in after_map:
-        for key in after_map:
-            if key[0] == pid and key[2] == phase and key[3] == part:
-                moved_key = key
-                break
-    if moved_key in after_map and not is_contiguous(after_map[moved_key]):
-        split = True
-    if not split and used_hours > 0:
-        # Only flag a conflict if the target day already contains hours from
-        # other phases; otherwise allow the move silently.
-        split = True
-    if not split:
-        # Check if moving this phase would alter any other task on the target
-        # worker, either by shifting it to different days or by adding/removing
-        # tasks on that worker.
-        related = set(
-            k
-            for k in before_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        related.update(
-            k
-            for k in after_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        for key in related:
-            if before_map.get(key, []) != after_map.get(key, []):
-                split = True
-                break
-    options = []
-    auto = None
-    if split:
-        for opid, items in before.items():
-            for w, day_str, ph, hrs, prt in items:
-                if w == worker and day_str == date_str:
-                    proj = next((p for p in projects if p['id'] == opid), None)
-                    txt = f"{proj.get('name','')} - {ph}" if proj else ph
-                    options.append({'pid': opid, 'phase': ph, 'part': prt, 'text': txt})
-        if not options:
-            future = []
-            for opid, items in before.items():
-                for w, day_str, ph, hrs, prt in items:
-                    d = date.fromisoformat(day_str)
-                    if w == worker and d > day:
-                        future.append((d, opid, ph, prt))
-            if future:
-                future.sort()
-                _, opid, ph, prt = future[0]
-                auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview}
+    resp = {'split': False, 'options': [], 'auto': None, 'free': free_hours, 'preview': preview, 'used': end_hour}
     if warn:
         resp['warning'] = warn
     return jsonify(resp)
@@ -2672,7 +2688,9 @@ def toggle_freeze(pid, phase):
     if any(t['phase'] == phase for t in frozen):
         proj['frozen_tasks'] = [t for t in frozen if t['phase'] != phase]
     else:
-        schedule, _ = schedule_projects(projects)
+        # Recompute the schedule on a copy so freezing a phase does not
+        # persistently modify the existing planning
+        schedule, _ = schedule_projects(copy.deepcopy(projects))
         for w, days in schedule.items():
             for day, tasks in days.items():
                 for t in tasks:
@@ -3062,6 +3080,26 @@ def kanbanize_webhook():
         return jsonify({"mensaje": "Proyecto creado"}), 200
     else:
         return jsonify({"mensaje": "Proyecto actualizado"}), 200
+
+
+@app.route('/hours')
+def hours():
+    projects = get_projects()
+    schedule, _ = schedule_projects(copy.deepcopy(projects))
+    rows = []
+    for days in schedule.values():
+        for tasks in days.values():
+            for t in tasks:
+                if t.get('phase') == 'vacaciones':
+                    continue
+                rows.append({
+                    'project': t.get('project'),
+                    'phase': t.get('phase'),
+                    'start_time': t.get('start_time'),
+                    'end_time': t.get('end_time'),
+                })
+    rows.sort(key=lambda r: r['start_time'])
+    return render_template('hours.html', rows=rows)
 
 
 @app.route('/bugs')
