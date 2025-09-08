@@ -240,9 +240,7 @@ table.pedidos-calendar td.week-label {
     cursor: pointer;
 }
 
-.snapshot-moved { background: #ffff99; font-weight: bold; }
-.snapshot-affected { background: #ffb3b3; }
-#snapshot-modal pre { max-height: 300px; overflow-y: auto; white-space: pre-wrap; }
+#snapshot-modal img { max-width: 100%; display: block; margin-bottom: 10px; }
 
 .vacation {
     background: #ff9999;
