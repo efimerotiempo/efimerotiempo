@@ -820,7 +820,7 @@ let dragInfo = null;
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      doMove(moveData, 'split', beforeMaterial);
+      doMove(moveData, 'push', beforeMaterial);
     });
   });
   function doMove(moveData, mode, beforeMaterial) {

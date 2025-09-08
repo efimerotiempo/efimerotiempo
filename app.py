@@ -583,7 +583,7 @@ def move_phase_date(
     part=None,
     *,
     save=True,
-    mode="split",
+    mode="push",
     push_from=None,
     unblock=False,
     skip_block=False,
@@ -592,12 +592,12 @@ def move_phase_date(
 ):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
-    ``mode`` controls how existing work is handled:
+    ``mode`` controls cómo se manejan las tareas existentes:
 
-    * ``"split"`` (default) keeps other tasks in place, allowing the phase to
-      be divided around them.
-    * ``"push"`` shifts subsequent tasks for the same worker so the phase can
-      remain continuous.
+    * ``"push"`` (predeterminado) desplaza las fases posteriores del mismo
+      trabajador para que la fase se mantenga continua.
+    * ``"split"`` deja las tareas en su sitio, permitiendo que la fase se
+      divida alrededor de ellas.
 
     Return tuple ``(day, error)`` where ``day`` is the first day of the phase
     after rescheduling, or ``None`` if it could not be moved. ``error`` provides
@@ -2361,8 +2361,8 @@ def move_phase():
             part = int(part)
         except Exception:
             part = None
-    # 🔧 Respetamos el modo que viene en la petición
-    mode = data.get('mode', 'split')
+    # 🔧 Respetamos el modo que viene en la petición (por defecto "push")
+    mode = data.get('mode', 'push')
     push_pid = data.get('push_pid')
     push_phase = data.get('push_phase')
     push_part = data.get('push_part')
