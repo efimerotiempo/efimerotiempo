@@ -2465,40 +2465,11 @@ def move_phase():
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
 
-    schedule_after, _ = schedule_projects(copy.deepcopy(projects))
-
-    def _index(schedule):
-        idx = {}
-        for w, days in schedule.items():
-            for d, tasks in days.items():
-                for t in tasks:
-                    key = (t['pid'], t['phase'], t.get('part'))
-                    idx.setdefault(key, []).append((w, d, t.get('start', 0), t['hours']))
-        for k in idx:
-            idx[k].sort()
-        return idx
-
-    before_idx = _index(schedule_before)
-    after_idx = _index(schedule_after)
-    changed = {k for k in set(before_idx) | set(after_idx) if before_idx.get(k) != after_idx.get(k)}
-    moved_key = (pid, phase, part)
-
-    for w, days in schedule_after.items():
-        for d, tasks in days.items():
-            for t in tasks:
-                key = (t['pid'], t['phase'], t.get('part'))
-                if key == moved_key:
-                    t['moved'] = True
-                elif key in changed:
-                    t['affected'] = True
-
     resp = {
         'date': new_day,
         'pid': pid,
         'phase': phase,
         'part': part,
-        'before': schedule_before,
-        'after': schedule_after,
     }
     if warn and not ack_warning:
         resp['warning'] = warn

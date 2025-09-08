@@ -247,8 +247,6 @@
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
-<div id="snapshot-modal" class="conflict-modal"><div class="conflict-content"><h3>Antes</h3><img id="snapshot-before" alt="Antes"/><h3>Después</h3><img id="snapshot-after" alt="Después"/><button id="snapshot-close">Cerrar</button></div></div>
-<div id="snapshot-temp" style="position:absolute; top:-10000px; left:-10000px;"></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -430,12 +428,6 @@
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
-  const snapshotModal = document.getElementById('snapshot-modal');
-  const snapshotBefore = document.getElementById('snapshot-before');
-  const snapshotAfter = document.getElementById('snapshot-after');
-  const snapshotClose = document.getElementById('snapshot-close');
-  const snapshotTemp = document.getElementById('snapshot-temp');
-  let snapshotBeforeImg = null;
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
@@ -443,37 +435,11 @@
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
   }
-  function captureSchedule(elem) {
-    return html2canvas(elem).then(c => c.toDataURL('image/png'));
-  }
-  function captureAfterSchedule() {
-    return fetch(location.href, { credentials: 'same-origin' })
-      .then(resp => resp.text())
-      .then(html => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const wrapper = doc.querySelector('.complete-calendar');
-        snapshotTemp.innerHTML = '';
-        snapshotTemp.appendChild(wrapper);
-        return captureSchedule(wrapper).then(img => {
-          snapshotTemp.innerHTML = '';
-          return img;
-        });
-      });
-  }
   function afterMove(data, originalDate) {
-    captureAfterSchedule().then(img => {
-      snapshotBefore.src = snapshotBeforeImg;
-      snapshotAfter.src = img;
-      snapshotModal.style.display = 'block';
-      snapshotClose.onclick = () => {
-        snapshotModal.style.display = 'none';
-        localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-        if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-        if (data.warning) showDeadline(data.warning, () => location.reload());
-        else location.reload();
-      };
-    });
+    localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+    if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+    if (data.warning) showDeadline(data.warning, () => location.reload());
+    else location.reload();
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -728,13 +694,10 @@ let previewStart = null;
           const today = new Date().toISOString().slice(0,10);
           const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
           if (unplan.dataset.part) body.part = unplan.dataset.part;
-          captureSchedule(document.querySelector('.complete-calendar')).then(img => {
-            snapshotBeforeImg = img;
-            return fetch(MOVE_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body)
-            });
+          fetch(MOVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
           })
             .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
             .then(({ ok, data }) => {
@@ -1001,14 +964,11 @@ let previewStart = null;
       const info = sessionStorage.getItem('undoMove');
       if (info) {
         const req = JSON.parse(info);
-        captureSchedule(document.querySelector('.complete-calendar')).then(img => {
-          snapshotBeforeImg = img;
-          return fetch(MOVE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: req.pid, phase: req.phase, date: req.date, worker: req.worker })
-          });
+        fetch(MOVE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: req.pid, phase: req.phase, date: req.date, worker: req.worker })
         })
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
@@ -1165,14 +1125,11 @@ let previewStart = null;
   });
   function doMove(moveData, mode, beforeMaterial) {
     moveData.mode = mode;
-    captureSchedule(document.querySelector('.complete-calendar')).then(img => {
-      snapshotBeforeImg = img;
-      return fetch(MOVE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify(moveData)
-      });
+    fetch(MOVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(moveData)
     })
     .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
     .then(({ok, data}) => {
@@ -1226,14 +1183,11 @@ let previewStart = null;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      captureSchedule(document.querySelector('.complete-calendar')).then(img => {
-        snapshotBeforeImg = img;
-        return fetch(MOVE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
-        });
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
       })
         .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
         .then(({ ok, data }) => {
