@@ -25,7 +25,6 @@ PHASE_ORDER = [
     'tratamiento',
     'pintar',
 ]
-PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
 UNPLANNED = 'Sin planificar'
 
@@ -247,7 +246,7 @@ def _build_vacation_map():
 
 def schedule_projects(projects):
     """Return schedule and conflicts after assigning all phases."""
-    projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
+    projects.sort(key=lambda p: p['start_date'])
     inactive = set(load_inactive_workers())
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
@@ -269,7 +268,6 @@ def schedule_projects(projects):
                     'color': '#ff9999',
                     'due_date': '',
                     'start_date': '',
-                    'priority': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
     # Place frozen phases first so other tasks respect their positions
@@ -353,7 +351,6 @@ def schedule_projects(projects):
                     project.get('due_confirmed'),
                     project.get('color', '#ddd'),
                     project['start_date'],
-                    project.get('priority'),
                     project['id'],
                     worker,
                     project_blocked=project.get('blocked', False),
@@ -418,7 +415,6 @@ def schedule_projects(projects):
                         project.get('color', '#ddd'),
                         worker,
                         project['start_date'],
-                        project.get('priority'),
                         project['id'],
                         hours_map,
                         part=idx if isinstance(val, list) else None,
@@ -458,7 +454,6 @@ def assign_phase(
     color,
     worker,
     start_date,
-    priority,
     pid,
     hours_map,
     part=None,
@@ -525,7 +520,6 @@ def assign_phase(
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -586,7 +580,6 @@ def assign_phase(
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -625,7 +618,6 @@ def assign_phase(
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -670,7 +662,6 @@ def assign_pedidos(
     due_confirmed,
     color,
     start_date,
-    priority,
     pid,
     worker=None,
     *,
@@ -714,7 +705,6 @@ def assign_pedidos(
             'color': color,
             'due_date': due_date,
             'start_date': start_date,
-            'priority': priority,
             'pid': pid,
             'frozen': project_frozen,
             'blocked': project_blocked,

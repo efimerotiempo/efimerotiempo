@@ -77,11 +77,6 @@ automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
  ha producido. Si desde el calendario se eliminan todas las fases de un proyecto,
  este también desaparece automáticamente de las listas de proyectos en todas las
  pestañas.
-Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
-lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
-de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
-proyecto afectado junto con un ✔ verde si ahora llega a su límite o una ❌
-roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
@@ -157,8 +152,7 @@ planificación continúa.
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
 después del último montaje programado para ese trabajador y aprovecha las
-horas libres de ese mismo día hasta completar su jornada, salvo que la
-prioridad del nuevo proyecto sea mayor y deba adelantarse en la cola.
+horas libres de ese mismo día hasta completar su jornada.
 
 De la misma forma, la fase de **soldar 2º** puede empezar el mismo día que
 termina el montaje si quedan horas disponibles. El planificador calcula las

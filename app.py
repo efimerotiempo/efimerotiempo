@@ -45,7 +45,6 @@ load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
-PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
@@ -1017,7 +1016,6 @@ def _kanban_card_to_project(card):
         'client': client,
         'start_date': date.today().isoformat(),
         'due_date': due.isoformat() if due else '',
-        'priority': 'Sin prioridad',
         'color': None,
         'phases': phases,
         # Ensure each phase is explicitly set to the unplanned worker so the
@@ -1087,7 +1085,6 @@ def calendar_view():
                 'pid': pid,
                 'phase': phase,
                 'color': item.get('color'),
-                'priority': item.get('priority'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
                 'day': item.get('day'),
@@ -1420,7 +1417,6 @@ def project_list():
     return render_template(
         'projects.html',
         projects=projects,
-        priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=active_workers(),
         project_filter=project_filter,
@@ -1455,7 +1451,6 @@ def add_project():
             'start_date': date.today().isoformat(),
             'due_date': due.isoformat() if due else '',
             'material_confirmed_date': '',
-            'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
             'assigned': {},
@@ -1649,7 +1644,6 @@ def complete():
                 'pid': pid,
                 'phase': phase,
                 'color': item.get('color'),
-                'priority': item.get('priority'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
                 'day': item.get('day'),
@@ -1782,7 +1776,6 @@ def complete():
         projects=filtered_projects,
         sort_option=sort_option,
         today=today,
-        priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=active_workers(today),
         notes=note_map,
@@ -1795,77 +1788,6 @@ def complete():
         unplanned_without=unplanned_without,
     )
 
-
-@app.route('/update_priority/<pid>', methods=['POST'])
-def update_priority(pid):
-    projects = get_projects()
-    old_map = compute_schedule_map(projects)
-    changed_proj = None
-    old_priority = None
-    for p in projects:
-        if p['id'] == pid:
-            changed_proj = p
-            old_priority = p['priority']
-            p['priority'] = request.form['priority']
-            break
-    save_projects(projects)
-    new_map = compute_schedule_map(projects)
-
-    changed_ids = []
-    for pr in projects:
-        if pr['id'] == pid:
-            continue
-        if old_map.get(pr['id']) != new_map.get(pr['id']):
-            changed_ids.append(pr['id'])
-
-    if changed_proj and changed_ids:
-        projects_copy = copy.deepcopy(projects)
-        sched, _ = schedule_projects(projects_copy)
-        end_dates = {p['id']: p['end_date'] for p in projects_copy}
-        start_dates = {}
-        for worker, days in sched.items():
-            for day, tasks in days.items():
-                for t in tasks:
-                    d = day
-                    pid2 = t['pid']
-                    if pid2 not in start_dates or d < start_dates[pid2]:
-                        start_dates[pid2] = d
-        details = []
-        for cid in changed_ids:
-            pr = next(p for p in projects if p['id'] == cid)
-            if pr.get('due_date'):
-                try:
-                    met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
-                except ValueError:
-                    met = False
-            else:
-                met = False
-            start_offset = (date.fromisoformat(start_dates[cid]) - MIN_DATE).days if cid in start_dates else 0
-            details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
-        if pid in start_dates:
-            changed_start = (date.fromisoformat(start_dates[pid]) - MIN_DATE).days
-        else:
-            changed_start = (date.fromisoformat(changed_proj['start_date']) - MIN_DATE).days
-
-        extras = load_extra_conflicts()
-        msg = (
-            f"Prioridad de {changed_proj['name']} (cliente {changed_proj['client']}) "
-            f"cambiada de {old_priority} a {changed_proj['priority']}"
-        )
-        extras.append({
-            'id': str(uuid.uuid4()),
-            'project': changed_proj['name'],
-            'client': changed_proj['client'],
-            'message': msg,
-            'changes': details,
-            'key': f'prio-{pid}-{len(extras)}',
-            'pid': changed_proj['id'],
-            'offset': changed_start,
-        })
-        save_extra_conflicts(extras)
-
-    next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
-    return redirect(next_url)
 
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
@@ -2076,8 +1998,6 @@ def update_project_row():
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])
         proj['due_date'] = dd.isoformat() if dd else ''
-    if 'priority' in data:
-        proj['priority'] = data['priority']
     if 'client' in data:
         proj['client'] = data['client']
     if 'material_confirmed_date' in data:
@@ -2751,14 +2671,6 @@ def kanbanize_webhook():
         or f"Kanbanize-{task_id or uuid.uuid4()}"
     )
     cliente = card.get('title') or "Sin cliente"
-    kanban_priority = (card.get('priority') or '').lower()
-    priority_map = {
-        'critical': 'Alta',
-        'high': 'Alta',
-        'average': 'Media',
-        'low': 'Baja',
-    }
-    proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
     attachments_raw = data.get('Attachments') or card.get('Attachments') or []
     kanban_files = []
@@ -2797,9 +2709,6 @@ def kanbanize_webhook():
             changed = True
         if existing.get('client') != cliente:
             existing['client'] = cliente
-            changed = True
-        if existing.get('priority') != proj_priority:
-            existing['priority'] = proj_priority
             changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
@@ -2884,7 +2793,6 @@ def kanbanize_webhook():
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
             'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
-            'priority': proj_priority,
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
