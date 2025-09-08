@@ -2249,6 +2249,7 @@ def move_phase():
             part = int(part)
         except Exception:
             part = None
+    # 🔧 Respetamos el modo que viene en la petición
     mode = data.get('mode', 'split')
     push_pid = data.get('push_pid')
     push_phase = data.get('push_phase')
@@ -2273,23 +2274,9 @@ def move_phase():
         day = date.fromisoformat(date_str)
     except Exception:
         return '', 400
+
     projects = get_projects()
-    schedule_before, _ = schedule_projects(copy.deepcopy(projects))
-    end_hour = 0
-    for w, days in schedule_before.items():
-        if w != worker:
-            continue
-        for dstr, tasks in days.items():
-            d = date.fromisoformat(dstr)
-            for t in tasks:
-                if t['pid'] == pid and t['phase'] == phase and (part is None or t.get('part') == part):
-                    continue
-                if d == day:
-                    end_hour = max(end_hour, t.get('start', 0) + t['hours'])
-    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    free_hours = max(0, limit - end_hour)
-    start_hour = end_hour
-    mode = 'push' if free_hours == 0 else 'split'
+
     new_day, warn = move_phase_date(
         projects,
         pid,
@@ -2297,7 +2284,7 @@ def move_phase():
         day,
         worker,
         part,
-        mode=mode,
+        mode=mode,   # 👉 aquí respetamos el valor recibido
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
