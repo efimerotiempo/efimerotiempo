@@ -983,7 +983,7 @@ def _kanban_card_to_project(card):
     mont = h('Horas Montaje')
     sold2 = h('Horas Soldadura 2º') or h('Horas Soldadura 2°')
     pint = h('Horas Acabado')
-    mont_final = h('Horas Montaje Final')
+    mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
     sold_int = h('Horas Soldadura Interior')
     phases = {}
     auto_hours = {}
@@ -992,7 +992,7 @@ def _kanban_card_to_project(card):
         and mont <= 0
         and sold2 <= 0
         and pint <= 0
-        and mont_final <= 0
+        and mont2 <= 0
         and sold_int <= 0
     ):
         phases['recepcionar material'] = 1
@@ -1000,8 +1000,8 @@ def _kanban_card_to_project(card):
     else:
         if pint:
             phases['pintar'] = pint
-        if mont_final:
-            phases['montaje final'] = mont_final
+        if mont2:
+            phases['montar 2º'] = mont2
         if mont:
             phases['montar'] = mont
         if prep:
@@ -2713,7 +2713,7 @@ def kanbanize_webhook():
     mont_hours = obtener_duracion('Horas Montaje')
     sold2_hours = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
     pint_hours = obtener_duracion('Horas Acabado')
-    mont_final_hours = obtener_duracion('Horas Montaje Final')
+    mont2_hours = obtener_duracion('Horas Montaje 2º') or obtener_duracion('Horas Montaje 2°')
     sold_int_hours = obtener_duracion('Horas Soldadura Interior')
     auto_prep = False
     if (
@@ -2721,7 +2721,7 @@ def kanbanize_webhook():
         and mont_hours <= 0
         and sold2_hours <= 0
         and pint_hours <= 0
-        and mont_final_hours <= 0
+        and mont2_hours <= 0
         and sold_int_hours <= 0
     ):
         prep_hours = 1
@@ -2739,8 +2739,8 @@ def kanbanize_webhook():
         fases.append({'nombre': 'soldadura interior', 'duracion': sold_int_hours})
     if pint_hours > 0:
         fases.append({'nombre': 'pintar', 'duracion': pint_hours})
-    if mont_final_hours > 0:
-        fases.append({'nombre': 'montaje final', 'duracion': mont_final_hours})
+    if mont2_hours > 0:
+        fases.append({'nombre': 'montar 2º', 'duracion': mont2_hours})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -2832,7 +2832,7 @@ def kanbanize_webhook():
             'montar',
             'soldar 2º',
             'pintar',
-            'montaje final',
+            'montar 2º',
             'soldadura interior',
         }
         # Si la fase de recepcionar material fue generada automáticamente
