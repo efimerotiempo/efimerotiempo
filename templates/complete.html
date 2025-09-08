@@ -1019,6 +1019,7 @@ let dragInfo = null;
     return hours;
   }
   document.querySelectorAll('tbody td[data-date]').forEach(cell => {
+    cell.addEventListener('dragover', e => { e.preventDefault(); });
     cell.addEventListener('drop', e => {
       e.preventDefault();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
