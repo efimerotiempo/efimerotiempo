@@ -18,11 +18,12 @@ PHASE_ORDER = [
     'pedidos',
     'recepcionar material',
     'montar',
-    'montar 2º',
     'soldar 2º',
     'mecanizar',
     'tratamiento',
     'pintar',
+    'montar 2º',
+    'soldar',
 ]
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
@@ -32,16 +33,16 @@ BASE_WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Mikel': ['montar', 'montar 2º', 'soldar 2º'],
-    'Iban': ['montar', 'montar 2º', 'soldar 2º'],
-    'Joseba 2': ['montar', 'montar 2º', 'soldar 2º'],
-    'Naparra': ['montar', 'montar 2º', 'soldar 2º'],
-    'Unai': ['montar', 'montar 2º', 'soldar 2º'],
-    'Fabio': ['soldar 2º'],
-    'Beltxa': ['soldar 2º', 'montar', 'montar 2º'],
-    'Igor': ['soldar 2º'],
-    'Albi': ['recepcionar material', 'soldar 2º', 'montar', 'montar 2º'],
-    'Eneko': ['pintar', 'montar', 'montar 2º', 'soldar 2º'],
+    'Mikel': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Iban': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Joseba 2': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Naparra': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Unai': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Fabio': ['soldar', 'soldar 2º'],
+    'Beltxa': ['soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Igor': ['soldar', 'soldar 2º'],
+    'Albi': ['recepcionar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Eneko': ['pintar', 'montar', 'montar 2º', 'soldar', 'soldar 2º'],
 }
 
 TAIL_WORKERS = {

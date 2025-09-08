@@ -998,17 +998,18 @@ def _kanban_card_to_project(card):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
     else:
+        if mont:
+            phases['montar'] = mont
+        if sold2:
+            phases['soldar 2º'] = sold2
         if pint:
             phases['pintar'] = pint
         if mont2:
             phases['montar 2º'] = mont2
-        if mont:
-            phases['montar'] = mont
+        if sold:
+            phases['soldar'] = sold
         if prep:
             phases['recepcionar material'] = prep
-        total_sold = sold2 + sold
-        if total_sold:
-            phases['soldar 2º'] = total_sold
 
     project = {
         'id': str(uuid.uuid4()),
@@ -2732,13 +2733,14 @@ def kanbanize_webhook():
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
-    total_sold = sold2_hours + sold_hours
-    if total_sold > 0:
-        fases.append({'nombre': 'soldar 2º', 'duracion': total_sold})
+    if sold2_hours > 0:
+        fases.append({'nombre': 'soldar 2º', 'duracion': sold2_hours})
     if pint_hours > 0:
         fases.append({'nombre': 'pintar', 'duracion': pint_hours})
     if mont2_hours > 0:
         fases.append({'nombre': 'montar 2º', 'duracion': mont2_hours})
+    if sold_hours > 0:
+        fases.append({'nombre': 'soldar', 'duracion': sold_hours})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -2831,6 +2833,7 @@ def kanbanize_webhook():
             'soldar 2º',
             'pintar',
             'montar 2º',
+            'soldar',
         }
         # Si la fase de recepcionar material fue generada automáticamente
         # (1h en rojo) y ahora la tarjeta tiene horas reales, eliminarla o
