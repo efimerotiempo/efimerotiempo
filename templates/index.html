@@ -191,6 +191,7 @@
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
+<div id="snapshot-modal" class="conflict-modal"><div class="conflict-content"><h3>Antes</h3><pre id="snapshot-before"></pre><h3>Después</h3><pre id="snapshot-after"></pre><button id="snapshot-close">Cerrar</button></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
         <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -297,12 +298,51 @@
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
+  const snapshotModal = document.getElementById('snapshot-modal');
+  const snapshotBefore = document.getElementById('snapshot-before');
+  const snapshotAfter = document.getElementById('snapshot-after');
+  const snapshotClose = document.getElementById('snapshot-close');
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
+  }
+  function formatSnapshot(schedule) {
+    const lines = [];
+    const workers = Object.keys(schedule).sort();
+    for (const w of workers) {
+      const days = schedule[w];
+      const dkeys = Object.keys(days).sort();
+      for (const d of dkeys) {
+        for (const t of days[d]) {
+          let line = `${w} ${d} ${t.pid} ${t.phase}`;
+          if (t.part !== undefined && t.part !== null) line += ` [${t.part}]`;
+          line += ` ${t.start || 0}-${(t.start || 0) + t.hours}`;
+          if (t.moved) line = `<span class="snapshot-moved">${line}</span>`;
+          else if (t.affected) line = `<span class="snapshot-affected">${line}</span>`;
+          lines.push(line);
+        }
+      }
+    }
+    return lines.join('\n');
+  }
+  function showSnapshots(before, after, done) {
+    snapshotBefore.innerHTML = formatSnapshot(before);
+    snapshotAfter.innerHTML = formatSnapshot(after);
+    snapshotModal.style.display = 'block';
+    snapshotClose.onclick = () => { snapshotModal.style.display = 'none'; if (done) done(); };
+  }
+  function afterMove(data, originalDate) {
+    const proceed = () => {
+      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+      if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+      if (data.warning) showDeadline(data.warning, () => location.reload());
+      else location.reload();
+    };
+    if (data.before && data.after) showSnapshots(data.before, data.after, proceed);
+    else proceed();
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -562,8 +602,7 @@ let previewStart = null;
                 else alert(data.error || 'Error');
                 return;
               }
-              if (data.warning) showDeadline(data.warning, () => location.reload());
-              else location.reload();
+              afterMove(data, today);
             });
         });
       }
@@ -746,12 +785,12 @@ let previewStart = null;
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       const info = sessionStorage.getItem('undoMove');
       if (info) {
-        const data = JSON.parse(info);
+        const req = JSON.parse(info);
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+          body: JSON.stringify({ pid: req.pid, phase: req.phase, date: req.date, worker: req.worker })
         })
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
@@ -761,8 +800,7 @@ let previewStart = null;
               return;
             }
             sessionStorage.removeItem('undoMove');
-            if (data.warning) showDeadline(data.warning, () => location.reload());
-            else location.reload();
+            afterMove(data, req.date);
           });
       }
     }
@@ -928,11 +966,7 @@ let previewStart = null;
         else alert(data.error || 'Error');
         return;
       }
-      const date = moveData.date;
-      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-      if (data.warning) showDeadline(data.warning, () => location.reload());
-      else location.reload();
+      afterMove(data, moveData.date);
     });
   }
   if (blockUnfreeze) {
@@ -984,8 +1018,7 @@ let previewStart = null;
             else alert(data.error || 'Error');
             return;
           }
-          if (data.warning) showDeadline(data.warning, () => location.reload());
-          else location.reload();
+          afterMove(data, today);
         });
     });
   }
