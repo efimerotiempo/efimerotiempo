@@ -129,6 +129,23 @@ BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
+TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+
+
+def load_tracker():
+    if os.path.exists(TRACKER_FILE):
+        try:
+            with open(TRACKER_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+def save_tracker(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(TRACKER_FILE, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
@@ -525,6 +542,7 @@ def move_phase_date(
     unblock=False,
     skip_block=False,
     start_hour=None,
+    track=None,
 ):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
@@ -591,6 +609,7 @@ def move_phase_date(
             sched_hour = 0
 
     warning = None
+    affected = track if track is not None else []
     if proj.get('due_date'):
         try:
             due_dt = date.fromisoformat(proj['due_date'])
@@ -610,6 +629,14 @@ def move_phase_date(
                 warning = f"{msg}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
         except Exception:
             pass
+    if 'hours' not in locals():
+        phase_val = proj['phases'].get(phase)
+        if isinstance(phase_val, list):
+            if part is None or part >= len(phase_val):
+                return None, 'Fase no encontrada'
+            hours = int(phase_val[part])
+        else:
+            hours = int(phase_val)
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
@@ -781,7 +808,9 @@ def move_phase_date(
                 save=False,
                 mode="split",
                 start_hour=current_hour,
+                track=affected,
             )
+            affected.append({'pid': opid, 'phase': oph, 'part': oprt})
             val = other_proj['phases'][oph]
             if isinstance(val, list):
                 h = int(val[oprt])
@@ -811,7 +840,44 @@ def move_phase_date(
 
     if save:
         save_projects(projects)
-    return sched_day.isoformat(), warning
+    # Determine end of this phase for logging purposes. When ``mode`` was
+    # ``push`` the values may already be available from the push calculation
+    # above; otherwise compute them now.
+    if "hours" in locals():
+        vac_days = vac_map.get(worker, set())
+        end_day = sched_day if 'end_day' not in locals() or end_day is None else end_day
+        end_hour = sched_hour if 'end_hour' not in locals() or end_hour is None else end_hour
+        if end_day == sched_day and end_hour == sched_hour:
+            remaining = hours
+            day = end_day
+            hour = end_hour
+            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+            while remaining > 0:
+                if day in vac_days:
+                    day = next_workday(day)
+                    hour = 0
+                    continue
+                free = limit - hour
+                if remaining <= free:
+                    hour += remaining
+                    remaining = 0
+                else:
+                    remaining -= free
+                    day = next_workday(day)
+                    hour = 0
+            end_day = day
+            end_hour = hour
+            if end_hour >= limit:
+                end_day = next_workday(end_day)
+                end_hour = 0
+    info = {
+        'start_hour': sched_hour,
+        'end_day': end_day.isoformat() if 'end_day' in locals() else sched_day.isoformat(),
+        'end_hour': end_hour if 'end_hour' in locals() else sched_hour,
+        'affected': track or [],
+    }
+
+    return sched_day.isoformat(), warning, info
 
 
 def get_projects():
@@ -2276,8 +2342,8 @@ def move_phase():
         return '', 400
 
     projects = get_projects()
-
-    new_day, warn = move_phase_date(
+    tracker_events = []
+    new_day, warn, info = move_phase_date(
         projects,
         pid,
         phase,
@@ -2289,11 +2355,43 @@ def move_phase():
         unblock=unblock,
         skip_block=skip_block,
         start_hour=start_hour,
+        track=tracker_events,
     )
     if new_day is None:
         if isinstance(warn, dict):
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
+
+    # Build tracker entry
+    proj = next((p for p in projects if p['id'] == pid), {})
+    reason = []
+    if mode == 'push':
+        reason.append('Se desplazaron fases posteriores para mantener la continuidad')
+    elif info.get('start_hour'):
+        reason.append(f"Se insertó tras {info['start_hour']}h ocupadas en la jornada")
+    else:
+        reason.append('Se colocó al inicio de la jornada')
+    if info.get('end_day') and info['end_day'] != new_day:
+        reason.append(f"Se dividió hasta {info['end_day']}")
+    affected_entries = []
+    for ev in tracker_events:
+        p2 = next((p for p in projects if p['id'] == ev['pid']), None)
+        if p2:
+            affected_entries.append({
+                'project': p2.get('name', ''),
+                'client': p2.get('client', ''),
+                'phase': ev['phase'],
+            })
+    logs = load_tracker()
+    logs.append({
+        'timestamp': datetime.now().isoformat(),
+        'project': proj.get('name', ''),
+        'client': proj.get('client', ''),
+        'phase': phase,
+        'reason': '; '.join(reason),
+        'affected': affected_entries,
+    })
+    save_tracker(logs)
 
     resp = {
         'date': new_day,
@@ -2834,6 +2932,12 @@ def hours():
                 })
     rows.sort(key=lambda r: r['start_time'])
     return render_template('hours.html', rows=rows)
+
+
+@app.route('/tracker')
+def tracker():
+    logs = load_tracker()
+    return render_template('tracker.html', logs=logs)
 
 
 @app.route('/bugs')
