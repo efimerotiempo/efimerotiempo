@@ -981,7 +981,7 @@ def _kanban_card_to_project(card):
 
     prep = h('Horas Preparación')
     mont = h('Horas Montaje')
-    sold = h('Horas Soldadura')
+    sold2 = h('Horas Soldadura 2º') or h('Horas Soldadura 2°')
     pint = h('Horas Acabado')
     mont_final = h('Horas Montaje Final')
     sold_int = h('Horas Soldadura Interior')
@@ -990,7 +990,7 @@ def _kanban_card_to_project(card):
     if (
         prep <= 0
         and mont <= 0
-        and sold <= 0
+        and sold2 <= 0
         and pint <= 0
         and mont_final <= 0
         and sold_int <= 0
@@ -1008,8 +1008,8 @@ def _kanban_card_to_project(card):
             phases['recepcionar material'] = prep
         if sold_int:
             phases['soldadura interior'] = sold_int
-        if sold:
-            phases['soldar'] = sold
+        if sold2:
+            phases['soldar 2º'] = sold2
 
     project = {
         'id': str(uuid.uuid4()),
@@ -2711,7 +2711,7 @@ def kanbanize_webhook():
 
     prep_hours = obtener_duracion('Horas Preparación')
     mont_hours = obtener_duracion('Horas Montaje')
-    sold_hours = obtener_duracion('Horas Soldadura')
+    sold2_hours = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
     pint_hours = obtener_duracion('Horas Acabado')
     mont_final_hours = obtener_duracion('Horas Montaje Final')
     sold_int_hours = obtener_duracion('Horas Soldadura Interior')
@@ -2719,7 +2719,7 @@ def kanbanize_webhook():
     if (
         prep_hours <= 0
         and mont_hours <= 0
-        and sold_hours <= 0
+        and sold2_hours <= 0
         and pint_hours <= 0
         and mont_final_hours <= 0
         and sold_int_hours <= 0
@@ -2733,8 +2733,8 @@ def kanbanize_webhook():
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
-    if sold_hours > 0:
-        fases.append({'nombre': 'soldar', 'duracion': sold_hours})
+    if sold2_hours > 0:
+        fases.append({'nombre': 'soldar 2º', 'duracion': sold2_hours})
     if sold_int_hours > 0:
         fases.append({'nombre': 'soldadura interior', 'duracion': sold_int_hours})
     if pint_hours > 0:
@@ -2830,7 +2830,7 @@ def kanbanize_webhook():
         restricted = {
             'recepcionar material',
             'montar',
-            'soldar',
+            'soldar 2º',
             'pintar',
             'montaje final',
             'soldadura interior',

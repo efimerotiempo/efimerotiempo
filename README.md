@@ -160,12 +160,12 @@ después del último montaje programado para ese trabajador y aprovecha las
 horas libres de ese mismo día hasta completar su jornada, salvo que la
 prioridad del nuevo proyecto sea mayor y deba adelantarse en la cola.
 
-De la misma forma, la fase de **soldar** puede empezar el mismo día que
+De la misma forma, la fase de **soldar 2º** puede empezar el mismo día que
 termina el montaje si quedan horas disponibles. El planificador calcula las
 horas libres que restan en la jornada y encadena la soldadura a continuación
 sin sobrepasar nunca las ocho horas diarias. Las tareas de un mismo día se
 ordenan según el momento en que se ejecutan, de modo que si otro trabajo de
-dos horas cabe antes de soldar, se colocará en las primeras horas del día.
+dos horas cabe antes de soldar 2º, se colocará en las primeras horas del día.
 Cada fase se programa en jornadas laborables consecutivas. Si un trabajador no
 tiene libres esos días seguidos —incluyendo las jornadas posteriores a sus
 montajes anteriores— se buscará otro que sí disponga de ese hueco antes de
