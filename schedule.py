@@ -18,12 +18,12 @@ PHASE_ORDER = [
     'pedidos',
     'recepcionar material',
     'montar',
+    'soldar',
+    'montar 2º',
     'soldar 2º',
     'mecanizar',
     'tratamiento',
     'pintar',
-    'montar 2º',
-    'soldar',
 ]
 PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
