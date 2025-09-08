@@ -982,18 +982,18 @@ def _kanban_card_to_project(card):
     prep = h('Horas Preparación')
     mont = h('Horas Montaje')
     sold2 = h('Horas Soldadura 2º') or h('Horas Soldadura 2°')
+    sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
     mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
-    sold_int = h('Horas Soldadura Interior')
     phases = {}
     auto_hours = {}
     if (
         prep <= 0
         and mont <= 0
         and sold2 <= 0
+        and sold <= 0
         and pint <= 0
         and mont2 <= 0
-        and sold_int <= 0
     ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
@@ -1006,10 +1006,9 @@ def _kanban_card_to_project(card):
             phases['montar'] = mont
         if prep:
             phases['recepcionar material'] = prep
-        if sold_int:
-            phases['soldadura interior'] = sold_int
-        if sold2:
-            phases['soldar 2º'] = sold2
+        total_sold = sold2 + sold
+        if total_sold:
+            phases['soldar 2º'] = total_sold
 
     project = {
         'id': str(uuid.uuid4()),
@@ -2712,17 +2711,17 @@ def kanbanize_webhook():
     prep_hours = obtener_duracion('Horas Preparación')
     mont_hours = obtener_duracion('Horas Montaje')
     sold2_hours = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
+    sold_hours = obtener_duracion('Horas Soldadura')
     pint_hours = obtener_duracion('Horas Acabado')
     mont2_hours = obtener_duracion('Horas Montaje 2º') or obtener_duracion('Horas Montaje 2°')
-    sold_int_hours = obtener_duracion('Horas Soldadura Interior')
     auto_prep = False
     if (
         prep_hours <= 0
         and mont_hours <= 0
         and sold2_hours <= 0
+        and sold_hours <= 0
         and pint_hours <= 0
         and mont2_hours <= 0
-        and sold_int_hours <= 0
     ):
         prep_hours = 1
         auto_prep = True
@@ -2733,10 +2732,9 @@ def kanbanize_webhook():
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
-    if sold2_hours > 0:
-        fases.append({'nombre': 'soldar 2º', 'duracion': sold2_hours})
-    if sold_int_hours > 0:
-        fases.append({'nombre': 'soldadura interior', 'duracion': sold_int_hours})
+    total_sold = sold2_hours + sold_hours
+    if total_sold > 0:
+        fases.append({'nombre': 'soldar 2º', 'duracion': total_sold})
     if pint_hours > 0:
         fases.append({'nombre': 'pintar', 'duracion': pint_hours})
     if mont2_hours > 0:
@@ -2833,7 +2831,6 @@ def kanbanize_webhook():
             'soldar 2º',
             'pintar',
             'montar 2º',
-            'soldadura interior',
         }
         # Si la fase de recepcionar material fue generada automáticamente
         # (1h en rojo) y ahora la tarjeta tiene horas reales, eliminarla o
