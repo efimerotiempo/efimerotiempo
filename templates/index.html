@@ -276,7 +276,6 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
-  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
@@ -437,11 +436,6 @@ const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
 let dragInfo = null;
-let previewTimer = null;
-let previewTarget = null;
-let previewCell = null;
-let previewHTML = null;
-let previewStart = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
@@ -456,7 +450,7 @@ let previewStart = null;
       dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; clearPreview(); });
+    t.addEventListener('dragend', () => { dragInfo = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -801,24 +795,10 @@ let previewStart = null;
     });
   });
 
-  function clearPreview() {
-    if (previewTimer) {
-      clearTimeout(previewTimer);
-      previewTimer = null;
-    }
-    previewTarget = null;
-    if (previewCell) {
-      previewCell.innerHTML = previewHTML;
-      previewCell = null;
-      previewHTML = null;
-    }
-    previewStart = null;
-  }
   function getStartHour(cell, y) {
     let hours = 0;
     const tasks = Array.from(cell.querySelectorAll('.task'));
     for (const t of tasks) {
-      if (t.classList.contains('preview-task')) continue;
       if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
       const rect = t.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) break;
@@ -827,64 +807,8 @@ let previewStart = null;
     return hours;
   }
   document.querySelectorAll('tbody td[data-date]').forEach(cell => {
-    cell.addEventListener('dragover', e => {
-      e.preventDefault();
-      if (!dragInfo) return;
-      let start = getStartHour(cell, e.clientY);
-      if (previewCell) {
-        if (previewCell !== cell || previewStart !== start) {
-          clearPreview();
-          start = getStartHour(cell, e.clientY);
-        } else {
-          return;
-        }
-      }
-      if (previewTimer && (previewTarget !== cell || previewStart !== start)) {
-        clearTimeout(previewTimer);
-        previewTimer = null;
-        previewTarget = null;
-      }
-      if (!previewTimer) {
-        previewTarget = cell;
-        previewStart = start;
-        previewTimer = setTimeout(() => {
-          const date = cell.dataset.date;
-          const worker = cell.closest('tr').dataset.worker;
-          const moveData = { pid: dragInfo.pid, phase: dragInfo.phase, date: date, worker: worker, part: dragInfo.part, start: previewStart };
-          fetch(CHECK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(moveData)
-          }).then(r => r.json()).then(res => {
-            if (!dragInfo || previewCell || previewTarget !== cell || previewStart !== start || !res.preview) return;
-            previewCell = cell;
-            previewHTML = cell.innerHTML;
-            cell.innerHTML = '';
-            res.preview.forEach(t => {
-              const div = document.createElement('div');
-              div.className = 'task preview-task' + (t.frozen ? ' frozen' : '');
-              div.style.borderColor = t.color;
-              div.textContent = `${t.project} - ${t.client} - ${t.phase}`;
-              cell.appendChild(div);
-            });
-          });
-        }, 700);
-      }
-    });
-    cell.addEventListener('dragleave', e => {
-      if (!cell.contains(e.relatedTarget)) {
-        if (previewCell === cell) clearPreview();
-        else if (previewTarget === cell) {
-          clearTimeout(previewTimer);
-          previewTimer = null;
-          previewTarget = null;
-        }
-      }
-    });
     cell.addEventListener('drop', e => {
       e.preventDefault();
-      clearPreview();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
@@ -895,20 +819,7 @@ let previewStart = null;
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      fetch(CHECK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify(moveData)
-      }).then(resp => resp.json()).then(res => {
-        const proceed = () => {
-          if (res.warning) moveData.ack_warning = true;
-          moveData.start = res.used;
-          doMove(moveData, 'split', beforeMaterial);
-        };
-        if (res.warning) showDeadline(res.warning, proceed);
-        else proceed();
-      });
+      doMove(moveData, 'split', beforeMaterial);
     });
   });
   function doMove(moveData, mode, beforeMaterial) {
