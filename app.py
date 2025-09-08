@@ -175,63 +175,6 @@ PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Planf. TAU',
     'Planif. OTROS',
 }
-# Mapping between local phase names and Kanbanize custom field names
-PHASE_FIELD_MAP = {
-    'recepcionar material': 'Horas Preparación',
-    'montar': 'Horas Montaje',
-    'soldar': 'Horas Soldadura',
-    'pintar': 'Horas Acabado',
-    'montaje final': 'Horas Montaje Final',
-    'soldadura interior': 'Horas Soldadura Interior',
-}
-
-
-def _sync_project_to_kanbanize(proj, changed):
-    """Send project updates to Kanbanize according to ``changed`` fields."""
-    kanban_id = proj.get('kanban_id')
-    if not kanban_id or not changed:
-        return
-
-    payload = {}
-    custom = {}
-
-    if 'client' in changed:
-        payload['title'] = proj.get('client', '')
-    if 'priority' in changed:
-        payload['priority'] = proj.get('priority')
-    if 'due_date' in changed:
-        due = proj.get('due_date')
-        if due:
-            payload['deadline'] = due
-            custom['Fecha Cliente'] = due
-    if 'material_confirmed_date' in changed:
-        mdate = proj.get('material_confirmed_date')
-        if mdate:
-            custom['Fecha material confirmado'] = mdate
-
-    phases = proj.get('phases', {})
-    for ph in changed:
-        field = PHASE_FIELD_MAP.get(ph)
-        if field and ph in phases:
-            custom[field] = phases[ph]
-
-    if custom:
-        payload['customFields'] = custom
-    if not payload:
-        return
-
-    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{kanban_id}"
-    req = Request(
-        url,
-        data=json.dumps(payload).encode('utf-8'),
-        headers={'apikey': KANBANIZE_API_KEY, 'Content-Type': 'application/json'},
-        method='PUT',
-    )
-    try:
-        with urlopen(req, timeout=10) as resp:
-            resp.read()
-    except Exception as e:
-        print('Kanbanize sync error:', e)
 
 
 def active_workers(today=None):
@@ -2009,7 +1952,6 @@ def update_due_date():
     proj['due_confirmed'] = True
     proj['due_warning'] = True
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, {'due_date'})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -2115,10 +2057,9 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
-        proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+    proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, {phase})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -2135,7 +2076,6 @@ def update_project_row():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
 
-    changed = set()
     modified = set()
 
     if 'start_date' in data:
@@ -2145,19 +2085,13 @@ def update_project_row():
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])
         proj['due_date'] = dd.isoformat() if dd else ''
-        if dd:
-            changed.add('due_date')
     if 'priority' in data:
         proj['priority'] = data['priority']
-        changed.add('priority')
     if 'client' in data:
         proj['client'] = data['client']
-        changed.add('client')
     if 'material_confirmed_date' in data:
         md = parse_input_date(data['material_confirmed_date'])
         proj['material_confirmed_date'] = md.isoformat() if md else ''
-        if md:
-            changed.add('material_confirmed_date')
     if 'color' in data:
         proj['color'] = data['color']
 
@@ -2204,7 +2138,6 @@ def update_project_row():
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
         modified.add(ph)
-        changed.add(ph)
 
     if data.get('phase_starts'):
         seg = proj.setdefault('segment_starts', {})
@@ -2230,7 +2163,6 @@ def update_project_row():
 
     schedule_projects(projects)
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, changed)
     return jsonify({'status': 'ok'})
 
 

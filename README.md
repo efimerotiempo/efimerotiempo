@@ -48,12 +48,6 @@ aparecen en la columna lateral **Sin fecha de entrega confirmada**, y sólo se
 visualizan proyectos de esta misma lane. En ningún caso generará un proyecto.
 Si una tarjeta de proyecto pasa a la columna "Ready to Archive", el
 Planificador eliminará automáticamente el proyecto y sus fases.
-
-Si modificas en el Planificador el cliente, la prioridad, la fecha límite,
-la fecha de material confirmado o las horas de alguna de sus fases, estos
-valores se envían de vuelta a la tarjeta correspondiente en Kanbanize para
-mantener sincronizada la información.
-
  También puedes añadir **Notas** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día de la
  nota y la descripción se muestra en rojo y en negrita al final del calendario,
