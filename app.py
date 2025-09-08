@@ -49,7 +49,6 @@ PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
-find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
 UNPLANNED = _schedule_mod.UNPLANNED
 if hasattr(_schedule_mod, "phase_start_map"):
@@ -820,7 +819,6 @@ def get_projects():
     projects = load_projects()
     changed = False
     color_index = 0
-    assigned_projects = []
     inactive = set(load_inactive_workers())
     for p in projects:
         if p.get('source') == 'api':
@@ -883,15 +881,9 @@ def get_projects():
                 changed = True
 
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
-        if missing:
-            schedule, _ = schedule_projects(assigned_projects)
-            for ph in missing:
-                worker = find_worker_for_phase(
-                    ph, {w: schedule.get(w, {}) for w in WORKERS}, p.get('priority')
-                )
-                if worker:
-                    p['assigned'][ph] = worker
-                    changed = True
+        for ph in missing:
+            p['assigned'][ph] = UNPLANNED
+            changed = True
         total = len(p.get('phases', {}))
         planned = sum(
             1
@@ -904,7 +896,6 @@ def get_projects():
             p['plan_state'] = 'all'
         else:
             p['plan_state'] = 'partial'
-        assigned_projects.append(p)
     if changed:
         save_projects(projects)
     return projects

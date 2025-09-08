@@ -109,8 +109,9 @@ cualquier trabajador sin restricciones de habilidades; el planificador solo
 considera su disponibilidad para colocarlas lo antes posible.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
-lista de proyectos. El planificador automático lo ignora al repartir fases por
-defecto.
+lista de proyectos. Las fases sin trabajador asignado se marcan como **Sin
+planificar** y permanecen en la columna lateral hasta que se asignen
+manualmente.
 
 Las filas del calendario muestran a las personas siempre en este orden:
 Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,

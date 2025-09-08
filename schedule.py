@@ -341,30 +341,8 @@ def schedule_projects(projects):
                     if (current + timedelta(days=i)).weekday() not in WEEKEND
                 )
                 worker = assigned.get(phase) if planned else UNPLANNED
-                if worker in inactive:
+                if not worker or worker in inactive:
                     worker = UNPLANNED
-                if planned and not worker:
-                    worker = find_worker_for_phase(
-                        phase,
-                        worker_schedule,
-                        project.get('priority'),
-                        start_day=current,
-                        days=days_needed,
-                        vacations=vac_map,
-                        hours_map=hours_map,
-                    )
-                    if worker:
-                        assigned[phase] = worker
-                if not worker:
-                    msg = f'Sin recurso para fase {phase}'
-                    conflicts.append({
-                        'id': len(conflicts) + 1,
-                        'project': project['name'],
-                        'client': project['client'],
-                        'message': msg,
-                        'key': f"{project['name']}|{msg}",
-                    })
-                    continue
                 current, hour, end_date = assign_pedidos(
                     worker_schedule[worker],
                     current,
@@ -397,35 +375,14 @@ def schedule_projects(projects):
                             worker = seg_workers[idx]
                         if not worker:
                             worker = assigned.get(phase)
-                        if worker in inactive:
+                        if not worker or worker in inactive:
                             worker = UNPLANNED
-                        if not worker:
-                            worker = find_worker_for_phase(
-                                phase,
-                                worker_schedule,
-                                project.get('priority'),
-                                start_day=current,
-                                days=days_needed,
-                                vacations=vac_map,
-                                hours_map=hours_map,
-                            )
                             if seg_workers:
                                 if len(seg_workers) <= idx:
                                     seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
-                                seg_workers[idx] = worker
+                                seg_workers[idx] = UNPLANNED
                             else:
-                                assigned[phase] = worker
-
-                    if not worker:
-                        msg = f'Sin recurso para fase {phase}'
-                        conflicts.append({
-                            'id': len(conflicts) + 1,
-                            'project': project['name'],
-                            'client': project['client'],
-                            'message': msg,
-                            'key': f"{project['name']}|{msg}",
-                        })
-                        continue
+                                assigned[phase] = UNPLANNED
 
                     override = None
                     hour_override = None
@@ -833,52 +790,6 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, h
             return d
         d = next_workday(d)
 
-
-def find_worker_for_phase(
-    phase,
-    schedule,
-    priority=None,
-    *,
-    start_day=None,
-    days=0,
-    vacations=None,
-    hours_map=None,
-):
-    """Choose the worker that can start the phase as soon as posible.
-
-    Unai is always excluded from automatic assignments so that he can only
-    be seleccionado manualmente desde la vista de proyectos.
-    """
-    inactive = set(load_inactive_workers())
-    candidates = []
-    for worker in WORKERS:
-        if worker in ('Unai', UNPLANNED) or worker in inactive:
-            continue
-        start = start_day or date.today()
-        if worker == 'Igor' and start >= IGOR_END:
-            continue
-        if phase == 'montar':
-            last, end = _last_phase_info(schedule.get(worker, {}), 'montar')
-            if last and start <= last:
-                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-                start = last if end < limit else next_workday(last)
-        free = _continuous_free_start(
-            schedule,
-            worker,
-            start,
-            days or 1,
-            vacations,
-            hours_map,
-        )
-        load = _worker_load(schedule, worker)
-        candidates.append((free, load, worker))
-    if not candidates:
-        return None
-    if priority == 'Alta':
-        earliest = min(candidates, key=lambda c: (c[0], c[1]))
-        return earliest[2]
-    candidates.sort(key=lambda c: (c[0], c[1]))
-    return candidates[0][2]
 
 def compute_schedule_map(projects):
     """Return a mapping of project id to scheduled tasks."""
