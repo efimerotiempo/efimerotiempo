@@ -16,7 +16,7 @@
     <td>{{ log.project }}</td>
     <td>{{ log.client }}</td>
     <td>{{ log.phase }}</td>
-    <td>{{ log.reason }}</td>
+    <td>{{ log.reason.replace('\n', '<br/>')|safe }}</td>
     <td>
       {% if log.affected %}
         {% for a in log.affected %}

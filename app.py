@@ -147,6 +147,52 @@ def save_tracker(data):
     with open(TRACKER_FILE, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
+def build_move_reason(projects, pid, phase, part, mode, info):
+    """Return a detailed explanation of how a phase was distributed."""
+    schedule, _ = schedule_projects(projects)
+    segments = []
+    for worker, days in schedule.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                if t.get('pid') == pid and t['phase'] == phase and (
+                    part is None or t.get('part') == part
+                ):
+                    segments.append((worker, day, t))
+    segments.sort(key=lambda x: (x[1], x[2].get('start', 0)))
+    explanations = []
+    for idx, (worker, day, t) in enumerate(segments):
+        start = t.get('start', 0)
+        hours = t['hours']
+        day_fmt = date.fromisoformat(day).strftime('%d/%m/%Y')
+        day_tasks = sorted(schedule[worker][day], key=lambda x: x.get('start', 0))
+        before = [
+            x
+            for x in day_tasks
+            if x is not t and x['start'] + x['hours'] <= start
+        ]
+        if before:
+            prev = ', '.join(
+                f"{b['project']} - {b['phase']} ({b['hours']}h)" for b in before
+            )
+            msg = f"{day_fmt}: {hours}h tras {start}h ocupadas por {prev}"
+        else:
+            msg = f"{day_fmt}: {hours}h al inicio de la jornada"
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        end = start + hours
+        if idx < len(segments) - 1:
+            remaining = limit - end
+            if remaining > 0:
+                msg += f"; quedaban {remaining}h libres y se continuó al día siguiente"
+            else:
+                msg += "; jornada completa, se continuó al día siguiente"
+        explanations.append(msg)
+    if mode == 'push' and info.get('affected'):
+        explanations.append(
+            'Se desplazaron fases posteriores para mantener la continuidad'
+        )
+    return '\n'.join(explanations)
+
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
@@ -2362,17 +2408,9 @@ def move_phase():
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
 
-    # Build tracker entry
+    # Build tracker entry with detailed reasoning
     proj = next((p for p in projects if p['id'] == pid), {})
-    reason = []
-    if mode == 'push':
-        reason.append('Se desplazaron fases posteriores para mantener la continuidad')
-    elif info.get('start_hour'):
-        reason.append(f"Se insertó tras {info['start_hour']}h ocupadas en la jornada")
-    else:
-        reason.append('Se colocó al inicio de la jornada')
-    if info.get('end_day') and info['end_day'] != new_day:
-        reason.append(f"Se dividió hasta {info['end_day']}")
+    reason = build_move_reason(projects, pid, phase, part, mode, info)
     affected_entries = []
     for ev in tracker_events:
         p2 = next((p for p in projects if p['id'] == ev['pid']), None)
@@ -2388,7 +2426,7 @@ def move_phase():
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
-        'reason': '; '.join(reason),
+        'reason': reason,
         'affected': affected_entries,
     })
     save_tracker(logs)
