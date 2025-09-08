@@ -48,12 +48,6 @@ aparecen en la columna lateral **Sin fecha de entrega confirmada**, y sólo se
 visualizan proyectos de esta misma lane. En ningún caso generará un proyecto.
 Si una tarjeta de proyecto pasa a la columna "Ready to Archive", el
 Planificador eliminará automáticamente el proyecto y sus fases.
-
-Si modificas en el Planificador el cliente, la prioridad, la fecha límite,
-la fecha de material confirmado o las horas de alguna de sus fases, estos
-valores se envían de vuelta a la tarjeta correspondiente en Kanbanize para
-mantener sincronizada la información.
-
  También puedes añadir **Notas** indicando una descripción y una fecha. En ambas
  vistas de calendario aparece una gruesa línea roja a la derecha del día de la
  nota y la descripción se muestra en rojo y en negrita al final del calendario,
@@ -83,11 +77,6 @@ automáticamente. Junto a cada proyecto hay un botón rojo con una **X** para
  ha producido. Si desde el calendario se eliminan todas las fases de un proyecto,
  este también desaparece automáticamente de las listas de proyectos en todas las
  pestañas.
-Si se modifica la prioridad de un proyecto también se vuelve a programar y en la
-lista de conflictos se añade una nota indicando qué otros proyectos han cambiado
-de fechas debido a esa prioridad. La nota muestra el nombre y cliente de cada
-proyecto afectado junto con un ✔ verde si ahora llega a su límite o una ❌
-roja en caso contrario.
 Puedes pulsar sobre el nombre de un proyecto en la lista de conflictos para
 que el calendario salte hasta sus tareas y las resalte igual que si hubieras
 hecho clic en ellas, incluso aunque estén fuera del rango visible.
@@ -115,8 +104,9 @@ cualquier trabajador sin restricciones de habilidades; el planificador solo
 considera su disponibilidad para colocarlas lo antes posible.
 
 El trabajador **Unai** solo recibe tareas si se le asignan manualmente en la
-lista de proyectos. El planificador automático lo ignora al repartir fases por
-defecto.
+lista de proyectos. Las fases sin trabajador asignado se marcan como **Sin
+planificar** y permanecen en la columna lateral hasta que se asignen
+manualmente.
 
 Las filas del calendario muestran a las personas siempre en este orden:
 Pilar, Joseba 1, Irene, Mikel, Iban, Joseba 2, Naparra, Unai, Fabio, Beltxa,
@@ -162,15 +152,14 @@ planificación continúa.
 Al planificar el montaje se respeta el orden en que cada trabajador termina
 la fase de montaje de su proyecto anterior. Un nuevo montaje se coloca justo
 después del último montaje programado para ese trabajador y aprovecha las
-horas libres de ese mismo día hasta completar su jornada, salvo que la
-prioridad del nuevo proyecto sea mayor y deba adelantarse en la cola.
+horas libres de ese mismo día hasta completar su jornada.
 
-De la misma forma, la fase de **soldar** puede empezar el mismo día que
+De la misma forma, la fase de **soldar 2º** puede empezar el mismo día que
 termina el montaje si quedan horas disponibles. El planificador calcula las
 horas libres que restan en la jornada y encadena la soldadura a continuación
 sin sobrepasar nunca las ocho horas diarias. Las tareas de un mismo día se
 ordenan según el momento en que se ejecutan, de modo que si otro trabajo de
-dos horas cabe antes de soldar, se colocará en las primeras horas del día.
+dos horas cabe antes de soldar 2º, se colocará en las primeras horas del día.
 Cada fase se programa en jornadas laborables consecutivas. Si un trabajador no
 tiene libres esos días seguidos —incluyendo las jornadas posteriores a sus
 montajes anteriores— se buscará otro que sí disponga de ese hueco antes de

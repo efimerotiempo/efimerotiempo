@@ -15,17 +15,6 @@
         <td>Fecha límite</td>
         <td colspan="2"><input type="text" name="due_date" value="{{ prefill.due_date or '' }}" placeholder="dd-mm" required></td>
     </tr>
-    <tr>
-        <td>Prioridad</td>
-        <td colspan="2">
-            <select name="priority">
-                <option value="Alta">Alta</option>
-                <option value="Media">Media</option>
-                <option value="Baja">Baja</option>
-                <option value="Sin prioridad" selected>Sin prioridad</option>
-            </select>
-        </td>
-    </tr>
     {% for phase in phases %}
         {% if phase == 'pedidos' %}
         <tr>

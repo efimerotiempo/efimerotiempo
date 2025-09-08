@@ -11,7 +11,8 @@ table.schedule th, table.schedule td {
     min-width: 300px;
 }
 table.schedule td.incomplete {
-    border: 3px solid #000;
+    border: 1px solid #ccc;
+    border-top: 3px solid #000;
 }
 
 table.schedule td.vacation-day {
@@ -71,10 +72,6 @@ table.schedule td.weekend-cell {
     background: #cce5ff;
 }
 
-.task.preview-task {
-    opacity: 0.5;
-    cursor: default;
-}
 
 .projects-table tr.frozen {
     border: 3px solid blue !important;
@@ -158,7 +155,7 @@ table.schedule th.resource-col,
 table.schedule td.resource-col {
     min-width: 150px;
     width: 150px;
-    border: 3px solid #000;
+    border: 1px solid #ccc;
     font-weight: bold;
 }
 
@@ -238,6 +235,7 @@ table.pedidos-calendar td.week-label {
     font-size: 1.2em;
     cursor: pointer;
 }
+
 
 .vacation {
     background: #ff9999;
