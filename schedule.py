@@ -270,28 +270,6 @@ def schedule_projects(projects):
                     'start_date': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
-    # Place frozen phases first so other tasks respect their positions
-    for p in projects:
-        for t in p.get('frozen_tasks', []):
-            w = t['worker']
-            day = t['day']
-            entry = t.copy()
-            entry.pop('worker', None)
-            entry.pop('day', None)
-            try:
-                day_obj = date.fromisoformat(day)
-            except Exception:
-                day_obj = date.today()
-            start_time, end_time = _calc_datetimes(day_obj, entry.get('start', 0), entry.get('hours', 0))
-            entry.setdefault('start', 0)
-            entry['start_time'] = start_time
-            entry['end_time'] = end_time
-            worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
-
-    # Sort frozen tasks chronologically
-    for w, days in worker_schedule.items():
-        for d, lst in days.items():
-            lst.sort(key=lambda x: x.get('start', 0))
 
     conflicts = []
     for project in projects:
@@ -306,27 +284,11 @@ def schedule_projects(projects):
                 current = date.today()
                 project['start_date'] = current.isoformat()
         hour = 0
-        frozen_end = {}
-        for t in project.get('frozen_tasks', []):
-            ph = t.get('phase')
-            try:
-                d = date.fromisoformat(t['day'])
-            except Exception:
-                continue
-            if ph in PHASE_ORDER:
-                prev = frozen_end.get(ph)
-                if not prev or d > prev:
-                    frozen_end[ph] = d
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
-                continue
-            if phase in frozen_end:
-                current = next_workday(frozen_end[phase])
-                end_date = max(end_date, frozen_end[phase])
-                hour = 0
                 continue
 
             if phase == 'pedidos' and isinstance(val, str) and '-' in val:
@@ -459,7 +421,6 @@ def assign_phase(
     part=None,
     *,
     manual=False,
-    project_frozen=False,
     project_blocked=False,
     material_date=None,
     auto=False,
@@ -522,7 +483,6 @@ def assign_phase(
                 'start_date': start_date,
                 'pid': pid,
                 'part': part,
-                'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
@@ -582,7 +542,6 @@ def assign_phase(
                 'start_date': start_date,
                 'pid': pid,
                 'part': part,
-                'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
@@ -620,7 +579,6 @@ def assign_phase(
                 'start_date': start_date,
                 'pid': pid,
                 'part': part,
-                'frozen': project_frozen,
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
@@ -665,7 +623,6 @@ def assign_pedidos(
     pid,
     worker=None,
     *,
-    project_frozen=False,
     project_blocked=False,
     material_date=None,
 ):
@@ -706,7 +663,6 @@ def assign_pedidos(
             'due_date': due_date,
             'start_date': start_date,
             'pid': pid,
-            'frozen': project_frozen,
             'blocked': project_blocked,
             'material_date': material_date,
         }

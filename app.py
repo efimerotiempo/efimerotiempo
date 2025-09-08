@@ -585,8 +585,6 @@ def move_phase_date(
     save=True,
     mode="push",
     push_from=None,
-    unblock=False,
-    skip_block=False,
     start_hour=None,
     track=None,
 ):
@@ -622,12 +620,6 @@ def move_phase_date(
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return None, 'Proyecto no encontrado'
-    if phase != 'pedidos' and any(
-        t['phase'] == phase and (part is None or t.get('part') == part)
-        for t in proj.get('frozen_tasks', [])
-    ):
-        return None, 'Fase congelada'
-
     vac_map = _schedule_mod._build_vacation_map()
     if (
         phase != 'pedidos'
@@ -796,51 +788,6 @@ def move_phase_date(
                     current_day = next_workday(current_day)
                     current_hour = 0
                 continue
-            if oph != 'pedidos' and any(
-                t['phase'] == oph and (oprt is None or t.get('part') == oprt)
-                for t in other_proj.get('frozen_tasks', [])
-            ):
-                if not unblock and not skip_block:
-                    return None, {
-                        'pid': opid,
-                        'phase': oph,
-                        'part': oprt,
-                        'name': other_proj.get('name', ''),
-                    }
-                if skip_block:
-                    val = other_proj['phases'][oph]
-                    if isinstance(val, list):
-                        h = int(val[oprt])
-                    else:
-                        h = int(val)
-                    rem = h
-                    day = start
-                    hour = 0
-                    while rem > 0:
-                        if day in vac_days:
-                            day = next_workday(day)
-                            hour = 0
-                            continue
-                        free = limit - hour
-                        if rem <= free:
-                            hour += rem
-                            rem = 0
-                        else:
-                            rem -= free
-                            day = next_workday(day)
-                            hour = 0
-                    current_day = day
-                    current_hour = hour
-                    if current_hour >= limit:
-                        current_day = next_workday(current_day)
-                        current_hour = 0
-                    continue
-                # unblock
-                other_proj['frozen_tasks'] = [
-                    t
-                    for t in other_proj.get('frozen_tasks', [])
-                    if not (t['phase'] == oph and (oprt is None or t.get('part') == oprt))
-                ]
             while current_day in vac_days:
                 current_day = next_workday(current_day)
                 current_hour = 0
@@ -943,8 +890,6 @@ def get_projects():
                 color_index += 1
                 changed = True
 
-        p.pop('frozen', None)
-        p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
@@ -1204,7 +1149,6 @@ def calendar_view():
                 'late': item.get('late', False),
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
-                'frozen': item.get('frozen', False),
                 'auto': item.get('auto', False),
             },
         )
@@ -1223,8 +1167,6 @@ def calendar_view():
             ph['late'] = True
         if item.get('blocked'):
             ph['blocked'] = True
-        if item.get('frozen'):
-            ph['frozen'] = True
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -1296,7 +1238,6 @@ def calendar_view():
         p.setdefault('kanban_attachments', [])
         project_map[p['id']] = {
             **p,
-            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
         }
     start_map = phase_start_map(projects)
 
@@ -1763,7 +1704,6 @@ def complete():
                 'late': item.get('late', False),
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
-                'frozen': item.get('frozen', False),
                 'auto': item.get('auto', False),
             },
         )
@@ -1782,8 +1722,6 @@ def complete():
             ph['late'] = True
         if item.get('blocked'):
             ph['blocked'] = True
-        if item.get('frozen'):
-            ph['frozen'] = True
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -1872,7 +1810,6 @@ def complete():
         p.setdefault('kanban_attachments', [])
         project_map[p['id']] = {
             **p,
-            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
         }
     start_map = phase_start_map(projects)
 
@@ -2059,7 +1996,6 @@ def update_phase_hours():
                 if request.is_json:
                     return '', 204
                 return redirect(next_url)
-            proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
@@ -2082,7 +2018,6 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
-    proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
     if request.is_json:
@@ -2180,9 +2115,6 @@ def update_project_row():
     if not proj.get('phases'):
         remove_project_and_preserve_schedule(projects, pid)
         return jsonify({'status': 'ok'})
-
-    if modified:
-        proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] not in modified]
 
     schedule_projects(projects)
     save_projects(projects)
@@ -2369,8 +2301,6 @@ def move_phase():
     push_from = None
     if push_pid and push_phase:
         push_from = (push_pid, push_phase, push_part if push_part not in (None, '', 'None') else None)
-    unblock = str(data.get('unblock')).lower() == 'true'
-    skip_block = str(data.get('skip_block')).lower() == 'true'
     ack_warning = str(data.get('ack_warning')).lower() == 'true'
     start = data.get('start')
     if start in (None, '', 'None'):
@@ -2398,14 +2328,10 @@ def move_phase():
         part,
         mode=mode,   # 👉 aquí respetamos el valor recibido
         push_from=push_from,
-        unblock=unblock,
-        skip_block=skip_block,
         start_hour=start_hour,
         track=tracker_events,
     )
     if new_day is None:
-        if isinstance(warn, dict):
-            return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
 
     # Build tracker entry with detailed reasoning
@@ -2559,34 +2485,6 @@ def delete_bug(bid):
     save_bugs(bugs)
     return redirect(url_for('bug_list'))
 
-
-@app.route('/toggle_freeze/<pid>/<phase>', methods=['POST'])
-def toggle_freeze(pid, phase):
-    projects = get_projects()
-    proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj:
-        return jsonify({'error': 'Proyecto no encontrado'}), 404
-    frozen = proj.get('frozen_tasks', [])
-    if any(t['phase'] == phase for t in frozen):
-        proj['frozen_tasks'] = [t for t in frozen if t['phase'] != phase]
-    else:
-        # Recompute the schedule on a copy so freezing a phase does not
-        # persistently modify the existing planning
-        schedule, _ = schedule_projects(copy.deepcopy(projects))
-        for w, days in schedule.items():
-            for day, tasks in days.items():
-                for t in tasks:
-                    if t['pid'] == pid and t['phase'] == phase:
-                        item = t.copy()
-                        item['worker'] = w
-                        item['day'] = day
-                        item['frozen'] = True
-                        frozen.append(item)
-        proj['frozen_tasks'] = frozen
-    save_projects(projects)
-    if request.is_json:
-        return '', 204
-    return redirect(request.referrer or url_for('calendar_view'))
 
 
 @app.route('/toggle_block/<pid>', methods=['POST'])
