@@ -26,7 +26,7 @@
             {% for t in d.tasks %}
             <div class="task" draggable="true"
                  data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="pedidos"
+                 data-phase="{{ t.get('phase') or '' }}"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
                  data-project="{{ t.project }}"
@@ -46,7 +46,7 @@
             {% for t in unconfirmed %}
             <div class="task" draggable="true"
                  data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="pedidos"
+                 data-phase="{{ t.get('phase') or '' }}"
                  data-worker="{{ t.get('worker') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
@@ -61,23 +61,22 @@
     {% endfor %}
     </tbody>
 </table>
-<table class="links-table">
+<table class="links-table columna-1">
+    <caption>Columna 1</caption>
     <tbody>
     {% for item in project_links %}
         <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <td class="project-name">
-                {{ item.project }}
-                {% if item.links %}
-                    <ul>
-                    {% for link in item.links %}
-                        <li><a href="{{ link.url }}" target="_blank">{{ link.name }}</a></li>
-                    {% endfor %}
-                    </ul>
-                {% else %}
-                    <div>Sin links</div>
-                {% endif %}
+            <td class="project-name">{{ item.project }}{% if item.client %} - {{ item.client }}{% endif %}</td>
+        </tr>
+        {% if item.links %}
+        <tr class="links-row">
+            <td class="project-links">
+                {% for link in item.links %}
+                    <span class="link-title">{{ link }}</span>
+                {% endfor %}
             </td>
         </tr>
+        {% endif %}
     {% endfor %}
     </tbody>
 </table>
@@ -96,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
       dragged = t;
       const data = {
         pid: t.dataset.pid,
-        phase: 'pedidos',
+        phase: t.dataset.phase,
         part: t.dataset.part,
         worker: t.dataset.worker
       };
@@ -159,7 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.links-table .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
-      row.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
+      const show = (!q || proj.includes(q) || cli.includes(q));
+      row.style.display = show ? '' : 'none';
+      const next = row.nextElementSibling;
+      if (next && next.classList.contains('links-row')) {
+        next.style.display = show ? '' : 'none';
+      }
     });
   });
 });

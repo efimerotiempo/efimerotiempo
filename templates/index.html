@@ -58,13 +58,13 @@
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set total = tasks|sum(attribute='hours') %}
         {% set limit = hours.get(d.isoformat(), 8) %}
-        {% set has_vac = tasks | selectattr('phase','equalto','vacaciones') | list | length > 0 %}
-        <td data-date="{{ d.isoformat() }}" class="{% if total < limit %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if has_vac %}vacation-day{% endif %}">
+        {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -133,7 +133,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -162,7 +162,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -188,10 +188,8 @@
 </div>
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
-<div id="material-modal" class="conflict-modal"><div class="conflict-content"><div id="material-text" style="color:red;font-weight:bold"></div><button id="material-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label id="move-label">Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
 <div id="bug-modal" class="modal">
     <div class="modal-content">
@@ -278,44 +276,58 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
-  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
-  const materialModal = document.getElementById('material-modal');
-  const materialText = document.getElementById('material-text');
-  const materialClose = document.getElementById('material-close');
   const deadlineModal = document.getElementById('deadline-modal');
   const deadlineText = document.getElementById('deadline-text');
   const deadlineClose = document.getElementById('deadline-close');
-  const DEADLINE_MSG = 'FECHA LÍMITE CONFIRMADA A CLIENTE, NO SOBREPASAR.';
+  const DEADLINE_MSG = 'Fecha cliente soprepasada.';
+  const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
-  const moveModal = document.getElementById('move-modal');
-  const moveSelect = document.getElementById('move-select');
-  const moveLabel = document.getElementById('move-label');
-  const moveText = document.getElementById('move-text');
-  const moveConfirm = document.getElementById('move-confirm');
-  const moveCancel = document.getElementById('move-cancel');
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
-  let pendingMove = null;
   let pendingBlock = null;
-  function showDeadline() {
-    deadlineText.textContent = DEADLINE_MSG;
+  function showDeadline(text = DEADLINE_MSG, after = null) {
+    deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
     deadlineModal.style.display = 'block';
-    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; };
+    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
+  }
+  function afterMove(data, originalDate) {
+    localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+    if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+    if (data.warning) showDeadline(data.warning, () => location.reload());
+    else location.reload();
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
+
+  for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
+    if (proj.due_warning) {
+      const msg = proj.due_confirmed ? CLIENT_DEADLINE_MSG : DEADLINE_MSG;
+      const text = `${msg}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
+      showDeadline(text, () => {
+        fetch(CLEAR_DEADLINE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid })
+        }).then(() => location.reload());
+      });
+      break;
+    }
+  }
 
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
@@ -419,10 +431,11 @@
     }
   });
 
-  const tasks = document.querySelectorAll('.task');
-  const folders = document.querySelectorAll('.unplanned-folder');
+const tasks = document.querySelectorAll('.task');
+const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
+let dragInfo = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
@@ -434,8 +447,10 @@ let lastDrag = null;
         worker: row ? row.dataset.worker : '',
         part: t.dataset.part
       };
+      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
+    t.addEventListener('dragend', () => { dragInfo = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -469,7 +484,7 @@ let lastDrag = null;
         else total = parseInt(val) || 0;
         if (total > 0) {
           const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : '';
+          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
           let line = `<div${cls}>${ph}: ${total}h`;
           if (ph === t.dataset.phase) {
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
@@ -539,13 +554,16 @@ let lastDrag = null;
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(body)
-          }).then(resp => {
-            if (resp.ok) location.reload();
-            else resp.json().then(d => {
-              if (d.error === DEADLINE_MSG) showDeadline();
-              else alert(d.error || 'Error');
+          })
+            .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
+                else alert(data.error || 'Error');
+                return;
+              }
+              afterMove(data, today);
             });
-          });
         });
       }
       const obsBtn = document.getElementById('obs-btn');
@@ -634,13 +652,7 @@ let lastDrag = null;
             if (d) {
               localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
               if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
-              const info = PROJECT_DATA[btn.dataset.pid] || {};
-              if (info.material_confirmed_date && d.date < info.material_confirmed_date) {
-                materialText.textContent = 'SIN MATERIAL';
-                materialModal.style.display = 'block';
-                materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
-                return;
-              }
+              // previously warned when scheduling before material confirmation, now proceed silently
             }
             location.reload();
           });
@@ -733,23 +745,23 @@ let lastDrag = null;
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       const info = sessionStorage.getItem('undoMove');
       if (info) {
-        const data = JSON.parse(info);
+        const req = JSON.parse(info);
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
-        }).then(resp => {
-          if (resp.ok) {
+          body: JSON.stringify({ pid: req.pid, phase: req.phase, date: req.date, worker: req.worker })
+        })
+          .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+          .then(({ ok, data }) => {
+            if (!ok) {
+              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
+              else alert(data.error || 'Error');
+              return;
+            }
             sessionStorage.removeItem('undoMove');
-            location.reload();
-          } else {
-            resp.json().then(d => {
-              if (d.error === DEADLINE_MSG) showDeadline();
-              else alert(d.error || 'Error');
-            });
-          }
-        });
+            afterMove(data, req.date);
+          });
       }
     }
   });
@@ -782,10 +794,20 @@ let lastDrag = null;
       }
     });
   });
+
+  function getStartHour(cell, y) {
+    let hours = 0;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    for (const t of tasks) {
+      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
+      const rect = t.getBoundingClientRect();
+      if (y < rect.top + rect.height / 2) break;
+      hours += parseFloat(t.dataset.hours || '0');
+    }
+    return hours;
+  }
   document.querySelectorAll('tbody td[data-date]').forEach(cell => {
-    cell.addEventListener('dragover', e => {
-      e.preventDefault();
-    });
+    cell.addEventListener('dragover', e => { e.preventDefault(); });
     cell.addEventListener('drop', e => {
       e.preventDefault();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
@@ -796,39 +818,9 @@ let lastDrag = null;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
-      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part };
-      fetch(CHECK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify(moveData)
-      }).then(resp => resp.json()).then(res => {
-        if (res.split) {
-          moveSelect.innerHTML = '';
-          if (res.options && res.options.length) {
-            moveLabel.style.display = '';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
-            res.options.forEach(opt => {
-              const o = document.createElement('option');
-              o.value = JSON.stringify(opt);
-              o.textContent = opt.text;
-              moveSelect.appendChild(o);
-            });
-          } else {
-            moveLabel.style.display = 'none';
-            moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
-            if (res.auto) {
-              moveData.push_pid = res.auto.pid;
-              moveData.push_phase = res.auto.phase;
-              moveData.push_part = res.auto.part;
-            }
-          }
-          pendingMove = { data: moveData, beforeMaterial };
-          moveModal.style.display = 'block';
-        } else {
-          doMove(moveData, 'split', beforeMaterial);
-        }
-      });
+      const start = getStartHour(cell, e.clientY);
+      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
+      doMove(moveData, 'split', beforeMaterial);
     });
   });
   function doMove(moveData, mode, beforeMaterial) {
@@ -848,43 +840,11 @@ let lastDrag = null;
           blockModal.style.display = 'block';
           return;
         }
-        if (data.error === DEADLINE_MSG) showDeadline();
+        if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
         else alert(data.error || 'Error');
         return;
       }
-      const date = moveData.date;
-      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-      if (beforeMaterial) {
-        materialText.textContent = 'SIN MATERIAL';
-        materialModal.style.display = 'block';
-        materialClose.onclick = () => { materialModal.style.display = 'none'; location.reload(); };
-      } else {
-        location.reload();
-      }
-    });
-  }
-  if (moveConfirm) {
-    moveConfirm.addEventListener('click', () => {
-      if (pendingMove) {
-        if (moveLabel.style.display !== 'none') {
-          const sel = moveSelect.value;
-          if (!sel) return;
-          const opt = JSON.parse(sel);
-          pendingMove.data.push_pid = opt.pid;
-          pendingMove.data.push_phase = opt.phase;
-          pendingMove.data.push_part = opt.part;
-        }
-        moveModal.style.display = 'none';
-        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
-        pendingMove = null;
-      }
-    });
-  }
-  if (moveCancel) {
-    moveCancel.addEventListener('click', () => {
-      moveModal.style.display = 'none';
-      pendingMove = null;
+      afterMove(data, moveData.date);
     });
   }
   if (blockUnfreeze) {
@@ -928,16 +888,16 @@ let lastDrag = null;
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ pid: data.pid, phase: data.phase, date: today, worker: 'Sin planificar', part: data.part })
-      }).then(resp => {
-        if (resp.ok) {
-          location.reload();
-        } else {
-          resp.json().then(d => {
-            if (d.error === DEADLINE_MSG) showDeadline();
-            else alert(d.error || 'Error');
-          });
-        }
-      });
+      })
+        .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
+            else alert(data.error || 'Error');
+            return;
+          }
+          afterMove(data, today);
+        });
     });
   }
   const unplanPanel = document.getElementById('unplanned-panel');

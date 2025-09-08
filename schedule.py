@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, time
 import json
 import os
 import copy
@@ -18,14 +18,13 @@ PHASE_ORDER = [
     'pedidos',
     'recepcionar material',
     'montar',
-    'soldadura interior',
-    'montaje final',
     'soldar',
+    'montar 2º',
+    'soldar 2º',
     'mecanizar',
     'tratamiento',
     'pintar',
 ]
-PRIORITY_ORDER = {'Alta': 1, 'Media': 2, 'Baja': 3, 'Sin prioridad': 4}
 
 UNPLANNED = 'Sin planificar'
 
@@ -33,16 +32,16 @@ BASE_WORKERS = {
     'Pilar': ['dibujo'],
     'Joseba 1': ['dibujo'],
     'Irene': ['pedidos'],
-    'Mikel': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
-    'Iban': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
-    'Joseba 2': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
-    'Naparra': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
-    'Unai': ['montar', 'montaje final', 'soldar', 'soldadura interior'],
-    'Fabio': ['soldar', 'soldadura interior'],
-    'Beltxa': ['soldar', 'soldadura interior', 'montar', 'montaje final'],
-    'Igor': ['soldar', 'soldadura interior'],
-    'Albi': ['recepcionar material', 'soldar', 'soldadura interior', 'montar', 'montaje final'],
-    'Eneko': ['pintar', 'montar', 'montaje final', 'soldar', 'soldadura interior'],
+    'Mikel': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Iban': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Joseba 2': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Naparra': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Unai': ['montar', 'montar 2º', 'soldar', 'soldar 2º'],
+    'Fabio': ['soldar', 'soldar 2º'],
+    'Beltxa': ['soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Igor': ['soldar', 'soldar 2º'],
+    'Albi': ['recepcionar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Eneko': ['pintar', 'montar', 'montar 2º', 'soldar', 'soldar 2º'],
 }
 
 TAIL_WORKERS = {
@@ -81,6 +80,7 @@ WORKERS = _build_workers()
 IGOR_END = date(2025, 7, 21)
 
 HOURS_PER_DAY = 8
+WORKDAY_START = 8
 HOURS_LIMITS = {w: HOURS_PER_DAY for w in WORKERS}
 HOURS_LIMITS['Irene'] = float('inf')
 HOURS_LIMITS['Mecanizar'] = float('inf')
@@ -222,6 +222,13 @@ def next_workday(d):
     return d
 
 
+def _calc_datetimes(day, start, hours):
+    """Return ISO start and end datetimes for a task."""
+    start_dt = datetime.combine(day, time(hour=WORKDAY_START)) + timedelta(hours=start)
+    end_dt = start_dt + timedelta(hours=hours)
+    return start_dt.isoformat(), end_dt.isoformat()
+
+
 def _build_vacation_map():
     """Return a mapping of worker to set of vacation days."""
     vac_map = {}
@@ -239,7 +246,7 @@ def _build_vacation_map():
 
 def schedule_projects(projects):
     """Return schedule and conflicts after assigning all phases."""
-    projects.sort(key=lambda p: (PRIORITY_ORDER.get(p['priority'], 4), p['start_date']))
+    projects.sort(key=lambda p: p['start_date'])
     inactive = set(load_inactive_workers())
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
@@ -248,16 +255,19 @@ def schedule_projects(projects):
         for day in days:
             if worker in worker_schedule:
                 ds = worker_schedule[worker].setdefault(day.isoformat(), [])
+                start_time, end_time = _calc_datetimes(day, 0, HOURS_PER_DAY)
                 ds.append({
                     'project': 'Vacaciones',
                     'client': '',
                     'phase': 'vacaciones',
                     'hours': HOURS_PER_DAY,
+                    'start': 0,
+                    'start_time': start_time,
+                    'end_time': end_time,
                     'late': False,
                     'color': '#ff9999',
                     'due_date': '',
                     'start_date': '',
-                    'priority': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
     # Place frozen phases first so other tasks respect their positions
@@ -268,6 +278,14 @@ def schedule_projects(projects):
             entry = t.copy()
             entry.pop('worker', None)
             entry.pop('day', None)
+            try:
+                day_obj = date.fromisoformat(day)
+            except Exception:
+                day_obj = date.today()
+            start_time, end_time = _calc_datetimes(day_obj, entry.get('start', 0), entry.get('hours', 0))
+            entry.setdefault('start', 0)
+            entry['start_time'] = start_time
+            entry['end_time'] = end_time
             worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
 
     # Sort frozen tasks chronologically
@@ -321,30 +339,8 @@ def schedule_projects(projects):
                     if (current + timedelta(days=i)).weekday() not in WEEKEND
                 )
                 worker = assigned.get(phase) if planned else UNPLANNED
-                if worker in inactive:
+                if not worker or worker in inactive:
                     worker = UNPLANNED
-                if planned and not worker:
-                    worker = find_worker_for_phase(
-                        phase,
-                        worker_schedule,
-                        project.get('priority'),
-                        start_day=current,
-                        days=days_needed,
-                        vacations=vac_map,
-                        hours_map=hours_map,
-                    )
-                    if worker:
-                        assigned[phase] = worker
-                if not worker:
-                    msg = f'Sin recurso para fase {phase}'
-                    conflicts.append({
-                        'id': len(conflicts) + 1,
-                        'project': project['name'],
-                        'client': project['client'],
-                        'message': msg,
-                        'key': f"{project['name']}|{msg}",
-                    })
-                    continue
                 current, hour, end_date = assign_pedidos(
                     worker_schedule[worker],
                     current,
@@ -355,7 +351,6 @@ def schedule_projects(projects):
                     project.get('due_confirmed'),
                     project.get('color', '#ddd'),
                     project['start_date'],
-                    project.get('priority'),
                     project['id'],
                     worker,
                     project_blocked=project.get('blocked', False),
@@ -365,6 +360,7 @@ def schedule_projects(projects):
                 segs = val if isinstance(val, list) else [val]
                 seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
                 start_overrides = project.get('segment_starts', {}).get(phase)
+                start_hour_overrides = project.get('segment_start_hours', {}).get(phase)
                 for idx, seg in enumerate(segs):
                     hours = int(seg)
                     days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
@@ -376,53 +372,36 @@ def schedule_projects(projects):
                             worker = seg_workers[idx]
                         if not worker:
                             worker = assigned.get(phase)
-                        if worker in inactive:
+                        if not worker or worker in inactive:
                             worker = UNPLANNED
-                        if not worker:
-                            worker = find_worker_for_phase(
-                                phase,
-                                worker_schedule,
-                                project.get('priority'),
-                                start_day=current,
-                                days=days_needed,
-                                vacations=vac_map,
-                                hours_map=hours_map,
-                            )
                             if seg_workers:
                                 if len(seg_workers) <= idx:
                                     seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
-                                seg_workers[idx] = worker
+                                seg_workers[idx] = UNPLANNED
                             else:
-                                assigned[phase] = worker
-
-                    if not worker:
-                        msg = f'Sin recurso para fase {phase}'
-                        conflicts.append({
-                            'id': len(conflicts) + 1,
-                            'project': project['name'],
-                            'client': project['client'],
-                            'message': msg,
-                            'key': f"{project['name']}|{msg}",
-                        })
-                        continue
+                                assigned[phase] = UNPLANNED
 
                     override = None
+                    hour_override = None
                     if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
                         override = date.fromisoformat(start_overrides[idx])
+                    if start_hour_overrides and idx < len(start_hour_overrides):
+                        hour_override = start_hour_overrides[idx]
                     test_start = override or current
                     test_end = test_start
                     for _ in range(days_needed - 1):
                         test_end = next_workday(test_end)
-                    if (
-                        project.get('due_confirmed')
-                        and project.get('due_date')
-                        and test_end > date.fromisoformat(project['due_date'])
-                    ):
-                        worker = UNPLANNED
+                    # Allow scheduling even if the phase exceeds a confirmed due date.
+                    # Previously, phases moved past a client deadline were treated as
+                    # unplanned and removed from the calendar. This prevented them
+                    # from being visualized after the move. By removing the forced
+                    # ``UNPLANNED`` assignment, phases remain in the schedule and are
+                    # displayed in the selected cell while still triggering the
+                    # appropriate deadline warning elsewhere.
                     manual = False
                     if override:
                         current = override
-                        hour = 0
+                        hour = hour_override or 0
                         manual = True
                     current, hour, end_date = assign_phase(
                         worker_schedule[worker],
@@ -436,7 +415,6 @@ def schedule_projects(projects):
                         project.get('color', '#ddd'),
                         worker,
                         project['start_date'],
-                        project.get('priority'),
                         project['id'],
                         hours_map,
                         part=idx if isinstance(val, list) else None,
@@ -476,7 +454,6 @@ def assign_phase(
     color,
     worker,
     start_date,
-    priority,
     pid,
     hours_map,
     part=None,
@@ -530,17 +507,19 @@ def assign_phase(
             used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
             allocate = min(remaining, HOURS_PER_DAY)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, used, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': used,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -588,17 +567,19 @@ def assign_phase(
             # un bloque de trabajo se pasa al siguiente día.
             allocate = min(remaining, HOURS_PER_DAY)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, used, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': used,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -624,17 +605,19 @@ def assign_phase(
         if available > 0:
             allocate = min(remaining, available)
             late = bool(due_dt and day > due_dt)
+            start_time, end_time = _calc_datetimes(day, start, allocate)
             task = {
                 'project': project_name,
                 'client': client,
                 'phase': phase,
                 'hours': allocate,
                 'start': start,
+                'start_time': start_time,
+                'end_time': end_time,
                 'late': late,
                 'color': color,
                 'due_date': due_date,
                 'start_date': start_date,
-                'priority': priority,
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
@@ -679,7 +662,6 @@ def assign_pedidos(
     due_confirmed,
     color,
     start_date,
-    priority,
     pid,
     worker=None,
     *,
@@ -710,16 +692,19 @@ def assign_pedidos(
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
         late = bool(due_dt and day > due_dt)
+        start_time, end_time = _calc_datetimes(day, 0, 0)
         task = {
             'project': project_name,
             'client': client,
             'phase': 'pedidos',
             'hours': 0,
+            'start': 0,
+            'start_time': start_time,
+            'end_time': end_time,
             'late': late,
             'color': color,
             'due_date': due_date,
             'start_date': start_date,
-            'priority': priority,
             'pid': pid,
             'frozen': project_frozen,
             'blocked': project_blocked,
@@ -795,52 +780,6 @@ def _continuous_free_start(schedule, worker, day, days_needed, vacations=None, h
             return d
         d = next_workday(d)
 
-
-def find_worker_for_phase(
-    phase,
-    schedule,
-    priority=None,
-    *,
-    start_day=None,
-    days=0,
-    vacations=None,
-    hours_map=None,
-):
-    """Choose the worker that can start the phase as soon as posible.
-
-    Unai is always excluded from automatic assignments so that he can only
-    be seleccionado manualmente desde la vista de proyectos.
-    """
-    inactive = set(load_inactive_workers())
-    candidates = []
-    for worker in WORKERS:
-        if worker in ('Unai', UNPLANNED) or worker in inactive:
-            continue
-        start = start_day or date.today()
-        if worker == 'Igor' and start >= IGOR_END:
-            continue
-        if phase == 'montar':
-            last, end = _last_phase_info(schedule.get(worker, {}), 'montar')
-            if last and start <= last:
-                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-                start = last if end < limit else next_workday(last)
-        free = _continuous_free_start(
-            schedule,
-            worker,
-            start,
-            days or 1,
-            vacations,
-            hours_map,
-        )
-        load = _worker_load(schedule, worker)
-        candidates.append((free, load, worker))
-    if not candidates:
-        return None
-    if priority == 'Alta':
-        earliest = min(candidates, key=lambda c: (c[0], c[1]))
-        return earliest[2]
-    candidates.sort(key=lambda c: (c[0], c[1]))
-    return candidates[0][2]
 
 def compute_schedule_map(projects):
     """Return a mapping of project id to scheduled tasks."""
