@@ -1,7 +1,8 @@
 import copy
 import json
 import base64
-from datetime import date
+from datetime import date, timedelta
+import re
 
 import pytest
 
@@ -137,6 +138,81 @@ def test_title_update_replaces_old_pedido(monkeypatch):
     text = resp.get_data(as_text=True)
     assert "New" in text
     assert "Old" not in text
+
+
+def test_pedido_title_date_persistence(monkeypatch):
+    today = date.today()
+    first_day = date(today.year, today.month, 1)
+    while first_day.weekday() >= 5:
+        first_day += timedelta(days=1)
+    second_day = first_day + timedelta(days=1)
+    while second_day.weekday() >= 5:
+        second_day += timedelta(days=1)
+    d1_day = first_day.day
+    d2_day = second_day.day
+    month_str = f"{today.month:02d}"
+    card_store = []
+
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: list(card_store))
+
+    def fake_save_cards(cards):
+        card_store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save_cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {})
+    monkeypatch.setattr(app, "save_column_colors", lambda data: None)
+
+    client = app.app.test_client()
+
+    payload1 = {
+        "card": {
+            "taskid": 1,
+            "laneName": "Seguimiento compras",
+            "columnName": "Laser",
+            "title": f"Pedido ({d1_day:02d}/{month_str})",
+            "deadline": today.isoformat(),
+        },
+        "timestamp": "t1",
+    }
+    client.post("/kanbanize-webhook", json=payload1)
+    assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
+
+    payload2 = {
+        "card": {
+            "taskid": 1,
+            "laneName": "Seguimiento compras",
+            "columnName": "Laser",
+            "title": "Pedido sin fecha",
+            "deadline": today.isoformat(),
+        },
+        "timestamp": "t2",
+    }
+    client.post("/kanbanize-webhook", json=payload2)
+    assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
+
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    text = resp.get_data(as_text=True)
+    d1 = date(today.year, today.month, d1_day).isoformat()
+    assert re.search(rf'<td data-date="{d1}".*?Pedido sin fecha', text, re.S)
+
+    payload3 = {
+        "card": {
+            "taskid": 1,
+            "laneName": "Seguimiento compras",
+            "columnName": "Laser",
+            "title": f"Pedido ({d2_day:02d}/{month_str})",
+            "deadline": today.isoformat(),
+        },
+        "timestamp": "t3",
+    }
+    client.post("/kanbanize-webhook", json=payload3)
+    assert card_store[0]["stored_title_date"] == f"{d2_day:02d}/{month_str}"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    text = resp.get_data(as_text=True)
+    d2 = date(today.year, today.month, d2_day).isoformat()
+    assert re.search(rf'<td data-date="{d2}".*?Pedido \({d2_day:02d}/{month_str}\)', text, re.S)
 
 
 def test_unfreeze_preserves_displaced_phase(monkeypatch):

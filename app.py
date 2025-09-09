@@ -1369,7 +1369,10 @@ def calendar_pedidos():
         if not cid:
             continue
 
-        compras_raw[cid] = card
+        compras_raw[cid] = {
+            'card': card,
+            'stored_date': entry.get('stored_title_date')
+        }
         kanban_columns[str(cid)] = column
 
         if column and column not in column_colors:
@@ -1385,22 +1388,32 @@ def calendar_pedidos():
     links_table = []
     seen_links = set()
 
-    for card in compras_raw.values():
+    for data in compras_raw.values():
+        card = data['card']
+        stored_date = data.get('stored_date')
         title = (card.get('title') or '').strip()
         project_name = title
         client_name = ''
         if ' - ' in title:
             project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
-        # Buscar fecha (dd/mm) en el título o usar deadline
-        m = re.search(r"\((\d{2})/(\d{2})\)", title)
-        if m:
-            day, month = int(m.group(1)), int(m.group(2))
+
+        # Determinar la fecha a usar: priorizar la almacenada del título
+        if stored_date:
             try:
+                day, month = [int(x) for x in stored_date.split('/')]
                 d = date(today.year, month, day)
-            except ValueError:
+            except Exception:
                 d = parse_kanban_date(card.get('deadline'))
         else:
-            d = parse_kanban_date(card.get('deadline'))
+            m = re.search(r"\((\d{2})/(\d{2})\)", title)
+            if m:
+                day, month = int(m.group(1)), int(m.group(2))
+                try:
+                    d = date(today.year, month, day)
+                except ValueError:
+                    d = parse_kanban_date(card.get('deadline'))
+            else:
+                d = parse_kanban_date(card.get('deadline'))
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -2733,16 +2746,27 @@ def kanbanize_webhook():
     if lane_norm == "seguimiento compras":
         cards = load_kanban_cards()
         cid_str = str(cid)
-        cards = [
-            c for c in cards
-            if str(
+        prev = None
+        new_cards = []
+        for c in cards:
+            existing_id = str(
                 c.get('card', {}).get('taskid')
                 or c.get('card', {}).get('cardId')
                 or c.get('card', {}).get('id')
-            ) != cid_str
-        ]
-        cards.append({'timestamp': payload_timestamp, 'card': card})
-        save_kanban_cards(cards)
+            )
+            if existing_id == cid_str:
+                prev = c
+            else:
+                new_cards.append(c)
+        prev_date = prev.get('stored_title_date') if prev else None
+        title = card.get('title') or ''
+        m = re.search(r"\((\d{2})/(\d{2})\)", title)
+        if m:
+            stored_date = f"{m.group(1)}/{m.group(2)}"
+        else:
+            stored_date = prev_date
+        new_cards.append({'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date})
+        save_kanban_cards(new_cards)
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
     # Lanes válidos para proyectos
