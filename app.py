@@ -2897,6 +2897,23 @@ def kanbanize_webhook():
     prev_pint_raw = obtener_duracion_prev('Horas Acabado')
     prev_mont2_raw = obtener_duracion_prev('Horas Montaje 2º') or obtener_duracion_prev('Horas Montaje 2°')
 
+    def flag_val(campo):
+        v = custom.get(campo)
+        if isinstance(v, str):
+            return v.strip().lower() not in ("", "0", "false", "no")
+        return bool(v)
+
+    def flag_val_prev(campo):
+        v = prev_custom.get(campo)
+        if isinstance(v, str):
+            return v.strip().lower() not in ("", "0", "false", "no")
+        return bool(v)
+
+    mecan_flag = flag_val('MECANIZADO')
+    trat_flag = flag_val('TRATAMIENTO')
+    prev_mecan_flag = flag_val_prev('MECANIZADO')
+    prev_trat_flag = flag_val_prev('TRATAMIENTO')
+
     # Working copies that may be adjusted for automatic phases
     prep_hours, mont_hours = prep_raw, mont_raw
     sold2_hours, sold_hours = sold2_raw, sold_raw
@@ -2909,6 +2926,8 @@ def kanbanize_webhook():
         'soldar': sold_raw,
         'pintar': pint_raw,
         'montar 2º': mont2_raw,
+        'mecanizar': 1 if mecan_flag else 0,
+        'tratamiento': 1 if trat_flag else 0,
     }
     phase_hours_prev = {
         'recepcionar material': prev_prep_raw,
@@ -2917,6 +2936,8 @@ def kanbanize_webhook():
         'soldar': prev_sold_raw,
         'pintar': prev_pint_raw,
         'montar 2º': prev_mont2_raw,
+        'mecanizar': 1 if prev_mecan_flag else 0,
+        'tratamiento': 1 if prev_trat_flag else 0,
     }
     auto_prep = False
     if (
@@ -2944,6 +2965,10 @@ def kanbanize_webhook():
         fases.append({'nombre': 'montar 2º', 'duracion': mont2_hours})
     if sold_hours > 0:
         fases.append({'nombre': 'soldar', 'duracion': sold_hours})
+    if mecan_flag:
+        fases.append({'nombre': 'mecanizar', 'duracion': 1, 'auto': True})
+    if trat_flag:
+        fases.append({'nombre': 'tratamiento', 'duracion': 1, 'auto': True})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
