@@ -347,6 +347,22 @@ def save_kanban_cards(data):
         json.dump(data, f)
 
 
+def last_kanban_card(cid):
+    """Return the most recent stored Kanban card with the given *cid*.
+
+    If no prior card is found, an empty dict is returned.  This helper lets the
+    webhook determine which fields actually changed in Kanbanize so that the
+    planner only updates those specific fields.
+    """
+    cid = str(cid)
+    for entry in reversed(load_kanban_cards()):
+        card = entry.get('card') or {}
+        old_cid = card.get('taskid') or card.get('cardId') or card.get('id')
+        if str(old_cid) == cid:
+            return card
+    return {}
+
+
 def load_column_colors():
     if os.path.exists(KANBAN_COLUMN_COLORS_FILE):
         with open(KANBAN_COLUMN_COLORS_FILE, 'r') as f:
@@ -2667,6 +2683,10 @@ def kanbanize_webhook():
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
 
+    # Retrieve the most recent stored version of this card to detect which
+    # fields actually changed in Kanbanize.
+    prev_card = last_kanban_card(cid)
+
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
     lane_norm = norm(lane)
@@ -2729,6 +2749,19 @@ def kanbanize_webhook():
         custom.pop(k, None)
     card['customFields'] = custom
 
+    prev_raw_custom = prev_card.get('customFields') or {}
+    if isinstance(prev_raw_custom, list):
+        prev_custom = {
+            f.get('name'): f.get('value')
+            for f in prev_raw_custom if isinstance(f, dict)
+        }
+    elif isinstance(prev_raw_custom, dict):
+        prev_custom = dict(prev_raw_custom)
+    else:
+        prev_custom = {}
+    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+        prev_custom.pop(k, None)
+
     deadline_str = card.get('deadline')
     pedido_str = custom.get('Fecha pedido')
     if deadline_str:
@@ -2739,6 +2772,17 @@ def kanbanize_webhook():
         due_confirmed_flag = False
     mat_str = custom.get('Fecha material confirmado')
     material_date_obj = parse_kanban_date(mat_str)
+
+    prev_deadline_str = prev_card.get('deadline')
+    prev_pedido_str = prev_custom.get('Fecha pedido')
+    if prev_deadline_str:
+        prev_due_date_obj = parse_kanban_date(prev_deadline_str)
+        prev_due_confirmed_flag = True
+    else:
+        prev_due_date_obj = parse_kanban_date(prev_pedido_str)
+        prev_due_confirmed_flag = False
+    prev_mat_str = prev_custom.get('Fecha material confirmado')
+    prev_material_date_obj = parse_kanban_date(prev_mat_str)
 
     def obtener_duracion(campo):
         valor = custom.get(campo)
@@ -2752,12 +2796,53 @@ def kanbanize_webhook():
         except Exception:
             return 0
 
-    prep_hours = obtener_duracion('Horas Preparación')
-    mont_hours = obtener_duracion('Horas Montaje')
-    sold2_hours = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
-    sold_hours = obtener_duracion('Horas Soldadura')
-    pint_hours = obtener_duracion('Horas Acabado')
-    mont2_hours = obtener_duracion('Horas Montaje 2º') or obtener_duracion('Horas Montaje 2°')
+    def obtener_duracion_prev(campo):
+        valor = prev_custom.get(campo)
+        if valor in [None, ""]:
+            return 0
+        if isinstance(valor, str):
+            match = re.search(r"\d+", valor)
+            return int(match.group()) if match else 0
+        try:
+            return int(valor)
+        except Exception:
+            return 0
+
+    prep_raw = obtener_duracion('Horas Preparación')
+    mont_raw = obtener_duracion('Horas Montaje')
+    sold2_raw = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
+    sold_raw = obtener_duracion('Horas Soldadura')
+    pint_raw = obtener_duracion('Horas Acabado')
+    mont2_raw = obtener_duracion('Horas Montaje 2º') or obtener_duracion('Horas Montaje 2°')
+
+    prev_prep_raw = obtener_duracion_prev('Horas Preparación')
+    prev_mont_raw = obtener_duracion_prev('Horas Montaje')
+    prev_sold2_raw = obtener_duracion_prev('Horas Soldadura 2º') or obtener_duracion_prev('Horas Soldadura 2°')
+    prev_sold_raw = obtener_duracion_prev('Horas Soldadura')
+    prev_pint_raw = obtener_duracion_prev('Horas Acabado')
+    prev_mont2_raw = obtener_duracion_prev('Horas Montaje 2º') or obtener_duracion_prev('Horas Montaje 2°')
+
+    # Working copies that may be adjusted for automatic phases
+    prep_hours, mont_hours = prep_raw, mont_raw
+    sold2_hours, sold_hours = sold2_raw, sold_raw
+    pint_hours, mont2_hours = pint_raw, mont2_raw
+
+    phase_hours_new_raw = {
+        'recepcionar material': prep_raw,
+        'montar': mont_raw,
+        'soldar 2º': sold2_raw,
+        'soldar': sold_raw,
+        'pintar': pint_raw,
+        'montar 2º': mont2_raw,
+    }
+    phase_hours_prev = {
+        'recepcionar material': prev_prep_raw,
+        'montar': prev_mont_raw,
+        'soldar 2º': prev_sold2_raw,
+        'soldar': prev_sold_raw,
+        'pintar': prev_pint_raw,
+        'montar 2º': prev_mont2_raw,
+    }
     auto_prep = False
     if (
         prep_hours <= 0
@@ -2795,6 +2880,18 @@ def kanbanize_webhook():
     )
     cliente = card.get('title') or "Sin cliente"
 
+    prev_task_id = (
+        prev_card.get('taskid')
+        or prev_card.get('cardId')
+        or prev_card.get('id')
+    )
+    prev_nombre_proyecto = (
+        prev_card.get('customCardId')
+        or prev_card.get('effectiveCardId')
+        or prev_card.get('title')
+    )
+    prev_cliente = prev_card.get('title') or "Sin cliente"
+
     attachments_raw = data.get('Attachments') or card.get('Attachments') or []
     kanban_files = []
     if isinstance(attachments_raw, list):
@@ -2806,6 +2903,18 @@ def kanbanize_webhook():
                     if url.startswith('/') or not re.match(r'https?://', url):
                         url = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
                     kanban_files.append({'name': name, 'url': url})
+
+    prev_attachments_raw = prev_card.get('Attachments') or []
+    prev_kanban_files = []
+    if isinstance(prev_attachments_raw, list):
+        for a in prev_attachments_raw:
+            if isinstance(a, dict):
+                name = (a.get('name') or a.get('fileName') or a.get('filename') or '').strip()
+                url = (a.get('url') or a.get('fileUrl') or a.get('link') or '').strip()
+                if name and url:
+                    if url.startswith('/') or not re.match(r'https?://', url):
+                        url = f"{KANBANIZE_BASE_URL.rstrip('/')}/{url.lstrip('/')}"
+                    prev_kanban_files.append({'name': name, 'url': url})
 
     image_path = None
 
@@ -2827,85 +2936,67 @@ def kanbanize_webhook():
         if existing.get('kanban_id') != task_id:
             existing['kanban_id'] = task_id
             changed = True
-        if existing.get('name') != nombre_proyecto:
+        if prev_nombre_proyecto != nombre_proyecto and existing.get('name') != nombre_proyecto:
             existing['name'] = nombre_proyecto
             changed = True
-        if existing.get('client') != cliente:
+        if prev_cliente != cliente and existing.get('client') != cliente:
             existing['client'] = cliente
             changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
             changed = True
-        if due_date_obj:
-            iso = due_date_obj.isoformat()
-            if existing.get('due_date') != iso or existing.get('due_confirmed') != due_confirmed_flag:
-                existing['due_date'] = iso
+        if (prev_due_date_obj != due_date_obj) or (prev_due_confirmed_flag != due_confirmed_flag):
+            if due_date_obj:
+                existing['due_date'] = due_date_obj.isoformat()
                 existing['due_confirmed'] = due_confirmed_flag
                 existing['due_warning'] = True
-                changed = True
-        elif existing.get('due_date') or existing.get('due_confirmed'):
-            existing['due_date'] = ''
-            existing['due_confirmed'] = False
+            else:
+                existing['due_date'] = ''
+                existing['due_confirmed'] = False
             changed = True
-        if material_date_obj and existing.get('material_confirmed_date') != material_date_obj.isoformat():
-            existing['material_confirmed_date'] = material_date_obj.isoformat()
+        if prev_material_date_obj != material_date_obj:
+            existing['material_confirmed_date'] = material_date_obj.isoformat() if material_date_obj else ''
             changed = True
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
-        if existing.get('kanban_attachments') != kanban_files:
+        if prev_kanban_files != kanban_files and existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
             changed = True
+
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
         existing_auto = existing.setdefault('auto_hours', {})
-        restricted = {
-            'recepcionar material',
-            'montar',
-            'soldar 2º',
-            'pintar',
-            'montar 2º',
-            'soldar',
-        }
-        # Si la fase de recepcionar material fue generada automáticamente
-        # (1h en rojo) y ahora la tarjeta tiene horas reales, eliminarla o
-        # actualizarla según corresponda.
-        had_auto_prep = existing_auto.get('recepcionar material')
-        incoming_auto_prep = new_auto.get('recepcionar material')
-        incoming_prep_hours = new_phases.get('recepcionar material')
-        if had_auto_prep and not incoming_auto_prep:
-            if incoming_prep_hours and incoming_prep_hours > 0:
-                existing_phases['recepcionar material'] = incoming_prep_hours
-            else:
-                existing_phases.pop('recepcionar material', None)
-                existing_assigned.pop('recepcionar material', None)
-            existing_auto.pop('recepcionar material', None)
-            changed = True
-        for ph, hours in new_phases.items():
-            if ph not in existing_phases:
-                if hours > 0:
+
+        changed_phases = {}
+        for ph, new_raw in phase_hours_new_raw.items():
+            prev_raw = phase_hours_prev.get(ph, 0)
+            if new_raw != prev_raw:
+                changed_phases[ph] = new_phases.get(ph, 0)
+
+        for ph, hours in changed_phases.items():
+            if hours > 0:
+                if existing_phases.get(ph) != hours:
                     existing_phases[ph] = hours
+                    changed = True
+                if ph not in existing_assigned:
                     existing_assigned[ph] = UNPLANNED
-                    if new_auto.get(ph):
+                    changed = True
+                if new_auto.get(ph):
+                    if not existing_auto.get(ph):
                         existing_auto[ph] = True
+                        changed = True
+                else:
+                    if existing_auto.pop(ph, None) is not None:
+                        changed = True
+            else:
+                if existing_phases.pop(ph, None) is not None:
                     changed = True
-                continue
-            if ph in restricted:
-                if existing_phases.get(ph) in [0, '', None] and existing_phases.get(ph) != hours:
-                    existing_phases[ph] = hours
+                if existing_assigned.pop(ph, None) is not None:
                     changed = True
-            elif existing_phases.get(ph) != hours:
-                existing_phases[ph] = hours
-                changed = True
-            if ph not in existing_assigned:
-                existing_assigned[ph] = UNPLANNED
-                changed = True
-            if new_auto.get(ph):
-                if not existing_auto.get(ph):
-                    existing_auto[ph] = True
+                if existing_auto.pop(ph, None) is not None:
                     changed = True
-            elif existing_auto.pop(ph, None) is not None:
-                changed = True
+
         if changed:
             save_projects(projects)
     else:
