@@ -138,3 +138,51 @@ def test_unfreeze_preserves_displaced_phase(monkeypatch):
     assert p1_day == "2024-01-03"
     assert projects[0]["segment_starts"]["montar"][0] == "2024-01-03"
 
+
+def test_frozen_phase_stays_in_cell_and_respects_start_order():
+    projects = [
+        {
+            "id": "p1",
+            "name": "P1",
+            "client": "C",
+            "start_date": "2024-01-01",
+            "due_date": "",
+            "phases": {"dibujo": 4},
+            "assigned": {"dibujo": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+            "frozen_tasks": [
+                {
+                    "phase": "dibujo",
+                    "hours": 4,
+                    "start": 4,
+                    "worker": "Mikel",
+                    "day": "2024-01-02",
+                    "project": "P1",
+                    "client": "C",
+                    "color": "#ffffff",
+                    "due_date": "",
+                    "start_date": "2024-01-01",
+                    "pid": "p1",
+                    "frozen": True,
+                }
+            ],
+        },
+        {
+            "id": "p2",
+            "name": "P2",
+            "client": "C",
+            "start_date": "2024-01-02",
+            "due_date": "",
+            "phases": {"dibujo": 4},
+            "assigned": {"dibujo": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+        },
+    ]
+    schedule, _ = app.schedule_projects(projects)
+    tasks = schedule["Mikel"]["2024-01-02"]
+    assert [t["pid"] for t in tasks] == ["p2", "p1"]
+    assert [t["start"] for t in tasks] == [0, 4]
+    assert tasks[1].get("frozen")
+
