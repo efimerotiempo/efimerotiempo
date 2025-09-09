@@ -1,6 +1,7 @@
 import copy
 import json
 import base64
+from datetime import date
 
 import pytest
 
@@ -88,6 +89,54 @@ def test_webhook_updates_only_changed_fields(monkeypatch):
     assert projects[0]["due_date"] == "2024-05-10"
     assert projects[0]["assigned"]["recepcionar material"] == "Pilar"
     assert len(saved) == 1
+
+
+def test_title_update_replaces_old_pedido(monkeypatch):
+    today = date.today()
+    card_store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": 1,
+                "lanename": "Seguimiento compras",
+                "columnname": "Laser",
+                "title": "Old",
+                "deadline": today.isoformat(),
+            },
+        }
+    ]
+
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: list(card_store))
+
+    def fake_save_cards(cards):
+        card_store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save_cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {})
+    monkeypatch.setattr(app, "save_column_colors", lambda data: None)
+
+    client = app.app.test_client()
+    payload = {
+        "card": {
+            "taskid": 1,
+            "laneName": "Seguimiento compras",
+            "columnName": "Laser",
+            "title": "New",
+            "deadline": today.isoformat(),
+        },
+        "timestamp": "t1",
+    }
+    response = client.post("/kanbanize-webhook", json=payload)
+
+    assert response.status_code == 200
+    assert len(card_store) == 1
+    assert card_store[0]["card"]["title"] == "New"
+
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    text = resp.get_data(as_text=True)
+    assert "New" in text
+    assert "Old" not in text
 
 
 def test_unfreeze_preserves_displaced_phase(monkeypatch):

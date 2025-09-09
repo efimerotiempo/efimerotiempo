@@ -1360,7 +1360,7 @@ def calendar_pedidos():
         if not isinstance(card, dict):
             continue
 
-        lane_name = (card.get('lanename') or '').strip()
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         if lane_name.lower() not in allowed_lanes:
             continue
 
@@ -1403,7 +1403,7 @@ def calendar_pedidos():
             d = parse_kanban_date(card.get('deadline'))
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
-        lane_name = (card.get('lanename') or '').strip()
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
 
         entry = {
             'project': title,
@@ -2732,9 +2732,14 @@ def kanbanize_webhook():
     # Guardar tarjetas del lane Seguimiento compras
     if lane_norm == "seguimiento compras":
         cards = load_kanban_cards()
+        cid_str = str(cid)
         cards = [
             c for c in cards
-            if (c.get('card', {}).get('taskid') or c.get('card', {}).get('cardId') or c.get('card', {}).get('id')) != cid
+            if str(
+                c.get('card', {}).get('taskid')
+                or c.get('card', {}).get('cardId')
+                or c.get('card', {}).get('id')
+            ) != cid_str
         ]
         cards.append({'timestamp': payload_timestamp, 'card': card})
         save_kanban_cards(cards)
