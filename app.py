@@ -2830,23 +2830,31 @@ def kanbanize_webhook():
         prev_custom.pop(k, None)
 
     deadline_str = card.get('deadline')
-    pedido_str = custom.get('Fecha pedido')
+    fecha_cli_str = (
+        custom.get('Fecha Cliente')
+        or custom.get('Fecha cliente')
+        or custom.get('Fecha pedido')
+    )
     if deadline_str:
         due_date_obj = parse_kanban_date(deadline_str)
         due_confirmed_flag = True
     else:
-        due_date_obj = parse_kanban_date(pedido_str)
+        due_date_obj = parse_kanban_date(fecha_cli_str)
         due_confirmed_flag = False
     mat_str = custom.get('Fecha material confirmado')
     material_date_obj = parse_kanban_date(mat_str)
 
     prev_deadline_str = prev_card.get('deadline')
-    prev_pedido_str = prev_custom.get('Fecha pedido')
+    prev_fecha_cli_str = (
+        prev_custom.get('Fecha Cliente')
+        or prev_custom.get('Fecha cliente')
+        or prev_custom.get('Fecha pedido')
+    )
     if prev_deadline_str:
         prev_due_date_obj = parse_kanban_date(prev_deadline_str)
         prev_due_confirmed_flag = True
     else:
-        prev_due_date_obj = parse_kanban_date(prev_pedido_str)
+        prev_due_date_obj = parse_kanban_date(prev_fecha_cli_str)
         prev_due_confirmed_flag = False
     prev_mat_str = prev_custom.get('Fecha material confirmado')
     prev_material_date_obj = parse_kanban_date(prev_mat_str)
