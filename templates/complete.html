@@ -120,7 +120,7 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -189,7 +189,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -218,7 +218,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -246,6 +246,7 @@
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
+<div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
                 <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
@@ -323,7 +324,7 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr data-pid="{{ p.id }}" style="background-color: {{ p.color }};">
+            <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
                 <td>{{ p.name }}</td>
                 <td>{{ p.client }}</td>
                 <td>
@@ -421,6 +422,12 @@
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  const blockModal = document.getElementById('block-modal');
+  const blockText = document.getElementById('block-text');
+  const blockUnfreeze = document.getElementById('block-unfreeze');
+  const blockSkip = document.getElementById('block-skip');
+  const blockCancel = document.getElementById('block-cancel');
+  let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
@@ -632,6 +639,7 @@ let dragInfo = null;
           if (acopio && acopio !== '0') html += `<div>Plazo acopio: ${acopio}</div>`;
         }
         html += `<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
+        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
         html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
         if (Array.isArray(info.phases[t.dataset.phase])) {
           html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
@@ -750,6 +758,16 @@ let dragInfo = null;
       }
       if (splitCancel) {
         splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
+      }
+      const freeze = document.getElementById('freeze-btn');
+      if (freeze) {
+        freeze.addEventListener('click', ev => {
+          ev.stopPropagation();
+          fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), {
+            method: 'POST',
+            credentials: 'same-origin'
+          }).then(() => location.reload());
+        });
       }
       const startForm = document.getElementById('start-form');
       if (startForm) {
@@ -1014,7 +1032,7 @@ let dragInfo = null;
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      doMove(moveData, 'push', beforeMaterial);
+      doMove(moveData, 'split', beforeMaterial);
     });
   });
   function doMove(moveData, mode, beforeMaterial) {
@@ -1025,15 +1043,47 @@ let dragInfo = null;
       credentials: 'same-origin',
       body: JSON.stringify(moveData)
     })
-      .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
-      .then(({ok, data}) => {
-        if (!ok) {
-          if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-          else alert(data.error || 'Error');
+    .then(resp => resp.json().then(j => ({ok: resp.ok, data: j})))
+    .then(({ok, data}) => {
+      if (!ok) {
+        if (data.blocked) {
+          pendingBlock = { moveData, mode, beforeMaterial };
+          blockText.textContent = `Hay una fase bloqueada (${data.blocked.name} - ${data.blocked.phase}). ¿Quieres descongelar la fase y que se aplace con el resto o que se atrase lo demás saltándose esa fase?`;
+          blockModal.style.display = 'block';
           return;
         }
-        afterMove(data, moveData.date);
-      });
+        if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
+        else alert(data.error || 'Error');
+        return;
+      }
+      afterMove(data, moveData.date);
+    });
+  }
+  if (blockUnfreeze) {
+    blockUnfreeze.addEventListener('click', () => {
+      if (pendingBlock) {
+        blockModal.style.display = 'none';
+        pendingBlock.moveData.unblock = true;
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
+        pendingBlock = null;
+      }
+    });
+  }
+  if (blockSkip) {
+    blockSkip.addEventListener('click', () => {
+      if (pendingBlock) {
+        blockModal.style.display = 'none';
+        pendingBlock.moveData.skip_block = true;
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
+        pendingBlock = null;
+      }
+    });
+  }
+  if (blockCancel) {
+    blockCancel.addEventListener('click', () => {
+      blockModal.style.display = 'none';
+      pendingBlock = null;
+    });
   }
   const unplanList = document.querySelector('.unplanned-list');
   if (unplanList) {
