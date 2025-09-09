@@ -506,3 +506,50 @@ def test_frozen_phase_stays_in_cell_and_respects_start_order():
     assert [t["start"] for t in tasks] == [0, 4]
     assert tasks[1].get("frozen")
 
+
+def test_move_phase_reverts_when_day_full(monkeypatch):
+    projects = [
+        {
+            "id": "p1",
+            "name": "Proj1",
+            "client": "C1",
+            "start_date": "2024-05-06",
+            "due_date": "",
+            "phases": {"montar": 8},
+            "assigned": {"montar": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+        },
+        {
+            "id": "p2",
+            "name": "Proj2",
+            "client": "C2",
+            "start_date": "2024-05-07",
+            "due_date": "",
+            "phases": {"montar": 4},
+            "assigned": {"montar": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+        },
+    ]
+
+    monkeypatch.setattr(app, "load_projects", lambda: projects)
+
+    def fake_save(projs):
+        projects[:] = copy.deepcopy(projs)
+
+    monkeypatch.setattr(app, "save_projects", fake_save)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post(
+        "/move",
+        json={"pid": "p2", "phase": "montar", "date": "2024-05-06", "worker": "Mikel"},
+        headers=auth,
+    )
+
+    assert resp.status_code == 409
+    mapping = app.compute_schedule_map(projects)
+    days = [d for _, d, ph, *_ in mapping["p2"] if ph == "montar"]
+    assert days == ["2024-05-07"]
+

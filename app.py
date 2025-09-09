@@ -2418,6 +2418,7 @@ def move_phase():
         return '', 400
 
     projects = get_projects()
+    original_projects = copy.deepcopy(projects)
     tracker_events = []
     new_day, warn, info = move_phase_date(
         projects,
@@ -2437,6 +2438,20 @@ def move_phase():
         if isinstance(warn, dict):
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
+
+    # Revert move if the target day is already full and the phase was
+    # scheduled elsewhere. This prevents the phase from jumping to the next
+    # available day when the chosen cell has no remaining hours.
+    mapping = compute_schedule_map(projects)
+    actual_day = None
+    for w, d, ph, hrs, prt in mapping.get(pid, []):
+        if ph == phase and (part is None or prt == part):
+            actual_day = d
+            break
+    if actual_day != date_str:
+        projects[:] = original_projects
+        save_projects(projects)
+        return jsonify({'error': 'Jornada ocupada'}), 409
 
     # Build tracker entry with detailed reasoning
     proj = next((p for p in projects if p['id'] == pid), {})
