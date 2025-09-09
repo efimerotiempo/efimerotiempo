@@ -1,5 +1,6 @@
 import copy
 import json
+import base64
 
 import pytest
 
@@ -87,4 +88,53 @@ def test_webhook_updates_only_changed_fields(monkeypatch):
     assert projects[0]["due_date"] == "2024-05-10"
     assert projects[0]["assigned"]["recepcionar material"] == "Pilar"
     assert len(saved) == 1
+
+
+def test_unfreeze_preserves_displaced_phase(monkeypatch):
+    projects = [
+        {
+            "id": "p1",
+            "name": "P1",
+            "client": "C1",
+            "start_date": "2024-01-01",
+            "due_date": "",
+            "phases": {"montar": 8},
+            "assigned": {"montar": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+        },
+        {
+            "id": "p2",
+            "name": "P2",
+            "client": "C2",
+            "start_date": "2024-01-01",
+            "due_date": "",
+            "phases": {"montar": 8},
+            "assigned": {"montar": "Mikel"},
+            "auto_hours": {},
+            "color": "#ffffff",
+        },
+    ]
+    saved = []
+
+    monkeypatch.setattr(app, "load_projects", lambda: projects)
+    monkeypatch.setattr(app, "save_projects", lambda p: saved.append(copy.deepcopy(p)))
+
+    client = app.app.test_client()
+
+    auth = {
+        "Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()
+    }
+
+    client.post("/toggle_freeze/p2/montar", headers=auth)
+
+    projects[0]["start_date"] = "2024-01-02"
+
+    client.post("/toggle_freeze/p2/montar", headers=auth)
+
+    mapping = app.compute_schedule_map(projects)
+    p1_day = [d for w, d, ph, *_ in mapping["p1"] if ph == "montar"][0]
+
+    assert p1_day == "2024-01-03"
+    assert projects[0]["segment_starts"]["montar"][0] == "2024-01-03"
 

@@ -2578,12 +2578,27 @@ def delete_bug(bid):
 
 @app.route('/toggle_freeze/<pid>/<phase>', methods=['POST'])
 def toggle_freeze(pid, phase):
+    def _task_positions(projs):
+        sched, _ = schedule_projects(copy.deepcopy(projs))
+        mapping = {}
+        for w, days in sched.items():
+            for d, tasks in days.items():
+                for t in tasks:
+                    key = (t['pid'], t['phase'], t.get('part'))
+                    start = t.get('start', 0)
+                    cur = mapping.get(key)
+                    if not cur or d < cur['day'] or (d == cur['day'] and start < cur['start']):
+                        mapping[key] = {'day': d, 'start': start}
+        return mapping
+
     projects = get_projects()
+    before = _task_positions(projects)
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     frozen = proj.get('frozen_tasks', [])
-    if any(t['phase'] == phase for t in frozen):
+    was_frozen = any(t['phase'] == phase for t in frozen)
+    if was_frozen:
         proj['frozen_tasks'] = [t for t in frozen if t['phase'] != phase]
     else:
         # Recompute the schedule on a copy so freezing a phase does not
@@ -2599,6 +2614,28 @@ def toggle_freeze(pid, phase):
                         item['frozen'] = True
                         frozen.append(item)
         proj['frozen_tasks'] = frozen
+
+    after = _task_positions(projects)
+
+    if was_frozen:
+        for (p_id, ph, part), info in before.items():
+            if p_id == pid and ph == phase:
+                continue
+            new = after.get((p_id, ph, part))
+            if not new or new['day'] != info['day'] or new['start'] != info['start']:
+                target = next((p for p in projects if p['id'] == p_id), None)
+                if not target:
+                    continue
+                segs = target.setdefault('segment_starts', {}).setdefault(ph, [])
+                hours = target.setdefault('segment_start_hours', {}).setdefault(ph, [])
+                idx = part if part is not None else 0
+                while len(segs) <= idx:
+                    segs.append(None)
+                while len(hours) <= idx:
+                    hours.append(None)
+                segs[idx] = info['day']
+                hours[idx] = info['start']
+
     save_projects(projects)
     if request.is_json:
         return '', 204
