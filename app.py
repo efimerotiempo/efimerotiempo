@@ -3075,6 +3075,10 @@ def kanbanize_webhook():
                 changed_phases[ph] = new_phases.get(ph, 0)
 
         for ph, hours in changed_phases.items():
+            if ph in ("mecanizar", "tratamiento") and hours == 1:
+                existing_hours = existing_phases.get(ph)
+                if existing_hours not in (None, 0, ''):
+                    continue
             if hours > 0:
                 if existing_phases.get(ph) != hours:
                     existing_phases[ph] = hours

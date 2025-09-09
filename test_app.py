@@ -223,6 +223,70 @@ def test_webhook_creates_mecanizado_tratamiento(monkeypatch):
     assert saved
 
 
+def test_webhook_preserves_existing_mecanizado_tratamiento(monkeypatch):
+    projects = [
+        {
+            "id": "p1",
+            "name": "Proj1",
+            "client": "ClientX",
+            "source": "api",
+            "phases": {"mecanizar": 5, "tratamiento": 2},
+            "assigned": {"mecanizar": app.UNPLANNED, "tratamiento": app.UNPLANNED},
+            "auto_hours": {},
+            "kanban_id": "10",
+            "due_date": "",
+            "color": "#ffffff",
+        }
+    ]
+    saved = []
+
+    monkeypatch.setattr(app, "load_projects", lambda: projects)
+
+    def fake_save(projs):
+        saved.append(copy.deepcopy(projs))
+
+    monkeypatch.setattr(app, "save_projects", fake_save)
+
+    prev_cards = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "10",
+                "customCardId": "Proj1",
+                "title": "ClientX",
+                "customFields": {},
+            },
+        }
+    ]
+    card_store = list(prev_cards)
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: list(card_store))
+
+    def fake_save_cards(cards):
+        card_store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save_cards)
+
+    client = app.app.test_client()
+    payload = {
+        "card": {
+            "taskid": "10",
+            "laneName": "Acero al Carbono",
+            "columnName": "Planif. Bekola",
+            "customCardId": "Proj1",
+            "title": "ClientX",
+            "customFields": {"MECANIZADO": "sí", "TRATAMIENTO": "sí"},
+        },
+        "timestamp": "t1",
+    }
+    response = client.post("/kanbanize-webhook", json=payload)
+
+    assert response.status_code == 200
+    assert projects[0]["phases"]["mecanizar"] == 5
+    assert projects[0]["phases"]["tratamiento"] == 2
+    assert "mecanizar" not in projects[0]["auto_hours"]
+    assert "tratamiento" not in projects[0]["auto_hours"]
+    assert saved == []
+
 def test_title_update_replaces_old_pedido(monkeypatch):
     today = date.today()
     card_store = [
