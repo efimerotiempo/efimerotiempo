@@ -1452,7 +1452,8 @@ def calendar_pedidos():
             lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
             and column not in ["Ready to Archive", "Hacer Albaran"]
         ):
-            if project_name not in seen_links:
+            key = (project_name, client_name)
+            if key not in seen_links:
                 child_links = []
                 links_info = card.get('links') or {}
                 children = links_info.get('children') if isinstance(links_info, dict) else []
@@ -1463,7 +1464,7 @@ def calendar_pedidos():
                             if t:
                                 child_links.append(t)
                 links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
-                seen_links.add(project_name)
+                seen_links.add(key)
 
     # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
