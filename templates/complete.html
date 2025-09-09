@@ -120,7 +120,7 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -189,7 +189,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -218,7 +218,7 @@
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-priority="{{ t.priority }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -246,7 +246,6 @@
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="move-modal" class="conflict-modal"><div class="conflict-content"><p id="move-text">Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.</p><label id="move-label">Fase a desplazar: <select id="move-select"></select></label><br><button id="move-confirm">Desplazar</button> <button id="move-append">No desplazar</button> <button id="move-cancel">No hacer nada</button></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
         <div id="bug-modal" class="modal">
             <div class="modal-content">
@@ -407,7 +406,6 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
-  const CHECK_URL = "{{ url_for('check_move') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -424,25 +422,23 @@
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
-  const moveModal = document.getElementById('move-modal');
-  const moveSelect = document.getElementById('move-select');
-  const moveLabel = document.getElementById('move-label');
-  const moveText = document.getElementById('move-text');
-  const moveConfirm = document.getElementById('move-confirm');
-  const moveAppend = document.getElementById('move-append');
-  const moveCancel = document.getElementById('move-cancel');
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
-  let pendingMove = null;
   let pendingBlock = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
+  }
+  function afterMove(data, originalDate) {
+    localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+    if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+    if (data.warning) showDeadline(data.warning, () => location.reload());
+    else location.reload();
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -571,11 +567,6 @@ const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
 let dragInfo = null;
-let previewTimer = null;
-let previewTarget = null;
-let previewCell = null;
-let previewHTML = null;
-let previewStart = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
@@ -590,7 +581,7 @@ let previewStart = null;
       dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; clearPreview(); });
+    t.addEventListener('dragend', () => { dragInfo = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -709,8 +700,7 @@ let previewStart = null;
                 else alert(data.error || 'Error');
                 return;
               }
-              if (data.warning) showDeadline(data.warning, () => location.reload());
-              else location.reload();
+              afterMove(data, today);
             });
         });
       }
@@ -967,12 +957,12 @@ let previewStart = null;
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       const info = sessionStorage.getItem('undoMove');
       if (info) {
-        const data = JSON.parse(info);
+        const req = JSON.parse(info);
         fetch(MOVE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ pid: data.pid, phase: data.phase, date: data.date, worker: data.worker })
+          body: JSON.stringify({ pid: req.pid, phase: req.phase, date: req.date, worker: req.worker })
         })
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
@@ -982,8 +972,7 @@ let previewStart = null;
               return;
             }
             sessionStorage.removeItem('undoMove');
-            if (data.warning) showDeadline(data.warning, () => location.reload());
-            else location.reload();
+            afterMove(data, req.date);
           });
       }
     }
@@ -1018,24 +1007,10 @@ let previewStart = null;
     });
   });
 
-  function clearPreview() {
-    if (previewTimer) {
-      clearTimeout(previewTimer);
-      previewTimer = null;
-    }
-    previewTarget = null;
-    if (previewCell) {
-      previewCell.innerHTML = previewHTML;
-      previewCell = null;
-      previewHTML = null;
-    }
-    previewStart = null;
-  }
   function getStartHour(cell, y) {
     let hours = 0;
     const tasks = Array.from(cell.querySelectorAll('.task'));
     for (const t of tasks) {
-      if (t.classList.contains('preview-task')) continue;
       if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
       const rect = t.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) break;
@@ -1044,64 +1019,9 @@ let previewStart = null;
     return hours;
   }
   document.querySelectorAll('tbody td[data-date]').forEach(cell => {
-    cell.addEventListener('dragover', e => {
-      e.preventDefault();
-      if (!dragInfo) return;
-      let start = getStartHour(cell, e.clientY);
-      if (previewCell) {
-        if (previewCell !== cell || previewStart !== start) {
-          clearPreview();
-          start = getStartHour(cell, e.clientY);
-        } else {
-          return;
-        }
-      }
-      if (previewTimer && (previewTarget !== cell || previewStart !== start)) {
-        clearTimeout(previewTimer);
-        previewTimer = null;
-        previewTarget = null;
-      }
-      if (!previewTimer) {
-        previewTarget = cell;
-        previewStart = start;
-        previewTimer = setTimeout(() => {
-          const date = cell.dataset.date;
-          const worker = cell.closest('tr').dataset.worker;
-          const moveData = { pid: dragInfo.pid, phase: dragInfo.phase, date: date, worker: worker, part: dragInfo.part, start: previewStart };
-          fetch(CHECK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(moveData)
-          }).then(r => r.json()).then(res => {
-            if (!dragInfo || previewCell || previewTarget !== cell || previewStart !== start || !res.preview) return;
-            previewCell = cell;
-            previewHTML = cell.innerHTML;
-            cell.innerHTML = '';
-            res.preview.forEach(t => {
-              const div = document.createElement('div');
-              div.className = 'task preview-task' + (t.frozen ? ' frozen' : '');
-              div.style.borderColor = t.color;
-              div.textContent = `${t.project} - ${t.client} - ${t.phase}`;
-              cell.appendChild(div);
-            });
-          });
-        }, 700);
-      }
-    });
-    cell.addEventListener('dragleave', e => {
-      if (!cell.contains(e.relatedTarget)) {
-        if (previewCell === cell) clearPreview();
-        else if (previewTarget === cell) {
-          clearTimeout(previewTimer);
-          previewTimer = null;
-          previewTarget = null;
-        }
-      }
-    });
+    cell.addEventListener('dragover', e => { e.preventDefault(); });
     cell.addEventListener('drop', e => {
       e.preventDefault();
-      clearPreview();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
@@ -1112,44 +1032,7 @@ let previewStart = null;
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      fetch(CHECK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify(moveData)
-      }).then(resp => resp.json()).then(res => {
-        const proceed = () => {
-          if (res.warning) moveData.ack_warning = true;
-          if (res.split) {
-            moveSelect.innerHTML = '';
-            if (res.options && res.options.length) {
-              moveLabel.style.display = '';
-              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Elige una fase para desplazar y hacer hueco.';
-              res.options.forEach(opt => {
-                const o = document.createElement('option');
-                o.value = JSON.stringify(opt);
-                o.textContent = opt.text;
-                moveSelect.appendChild(o);
-              });
-            } else {
-              moveLabel.style.display = 'none';
-              moveText.textContent = 'Esta celda no tiene espacio libre suficiente. Se aplazará la primera fase del día siguiente.';
-              if (res.auto) {
-                moveData.push_pid = res.auto.pid;
-                moveData.push_phase = res.auto.phase;
-                moveData.push_part = res.auto.part;
-              }
-            }
-            if (moveAppend) moveAppend.style.display = res.free > 0 ? '' : 'none';
-            pendingMove = { data: moveData, beforeMaterial };
-            moveModal.style.display = 'block';
-          } else {
-            doMove(moveData, 'split', beforeMaterial);
-          }
-        };
-        if (res.warning) showDeadline(res.warning, proceed);
-        else proceed();
-      });
+      doMove(moveData, 'split', beforeMaterial);
     });
   });
   function doMove(moveData, mode, beforeMaterial) {
@@ -1173,43 +1056,7 @@ let previewStart = null;
         else alert(data.error || 'Error');
         return;
       }
-      const date = moveData.date;
-      localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-      if (data.date !== date) localStorage.setItem(SCROLL_KEY2, data.date);
-      if (data.warning) showDeadline(data.warning, () => location.reload());
-      else location.reload();
-    });
-  }
-  if (moveConfirm) {
-    moveConfirm.addEventListener('click', () => {
-      if (pendingMove) {
-        if (moveLabel.style.display !== 'none') {
-          const sel = moveSelect.value;
-          if (!sel) return;
-          const opt = JSON.parse(sel);
-          pendingMove.data.push_pid = opt.pid;
-          pendingMove.data.push_phase = opt.phase;
-          pendingMove.data.push_part = opt.part;
-        }
-        moveModal.style.display = 'none';
-        doMove(pendingMove.data, 'push', pendingMove.beforeMaterial);
-        pendingMove = null;
-      }
-    });
-  }
-  if (moveAppend) {
-    moveAppend.addEventListener('click', () => {
-      if (pendingMove) {
-        moveModal.style.display = 'none';
-        doMove(pendingMove.data, 'split', pendingMove.beforeMaterial);
-        pendingMove = null;
-      }
-    });
-  }
-  if (moveCancel) {
-    moveCancel.addEventListener('click', () => {
-      moveModal.style.display = 'none';
-      pendingMove = null;
+      afterMove(data, moveData.date);
     });
   }
   if (blockUnfreeze) {
@@ -1261,8 +1108,7 @@ let previewStart = null;
             else alert(data.error || 'Error');
             return;
           }
-          if (data.warning) showDeadline(data.warning, () => location.reload());
-          else location.reload();
+          afterMove(data, today);
         });
     });
   }
