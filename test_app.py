@@ -600,4 +600,7 @@ def test_gantt_view(monkeypatch):
     assert "overflow-y:hidden" in body
     assert "overflow:visible" in body
     assert "addEventListener('wheel'" in body
+    # days scaled to the workday duration
+    assert "startOfDay" in body
+    assert "+ 1)*pxPerDay" in body
 
