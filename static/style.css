@@ -46,6 +46,9 @@ table.schedule td.weekend-cell {
     border: 3px solid transparent;
     background: #fff;
 }
+.task.frozen {
+    background: #cce5ff;
+}
 .task-main {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -410,6 +413,9 @@ tr.collapsed td:not(:first-child) { display: none; }
 .projects-table tr.proj-highlight {
     font-weight: bold;
     border: 3px solid #000;
+}
+.projects-table tr.frozen {
+    border: 3px solid blue !important;
 }
 .projects-table tbody tr form { display: none; }
 .projects-table tr.proj-highlight form {
