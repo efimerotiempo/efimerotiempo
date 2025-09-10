@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Vista Gantt</h1>
+<div class="gantt-controls">
+  <button id="expand_all">Desplegar todos</button>
+  <button id="collapse_all">Plegar todos</button>
+  <button id="zoom_in">+</button>
+  <button id="zoom_out">-</button>
+</div>
 <div id="gantt_container" class="gantt-container"></div>
 <style>
   .gantt-container {
     position: relative;
-    width: 100%;
     border: 1px solid #ccc;
     background: #fafafa;
+    overflow-x: auto;
+    width: 100%;
   }
   .gantt-task {
     position: absolute;
@@ -21,28 +28,70 @@
     box-sizing: border-box;
     border-radius: 2px;
   }
+  .project-bar { background:#3a87ad; cursor:pointer; }
+  .phase-bar { background:#6c9ec1; }
 </style>
 <script>
-  const tasks = {{ tasks|safe }};
-  if (tasks.length) {
-    const container = document.getElementById('gantt_container');
-    const starts = tasks.map(t => new Date(t.start).getTime());
-    const ends = tasks.map(t => new Date(t.end).getTime());
-    const minStart = Math.min(...starts);
-    const maxEnd = Math.max(...ends);
-    const range = maxEnd - minStart;
-    container.style.height = (tasks.length * 24) + 'px';
-    tasks.forEach((t, i) => {
-      const s = new Date(t.start).getTime();
-      const e = new Date(t.end).getTime();
-      const task = document.createElement('div');
-      task.className = 'gantt-task';
-      task.style.top = (i * 24) + 'px';
-      task.style.left = ((s - minStart) / range * 100) + '%';
-      task.style.width = ((e - s) / range * 100) + '%';
-      task.textContent = t.name;
-      container.appendChild(task);
+  const projects = {{ projects|safe }};
+  const container = document.getElementById('gantt_container');
+  const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
+  let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+
+  function formatDate(d){return d.split('T')[0];}
+
+  function render(){
+    container.innerHTML = '';
+    if(!projects.length){return;}
+    const dayMs = 24*60*60*1000;
+    const allStarts = [];
+    const allEnds = [];
+    projects.forEach(p=>{allStarts.push(new Date(p.start).getTime()); allEnds.push(new Date(p.end).getTime()); p.phases.forEach(ph=>{allStarts.push(new Date(ph.start).getTime()); allEnds.push(new Date(ph.end).getTime());});});
+    const minStart = Math.min(...allStarts);
+    const maxEnd = Math.max(...allEnds);
+    const totalDays = (maxEnd - minStart) / dayMs;
+    const pxPerDay = 40 * zoom;
+    container.style.width = (totalDays * pxPerDay) + 'px';
+    let y = 0;
+    projects.forEach(p=>{
+      const projStart = new Date(p.start).getTime();
+      const projEnd = new Date(p.end).getTime();
+      const projBar = document.createElement('div');
+      projBar.className = 'gantt-task project-bar';
+      projBar.style.top = y + 'px';
+      projBar.style.left = ((projStart - minStart)/dayMs*pxPerDay) + 'px';
+      projBar.style.width = ((projEnd - projStart)/dayMs*pxPerDay) + 'px';
+      projBar.textContent = `${p.name} - ${p.client} (${formatDate(p.start)} - ${formatDate(p.end)})`;
+      projBar.onclick = () => toggleProject(p.id);
+      container.appendChild(projBar);
+      y += 24;
+      if(!collapsed[p.id]){
+        p.phases.forEach(ph=>{
+          const s = new Date(ph.start).getTime();
+          const e = new Date(ph.end).getTime();
+          const bar = document.createElement('div');
+          bar.className = 'gantt-task phase-bar';
+          bar.style.top = y + 'px';
+          bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
+          bar.style.width = ((e - s)/dayMs*pxPerDay) + 'px';
+          bar.textContent = ph.name;
+          container.appendChild(bar);
+          y += 24;
+        });
+      }
     });
+    container.style.height = (y) + 'px';
   }
+
+  function toggleProject(id){
+    collapsed[id] = !collapsed[id];
+    localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed));
+    render();
+  }
+  document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=false); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+  document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+  document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+  document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+
+  render();
 </script>
 {% endblock %}

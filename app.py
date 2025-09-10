@@ -1527,7 +1527,8 @@ def gantt_view():
         for day, tasks in days.items():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
-    gantt_tasks = []
+
+    gantt_projects = []
     for p in projects:
         pid = p['id']
         tasks = by_pid.get(pid, [])
@@ -1535,16 +1536,23 @@ def gantt_view():
             continue
         start = min(t['start_time'] for t in tasks)
         end = max(t['end_time'] for t in tasks)
-        gantt_tasks.append({'id': pid, 'name': p['name'], 'start': start, 'end': end})
+        phases = []
         for t in tasks:
-            gantt_tasks.append({
+            phases.append({
                 'id': f"{pid}-{t['phase']}-{t.get('part', '')}",
                 'name': t['phase'],
-                'resource': p['name'],
                 'start': t['start_time'],
                 'end': t['end_time'],
             })
-    return render_template('gantt.html', tasks=json.dumps(gantt_tasks))
+        gantt_projects.append({
+            'id': pid,
+            'name': p['name'],
+            'client': p.get('client', ''),
+            'start': start,
+            'end': end,
+            'phases': phases,
+        })
+    return render_template('gantt.html', projects=json.dumps(gantt_projects))
 
 @app.route('/projects')
 def project_list():

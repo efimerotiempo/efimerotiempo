@@ -585,5 +585,7 @@ def test_gantt_view(monkeypatch):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "Proj1" in body
+    assert "Client1" in body
     assert "montar" in body
+    assert "2024-01-01" in body
 
