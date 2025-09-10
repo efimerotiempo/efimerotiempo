@@ -16,26 +16,31 @@
     overflow-x: auto;
     width: 100%;
   }
-  .gantt-task {
-    position: absolute;
-    height: 20px;
-    background: #3a87ad;
-    color: #fff;
-    font-size: 12px;
-    overflow: hidden;
-    white-space: nowrap;
-    padding: 0 4px;
-    box-sizing: border-box;
-    border-radius: 2px;
-  }
-  .project-bar { background:#3a87ad; cursor:pointer; }
-  .phase-bar { background:#6c9ec1; }
+    .gantt-task {
+      position: absolute;
+      height: 60px;
+      line-height: 60px;
+      color: #fff;
+      font-size: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+      padding: 0 4px;
+      box-sizing: border-box;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+    }
+    .project-bar { cursor:pointer; }
+    .phase-bar {}
 </style>
 <script>
-  const projects = {{ projects|safe }};
-  const container = document.getElementById('gantt_container');
-  const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
-  let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+    const projects = {{ projects|safe }};
+    const container = document.getElementById('gantt_container');
+    const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
+    let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+    const BAR_HEIGHT = 60;
+    const INNER_GAP = 2;
+    const GROUP_GAP = 10;
 
   function formatDate(d){return d.split('T')[0];}
 
@@ -49,38 +54,49 @@
     const minStart = Math.min(...allStarts);
     const maxEnd = Math.max(...allEnds);
     const totalDays = (maxEnd - minStart) / dayMs;
-    const pxPerDay = 40 * zoom;
-    container.style.width = (totalDays * pxPerDay) + 'px';
-    let y = 0;
-    projects.forEach(p=>{
-      const projStart = new Date(p.start).getTime();
-      const projEnd = new Date(p.end).getTime();
-      const projBar = document.createElement('div');
-      projBar.className = 'gantt-task project-bar';
-      projBar.style.top = y + 'px';
-      projBar.style.left = ((projStart - minStart)/dayMs*pxPerDay) + 'px';
-      projBar.style.width = ((projEnd - projStart)/dayMs*pxPerDay) + 'px';
-      projBar.textContent = `${p.name} - ${p.client} (${formatDate(p.start)} - ${formatDate(p.end)})`;
-      projBar.onclick = () => toggleProject(p.id);
-      container.appendChild(projBar);
-      y += 24;
-      if(!collapsed[p.id]){
-        p.phases.forEach(ph=>{
-          const s = new Date(ph.start).getTime();
-          const e = new Date(ph.end).getTime();
-          const bar = document.createElement('div');
-          bar.className = 'gantt-task phase-bar';
-          bar.style.top = y + 'px';
-          bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
-          bar.style.width = ((e - s)/dayMs*pxPerDay) + 'px';
-          bar.textContent = ph.name;
-          container.appendChild(bar);
-          y += 24;
-        });
-      }
-    });
-    container.style.height = (y) + 'px';
-  }
+      const pxPerDay = 40 * zoom;
+      container.style.width = (totalDays * pxPerDay) + 'px';
+      let y = 0;
+      projects.forEach(p=>{
+        const projStart = new Date(p.start).getTime();
+        const projEnd = new Date(p.end).getTime();
+        const projBar = document.createElement('div');
+        projBar.className = 'gantt-task project-bar';
+        projBar.style.top = y + 'px';
+        projBar.style.left = ((projStart - minStart)/dayMs*pxPerDay) + 'px';
+        projBar.style.width = ((projEnd - projStart)/dayMs*pxPerDay) + 'px';
+        projBar.style.background = p.color || '#3a87ad';
+        projBar.style.height = BAR_HEIGHT + 'px';
+        projBar.style.lineHeight = BAR_HEIGHT + 'px';
+        projBar.textContent = `${p.name} - ${p.client} (${formatDate(p.start)} - ${formatDate(p.end)})`;
+        projBar.onclick = () => toggleProject(p.id);
+        container.appendChild(projBar);
+        y += BAR_HEIGHT;
+        if(!collapsed[p.id]){
+          y += INNER_GAP;
+          p.phases.forEach((ph, idx)=>{
+            const s = new Date(ph.start).getTime();
+            const e = new Date(ph.end).getTime();
+            const bar = document.createElement('div');
+            bar.className = 'gantt-task phase-bar';
+            bar.style.top = y + 'px';
+            bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
+            bar.style.width = ((e - s)/dayMs*pxPerDay) + 'px';
+            bar.style.background = ph.color || p.color || '#6c9ec1';
+            bar.style.height = BAR_HEIGHT + 'px';
+            bar.style.lineHeight = BAR_HEIGHT + 'px';
+            bar.textContent = ph.name;
+            container.appendChild(bar);
+            y += BAR_HEIGHT;
+            if(idx < p.phases.length - 1){
+              y += INNER_GAP;
+            }
+          });
+        }
+        y += GROUP_GAP;
+      });
+      container.style.height = y + 'px';
+    }
 
   function toggleProject(id){
     collapsed[id] = !collapsed[id];

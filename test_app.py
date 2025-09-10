@@ -562,6 +562,7 @@ def test_gantt_view(monkeypatch):
             "client": "Client1",
             "phases": {"montar": 8},
             "assigned": {"montar": "Mikel"},
+            "color": "#123456",
         }
     ]
     fake_sched = {
@@ -573,6 +574,7 @@ def test_gantt_view(monkeypatch):
                     "hours": 8,
                     "start_time": "2024-01-01T08:00:00",
                     "end_time": "2024-01-01T16:00:00",
+                    "color": "#123456",
                 }
             ]
         }
@@ -588,4 +590,7 @@ def test_gantt_view(monkeypatch):
     assert "Client1" in body
     assert "montar" in body
     assert "2024-01-01" in body
+    # color and bar size indicators
+    assert "#123456" in body
+    assert "BAR_HEIGHT = 60" in body
 

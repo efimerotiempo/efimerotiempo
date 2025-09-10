@@ -1543,6 +1543,7 @@ def gantt_view():
                 'name': t['phase'],
                 'start': t['start_time'],
                 'end': t['end_time'],
+                'color': t.get('color', p.get('color')),
             })
         gantt_projects.append({
             'id': pid,
@@ -1550,6 +1551,7 @@ def gantt_view():
             'client': p.get('client', ''),
             'start': start,
             'end': end,
+            'color': p.get('color'),
             'phases': phases,
         })
     return render_template('gantt.html', projects=json.dumps(gantt_projects))
