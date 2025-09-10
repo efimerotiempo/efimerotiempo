@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Vista Gantt</h1>
+<div class="gantt-controls">
+  <button id="expand_all">Desplegar todos</button>
+  <button id="collapse_all">Plegar todos</button>
+  <button id="zoom_in">+</button>
+  <button id="zoom_out">-</button>
+  <button id="sort_start">Ordenar por inicio</button>
+  <button id="sort_due">Ordenar por límite</button>
+</div>
+<div class="gantt-wrapper">
+  <div id="gantt_summary" class="gantt-summary">
+    <div class="summary-header">Resumen</div>
+    <div id="gantt_summary_body"></div>
+  </div>
+  <div id="gantt_main" class="gantt-main">
+    <div id="gantt_header" class="gantt-header"></div>
+    <div id="gantt_body" class="gantt-body"></div>
+  </div>
+</div>
+<style>
+  .gantt-wrapper { display:flex; }
+  .gantt-summary { width:250px; overflow-x:auto; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; }
+  .gantt-summary::-webkit-scrollbar { display:none; }
+  .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
+  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
+  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
+  .summary-row.project-row { cursor:pointer; font-weight:bold; }
+  .summary-row.phase-row { padding-left:16px; }
+  .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
+  .gantt-main::-webkit-scrollbar { display:none; }
+  .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .gantt-body { position:relative; }
+  .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
+  .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
+  .project-bar { cursor:pointer; }
+</style>
+<script>
+const projects = {{ projects|safe }};
+const summaryContainer = document.getElementById('gantt_summary');
+const summaryBody = document.getElementById('gantt_summary_body');
+const main = document.getElementById('gantt_main');
+const header = document.getElementById('gantt_header');
+const body = document.getElementById('gantt_body');
+const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
+let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+const BAR_HEIGHT = 30;
+
+function formatDate(d){return d.split('T')[0];}
+
+function sortProjects(type, store=true){
+  projects.sort((a,b)=>{
+    const da = type==='start'? new Date(a.start) : new Date(a.due_date || '9999-12-31');
+    const db = type==='start'? new Date(b.start) : new Date(b.due_date || '9999-12-31');
+    return da - db;
+  });
+  if(store) localStorage.setItem('ganttSort', type);
+  render();
+}
+
+function render(){
+  summaryBody.innerHTML = '';
+  body.innerHTML = '';
+  header.innerHTML = '';
+  if(!projects.length){return;}
+  const dayMs = 24*60*60*1000;
+  const startOfDay = d => new Date(d.split('T')[0] + 'T00:00:00');
+  const allStarts = [];
+  const allEnds = [];
+  projects.forEach(p=>{
+    const ps = startOfDay(p.start);
+    const pe = startOfDay(p.end);
+    allStarts.push(ps.getTime());
+    allEnds.push(pe.getTime());
+    p.phases.forEach(ph=>{
+      const s = startOfDay(ph.start);
+      const e = startOfDay(ph.end);
+      allStarts.push(s.getTime());
+      allEnds.push(e.getTime());
+    });
+  });
+  const minStart = Math.min(...allStarts);
+  const maxEnd = Math.max(...allEnds);
+  const totalDays = Math.round((maxEnd - minStart)/dayMs) + 1;
+  const pxPerDay = 40 * zoom;
+  const width = totalDays * pxPerDay;
+  header.style.width = width + 'px';
+  body.style.width = width + 'px';
+  body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
+  header.style.background = body.style.background;
+
+  for(let i=0;i<totalDays;i++){
+    const d = new Date(minStart + i*dayMs);
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    cell.style.left = (i*pxPerDay) + 'px';
+    cell.style.width = pxPerDay + 'px';
+    cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
+    header.appendChild(cell);
+  }
+
+  const rows = [];
+  projects.forEach(p=>{
+    rows.push({type:'project', project:p});
+    if(!collapsed[p.id]){
+      p.phases.forEach(ph=>rows.push({type:'phase', project:p, phase:ph}));
+    }
+  });
+
+  rows.forEach(r=>{
+    const summaryRow = document.createElement('div');
+    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
+    if(r.type==='project'){
+      summaryRow.textContent = `${r.project.name} - ${r.project.client}`;
+      summaryRow.onclick = ()=>toggleProject(r.project.id);
+    } else {
+      summaryRow.textContent = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
+    }
+    summaryBody.appendChild(summaryRow);
+
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'gantt-row';
+    const bar = document.createElement('div');
+    bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
+    const s = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
+    const e = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
+    bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
+    bar.style.width = (((e - s)/dayMs + 1)*pxPerDay) + 'px';
+    bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+    bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
+    if(r.type==='project'){
+      bar.onclick = ()=>toggleProject(r.project.id);
+    }
+    rowDiv.appendChild(bar);
+    body.appendChild(rowDiv);
+  });
+
+  const totalHeight = rows.length * BAR_HEIGHT;
+  summaryBody.style.height = totalHeight + 'px';
+  body.style.height = totalHeight + 'px';
+}
+
+function toggleProject(id){
+  collapsed[id] = !collapsed[id];
+  localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed));
+  render();
+}
+
+document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=false); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('sort_start').onclick = ()=>sortProjects('start');
+document.getElementById('sort_due').onclick = ()=>sortProjects('due');
+
+let syncing = false;
+function syncScroll(source, target){
+  if(syncing) return;
+  syncing = true;
+  target.scrollTop = source.scrollTop;
+  syncing = false;
+}
+
+main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
+summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
+const pref = localStorage.getItem('ganttSort');
+if(pref){
+  sortProjects(pref, false);
+} else {
+  render();
+}
+</script>
+{% endblock %}

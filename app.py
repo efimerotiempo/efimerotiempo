@@ -1452,7 +1452,8 @@ def calendar_pedidos():
             lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
             and column not in ["Ready to Archive", "Hacer Albaran"]
         ):
-            if project_name not in seen_links:
+            key = (project_name, client_name)
+            if key not in seen_links:
                 child_links = []
                 links_info = card.get('links') or {}
                 children = links_info.get('children') if isinstance(links_info, dict) else []
@@ -1463,7 +1464,7 @@ def calendar_pedidos():
                             if t:
                                 child_links.append(t)
                 links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
-                seen_links.add(project_name)
+                seen_links.add(key)
 
     # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
@@ -1515,6 +1516,47 @@ def calendar_pedidos():
         unconfirmed=unconfirmed,
         project_links=links_table,
     )
+
+
+@app.route('/gantt')
+def gantt_view():
+    projects = load_projects()
+    sched, _ = schedule_projects(copy.deepcopy(projects))
+    by_pid = {}
+    for worker, days in sched.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                by_pid.setdefault(t['pid'], []).append(t)
+
+    gantt_projects = []
+    for p in projects:
+        pid = p['id']
+        tasks = by_pid.get(pid, [])
+        if not tasks:
+            continue
+        start = min(t['start_time'] for t in tasks)
+        end = max(t['end_time'] for t in tasks)
+        phases = []
+        for t in tasks:
+            phases.append({
+                'id': f"{pid}-{t['phase']}-{t.get('part', '')}",
+                'name': t['phase'],
+                'start': t['start_time'],
+                'end': t['end_time'],
+                'color': t.get('color', p.get('color')),
+                'worker': t.get('worker'),
+            })
+        gantt_projects.append({
+            'id': pid,
+            'name': p['name'],
+            'client': p.get('client', ''),
+            'start': start,
+            'end': end,
+            'due_date': p.get('due_date'),
+            'color': p.get('color'),
+            'phases': phases,
+        })
+    return render_template('gantt.html', projects=json.dumps(gantt_projects))
 
 @app.route('/projects')
 def project_list():
@@ -2417,6 +2459,7 @@ def move_phase():
         return '', 400
 
     projects = get_projects()
+    original_projects = copy.deepcopy(projects)
     tracker_events = []
     new_day, warn, info = move_phase_date(
         projects,
@@ -2436,6 +2479,20 @@ def move_phase():
         if isinstance(warn, dict):
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
+
+    # Revert move if the target day is already full and the phase was
+    # scheduled elsewhere. This prevents the phase from jumping to the next
+    # available day when the chosen cell has no remaining hours.
+    mapping = compute_schedule_map(projects)
+    actual_day = None
+    for w, d, ph, hrs, prt in mapping.get(pid, []):
+        if ph == phase and (part is None or prt == part):
+            actual_day = d
+            break
+    if actual_day != date_str:
+        projects[:] = original_projects
+        save_projects(projects)
+        return jsonify({'error': 'Jornada ocupada'}), 409
 
     # Build tracker entry with detailed reasoning
     proj = next((p for p in projects if p['id'] == pid), {})
@@ -2829,23 +2886,31 @@ def kanbanize_webhook():
         prev_custom.pop(k, None)
 
     deadline_str = card.get('deadline')
-    pedido_str = custom.get('Fecha pedido')
+    fecha_cli_str = (
+        custom.get('Fecha Cliente')
+        or custom.get('Fecha cliente')
+        or custom.get('Fecha pedido')
+    )
     if deadline_str:
         due_date_obj = parse_kanban_date(deadline_str)
         due_confirmed_flag = True
     else:
-        due_date_obj = parse_kanban_date(pedido_str)
+        due_date_obj = parse_kanban_date(fecha_cli_str)
         due_confirmed_flag = False
     mat_str = custom.get('Fecha material confirmado')
     material_date_obj = parse_kanban_date(mat_str)
 
     prev_deadline_str = prev_card.get('deadline')
-    prev_pedido_str = prev_custom.get('Fecha pedido')
+    prev_fecha_cli_str = (
+        prev_custom.get('Fecha Cliente')
+        or prev_custom.get('Fecha cliente')
+        or prev_custom.get('Fecha pedido')
+    )
     if prev_deadline_str:
         prev_due_date_obj = parse_kanban_date(prev_deadline_str)
         prev_due_confirmed_flag = True
     else:
-        prev_due_date_obj = parse_kanban_date(prev_pedido_str)
+        prev_due_date_obj = parse_kanban_date(prev_fecha_cli_str)
         prev_due_confirmed_flag = False
     prev_mat_str = prev_custom.get('Fecha material confirmado')
     prev_material_date_obj = parse_kanban_date(prev_mat_str)
@@ -2888,6 +2953,23 @@ def kanbanize_webhook():
     prev_pint_raw = obtener_duracion_prev('Horas Acabado')
     prev_mont2_raw = obtener_duracion_prev('Horas Montaje 2º') or obtener_duracion_prev('Horas Montaje 2°')
 
+    def flag_val(campo):
+        v = custom.get(campo)
+        if isinstance(v, str):
+            return v.strip().lower() not in ("", "0", "false", "no")
+        return bool(v)
+
+    def flag_val_prev(campo):
+        v = prev_custom.get(campo)
+        if isinstance(v, str):
+            return v.strip().lower() not in ("", "0", "false", "no")
+        return bool(v)
+
+    mecan_flag = flag_val('MECANIZADO')
+    trat_flag = flag_val('TRATAMIENTO')
+    prev_mecan_flag = flag_val_prev('MECANIZADO')
+    prev_trat_flag = flag_val_prev('TRATAMIENTO')
+
     # Working copies that may be adjusted for automatic phases
     prep_hours, mont_hours = prep_raw, mont_raw
     sold2_hours, sold_hours = sold2_raw, sold_raw
@@ -2900,6 +2982,8 @@ def kanbanize_webhook():
         'soldar': sold_raw,
         'pintar': pint_raw,
         'montar 2º': mont2_raw,
+        'mecanizar': 1 if mecan_flag else 0,
+        'tratamiento': 1 if trat_flag else 0,
     }
     phase_hours_prev = {
         'recepcionar material': prev_prep_raw,
@@ -2908,6 +2992,8 @@ def kanbanize_webhook():
         'soldar': prev_sold_raw,
         'pintar': prev_pint_raw,
         'montar 2º': prev_mont2_raw,
+        'mecanizar': 1 if prev_mecan_flag else 0,
+        'tratamiento': 1 if prev_trat_flag else 0,
     }
     auto_prep = False
     if (
@@ -2935,6 +3021,10 @@ def kanbanize_webhook():
         fases.append({'nombre': 'montar 2º', 'duracion': mont2_hours})
     if sold_hours > 0:
         fases.append({'nombre': 'soldar', 'duracion': sold_hours})
+    if mecan_flag:
+        fases.append({'nombre': 'mecanizar', 'duracion': 1, 'auto': True})
+    if trat_flag:
+        fases.append({'nombre': 'tratamiento', 'duracion': 1, 'auto': True})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -3041,6 +3131,10 @@ def kanbanize_webhook():
                 changed_phases[ph] = new_phases.get(ph, 0)
 
         for ph, hours in changed_phases.items():
+            if ph in ("mecanizar", "tratamiento") and hours == 1:
+                existing_hours = existing_phases.get(ph)
+                if existing_hours not in (None, 0, ''):
+                    continue
             if hours > 0:
                 if existing_phases.get(ph) != hours:
                     existing_phases[ph] = hours

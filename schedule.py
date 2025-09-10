@@ -554,26 +554,32 @@ def assign_phase(
         if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento') and phase not in ('mecanizar', 'tratamiento'):
             day_limit = hours_map.get(day_str, HOURS_PER_DAY)
             limit = min(limit, day_limit)
-        start = hour
-        next_task_start = None
-        for t in tasks:
-            if start + 1e-9 <= t.get('start', 0):
-                next_task_start = t.get('start', 0)
-                break
-            start = max(start, t.get('start', 0) + t['hours'])
-        if next_task_start is None:
-            next_task_start = limit if limit != float('inf') else HOURS_PER_DAY
-        if limit != float('inf') and start >= limit:
-            day = next_workday(day)
-            hour = 0
-            continue
-        available = next_task_start - start
-        if limit != float('inf'):
-            available = min(available, limit - start)
-        if available <= 0:
-            day = next_workday(day)
-            hour = 0
-            continue
+
+        if phase in ('tratamiento', 'mecanizar'):
+            start = 0
+            available = HOURS_PER_DAY
+        else:
+            start = hour
+            next_task_start = None
+            for t in tasks:
+                if start + 1e-9 <= t.get('start', 0):
+                    next_task_start = t.get('start', 0)
+                    break
+                start = max(start, t.get('start', 0) + t['hours'])
+            if next_task_start is None:
+                next_task_start = limit if limit != float('inf') else HOURS_PER_DAY
+            if limit != float('inf') and start >= limit:
+                day = next_workday(day)
+                hour = 0
+                continue
+            available = next_task_start - start
+            if limit != float('inf'):
+                available = min(available, limit - start)
+            if available <= 0:
+                day = next_workday(day)
+                hour = 0
+                continue
+
         allocate = min(remaining, available)
         if phase in ('tratamiento', 'mecanizar'):
             # These phases can accumulate unlimited projects per day but
@@ -611,38 +617,37 @@ def assign_phase(
             hour = 0
             continue
 
-        else:
-            late = bool(due_dt and day > due_dt)
-            start_time, end_time = _calc_datetimes(day, start, allocate)
-            task = {
-                'project': project_name,
-                'client': client,
-                'phase': phase,
-                'hours': allocate,
-                'start': start,
-                'start_time': start_time,
-                'end_time': end_time,
-                'late': late,
-                'color': color,
-                'due_date': due_date,
-                'start_date': start_date,
-                'pid': pid,
-                'part': part,
-                'frozen': project_frozen,
-                'blocked': project_blocked,
-                'material_date': material_date,
-                'auto': auto,
-            }
-            tasks.append(task)
-            phase_entries.append((task, day))
-            tasks.sort(key=lambda t: t.get('start', 0))
-            schedule[day_str] = tasks
-            remaining -= allocate
-            last_day = day
-            hour = start + allocate
-            if hour >= limit and limit != float('inf'):
-                day = next_workday(day)
-                hour = 0
+        late = bool(due_dt and day > due_dt)
+        start_time, end_time = _calc_datetimes(day, start, allocate)
+        task = {
+            'project': project_name,
+            'client': client,
+            'phase': phase,
+            'hours': allocate,
+            'start': start,
+            'start_time': start_time,
+            'end_time': end_time,
+            'late': late,
+            'color': color,
+            'due_date': due_date,
+            'start_date': start_date,
+            'pid': pid,
+            'part': part,
+            'frozen': project_frozen,
+            'blocked': project_blocked,
+            'material_date': material_date,
+            'auto': auto,
+        }
+        tasks.append(task)
+        phase_entries.append((task, day))
+        tasks.sort(key=lambda t: t.get('start', 0))
+        schedule[day_str] = tasks
+        remaining -= allocate
+        last_day = day
+        hour = start + allocate
+        if hour >= limit and limit != float('inf'):
+            day = next_workday(day)
+            hour = 0
     project_late = bool(due_dt and last_day > due_dt)
     for task, t_day in phase_entries:
         if due_dt:
