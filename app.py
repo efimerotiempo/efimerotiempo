@@ -13,7 +13,6 @@ import urllib.parse
 import sys
 import importlib.util
 import random
-import requests
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -194,15 +193,9 @@ def build_move_reason(projects, pid, phase, part, mode, info):
     return '\n'.join(explanations)
 
 # Kanbanize integration constants
-KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
 KANBANIZE_BASE_URL = 'https://caldereriacpk.kanbanize.com'
 KANBANIZE_BOARD_TOKEN = os.environ.get('KANBANIZE_BOARD_TOKEN', '682d829a0aafe44469o50acd')
-KANBANIZE_BOARD_ID = os.getenv("1")
 KANBANIZE_API_KEY = "jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE"
-KANBANIZE_SUBDOMAIN = "caldereriacpk"
-KANBANIZE_BOARD_ID = "1"
-
-KANBANIZE_URL = "https://caldereriacpk.kanbanize.com/api/v2/cards"
 
 # Lanes from Kanbanize that the webhook listens to for project events.
 ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
@@ -412,59 +405,6 @@ def normalize_card(c):
         "columnname": c.get("column_name"),
         "lanename": c.get("lane_name"),
     }
-
-
-def sync_all_cards():
-    headers = {"apikey": KANBANIZE_API_KEY, "accept": "application/json"}
-    url_cards = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/cards"
-    url_columns = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/boards/{KANBANIZE_BOARD_ID}/columns"
-    url_lanes = f"https://{KANBANIZE_SUBDOMAIN}.kanbanize.com/api/v2/boards/{KANBANIZE_BOARD_ID}/lanes"
-
-    # columnas
-    resp_cols = requests.get(url_columns, headers=headers)
-    print("Columns response:", resp_cols.status_code, resp_cols.text[:200])
-    cols_json = resp_cols.json()
-    cols = cols_json.get("data", [])
-    column_names = {c["column_id"]: c["name"] for c in cols}
-
-    # lanes
-    resp_lanes = requests.get(url_lanes, headers=headers)
-    print("Lanes response:", resp_lanes.status_code, resp_lanes.text[:200])
-    lanes_json = resp_lanes.json()
-    lanes = lanes_json.get("data", [])
-    lane_names = {l["lane_id"]: l["name"] for l in lanes}
-
-    # tarjetas
-    params = {"boardid": KANBANIZE_BOARD_ID}
-    r = requests.get(url_cards, headers=headers, params=params)
-    print("Cards response:", r.status_code, r.text[:200])
-    r.raise_for_status()
-    cards = r.json()["data"]["data"]
-
-    now = datetime.utcnow().isoformat()
-    payload = []
-    for c in cards:
-        payload.append({
-            "timestamp": now,
-            "card": {
-                "taskid": c.get("card_id"),
-                "title": c.get("title"),
-                "customid": c.get("custom_id"),
-                "columnid": c.get("column_id"),
-                "laneid": c.get("lane_id"),
-                "boardid": c.get("board_id"),
-                "workflowid": c.get("workflow_id"),
-                "columnname": column_names.get(c.get("column_id")),
-                "lanename": lane_names.get(c.get("lane_id")),
-            }
-        })
-
-    save_kanban_cards(payload)
-    print(f"Sincronizadas {len(cards)} tarjetas desde Kanbanize")
-
-
-
-
 
 def _decode_json(value):
     """Try to parse *value* as JSON, ignoring trailing text."""
@@ -3237,7 +3177,6 @@ def bug_list():
 
 
 if __name__ == '__main__':
-    sync_all_cards()
     print("Rutas registradas:")
     for rule in app.url_map.iter_rules():
         print(f"{sorted(rule.methods)}  {rule.rule}")
