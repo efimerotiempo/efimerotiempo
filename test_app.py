@@ -599,6 +599,8 @@ def test_gantt_view(monkeypatch):
     assert "overflow-x:auto" in body
     assert "overflow-y:auto" in body
     assert "overflow:visible" in body
+    assert "gantt-main::-webkit-scrollbar" in body
+    assert "scrollbar-width:none" in body
     assert "syncScroll(main, summaryContainer)" in body
     assert "syncScroll(summaryContainer, main)" in body
     # days scaled to the workday duration
