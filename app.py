@@ -45,11 +45,9 @@ load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
-PRIORITY_ORDER = _schedule_mod.PRIORITY_ORDER
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
-find_worker_for_phase = _schedule_mod.find_worker_for_phase
 compute_schedule_map = _schedule_mod.compute_schedule_map
 UNPLANNED = _schedule_mod.UNPLANNED
 if hasattr(_schedule_mod, "phase_start_map"):
@@ -131,6 +129,69 @@ BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
+TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+
+
+def load_tracker():
+    if os.path.exists(TRACKER_FILE):
+        try:
+            with open(TRACKER_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+def save_tracker(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(TRACKER_FILE, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def build_move_reason(projects, pid, phase, part, mode, info):
+    """Return a detailed explanation of how a phase was distributed."""
+    schedule, _ = schedule_projects(projects)
+    segments = []
+    for worker, days in schedule.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                if t.get('pid') == pid and t['phase'] == phase and (
+                    part is None or t.get('part') == part
+                ):
+                    segments.append((worker, day, t))
+    segments.sort(key=lambda x: (x[1], x[2].get('start', 0)))
+    explanations = []
+    for idx, (worker, day, t) in enumerate(segments):
+        start = t.get('start', 0)
+        hours = t['hours']
+        day_fmt = date.fromisoformat(day).strftime('%d/%m/%Y')
+        day_tasks = sorted(schedule[worker][day], key=lambda x: x.get('start', 0))
+        before = [
+            x
+            for x in day_tasks
+            if x is not t and x['start'] + x['hours'] <= start
+        ]
+        if before:
+            prev = ', '.join(
+                f"{b['project']} - {b['phase']} ({b['hours']}h)" for b in before
+            )
+            msg = f"{day_fmt}: {hours}h tras {start}h ocupadas por {prev}"
+        else:
+            msg = f"{day_fmt}: {hours}h al inicio de la jornada"
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        end = start + hours
+        if idx < len(segments) - 1:
+            remaining = limit - end
+            if remaining > 0:
+                msg += f"; quedaban {remaining}h libres y se continuó al día siguiente"
+            else:
+                msg += "; jornada completa, se continuó al día siguiente"
+        explanations.append(msg)
+    if mode == 'push' and info.get('affected'):
+        explanations.append(
+            'Se desplazaron fases posteriores para mantener la continuidad'
+        )
+    return '\n'.join(explanations)
 
 # Kanbanize integration constants
 KANBANIZE_API_KEY = os.getenv("jpQfMzS8AzdyD70zLkilBjP0Uig957mOATuM0BOE")
@@ -175,63 +236,6 @@ PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Planf. TAU',
     'Planif. OTROS',
 }
-# Mapping between local phase names and Kanbanize custom field names
-PHASE_FIELD_MAP = {
-    'recepcionar material': 'Horas Preparación',
-    'montar': 'Horas Montaje',
-    'soldar': 'Horas Soldadura',
-    'pintar': 'Horas Acabado',
-    'montaje final': 'Horas Montaje Final',
-    'soldadura interior': 'Horas Soldadura Interior',
-}
-
-
-def _sync_project_to_kanbanize(proj, changed):
-    """Send project updates to Kanbanize according to ``changed`` fields."""
-    kanban_id = proj.get('kanban_id')
-    if not kanban_id or not changed:
-        return
-
-    payload = {}
-    custom = {}
-
-    if 'client' in changed:
-        payload['title'] = proj.get('client', '')
-    if 'priority' in changed:
-        payload['priority'] = proj.get('priority')
-    if 'due_date' in changed:
-        due = proj.get('due_date')
-        if due:
-            payload['deadline'] = due
-            custom['Fecha Cliente'] = due
-    if 'material_confirmed_date' in changed:
-        mdate = proj.get('material_confirmed_date')
-        if mdate:
-            custom['Fecha material confirmado'] = mdate
-
-    phases = proj.get('phases', {})
-    for ph in changed:
-        field = PHASE_FIELD_MAP.get(ph)
-        if field and ph in phases:
-            custom[field] = phases[ph]
-
-    if custom:
-        payload['customFields'] = custom
-    if not payload:
-        return
-
-    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{kanban_id}"
-    req = Request(
-        url,
-        data=json.dumps(payload).encode('utf-8'),
-        headers={'apikey': KANBANIZE_API_KEY, 'Content-Type': 'application/json'},
-        method='PUT',
-    )
-    try:
-        with urlopen(req, timeout=10) as resp:
-            resp.read()
-    except Exception as e:
-        print('Kanbanize sync error:', e)
 
 
 def active_workers(today=None):
@@ -584,6 +588,7 @@ def move_phase_date(
     unblock=False,
     skip_block=False,
     start_hour=None,
+    track=None,
 ):
     """Move ``phase`` of project ``pid`` so it starts on ``new_date``.
 
@@ -631,7 +636,26 @@ def move_phase_date(
         and new_date in vac_map.get(worker, set())
     ):
         return None, 'Vacaciones en esa fecha'
+
+    # Remember the originally requested day.  When ``start_hour`` exceeds the
+    # daily limit we normally roll the phase to the next workday, but in push
+    # mode we instead keep the phase on the requested day and start at hour 0 so
+    # subsequent tasks can be shifted after it.
+    target_day = new_date
+    sched_day = new_date
+    sched_hour = start_hour if start_hour is not None else 0
+    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+    push_same_day = False
+    if start_hour is not None and start_hour >= limit:
+        if mode == "push":
+            sched_hour = 0
+            push_same_day = True
+        else:
+            sched_day = next_workday(sched_day)
+            sched_hour = 0
+
     warning = None
+    affected = track if track is not None else []
     if proj.get('due_date'):
         try:
             due_dt = date.fromisoformat(proj['due_date'])
@@ -643,7 +667,7 @@ def move_phase_date(
             else:
                 hours = int(phase_hours)
             days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            test_end = new_date
+            test_end = sched_day
             for _ in range(days_needed - 1):
                 test_end = next_workday(test_end)
             if test_end > due_dt:
@@ -651,12 +675,20 @@ def move_phase_date(
                 warning = f"{msg}\n{proj['name']} - {proj['client']} - {due_dt.strftime('%Y-%m-%d')}"
         except Exception:
             pass
+    if 'hours' not in locals():
+        phase_val = proj['phases'].get(phase)
+        if isinstance(phase_val, list):
+            if part is None or part >= len(phase_val):
+                return None, 'Fase no encontrada'
+            hours = int(phase_val[part])
+        else:
+            hours = int(phase_val)
     # Apply the change to the real project list
     if part is None and not isinstance(proj['phases'].get(phase), list):
         seg_starts = proj.setdefault('segment_starts', {}).setdefault(phase, [None])
-        seg_starts[0] = new_date.isoformat()
+        seg_starts[0] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(phase, [None])
-        seg_hours[0] = start_hour
+        seg_hours[0] = sched_hour
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     else:
@@ -666,18 +698,18 @@ def move_phase_date(
         idx = part if part is not None else 0
         while len(seg_starts) <= idx:
             seg_starts.append(None)
-        seg_starts[idx] = new_date.isoformat()
+        seg_starts[idx] = sched_day.isoformat()
         seg_hours = proj.setdefault('segment_start_hours', {}).setdefault(
             phase, [None] * len(proj['phases'][phase])
         )
         if idx >= len(seg_hours):
             seg_hours.extend([None] * (idx + 1 - len(seg_hours)))
-        seg_hours[idx] = start_hour
+        seg_hours[idx] = sched_hour
         if worker:
             seg_workers = proj.setdefault('segment_workers', {}).setdefault(
                 phase, [None] * len(proj['phases'][phase])
             )
-        
+
             if idx >= len(seg_workers):
                 seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
             seg_workers[idx] = worker
@@ -694,15 +726,42 @@ def move_phase_date(
             hours = int(phase_val[part or 0])
         else:
             hours = int(phase_val)
-        days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-        next_start = new_date
-        for _ in range(days_needed):
-            next_start = next_workday(next_start)
+
+        # Determine the exact end of the moved phase taking into account
+        # the worker's daily limit and vacations so subsequent phases can be
+        # appended immediately afterwards.
+        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        end_day = sched_day
+        end_hour = sched_hour
+        remaining = hours
+        while remaining > 0:
+            if end_day in vac_days:
+                end_day = next_workday(end_day)
+                end_hour = 0
+                continue
+            free = limit - end_hour
+            if remaining <= free:
+                end_hour += remaining
+                remaining = 0
+            else:
+                remaining -= free
+                end_day = next_workday(end_day)
+                end_hour = 0
+        if end_hour >= limit:
+            end_day = next_workday(end_day)
+            end_hour = 0
+
+        # `current_day`/`current_hour` mark the next free slot after inserting
+        # the new phase. Pushed phases will be placed sequentially here.
+        current_day = end_day
+        current_hour = end_hour
 
         mapping = compute_schedule_map(projects)
-        start_push = new_date
+        start_push = sched_day if push_same_day else next_workday(target_day)
         if push_from:
             pf_pid, pf_phase, pf_part = push_from
+            selected = None
             for w, day_str, ph, hrs, prt in mapping.get(pf_pid, []):
                 if (
                     w == worker
@@ -710,8 +769,10 @@ def move_phase_date(
                     and (pf_part is None or prt == pf_part)
                 ):
                     d = date.fromisoformat(day_str)
-                    if d < start_push:
-                        start_push = d
+                    if d >= start_push and (selected is None or d < selected):
+                        selected = d
+            if selected is not None:
+                start_push = selected
         seen = {}
         for opid, items in mapping.items():
             for w, day_str, ph, hrs, prt in items:
@@ -725,14 +786,15 @@ def move_phase_date(
                 key = (opid, ph, prt)
                 if key not in seen or d < seen[key]:
                     seen[key] = d
-        vac_days = _schedule_mod._build_vacation_map().get(worker, set())
+
         for start, opid, oph, oprt in sorted(
             (v, k[0], k[1], k[2]) for k, v in seen.items()
         ):
             other_proj = next((p for p in projects if p['id'] == opid), None)
             if not other_proj:
-                while next_start in vac_days:
-                    next_start = next_workday(next_start)
+                while current_day in vac_days:
+                    current_day = next_workday(current_day)
+                    current_hour = 0
                 continue
             if oph != 'pedidos' and any(
                 t['phase'] == oph and (oprt is None or t.get('part') == oprt)
@@ -751,11 +813,27 @@ def move_phase_date(
                         h = int(val[oprt])
                     else:
                         h = int(val)
-                    d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-                    ns = start
-                    for _ in range(d_needed):
-                        ns = next_workday(ns)
-                    next_start = ns
+                    rem = h
+                    day = start
+                    hour = 0
+                    while rem > 0:
+                        if day in vac_days:
+                            day = next_workday(day)
+                            hour = 0
+                            continue
+                        free = limit - hour
+                        if rem <= free:
+                            hour += rem
+                            rem = 0
+                        else:
+                            rem -= free
+                            day = next_workday(day)
+                            hour = 0
+                    current_day = day
+                    current_hour = hour
+                    if current_hour >= limit:
+                        current_day = next_workday(current_day)
+                        current_hour = 0
                     continue
                 # unblock
                 other_proj['frozen_tasks'] = [
@@ -763,37 +841,95 @@ def move_phase_date(
                     for t in other_proj.get('frozen_tasks', [])
                     if not (t['phase'] == oph and (oprt is None or t.get('part') == oprt))
                 ]
-            while next_start in vac_days:
-                next_start = next_workday(next_start)
+            while current_day in vac_days:
+                current_day = next_workday(current_day)
+                current_hour = 0
             move_phase_date(
                 projects,
                 opid,
                 oph,
-                next_start,
+                current_day,
                 worker,
                 oprt,
                 save=False,
                 mode="split",
+                start_hour=current_hour,
+                track=affected,
             )
+            affected.append({'pid': opid, 'phase': oph, 'part': oprt})
             val = other_proj['phases'][oph]
             if isinstance(val, list):
                 h = int(val[oprt])
             else:
                 h = int(val)
-            d_needed = (h + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-            for _ in range(d_needed):
-                next_start = next_workday(next_start)
+            rem = h
+            day = current_day
+            hour = current_hour
+            while rem > 0:
+                if day in vac_days:
+                    day = next_workday(day)
+                    hour = 0
+                    continue
+                free = limit - hour
+                if rem <= free:
+                    hour += rem
+                    rem = 0
+                else:
+                    rem -= free
+                    day = next_workday(day)
+                    hour = 0
+            current_day = day
+            current_hour = hour
+            if current_hour >= limit:
+                current_day = next_workday(current_day)
+                current_hour = 0
 
     if save:
         save_projects(projects)
-    return new_date.isoformat(), warning
+    # Determine end of this phase for logging purposes. When ``mode`` was
+    # ``push`` the values may already be available from the push calculation
+    # above; otherwise compute them now.
+    if "hours" in locals():
+        vac_days = vac_map.get(worker, set())
+        end_day = sched_day if 'end_day' not in locals() or end_day is None else end_day
+        end_hour = sched_hour if 'end_hour' not in locals() or end_hour is None else end_hour
+        if end_day == sched_day and end_hour == sched_hour:
+            remaining = hours
+            day = end_day
+            hour = end_hour
+            limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+            while remaining > 0:
+                if day in vac_days:
+                    day = next_workday(day)
+                    hour = 0
+                    continue
+                free = limit - hour
+                if remaining <= free:
+                    hour += remaining
+                    remaining = 0
+                else:
+                    remaining -= free
+                    day = next_workday(day)
+                    hour = 0
+            end_day = day
+            end_hour = hour
+            if end_hour >= limit:
+                end_day = next_workday(end_day)
+                end_hour = 0
+    info = {
+        'start_hour': sched_hour,
+        'end_day': end_day.isoformat() if 'end_day' in locals() else sched_day.isoformat(),
+        'end_hour': end_hour if 'end_hour' in locals() else sched_hour,
+        'affected': track or [],
+    }
+
+    return sched_day.isoformat(), warning, info
 
 
 def get_projects():
     projects = load_projects()
     changed = False
     color_index = 0
-    assigned_projects = []
     inactive = set(load_inactive_workers())
     for p in projects:
         if p.get('source') == 'api':
@@ -856,15 +992,9 @@ def get_projects():
                 changed = True
 
         missing = [ph for ph in p['phases'] if ph not in p['assigned']]
-        if missing:
-            schedule, _ = schedule_projects(assigned_projects)
-            for ph in missing:
-                worker = find_worker_for_phase(
-                    ph, {w: schedule.get(w, {}) for w in WORKERS}, p.get('priority')
-                )
-                if worker:
-                    p['assigned'][ph] = worker
-                    changed = True
+        for ph in missing:
+            p['assigned'][ph] = UNPLANNED
+            changed = True
         total = len(p.get('phases', {}))
         planned = sum(
             1
@@ -877,7 +1007,6 @@ def get_projects():
             p['plan_state'] = 'all'
         else:
             p['plan_state'] = 'partial'
-        assigned_projects.append(p)
     if changed:
         save_projects(projects)
     return projects
@@ -963,35 +1092,35 @@ def _kanban_card_to_project(card):
 
     prep = h('Horas Preparación')
     mont = h('Horas Montaje')
+    sold2 = h('Horas Soldadura 2º') or h('Horas Soldadura 2°')
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
-    mont_final = h('Horas Montaje Final')
-    sold_int = h('Horas Soldadura Interior')
+    mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
     phases = {}
     auto_hours = {}
     if (
         prep <= 0
         and mont <= 0
+        and sold2 <= 0
         and sold <= 0
         and pint <= 0
-        and mont_final <= 0
-        and sold_int <= 0
+        and mont2 <= 0
     ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
     else:
-        if pint:
-            phases['pintar'] = pint
-        if mont_final:
-            phases['montaje final'] = mont_final
         if mont:
             phases['montar'] = mont
-        if prep:
-            phases['recepcionar material'] = prep
-        if sold_int:
-            phases['soldadura interior'] = sold_int
+        if sold2:
+            phases['soldar 2º'] = sold2
+        if pint:
+            phases['pintar'] = pint
+        if mont2:
+            phases['montar 2º'] = mont2
         if sold:
             phases['soldar'] = sold
+        if prep:
+            phases['recepcionar material'] = prep
 
     project = {
         'id': str(uuid.uuid4()),
@@ -999,7 +1128,6 @@ def _kanban_card_to_project(card):
         'client': client,
         'start_date': date.today().isoformat(),
         'due_date': due.isoformat() if due else '',
-        'priority': 'Sin prioridad',
         'color': None,
         'phases': phases,
         # Ensure each phase is explicitly set to the unplanned worker so the
@@ -1069,7 +1197,6 @@ def calendar_view():
                 'pid': pid,
                 'phase': phase,
                 'color': item.get('color'),
-                'priority': item.get('priority'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
                 'day': item.get('day'),
@@ -1402,7 +1529,6 @@ def project_list():
     return render_template(
         'projects.html',
         projects=projects,
-        priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=active_workers(),
         project_filter=project_filter,
@@ -1437,7 +1563,6 @@ def add_project():
             'start_date': date.today().isoformat(),
             'due_date': due.isoformat() if due else '',
             'material_confirmed_date': '',
-            'priority': data.get('priority', 'Sin prioridad'),
             'color': color,
             'phases': {},
             'assigned': {},
@@ -1631,7 +1756,6 @@ def complete():
                 'pid': pid,
                 'phase': phase,
                 'color': item.get('color'),
-                'priority': item.get('priority'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
                 'day': item.get('day'),
@@ -1764,7 +1888,6 @@ def complete():
         projects=filtered_projects,
         sort_option=sort_option,
         today=today,
-        priorities=list(PRIORITY_ORDER.keys()),
         phases=PHASE_ORDER,
         all_workers=active_workers(today),
         notes=note_map,
@@ -1777,77 +1900,6 @@ def complete():
         unplanned_without=unplanned_without,
     )
 
-
-@app.route('/update_priority/<pid>', methods=['POST'])
-def update_priority(pid):
-    projects = get_projects()
-    old_map = compute_schedule_map(projects)
-    changed_proj = None
-    old_priority = None
-    for p in projects:
-        if p['id'] == pid:
-            changed_proj = p
-            old_priority = p['priority']
-            p['priority'] = request.form['priority']
-            break
-    save_projects(projects)
-    new_map = compute_schedule_map(projects)
-
-    changed_ids = []
-    for pr in projects:
-        if pr['id'] == pid:
-            continue
-        if old_map.get(pr['id']) != new_map.get(pr['id']):
-            changed_ids.append(pr['id'])
-
-    if changed_proj and changed_ids:
-        projects_copy = copy.deepcopy(projects)
-        sched, _ = schedule_projects(projects_copy)
-        end_dates = {p['id']: p['end_date'] for p in projects_copy}
-        start_dates = {}
-        for worker, days in sched.items():
-            for day, tasks in days.items():
-                for t in tasks:
-                    d = day
-                    pid2 = t['pid']
-                    if pid2 not in start_dates or d < start_dates[pid2]:
-                        start_dates[pid2] = d
-        details = []
-        for cid in changed_ids:
-            pr = next(p for p in projects if p['id'] == cid)
-            if pr.get('due_date'):
-                try:
-                    met = date.fromisoformat(end_dates[cid]) <= date.fromisoformat(pr['due_date'])
-                except ValueError:
-                    met = False
-            else:
-                met = False
-            start_offset = (date.fromisoformat(start_dates[cid]) - MIN_DATE).days if cid in start_dates else 0
-            details.append({'id': pr['id'], 'name': pr['name'], 'client': pr['client'], 'met': met, 'offset': start_offset})
-        if pid in start_dates:
-            changed_start = (date.fromisoformat(start_dates[pid]) - MIN_DATE).days
-        else:
-            changed_start = (date.fromisoformat(changed_proj['start_date']) - MIN_DATE).days
-
-        extras = load_extra_conflicts()
-        msg = (
-            f"Prioridad de {changed_proj['name']} (cliente {changed_proj['client']}) "
-            f"cambiada de {old_priority} a {changed_proj['priority']}"
-        )
-        extras.append({
-            'id': str(uuid.uuid4()),
-            'project': changed_proj['name'],
-            'client': changed_proj['client'],
-            'message': msg,
-            'changes': details,
-            'key': f'prio-{pid}-{len(extras)}',
-            'pid': changed_proj['id'],
-            'offset': changed_start,
-        })
-        save_extra_conflicts(extras)
-
-    next_url = request.form.get('next') or request.args.get('next') or url_for('project_list')
-    return redirect(next_url)
 
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])
@@ -1925,7 +1977,6 @@ def update_due_date():
     proj['due_confirmed'] = True
     proj['due_warning'] = True
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, {'due_date'})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -2031,10 +2082,9 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
-        proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+    proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, {phase})
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -2051,7 +2101,6 @@ def update_project_row():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
 
-    changed = set()
     modified = set()
 
     if 'start_date' in data:
@@ -2061,19 +2110,11 @@ def update_project_row():
     if 'due_date' in data:
         dd = parse_input_date(data['due_date'])
         proj['due_date'] = dd.isoformat() if dd else ''
-        if dd:
-            changed.add('due_date')
-    if 'priority' in data:
-        proj['priority'] = data['priority']
-        changed.add('priority')
     if 'client' in data:
         proj['client'] = data['client']
-        changed.add('client')
     if 'material_confirmed_date' in data:
         md = parse_input_date(data['material_confirmed_date'])
         proj['material_confirmed_date'] = md.isoformat() if md else ''
-        if md:
-            changed.add('material_confirmed_date')
     if 'color' in data:
         proj['color'] = data['color']
 
@@ -2120,7 +2161,6 @@ def update_project_row():
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
         modified.add(ph)
-        changed.add(ph)
 
     if data.get('phase_starts'):
         seg = proj.setdefault('segment_starts', {})
@@ -2146,7 +2186,6 @@ def update_project_row():
 
     schedule_projects(projects)
     save_projects(projects)
-    _sync_project_to_kanbanize(proj, changed)
     return jsonify({'status': 'ok'})
 
 
@@ -2322,6 +2361,7 @@ def move_phase():
             part = int(part)
         except Exception:
             part = None
+    # 🔧 Respetamos el modo que viene en la petición
     mode = data.get('mode', 'split')
     push_pid = data.get('push_pid')
     push_phase = data.get('push_phase')
@@ -2346,203 +2386,61 @@ def move_phase():
         day = date.fromisoformat(date_str)
     except Exception:
         return '', 400
+
     projects = get_projects()
-    before = compute_schedule_map(projects)
-    used_hours = 0
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
-                    continue
-                used_hours += hrs
-    new_day, warn = move_phase_date(
+    tracker_events = []
+    new_day, warn, info = move_phase_date(
         projects,
         pid,
         phase,
         day,
         worker,
         part,
-        mode=mode,
+        mode=mode,   # 👉 aquí respetamos el valor recibido
         push_from=push_from,
         unblock=unblock,
         skip_block=skip_block,
-        start_hour=start_hour if start_hour is not None else (used_hours if mode == 'split' else None),
+        start_hour=start_hour,
+        track=tracker_events,
     )
     if new_day is None:
         if isinstance(warn, dict):
             return jsonify({'blocked': warn}), 409
         return jsonify({'error': warn or 'No se pudo mover'}), 400
-    resp = {'date': new_day, 'pid': pid, 'phase': phase}
+
+    # Build tracker entry with detailed reasoning
+    proj = next((p for p in projects if p['id'] == pid), {})
+    reason = build_move_reason(projects, pid, phase, part, mode, info)
+    affected_entries = []
+    for ev in tracker_events:
+        p2 = next((p for p in projects if p['id'] == ev['pid']), None)
+        if p2:
+            affected_entries.append({
+                'project': p2.get('name', ''),
+                'client': p2.get('client', ''),
+                'phase': ev['phase'],
+            })
+    logs = load_tracker()
+    logs.append({
+        'timestamp': datetime.now().isoformat(),
+        'project': proj.get('name', ''),
+        'client': proj.get('client', ''),
+        'phase': phase,
+        'reason': reason,
+        'affected': affected_entries,
+    })
+    save_tracker(logs)
+
+    resp = {
+        'date': new_day,
+        'pid': pid,
+        'phase': phase,
+        'part': part,
+    }
     if warn and not ack_warning:
         resp['warning'] = warn
     return jsonify(resp)
 
-
-@app.route('/check_move', methods=['POST'])
-def check_move():
-    data = request.get_json() or {}
-    pid = data.get('pid')
-    phase = data.get('phase')
-    date_str = data.get('date')
-    worker = data.get('worker')
-    part = data.get('part')
-    if part in (None, '', 'None'):
-        part = None
-    else:
-        try:
-            part = int(part)
-        except Exception:
-            part = None
-    start = data.get('start')
-    if start in (None, '', 'None'):
-        start_hour = None
-    else:
-        try:
-            start_hour = float(start)
-        except Exception:
-            start_hour = None
-    if not pid or not phase or not date_str:
-        return '', 400
-    try:
-        day = date.fromisoformat(date_str)
-    except Exception:
-        return '', 400
-    projects = get_projects()
-    before = compute_schedule_map(projects)
-    used_hours = 0
-    for opid, items in before.items():
-        for w, day_str, ph, hrs, prt in items:
-            if w == worker and day_str == date_str:
-                if opid == pid and ph == phase and (part is None or prt == part):
-                    continue
-                used_hours += hrs
-    limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-    free_hours = max(0, limit - used_hours)
-    temp = copy.deepcopy(projects)
-    new_day, warn = move_phase_date(
-        temp,
-        pid,
-        phase,
-        day,
-        worker,
-        part,
-        save=False,
-        mode="split",
-        start_hour=start_hour if start_hour is not None else used_hours,
-    )
-    if new_day is None:
-        return jsonify({'error': warn or 'No se pudo mover'}), 400
-
-    schedule_after, _ = schedule_projects(copy.deepcopy(temp))
-    after = {}
-    for w, days in schedule_after.items():
-        for dstr, tasks in days.items():
-            for t in tasks:
-                after.setdefault(t['pid'], []).append((w, dstr, t['phase'], t['hours'], t.get('part')))
-    for lst in after.values():
-        lst.sort()
-
-    def build_map(mapping):
-        res = {}
-        for opid, items in mapping.items():
-            for w, day_str, ph, hrs, prt in items:
-                key = (opid, w, ph, prt)
-                res.setdefault(key, []).append(date.fromisoformat(day_str))
-        return res
-
-    before_map = build_map(before)
-    after_map = build_map(after)
-
-    preview = []
-    for t in schedule_after.get(worker, {}).get(date_str, []):
-        proj = next((p for p in temp if p['id'] == t['pid']), None)
-        if not proj:
-            continue
-        frozen = any(
-            ft.get('phase') == t['phase'] and (t.get('part') is None or ft.get('part') == t.get('part'))
-            for ft in proj.get('frozen_tasks', [])
-        )
-        preview.append(
-            {
-                'pid': t['pid'],
-                'phase': t['phase'],
-                'part': t.get('part'),
-                'project': proj.get('name', ''),
-                'client': proj.get('client', ''),
-                'color': proj.get('color', ''),
-                'priority': proj.get('priority', ''),
-                'due_date': proj.get('due_date', ''),
-                'start_date': proj.get('start_date', ''),
-                'frozen': frozen,
-            }
-        )
-
-    def is_contiguous(days):
-        if not days:
-            return True
-        days.sort()
-        prev = days[0]
-        for d in days[1:]:
-            if d != next_workday(prev):
-                return False
-            prev = d
-        return True
-
-    split = False
-    moved_key = (pid, worker, phase, part)
-    if moved_key not in after_map:
-        for key in after_map:
-            if key[0] == pid and key[2] == phase and key[3] == part:
-                moved_key = key
-                break
-    if moved_key in after_map and not is_contiguous(after_map[moved_key]):
-        split = True
-    if not split and used_hours > 0:
-        # Only flag a conflict if the target day already contains hours from
-        # other phases; otherwise allow the move silently.
-        split = True
-    if not split:
-        # Check if moving this phase would alter any other task on the target
-        # worker, either by shifting it to different days or by adding/removing
-        # tasks on that worker.
-        related = set(
-            k
-            for k in before_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        related.update(
-            k
-            for k in after_map
-            if k[1] == worker and not (k[0] == pid and k[2] == phase and k[3] == part)
-        )
-        for key in related:
-            if before_map.get(key, []) != after_map.get(key, []):
-                split = True
-                break
-    options = []
-    auto = None
-    if split:
-        for opid, items in before.items():
-            for w, day_str, ph, hrs, prt in items:
-                if w == worker and day_str == date_str:
-                    proj = next((p for p in projects if p['id'] == opid), None)
-                    txt = f"{proj.get('name','')} - {ph}" if proj else ph
-                    options.append({'pid': opid, 'phase': ph, 'part': prt, 'text': txt})
-        if not options:
-            future = []
-            for opid, items in before.items():
-                for w, day_str, ph, hrs, prt in items:
-                    d = date.fromisoformat(day_str)
-                    if w == worker and d > day:
-                        future.append((d, opid, ph, prt))
-            if future:
-                future.sort()
-                _, opid, ph, prt = future[0]
-                auto = {'pid': opid, 'phase': ph, 'part': prt}
-    resp = {'split': split, 'options': options, 'auto': auto, 'free': free_hours, 'preview': preview}
-    if warn:
-        resp['warning'] = warn
-    return jsonify(resp)
 
 
 def remove_project_and_preserve_schedule(projects, pid):
@@ -2672,7 +2570,9 @@ def toggle_freeze(pid, phase):
     if any(t['phase'] == phase for t in frozen):
         proj['frozen_tasks'] = [t for t in frozen if t['phase'] != phase]
     else:
-        schedule, _ = schedule_projects(projects)
+        # Recompute the schedule on a copy so freezing a phase does not
+        # persistently modify the existing planning
+        schedule, _ = schedule_projects(copy.deepcopy(projects))
         for w, days in schedule.items():
             for day, tasks in days.items():
                 for t in tasks:
@@ -2854,18 +2754,18 @@ def kanbanize_webhook():
 
     prep_hours = obtener_duracion('Horas Preparación')
     mont_hours = obtener_duracion('Horas Montaje')
+    sold2_hours = obtener_duracion('Horas Soldadura 2º') or obtener_duracion('Horas Soldadura 2°')
     sold_hours = obtener_duracion('Horas Soldadura')
     pint_hours = obtener_duracion('Horas Acabado')
-    mont_final_hours = obtener_duracion('Horas Montaje Final')
-    sold_int_hours = obtener_duracion('Horas Soldadura Interior')
+    mont2_hours = obtener_duracion('Horas Montaje 2º') or obtener_duracion('Horas Montaje 2°')
     auto_prep = False
     if (
         prep_hours <= 0
         and mont_hours <= 0
+        and sold2_hours <= 0
         and sold_hours <= 0
         and pint_hours <= 0
-        and mont_final_hours <= 0
-        and sold_int_hours <= 0
+        and mont2_hours <= 0
     ):
         prep_hours = 1
         auto_prep = True
@@ -2876,14 +2776,14 @@ def kanbanize_webhook():
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
-    if sold_hours > 0:
-        fases.append({'nombre': 'soldar', 'duracion': sold_hours})
-    if sold_int_hours > 0:
-        fases.append({'nombre': 'soldadura interior', 'duracion': sold_int_hours})
+    if sold2_hours > 0:
+        fases.append({'nombre': 'soldar 2º', 'duracion': sold2_hours})
     if pint_hours > 0:
         fases.append({'nombre': 'pintar', 'duracion': pint_hours})
-    if mont_final_hours > 0:
-        fases.append({'nombre': 'montaje final', 'duracion': mont_final_hours})
+    if mont2_hours > 0:
+        fases.append({'nombre': 'montar 2º', 'duracion': mont2_hours})
+    if sold_hours > 0:
+        fases.append({'nombre': 'soldar', 'duracion': sold_hours})
     auto_flags = {f['nombre']: True for f in fases if f.get('auto')}
 
     task_id = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -2894,14 +2794,6 @@ def kanbanize_webhook():
         or f"Kanbanize-{task_id or uuid.uuid4()}"
     )
     cliente = card.get('title') or "Sin cliente"
-    kanban_priority = (card.get('priority') or '').lower()
-    priority_map = {
-        'critical': 'Alta',
-        'high': 'Alta',
-        'average': 'Media',
-        'low': 'Baja',
-    }
-    proj_priority = priority_map.get(kanban_priority, 'Sin prioridad')
 
     attachments_raw = data.get('Attachments') or card.get('Attachments') or []
     kanban_files = []
@@ -2941,9 +2833,6 @@ def kanbanize_webhook():
         if existing.get('client') != cliente:
             existing['client'] = cliente
             changed = True
-        if existing.get('priority') != proj_priority:
-            existing['priority'] = proj_priority
-            changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
             changed = True
@@ -2973,10 +2862,10 @@ def kanbanize_webhook():
         restricted = {
             'recepcionar material',
             'montar',
-            'soldar',
+            'soldar 2º',
             'pintar',
-            'montaje final',
-            'soldadura interior',
+            'montar 2º',
+            'soldar',
         }
         # Si la fase de recepcionar material fue generada automáticamente
         # (1h en rojo) y ahora la tarjeta tiene horas reales, eliminarla o
@@ -3027,7 +2916,6 @@ def kanbanize_webhook():
             'start_date': date.today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
             'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
-            'priority': proj_priority,
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},
@@ -3062,6 +2950,32 @@ def kanbanize_webhook():
         return jsonify({"mensaje": "Proyecto creado"}), 200
     else:
         return jsonify({"mensaje": "Proyecto actualizado"}), 200
+
+
+@app.route('/hours')
+def hours():
+    projects = get_projects()
+    schedule, _ = schedule_projects(copy.deepcopy(projects))
+    rows = []
+    for days in schedule.values():
+        for tasks in days.values():
+            for t in tasks:
+                if t.get('phase') == 'vacaciones':
+                    continue
+                rows.append({
+                    'project': t.get('project'),
+                    'phase': t.get('phase'),
+                    'start_time': t.get('start_time'),
+                    'end_time': t.get('end_time'),
+                })
+    rows.sort(key=lambda r: r['start_time'])
+    return render_template('hours.html', rows=rows)
+
+
+@app.route('/tracker')
+def tracker():
+    logs = load_tracker()
+    return render_template('tracker.html', logs=logs)
 
 
 @app.route('/bugs')
