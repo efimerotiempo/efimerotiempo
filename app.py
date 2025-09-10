@@ -2480,6 +2480,23 @@ def remove_project_and_preserve_schedule(projects, pid):
     if not removed:
         return
     projects.remove(removed)
+    # Drop any persisted conflicts tied to the removed project so stale
+    # warnings do not linger in the interface.
+    extras = load_extra_conflicts()
+    new_extras = [
+        c for c in extras if c.get('pid') != pid and c.get('project') != removed.get('name')
+    ]
+    if len(new_extras) != len(extras):
+        save_extra_conflicts(new_extras)
+
+    dismissed = load_dismissed()
+    prefix = f"{removed.get('name')}|"
+    kanban_key = f"kanban-{pid}"
+    new_dismissed = [
+        k for k in dismissed if not (k.startswith(prefix) or k == kanban_key)
+    ]
+    if len(new_dismissed) != len(dismissed):
+        save_dismissed(new_dismissed)
     for proj in projects:
         tasks = mapping.get(proj['id'])
         if not tasks:

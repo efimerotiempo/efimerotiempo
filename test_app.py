@@ -613,3 +613,41 @@ def test_gantt_view(monkeypatch):
     assert "startOfDay" in body
     assert "+ 1)*pxPerDay" in body
 
+
+def test_delete_project_cleans_conflicts(monkeypatch):
+    today = date.today().isoformat()
+    projects = [
+        {"id": "p1", "name": "Proj1", "client": "C1", "phases": {}, "start_date": today},
+        {"id": "p2", "name": "Proj2", "client": "C2", "phases": {}, "start_date": today},
+    ]
+    extras_store = [
+        {"id": "1", "project": "Proj1", "client": "C1", "message": "x", "key": "k1", "pid": "p1"},
+        {"id": "2", "project": "Proj2", "client": "C2", "message": "y", "key": "k2", "pid": "p2"},
+    ]
+    dismissed_store = [
+        "Proj1|No se cumple la fecha de entrega",
+        "Proj2|No se cumple la fecha de entrega",
+        "kanban-p1",
+        "kanban-p2",
+    ]
+
+    monkeypatch.setattr(app, "compute_schedule_map", lambda projs: {})
+    monkeypatch.setattr(app, "save_projects", lambda projs: None)
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: list(extras_store))
+
+    def fake_save_extra(data):
+        extras_store[:] = data
+
+    monkeypatch.setattr(app, "save_extra_conflicts", fake_save_extra)
+    monkeypatch.setattr(app, "load_dismissed", lambda: list(dismissed_store))
+
+    def fake_save_dismissed(data):
+        dismissed_store[:] = data
+
+    monkeypatch.setattr(app, "save_dismissed", fake_save_dismissed)
+
+    app.remove_project_and_preserve_schedule(projects, "p1")
+
+    assert all(c.get("pid") != "p1" for c in extras_store)
+    assert all("Proj1|" not in k and k != "kanban-p1" for k in dismissed_store)
+
