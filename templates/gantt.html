@@ -1,36 +1,48 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Vista Gantt</h1>
-<div id="gantt_chart" style="height: 600px"></div>
-<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<div id="gantt_container" class="gantt-container"></div>
+<style>
+  .gantt-container {
+    position: relative;
+    width: 100%;
+    border: 1px solid #ccc;
+    background: #fafafa;
+  }
+  .gantt-task {
+    position: absolute;
+    height: 20px;
+    background: #3a87ad;
+    color: #fff;
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 2px;
+  }
+</style>
 <script>
-  google.charts.load('current', {'packages':['gantt']});
-  google.charts.setOnLoadCallback(drawChart);
-  function drawChart() {
-    var data = new google.visualization.DataTable();
-    data.addColumn('string', 'Task ID');
-    data.addColumn('string', 'Task Name');
-    data.addColumn('string', 'Resource');
-    data.addColumn('date', 'Start');
-    data.addColumn('date', 'End');
-    data.addColumn('number', 'Duration');
-    data.addColumn('number', 'Percent Complete');
-    data.addColumn('string', 'Dependencies');
-    var tasks = {{ tasks|safe }};
-    tasks.forEach(function(t) {
-      data.addRow([
-        t.id,
-        t.name,
-        t.resource || '',
-        new Date(t.start),
-        new Date(t.end),
-        null,
-        0,
-        null
-      ]);
+  const tasks = {{ tasks|safe }};
+  if (tasks.length) {
+    const container = document.getElementById('gantt_container');
+    const starts = tasks.map(t => new Date(t.start).getTime());
+    const ends = tasks.map(t => new Date(t.end).getTime());
+    const minStart = Math.min(...starts);
+    const maxEnd = Math.max(...ends);
+    const range = maxEnd - minStart;
+    container.style.height = (tasks.length * 24) + 'px';
+    tasks.forEach((t, i) => {
+      const s = new Date(t.start).getTime();
+      const e = new Date(t.end).getTime();
+      const task = document.createElement('div');
+      task.className = 'gantt-task';
+      task.style.top = (i * 24) + 'px';
+      task.style.left = ((s - minStart) / range * 100) + '%';
+      task.style.width = ((e - s) / range * 100) + '%';
+      task.textContent = t.name;
+      container.appendChild(task);
     });
-    var chart = new google.visualization.Gantt(document.getElementById('gantt_chart'));
-    chart.draw(data);
   }
 </script>
 {% endblock %}
