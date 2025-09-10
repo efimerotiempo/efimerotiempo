@@ -996,7 +996,9 @@ const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
 const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = CONFLICTS.filter(c => !seen[c.key]);
+const NEW_CONFLICTS = CONFLICTS.filter(
+  c => !seen[c.key] && c.message !== 'No se cumple la fecha de entrega'
+);
 let conflictIndex = 0;
 function showNextConflict() {
   if (conflictIndex < NEW_CONFLICTS.length) {
