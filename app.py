@@ -2688,7 +2688,6 @@ def kanbanize_webhook():
     """Convert incoming Kanbanize card data into a new project."""
 
     raw_body = request.get_data()
-    print("Raw body:", raw_body)
 
     data = None
 
