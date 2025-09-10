@@ -7,107 +7,131 @@
   <button id="zoom_in">+</button>
   <button id="zoom_out">-</button>
 </div>
-<div id="gantt_container" class="gantt-container"></div>
+<div class="gantt-wrapper">
+  <div id="gantt_summary" class="gantt-summary">
+    <div class="summary-header">Resumen</div>
+    <div id="gantt_summary_body"></div>
+  </div>
+  <div id="gantt_main" class="gantt-main">
+    <div id="gantt_header" class="gantt-header"></div>
+    <div id="gantt_body" class="gantt-body"></div>
+  </div>
+</div>
 <style>
-  .gantt-container {
-    position: relative;
-    border: 1px solid #ccc;
-    background: #fafafa;
-    overflow-x: auto;
-    width: 100%;
-  }
-    .gantt-task {
-      position: absolute;
-      height: 60px;
-      line-height: 60px;
-      color: #fff;
-      font-size: 12px;
-      overflow: hidden;
-      white-space: nowrap;
-      padding: 0 4px;
-      box-sizing: border-box;
-      border-radius: 2px;
-      display: flex;
-      align-items: center;
-    }
-    .project-bar { cursor:pointer; }
-    .phase-bar {}
+  .gantt-wrapper { display:flex; }
+  .gantt-summary { width:250px; overflow:auto; border:1px solid #ddd; border-right:0; }
+  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
+  .summary-row { height:60px; line-height:60px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; }
+  .summary-row.project-row { cursor:pointer; font-weight:bold; }
+  .summary-row.phase-row { padding-left:16px; }
+  .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; }
+  .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .gantt-body { position:relative; }
+  .gantt-row { height:60px; border-bottom:1px solid #ddd; position:relative; }
+  .gantt-task { position:absolute; top:0; height:100%; line-height:60px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:hidden; white-space:nowrap; display:flex; align-items:center; }
+  .project-bar { cursor:pointer; }
 </style>
 <script>
-    const projects = {{ projects|safe }};
-    const container = document.getElementById('gantt_container');
-    const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
-    let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
-    const BAR_HEIGHT = 60;
-    const INNER_GAP = 2;
-    const GROUP_GAP = 10;
+const projects = {{ projects|safe }};
+const summaryContainer = document.getElementById('gantt_summary');
+const summaryBody = document.getElementById('gantt_summary_body');
+const main = document.getElementById('gantt_main');
+const header = document.getElementById('gantt_header');
+const body = document.getElementById('gantt_body');
+const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
+let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+const BAR_HEIGHT = 60;
 
-  function formatDate(d){return d.split('T')[0];}
+function formatDate(d){return d.split('T')[0];}
 
-  function render(){
-    container.innerHTML = '';
-    if(!projects.length){return;}
-    const dayMs = 24*60*60*1000;
-    const allStarts = [];
-    const allEnds = [];
-    projects.forEach(p=>{allStarts.push(new Date(p.start).getTime()); allEnds.push(new Date(p.end).getTime()); p.phases.forEach(ph=>{allStarts.push(new Date(ph.start).getTime()); allEnds.push(new Date(ph.end).getTime());});});
-    const minStart = Math.min(...allStarts);
-    const maxEnd = Math.max(...allEnds);
-    const totalDays = (maxEnd - minStart) / dayMs;
-      const pxPerDay = 40 * zoom;
-      container.style.width = (totalDays * pxPerDay) + 'px';
-      let y = 0;
-      projects.forEach(p=>{
-        const projStart = new Date(p.start).getTime();
-        const projEnd = new Date(p.end).getTime();
-        const projBar = document.createElement('div');
-        projBar.className = 'gantt-task project-bar';
-        projBar.style.top = y + 'px';
-        projBar.style.left = ((projStart - minStart)/dayMs*pxPerDay) + 'px';
-        projBar.style.width = ((projEnd - projStart)/dayMs*pxPerDay) + 'px';
-        projBar.style.background = p.color || '#3a87ad';
-        projBar.style.height = BAR_HEIGHT + 'px';
-        projBar.style.lineHeight = BAR_HEIGHT + 'px';
-        projBar.textContent = `${p.name} - ${p.client} (${formatDate(p.start)} - ${formatDate(p.end)})`;
-        projBar.onclick = () => toggleProject(p.id);
-        container.appendChild(projBar);
-        y += BAR_HEIGHT;
-        if(!collapsed[p.id]){
-          y += INNER_GAP;
-          p.phases.forEach((ph, idx)=>{
-            const s = new Date(ph.start).getTime();
-            const e = new Date(ph.end).getTime();
-            const bar = document.createElement('div');
-            bar.className = 'gantt-task phase-bar';
-            bar.style.top = y + 'px';
-            bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
-            bar.style.width = ((e - s)/dayMs*pxPerDay) + 'px';
-            bar.style.background = ph.color || p.color || '#6c9ec1';
-            bar.style.height = BAR_HEIGHT + 'px';
-            bar.style.lineHeight = BAR_HEIGHT + 'px';
-            bar.textContent = ph.name;
-            container.appendChild(bar);
-            y += BAR_HEIGHT;
-            if(idx < p.phases.length - 1){
-              y += INNER_GAP;
-            }
-          });
-        }
-        y += GROUP_GAP;
-      });
-      container.style.height = y + 'px';
-    }
+function render(){
+  summaryBody.innerHTML = '';
+  body.innerHTML = '';
+  header.innerHTML = '';
+  if(!projects.length){return;}
+  const dayMs = 24*60*60*1000;
+  const allStarts = [];
+  const allEnds = [];
+  projects.forEach(p=>{
+    allStarts.push(new Date(p.start).getTime());
+    allEnds.push(new Date(p.end).getTime());
+    p.phases.forEach(ph=>{allStarts.push(new Date(ph.start).getTime()); allEnds.push(new Date(ph.end).getTime());});
+  });
+  const minStart = Math.min(...allStarts);
+  const maxEnd = Math.max(...allEnds);
+  const totalDays = Math.ceil((maxEnd - minStart)/dayMs);
+  const pxPerDay = 40 * zoom;
+  const width = totalDays * pxPerDay;
+  header.style.width = width + 'px';
+  body.style.width = width + 'px';
+  body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
+  header.style.background = body.style.background;
 
-  function toggleProject(id){
-    collapsed[id] = !collapsed[id];
-    localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed));
-    render();
+  for(let i=0;i<totalDays;i++){
+    const d = new Date(minStart + i*dayMs);
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    cell.style.left = (i*pxPerDay) + 'px';
+    cell.style.width = pxPerDay + 'px';
+    cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
+    header.appendChild(cell);
   }
-  document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=false); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
-  document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
-  document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
-  document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
 
+  const rows = [];
+  projects.forEach(p=>{
+    rows.push({type:'project', project:p});
+    if(!collapsed[p.id]){
+      p.phases.forEach(ph=>rows.push({type:'phase', project:p, phase:ph}));
+    }
+  });
+
+  rows.forEach(r=>{
+    const summaryRow = document.createElement('div');
+    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
+    if(r.type==='project'){
+      summaryRow.textContent = `${r.project.name} - ${r.project.client}`;
+      summaryRow.onclick = ()=>toggleProject(r.project.id);
+    } else {
+      summaryRow.textContent = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
+    }
+    summaryBody.appendChild(summaryRow);
+
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'gantt-row';
+    const bar = document.createElement('div');
+    bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
+    const s = new Date(r.type==='project'?r.project.start:r.phase.start).getTime();
+    const e = new Date(r.type==='project'?r.project.end:r.phase.end).getTime();
+    bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
+    bar.style.width = ((e - s)/dayMs*pxPerDay) + 'px';
+    bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+    bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
+    if(r.type==='project'){
+      bar.onclick = ()=>toggleProject(r.project.id);
+    }
+    rowDiv.appendChild(bar);
+    body.appendChild(rowDiv);
+  });
+
+  const totalHeight = rows.length * BAR_HEIGHT;
+  summaryBody.style.height = totalHeight + 'px';
+  body.style.height = totalHeight + 'px';
+}
+
+function toggleProject(id){
+  collapsed[id] = !collapsed[id];
+  localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed));
   render();
+}
+
+document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=false); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+main.addEventListener('scroll',()=>{summaryContainer.scrollTop = main.scrollTop;});
+summaryContainer.addEventListener('scroll',()=>{main.scrollTop = summaryContainer.scrollTop;});
+
+render();
 </script>
 {% endblock %}

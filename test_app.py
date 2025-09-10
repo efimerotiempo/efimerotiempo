@@ -568,17 +568,18 @@ def test_gantt_view(monkeypatch):
     fake_sched = {
         "Mikel": {
             "2024-01-01": [
-                {
-                    "pid": "p1",
-                    "phase": "montar",
-                    "hours": 8,
-                    "start_time": "2024-01-01T08:00:00",
-                    "end_time": "2024-01-01T16:00:00",
-                    "color": "#123456",
-                }
-            ]
+                    {
+                        "pid": "p1",
+                        "phase": "montar",
+                        "hours": 8,
+                        "start_time": "2024-01-01T08:00:00",
+                        "end_time": "2024-01-01T16:00:00",
+                        "color": "#123456",
+                        "worker": "Mikel",
+                    }
+                ]
+            }
         }
-    }
     monkeypatch.setattr(app, "load_projects", lambda: copy.deepcopy(projects))
     monkeypatch.setattr(app, "schedule_projects", lambda projs: (fake_sched, []))
     client = app.app.test_client()
@@ -589,6 +590,8 @@ def test_gantt_view(monkeypatch):
     assert "Proj1" in body
     assert "Client1" in body
     assert "montar" in body
+    assert "Mikel" in body
+    assert "Resumen" in body
     assert "2024-01-01" in body
     # color and bar size indicators
     assert "#123456" in body

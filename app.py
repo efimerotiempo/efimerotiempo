@@ -1544,6 +1544,7 @@ def gantt_view():
                 'start': t['start_time'],
                 'end': t['end_time'],
                 'color': t.get('color', p.get('color')),
+                'worker': t.get('worker'),
             })
         gantt_projects.append({
             'id': pid,
