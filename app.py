@@ -1552,6 +1552,7 @@ def gantt_view():
             'client': p.get('client', ''),
             'start': start,
             'end': end,
+            'due_date': p.get('due_date'),
             'color': p.get('color'),
             'phases': phases,
         })

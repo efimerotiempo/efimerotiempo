@@ -563,6 +563,7 @@ def test_gantt_view(monkeypatch):
             "phases": {"montar": 8},
             "assigned": {"montar": "Mikel"},
             "color": "#123456",
+            "due_date": "2024-02-01",
         }
     ]
     fake_sched = {
@@ -593,6 +594,9 @@ def test_gantt_view(monkeypatch):
     assert '"worker": "Mikel"' in body
     assert "Resumen" in body
     assert "2024-01-01" in body
+    assert '"due_date": "2024-02-01"' in body
+    assert "sort_start" in body
+    assert "sort_due" in body
     # color and bar size indicators
     assert "#123456" in body
     assert "BAR_HEIGHT = 30" in body

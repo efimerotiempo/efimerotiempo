@@ -6,6 +6,8 @@
   <button id="collapse_all">Plegar todos</button>
   <button id="zoom_in">+</button>
   <button id="zoom_out">-</button>
+  <button id="sort_start">Ordenar por inicio</button>
+  <button id="sort_due">Ordenar por límite</button>
 </div>
 <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
@@ -47,6 +49,16 @@ let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
 const BAR_HEIGHT = 30;
 
 function formatDate(d){return d.split('T')[0];}
+
+function sortProjects(type, store=true){
+  projects.sort((a,b)=>{
+    const da = type==='start'? new Date(a.start) : new Date(a.due_date || '9999-12-31');
+    const db = type==='start'? new Date(b.start) : new Date(b.due_date || '9999-12-31');
+    return da - db;
+  });
+  if(store) localStorage.setItem('ganttSort', type);
+  render();
+}
 
 function render(){
   summaryBody.innerHTML = '';
@@ -140,6 +152,8 @@ document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collaps
 document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
 document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
 document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('sort_start').onclick = ()=>sortProjects('start');
+document.getElementById('sort_due').onclick = ()=>sortProjects('due');
 
 let syncing = false;
 function syncScroll(source, target){
@@ -151,7 +165,11 @@ function syncScroll(source, target){
 
 main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
 summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
-
-render();
+const pref = localStorage.getItem('ganttSort');
+if(pref){
+  sortProjects(pref, false);
+} else {
+  render();
+}
 </script>
 {% endblock %}
