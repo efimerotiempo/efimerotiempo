@@ -19,7 +19,9 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:250px; overflow-x:auto; overflow-y:hidden; border:1px solid #ddd; border-right:0; }
+  .gantt-summary { width:250px; overflow-x:auto; overflow-y:auto; border:1px solid #ddd; border-right:0; }
+  .gantt-summary::-webkit-scrollbar { display:none; }
+  .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
   .summary-row { height:60px; line-height:60px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
   .summary-row.project-row { cursor:pointer; font-weight:bold; }
@@ -137,8 +139,17 @@ document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collaps
 document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
 document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
 document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
-main.addEventListener('scroll',()=>{summaryContainer.scrollTop = main.scrollTop;});
-summaryContainer.addEventListener('wheel', e => { main.scrollTop += e.deltaY; e.preventDefault(); });
+
+let syncing = false;
+function syncScroll(source, target){
+  if(syncing) return;
+  syncing = true;
+  target.scrollTop = source.scrollTop;
+  syncing = false;
+}
+
+main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
+summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
 
 render();
 </script>

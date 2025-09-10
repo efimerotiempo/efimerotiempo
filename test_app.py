@@ -597,9 +597,10 @@ def test_gantt_view(monkeypatch):
     assert "#123456" in body
     assert "BAR_HEIGHT = 60" in body
     assert "overflow-x:auto" in body
-    assert "overflow-y:hidden" in body
+    assert "overflow-y:auto" in body
     assert "overflow:visible" in body
-    assert "addEventListener('wheel'" in body
+    assert "syncScroll(main, summaryContainer)" in body
+    assert "syncScroll(summaryContainer, main)" in body
     # days scaled to the workday duration
     assert "startOfDay" in body
     assert "+ 1)*pxPerDay" in body
