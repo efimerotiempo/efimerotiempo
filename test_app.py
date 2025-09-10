@@ -590,10 +590,14 @@ def test_gantt_view(monkeypatch):
     assert "Proj1" in body
     assert "Client1" in body
     assert "montar" in body
-    assert "Mikel" in body
+    assert '"worker": "Mikel"' in body
     assert "Resumen" in body
     assert "2024-01-01" in body
     # color and bar size indicators
     assert "#123456" in body
     assert "BAR_HEIGHT = 60" in body
+    assert "overflow-x:auto" in body
+    assert "overflow-y:hidden" in body
+    assert "overflow:visible" in body
+    assert "addEventListener('wheel'" in body
 
