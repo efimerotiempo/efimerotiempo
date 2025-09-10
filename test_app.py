@@ -600,6 +600,7 @@ def test_gantt_view(monkeypatch):
     # color and bar size indicators
     assert "#123456" in body
     assert "BAR_HEIGHT = 30" in body
+    assert ".gantt-row { height:29px" in body
     assert "overflow-x:auto" in body
     assert "overflow-y:auto" in body
     assert "overflow:visible" in body
