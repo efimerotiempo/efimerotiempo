@@ -1517,6 +1517,35 @@ def calendar_pedidos():
         project_links=links_table,
     )
 
+
+@app.route('/gantt')
+def gantt_view():
+    projects = load_projects()
+    sched, _ = schedule_projects(copy.deepcopy(projects))
+    by_pid = {}
+    for worker, days in sched.items():
+        for day, tasks in days.items():
+            for t in tasks:
+                by_pid.setdefault(t['pid'], []).append(t)
+    gantt_tasks = []
+    for p in projects:
+        pid = p['id']
+        tasks = by_pid.get(pid, [])
+        if not tasks:
+            continue
+        start = min(t['start_time'] for t in tasks)
+        end = max(t['end_time'] for t in tasks)
+        gantt_tasks.append({'id': pid, 'name': p['name'], 'start': start, 'end': end})
+        for t in tasks:
+            gantt_tasks.append({
+                'id': f"{pid}-{t['phase']}-{t.get('part', '')}",
+                'name': t['phase'],
+                'resource': p['name'],
+                'start': t['start_time'],
+                'end': t['end_time'],
+            })
+    return render_template('gantt.html', tasks=json.dumps(gantt_tasks))
+
 @app.route('/projects')
 def project_list():
     projects = get_projects()

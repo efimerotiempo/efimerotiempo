@@ -553,3 +553,37 @@ def test_move_phase_reverts_when_day_full(monkeypatch):
     days = [d for _, d, ph, *_ in mapping["p2"] if ph == "montar"]
     assert days == ["2024-05-07"]
 
+
+def test_gantt_view(monkeypatch):
+    projects = [
+        {
+            "id": "p1",
+            "name": "Proj1",
+            "client": "Client1",
+            "phases": {"montar": 8},
+            "assigned": {"montar": "Mikel"},
+        }
+    ]
+    fake_sched = {
+        "Mikel": {
+            "2024-01-01": [
+                {
+                    "pid": "p1",
+                    "phase": "montar",
+                    "hours": 8,
+                    "start_time": "2024-01-01T08:00:00",
+                    "end_time": "2024-01-01T16:00:00",
+                }
+            ]
+        }
+    }
+    monkeypatch.setattr(app, "load_projects", lambda: copy.deepcopy(projects))
+    monkeypatch.setattr(app, "schedule_projects", lambda projs: (fake_sched, []))
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/gantt", headers=auth)
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Proj1" in body
+    assert "montar" in body
+
