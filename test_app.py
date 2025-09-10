@@ -603,6 +603,7 @@ def test_gantt_view(monkeypatch):
     assert "scrollbar-width:none" in body
     assert "syncScroll(main, summaryContainer)" in body
     assert "syncScroll(summaryContainer, main)" in body
+    assert "height:80vh" in body
     # days scaled to the workday duration
     assert "startOfDay" in body
     assert "+ 1)*pxPerDay" in body
