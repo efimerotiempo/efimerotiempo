@@ -972,6 +972,52 @@ def test_move_pedido_to_unconfirmed_remembers_date(monkeypatch):
     assert re.search(r'class="unconfirmed"[\s\S]*ProjB[\s\S]*10/07', html)
 
 
+def test_move_pedido_from_calendar_to_unconfirmed_visible(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "30",
+                "title": "ProjC - Client3",
+                "columnname": "Plegado/curvado - Fabricación",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-08-20",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(
+        app, "load_column_colors", lambda: {"Plegado/curvado - Fabricación": "#111"}
+    )
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 8, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.post(
+        "/update_pedido_date", json={"cid": "30", "date": None}, headers=auth
+    )
+    assert resp.status_code == 200
+    assert store[0].get("previous_title_date") == "20/08"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjC[\s\S]*20/08', html)
+
+
 def test_calendar_renders_worker_note(monkeypatch):
     auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
     monkeypatch.setattr(app, "get_projects", lambda: [])
