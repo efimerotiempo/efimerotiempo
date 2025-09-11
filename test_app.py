@@ -735,6 +735,30 @@ def test_project_links_endpoint(monkeypatch):
     ]
 
 
+def test_calendar_pedidos_child_links_from_parent(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+                "links": {"child": [{"taskid": "2"}]},
+            }
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid: {"title": "Child1"} if cid == "2" else None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Child1" in html
+
+
 def test_webhook_enriches_child_links(monkeypatch):
     card_store = [
         {

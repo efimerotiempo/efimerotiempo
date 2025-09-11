@@ -412,14 +412,34 @@ def build_project_links(compras_raw):
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
+        cid = str(cid) if cid else None
         links_info = card.get('links') or {}
+
         parents = links_info.get('parent') if isinstance(links_info, dict) else []
         if isinstance(parents, list) and title:
             for p in parents:
                 if isinstance(p, dict):
                     pid = p.get('taskid') or p.get('cardId') or p.get('id')
                     if pid:
-                        children_by_parent.setdefault(str(pid), []).append(title)
+                        lst = children_by_parent.setdefault(str(pid), [])
+                        if title not in lst:
+                            lst.append(title)
+
+        children = links_info.get('child') if isinstance(links_info, dict) else []
+        if isinstance(children, list) and cid:
+            for ch in children:
+                if isinstance(ch, dict):
+                    child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
+                    child_title = (ch.get('title') or '').strip()
+                    if child_id and not child_title:
+                        fetched = _fetch_kanban_card(child_id)
+                        if fetched:
+                            child_title = (fetched.get('title') or '').strip()
+                    if child_id and child_title:
+                        lst = children_by_parent.setdefault(cid, [])
+                        if child_title not in lst:
+                            lst.append(child_title)
 
     links_table = []
     seen_links = set()
