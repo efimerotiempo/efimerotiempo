@@ -651,3 +651,42 @@ def test_delete_project_cleans_conflicts(monkeypatch):
     assert all(c.get("pid") != "p1" for c in extras_store)
     assert all("Proj1|" not in k and k != "kanban-p1" for k in dismissed_store)
 
+
+def test_calendar_pedidos_includes_child_links(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        },
+        {
+            "card": {
+                "taskid": "2",
+                "title": "Child1",
+                "columnname": "X",
+                "lanename": "Seguimiento compras",
+                "links": {"parent": [{"taskid": "1"}]},
+            }
+        },
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    captured = {}
+
+    def fake_render(tpl, **ctx):
+        captured.update(ctx)
+        return ""
+
+    monkeypatch.setattr(app, "render_template", fake_render)
+
+    app.calendar_pedidos()
+
+    assert captured["project_links"] == [
+        {"project": "ProjA", "client": "Client1", "links": ["Child1"]}
+    ]
+

@@ -1322,6 +1322,20 @@ def calendar_pedidos():
     if updated_colors:
         save_column_colors(column_colors)
 
+    # Map parent card IDs to a list of their children titles
+    children_by_parent = {}
+    for data in compras_raw.values():
+        card = data['card']
+        title = (card.get('title') or '').strip()
+        links_info = card.get('links') or {}
+        parents = links_info.get('parent') if isinstance(links_info, dict) else []
+        if isinstance(parents, list) and title:
+            for p in parents:
+                if isinstance(p, dict):
+                    pid = p.get('taskid') or p.get('cardId') or p.get('id')
+                    if pid:
+                        children_by_parent.setdefault(str(pid), []).append(title)
+
     # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
     pedidos = {}
     unconfirmed = []
@@ -1394,15 +1408,8 @@ def calendar_pedidos():
         ):
             key = (project_name, client_name)
             if key not in seen_links:
-                child_links = []
-                links_info = card.get('links') or {}
-                children = links_info.get('children') if isinstance(links_info, dict) else []
-                if isinstance(children, list):
-                    for ch in children:
-                        if isinstance(ch, dict):
-                            t = ch.get('title')
-                            if t:
-                                child_links.append(t)
+                cid = card.get('taskid') or card.get('cardId') or card.get('id')
+                child_links = children_by_parent.get(str(cid), [])
                 links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
                 seen_links.add(key)
 
