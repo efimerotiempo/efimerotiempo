@@ -1475,7 +1475,12 @@ def calendar_pedidos():
 
         # --- LISTA SIN FECHA CONFIRMADA ---
         if (
-            lane_name.strip() == "Seguimiento compras"
+            lane_name.strip().lower() == "seguimiento compras"
+            and column not in PEDIDOS_HIDDEN_COLUMNS
+            and (
+                column in PEDIDOS_ALLOWED_COLUMNS
+                or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            )
             and not d
         ):
             unconfirmed.append(entry)

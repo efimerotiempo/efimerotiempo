@@ -1018,6 +1018,47 @@ def test_move_pedido_from_calendar_to_unconfirmed_visible(monkeypatch):
     assert re.search(r'class="unconfirmed"[\s\S]*ProjC[\s\S]*20/08', html)
 
 
+def test_unconfirmed_ignores_disallowed_columns(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "40",
+                "title": "ProjD - Client4",
+                "columnname": "Random",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-09-15",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Random": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 9, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.post("/update_pedido_date", json={"cid": "40", "date": None}, headers=auth)
+    assert resp.status_code == 200
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjD', html) is None
+
+
 def test_calendar_renders_worker_note(monkeypatch):
     auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
     monkeypatch.setattr(app, "get_projects", lambda: [])
