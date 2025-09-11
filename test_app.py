@@ -676,17 +676,15 @@ def test_calendar_pedidos_includes_child_links(monkeypatch):
     monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
     monkeypatch.setattr(app, "save_column_colors", lambda c: None)
 
-    captured = {}
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
 
-    def fake_render(tpl, **ctx):
-        captured.update(ctx)
-        return ""
-
-    monkeypatch.setattr(app, "render_template", fake_render)
-
-    app.calendar_pedidos()
-
-    assert captured["project_links"] == [
-        {"project": "ProjA", "client": "Client1", "links": ["Child1"]}
-    ]
+    import re
+    cell_pattern = re.compile(
+        r'<td class="project-name">[\s\S]*?ProjA[\s\S]*?Child1[\s\S]*?</td>',
+        re.MULTILINE,
+    )
+    assert cell_pattern.search(html)
 

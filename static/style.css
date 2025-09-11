@@ -214,9 +214,9 @@ table.pedidos-calendar td.week-label {
     background: #eee;
 }
 
-.links-table td.project-links .link-title {
-    display: inline-block;
-    margin-right: 6px;
+.links-table .link-title {
+    display: block;
+    margin-left: 10px;
 }
 
 

@@ -71,17 +71,11 @@
                 {% if item.client %}
                     <br><span class="proj-client">{{ item.client }}</span>
                 {% endif %}
-            </td>
-        </tr>
-        {% if item.links %}
-        <tr class="links-row">
-            <td class="project-links">
                 {% for link in item.links %}
-                    <span class="link-title">{{ link }}</span>
+                    <br><span class="link-title">{{ link }}</span>
                 {% endfor %}
             </td>
         </tr>
-        {% endif %}
     {% endfor %}
     </tbody>
 </table>
