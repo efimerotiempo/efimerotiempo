@@ -785,6 +785,55 @@ def test_calendar_pedidos_child_links_from_parent(monkeypatch):
     assert "Child1" in html
 
 
+def test_calendar_pedidos_limits_past_weeks(monkeypatch):
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2024, 6, 19)
+
+        @classmethod
+        def fromisoformat(cls, s):
+            return date.fromisoformat(s)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    compras = {
+        "1": {
+            "card": {
+                "taskid": "1",
+                "title": "T1",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2024-05-01",
+            }
+        },
+        "2": {
+            "card": {
+                "taskid": "2",
+                "title": "T2",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2024-05-30",
+            }
+        },
+    }
+
+    monkeypatch.setattr(
+        app, "load_compras_raw", lambda: (compras, {"Plegado/Curvado": "#111"})
+    )
+    monkeypatch.setattr(app, "build_project_links", lambda cr: [])
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+
+    assert 'data-date="2024-05-27"' in html
+    assert 'data-date="2024-05-20"' not in html
+    assert re.search(r'data-date="2024-05-27"[\s\S]*T1', html)
+    assert re.search(r'data-date="2024-05-30"[\s\S]*T2', html)
+
+
 def test_webhook_enriches_child_links(monkeypatch):
     card_store = [
         {

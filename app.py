@@ -1486,15 +1486,17 @@ def calendar_pedidos():
             unconfirmed.append(entry)
 
 
-    # --- ARMAR CALENDARIO MENSUAL ---
-    current_month_start = date(today.year, today.month, 1)
-    month_start = (current_month_start - timedelta(days=1)).replace(day=1)
-    start = month_start - timedelta(days=month_start.weekday())
+    # --- ARMAR CALENDARIO SEMANAL ---
+    start = today - timedelta(weeks=3)
+    start -= timedelta(days=start.weekday())
+    for d in list(pedidos.keys()):
+        if d < start:
+            pedidos.setdefault(start, []).extend(pedidos.pop(d))
 
-    # Mostrar mes anterior, mes actual y dos meses siguientes
-    months_to_show = 4
-    end_month = month_start
-    for _ in range(months_to_show - 1):
+    current_month_start = date(today.year, today.month, 1)
+    months_ahead = 2
+    end_month = current_month_start
+    for _ in range(months_ahead):
         end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
     month_end = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
 
@@ -1517,7 +1519,7 @@ def calendar_pedidos():
             else:
                 if day.weekday() == 0 and 1 < day.day <= 7:
                     month_label = MONTHS[day.month - 1].capitalize()
-            tasks = pedidos.get(day, []) if month_start <= day <= month_end else []
+            tasks = pedidos.get(day, []) if start <= day <= month_end else []
             week['days'].append(
                 {
                     'date': day,
