@@ -166,8 +166,8 @@ table.schedule td.resource-col {
 .worker-note {
     width: 100%;
     box-sizing: border-box;
-    font-size: 0.8em;
-    font-weight: normal;
+    font-size: 2.4em;
+    font-weight: bold;
 }
 
 .worker-note-time {
