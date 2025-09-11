@@ -13,6 +13,7 @@ import urllib.parse
 import sys
 import importlib.util
 import random
+from queue import Queue
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -131,6 +132,27 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+
+SSE_CLIENTS = []
+
+
+def broadcast_event(data):
+    for q in list(SSE_CLIENTS):
+        q.put(data)
+
+
+@app.route('/events')
+def event_stream():
+    def gen():
+        q = Queue()
+        SSE_CLIENTS.append(q)
+        try:
+            while True:
+                data = q.get()
+                yield f"data: {json.dumps(data)}\n\n"
+        except GeneratorExit:
+            SSE_CLIENTS.remove(q)
+    return Response(gen(), mimetype='text/event-stream', headers={'Cache-Control': 'no-cache'})
 
 
 def load_tracker():
@@ -356,6 +378,71 @@ def last_kanban_card(cid):
         if str(old_cid) == cid:
             return card
     return {}
+
+
+def load_compras_raw():
+    allowed_lanes = {'seguimiento compras', 'acero al carbono', 'inoxidable - aluminio'}
+    compras_raw = {}
+    column_colors = load_column_colors()
+    updated_colors = False
+    for entry in load_kanban_cards():
+        if not isinstance(entry, dict):
+            continue
+        card = entry.get('card') or {}
+        if not isinstance(card, dict):
+            continue
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        if lane_name.lower() not in allowed_lanes:
+            continue
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
+        if not cid:
+            continue
+        compras_raw[cid] = {'card': card, 'stored_date': entry.get('stored_title_date')}
+        if column and column not in column_colors:
+            column_colors[column] = _next_api_color()
+            updated_colors = True
+    if updated_colors:
+        save_column_colors(column_colors)
+    return compras_raw, column_colors
+
+
+def build_project_links(compras_raw):
+    children_by_parent = {}
+    for data in compras_raw.values():
+        card = data['card']
+        title = (card.get('title') or '').strip()
+        links_info = card.get('links') or {}
+        parents = links_info.get('parent') if isinstance(links_info, dict) else []
+        if isinstance(parents, list) and title:
+            for p in parents:
+                if isinstance(p, dict):
+                    pid = p.get('taskid') or p.get('cardId') or p.get('id')
+                    if pid:
+                        children_by_parent.setdefault(str(pid), []).append(title)
+
+    links_table = []
+    seen_links = set()
+    for data in compras_raw.values():
+        card = data['card']
+        title = (card.get('title') or '').strip()
+        project_name = title
+        client_name = ''
+        if ' - ' in title:
+            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        if (
+            lane_name.strip() in ['Acero al Carbono', 'Inoxidable - Aluminio']
+            and column not in ['Ready to Archive', 'Hacer Albaran']
+        ):
+            key = (project_name, client_name)
+            if key not in seen_links:
+                cid = card.get('taskid') or card.get('cardId') or card.get('id')
+                child_links = children_by_parent.get(str(cid), [])
+                links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                seen_links.add(key)
+    return links_table
 
 
 def load_column_colors():
@@ -1298,66 +1385,12 @@ def calendar_view():
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
     today = date.today()
-
-    # --- CARGAR TARJETAS DE KANBANIZE ---
-    compras_raw = {}
-    kanban_columns = {}
-    column_colors = load_column_colors()
-    updated_colors = False
-    allowed_lanes = [
-        'seguimiento compras',
-        'acero al carbono',
-        'inoxidable - aluminio',
-    ]
-
-    for entry in load_kanban_cards():
-        if not isinstance(entry, dict):
-            continue
-        card = entry.get('card') or {}
-        if not isinstance(card, dict):
-            continue
-
-        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        if lane_name.lower() not in allowed_lanes:
-            continue
-
-        column = (card.get('columnname') or card.get('columnName') or '').strip()
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-        if not cid:
-            continue
-
-        compras_raw[cid] = {
-            'card': card,
-            'stored_date': entry.get('stored_title_date')
-        }
-        kanban_columns[str(cid)] = column
-
-        if column and column not in column_colors:
-            column_colors[column] = _next_api_color()
-            updated_colors = True
-
-    if updated_colors:
-        save_column_colors(column_colors)
-
-    # Map parent card IDs to a list of their children titles
-    children_by_parent = {}
-    for data in compras_raw.values():
-        card = data['card']
-        title = (card.get('title') or '').strip()
-        links_info = card.get('links') or {}
-        parents = links_info.get('parent') if isinstance(links_info, dict) else []
-        if isinstance(parents, list) and title:
-            for p in parents:
-                if isinstance(p, dict):
-                    pid = p.get('taskid') or p.get('cardId') or p.get('id')
-                    if pid:
-                        children_by_parent.setdefault(str(pid), []).append(title)
+    compras_raw, column_colors = load_compras_raw()
+    links_table = build_project_links(compras_raw)
 
     # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
     pedidos = {}
     unconfirmed = []
-    links_table = []
-    seen_links = set()
 
     for data in compras_raw.values():
         card = data['card']
@@ -1418,17 +1451,6 @@ def calendar_pedidos():
         ):
             unconfirmed.append(entry)
 
-        # --- TABLA DERECHA (otros lanes archivables) ---
-        if (
-            lane_name.strip() in ["Acero al Carbono", "Inoxidable - Aluminio"]
-            and column not in ["Ready to Archive", "Hacer Albaran"]
-        ):
-            key = (project_name, client_name)
-            if key not in seen_links:
-                cid = card.get('taskid') or card.get('cardId') or card.get('id')
-                child_links = children_by_parent.get(str(cid), [])
-                links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
-                seen_links.add(key)
 
     # --- ARMAR CALENDARIO MENSUAL ---
     current_month_start = date(today.year, today.month, 1)
@@ -1480,6 +1502,13 @@ def calendar_pedidos():
         unconfirmed=unconfirmed,
         project_links=links_table,
     )
+
+
+@app.route('/project_links')
+def project_links_api():
+    compras_raw, _ = load_compras_raw()
+    links = build_project_links(compras_raw)
+    return jsonify(links)
 
 
 @app.route('/gantt')
@@ -2839,6 +2868,7 @@ def kanbanize_webhook():
             stored_date = prev_date
         new_cards.append({'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date})
         save_kanban_cards(new_cards)
+        broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
 
     # Lanes válidos para proyectos
@@ -3213,8 +3243,10 @@ def kanbanize_webhook():
             'pid': project['id'],
         })
         save_extra_conflicts(extras)
+        broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Proyecto creado"}), 200
     else:
+        broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Proyecto actualizado"}), 200
 
 

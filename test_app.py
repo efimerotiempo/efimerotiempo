@@ -703,6 +703,38 @@ def test_calendar_pedidos_includes_child_links(monkeypatch):
     assert row_pattern.search(html)
 
 
+def test_project_links_endpoint(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        },
+        {
+            "card": {
+                "taskid": "2",
+                "title": "Child1",
+                "columnname": "X",
+                "lanename": "Seguimiento compras",
+                "links": {"parent": [{"taskid": "1"}]},
+            }
+        },
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/project_links", headers=auth)
+    assert resp.get_json() == [
+        {"project": "ProjA", "client": "Client1", "links": ["Child1"]}
+    ]
+
+
 def test_webhook_enriches_child_links(monkeypatch):
     card_store = [
         {
@@ -751,6 +783,27 @@ def test_webhook_enriches_child_links(monkeypatch):
     resp = client.get("/calendario-pedidos", headers=auth)
     html = resp.get_data(as_text=True)
     assert "Child1" in html
+
+
+def test_webhook_triggers_broadcast(monkeypatch):
+    events = []
+    monkeypatch.setattr(app, "broadcast_event", lambda data: events.append(data))
+    monkeypatch.setattr(app, "save_kanban_cards", lambda cards: None)
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: [])
+    payload = {
+        "card": {
+            "taskid": "5",
+            "laneName": "Seguimiento compras",
+            "columnName": "X",
+            "title": "Card5",
+        },
+        "timestamp": "t1",
+    }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=True, card=payload["card"]: card)
+    client = app.app.test_client()
+    resp = client.post("/kanbanize-webhook", json=payload)
+    assert resp.status_code == 200
+    assert events == [{"type": "kanban_update"}]
 
 
 def test_update_worker_note(monkeypatch):
