@@ -735,6 +735,32 @@ def test_project_links_endpoint(monkeypatch):
     ]
 
 
+def test_project_links_omit_projects_without_children(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.get("/project_links", headers=auth)
+    assert resp.get_json() == []
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "ProjA" not in html
+
+
 def test_calendar_pedidos_child_links_from_parent(monkeypatch):
     cards = [
         {

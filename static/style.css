@@ -219,8 +219,14 @@ table.pedidos-calendar td.week-label {
     font-weight: bold;
 }
 
+.columna-1 .proj-client {
+    display: block;
+    margin-top: 2px;
+}
+
 .columna-1 .project-row {
     padding: 4px 0;
+    margin-bottom: 16px;
     max-width: 200px;
     word-break: break-word;
 }
@@ -228,6 +234,7 @@ table.pedidos-calendar td.week-label {
 .columna-1 .link-title {
     display: block;
     margin-left: 10px;
+    margin-top: 4px;
 }
 
 

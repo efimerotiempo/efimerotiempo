@@ -460,8 +460,9 @@ def build_project_links(compras_raw):
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
-                links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
-                seen_links.add(key)
+                if child_links:
+                    links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                    seen_links.add(key)
     return links_table
 
 

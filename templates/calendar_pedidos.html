@@ -67,10 +67,10 @@
         <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
             <span class="proj-name">{{ item.project }}</span>
             {% if item.client %}
-                <br><span class="proj-client">{{ item.client }}</span>
+                <span class="proj-client">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <br><span class="link-title">{{ link }}</span>
+                <span class="link-title">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
