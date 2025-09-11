@@ -82,6 +82,7 @@ def test_webhook_updates_only_changed_fields(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -149,6 +150,7 @@ def test_webhook_updates_fecha_cliente(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -211,6 +213,7 @@ def test_webhook_creates_mecanizado_tratamiento(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -278,6 +281,7 @@ def test_webhook_preserves_existing_mecanizado_tratamiento(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -322,6 +326,7 @@ def test_title_update_replaces_old_pedido(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -359,6 +364,12 @@ def test_pedido_title_date_persistence(monkeypatch):
 
     client = app.app.test_client()
 
+    current_payload = {}
+    def fake_fetch(cid, with_links=False):
+        return current_payload.get("card", {"taskid": cid})
+
+    monkeypatch.setattr(app, "_fetch_kanban_card", fake_fetch)
+
     payload1 = {
         "card": {
             "taskid": 1,
@@ -369,6 +380,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t1",
     }
+    current_payload = payload1
     client.post("/kanbanize-webhook", json=payload1)
     assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
 
@@ -382,6 +394,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t2",
     }
+    current_payload = payload2
     client.post("/kanbanize-webhook", json=payload2)
     assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
 
@@ -401,6 +414,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t3",
     }
+    current_payload = payload3
     client.post("/kanbanize-webhook", json=payload3)
     assert card_store[0]["stored_title_date"] == f"{d2_day:02d}/{month_str}"
 
@@ -687,4 +701,54 @@ def test_calendar_pedidos_includes_child_links(monkeypatch):
         re.MULTILINE,
     )
     assert row_pattern.search(html)
+
+
+def test_webhook_enriches_child_links(monkeypatch):
+    card_store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: list(card_store))
+
+    def fake_save(cards):
+        card_store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+
+    enriched = {
+        "taskid": "2",
+        "title": "Child1",
+        "columnname": "X",
+        "lanename": "Seguimiento compras",
+        "links": {"parent": [{"taskid": "1"}]},
+    }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False: enriched)
+
+    client = app.app.test_client()
+    payload = {
+        "card": {
+            "taskid": "2",
+            "laneName": "Seguimiento compras",
+            "columnName": "X",
+            "title": "Child1",
+        },
+        "timestamp": "t1",
+    }
+    client.post("/kanbanize-webhook", json=payload)
+
+    assert card_store[-1]["card"].get("links") == {"parent": [{"taskid": "1"}]}
+
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Child1" in html
 

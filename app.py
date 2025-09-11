@@ -1098,9 +1098,11 @@ def _kanban_card_to_project(card):
     return project
 
 
-def _fetch_kanban_card(card_id):
+def _fetch_kanban_card(card_id, with_links=False):
     """Retrieve card details from Kanbanize via the REST API."""
     url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
+    if with_links:
+        url += "?withLinks=1"
     req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
     try:
         with urlopen(req, timeout=10) as resp:
@@ -2750,6 +2752,11 @@ def kanbanize_webhook():
         return re.sub(r'\s+', ' ', s or '').strip().lower()
 
     cid = pick(card, 'taskid', 'cardId', 'id')
+    if cid:
+        fetched = _fetch_kanban_card(cid, with_links=True)
+        if isinstance(fetched, dict):
+            card = fetched
+
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
 
