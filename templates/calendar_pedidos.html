@@ -29,6 +29,7 @@
                  data-phase="{{ t.get('phase') or '' }}"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
@@ -48,6 +49,7 @@
                  data-pid="{{ t.get('pid') or '' }}"
                  data-phase="{{ t.get('phase') or '' }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
                  style="border-color: {{ t.get('color', '#999999') }};">
@@ -92,7 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         part: t.dataset.part,
-        worker: t.dataset.worker
+        worker: t.dataset.worker,
+        cid: t.dataset.cid
       };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
@@ -114,6 +117,13 @@ document.addEventListener('DOMContentLoaded', () => {
           credentials: 'same-origin',
           body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
         }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: cell.dataset.date})
+        }).then(resp => { if (resp.ok) location.reload(); });
       } else if (dragged) {
         cell.appendChild(dragged);
         dragged = null;
@@ -126,7 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
     unconfirmedCell.addEventListener('dragover', e => e.preventDefault());
     unconfirmedCell.addEventListener('drop', e => {
       e.preventDefault();
-      if (dragged) {
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
+      if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: null})
+        }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (dragged) {
         unconfirmedCell.appendChild(dragged);
         dragged = null;
       }

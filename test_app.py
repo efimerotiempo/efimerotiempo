@@ -880,6 +880,56 @@ def test_update_worker_note(monkeypatch):
     assert resp.get_json()["edited"] == "15:30 02/01"
 
 
+def test_update_pedido_date(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "stored_title_date": "03/05",
+            "card": {
+                "taskid": "10",
+                "title": "ProjA - Client1",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-05-03",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Plegado/Curvado": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 5, 1)
+
+        @classmethod
+        def fromisoformat(cls, s):
+            return date.fromisoformat(s)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post(
+        "/update_pedido_date",
+        json={"cid": "10", "date": "2025-05-12"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert store[0]["stored_title_date"] == "12/05"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'data-date="2025-05-12"[\s\S]*ProjA', html)
+
+
 def test_calendar_renders_worker_note(monkeypatch):
     auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
     monkeypatch.setattr(app, "get_projects", lambda: [])

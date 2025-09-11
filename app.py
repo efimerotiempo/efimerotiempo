@@ -1442,6 +1442,7 @@ def calendar_pedidos():
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
         entry = {
             'project': title,
@@ -1450,6 +1451,7 @@ def calendar_pedidos():
             'lane': lane_name,
             'client': client_name,
             'column': column,
+            'cid': cid,
         }
 
         # --- CALENDARIO PRINCIPAL ---
@@ -1737,6 +1739,38 @@ def update_worker_note():
     save_worker_notes(notes)
     dt = datetime.fromisoformat(notes[worker]['edited'])
     return jsonify({'edited': dt.strftime('%H:%M %d/%m')})
+
+
+@app.route('/update_pedido_date', methods=['POST'])
+def update_pedido_date():
+    data = request.get_json() or {}
+    cid = data.get('cid')
+    date_str = data.get('date')
+    if not cid:
+        return '', 400
+    if date_str:
+        try:
+            d = date.fromisoformat(date_str)
+        except Exception:
+            return '', 400
+        stored = f"{d.day:02d}/{d.month:02d}"
+    else:
+        stored = None
+    cards = load_kanban_cards()
+    cid = str(cid)
+    updated = False
+    for entry in cards:
+        card = entry.get('card') or {}
+        existing = card.get('taskid') or card.get('cardId') or card.get('id')
+        if str(existing) == cid:
+            entry['stored_title_date'] = stored
+            updated = True
+            break
+    if updated:
+        save_kanban_cards(cards)
+        broadcast_event({'type': 'kanban_update'})
+        return jsonify({'stored_date': stored})
+    return '', 404
 
 
 @app.route('/observaciones')
