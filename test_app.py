@@ -1,7 +1,7 @@
 import copy
 import json
 import base64
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import re
 
 import pytest
@@ -751,4 +751,44 @@ def test_webhook_enriches_child_links(monkeypatch):
     resp = client.get("/calendario-pedidos", headers=auth)
     html = resp.get_data(as_text=True)
     assert "Child1" in html
+
+
+def test_update_worker_note(monkeypatch):
+    store = {}
+    monkeypatch.setattr(app, "load_worker_notes", lambda: store.copy())
+    def fake_save(data):
+        store.update(data)
+    monkeypatch.setattr(app, "save_worker_notes", fake_save)
+    fake_now = datetime(2025, 1, 2, 15, 30)
+    class FakeDT(datetime):
+        @classmethod
+        def now(cls):
+            return fake_now
+        @classmethod
+        def fromisoformat(cls, s):
+            return datetime.fromisoformat(s)
+    monkeypatch.setattr(app, "datetime", FakeDT)
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post("/update_worker_note", json={"worker": "Irene", "text": "Hola"}, headers=auth)
+    assert resp.status_code == 200
+    assert store["Irene"]["text"] == "Hola"
+    assert store["Irene"]["edited"] == fake_now.isoformat(timespec="minutes")
+    assert resp.get_json()["edited"] == "15:30 02/01"
+
+
+def test_calendar_renders_worker_note(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {"Irene": {"text": "Nota", "edited": "2025-01-02T15:30"}})
+    resp = app.app.test_client().get("/calendar", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Nota" in html
+    assert "15:30 02/01" in html
 

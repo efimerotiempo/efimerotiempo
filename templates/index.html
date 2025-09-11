@@ -51,7 +51,12 @@
     <tbody>
 {% for worker, days_data in schedule.items() %}
     <tr data-worker="{{ worker }}">
-        <td class="resource-col">{{ worker }}</td>
+        <td class="resource-col">
+            <div class="worker-label">{{ worker }}</div>
+            <textarea class="worker-note" data-worker="{{ worker }}">{{ worker_notes.get(worker, {}).get('text','') }}</textarea>
+            {% set wn = worker_notes.get(worker) %}
+            <div class="worker-note-time">{% if wn and wn.edited %}{{ wn.edited }}{% endif %}</div>
+        </td>
         {% for c in cols %}
         {% if c.type == 'day' %}
         {% set d = c.dates[0] %}
@@ -279,6 +284,7 @@
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
+  const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -355,6 +361,20 @@
     });
   }
   document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
+
+  document.querySelectorAll('.worker-note').forEach(area => {
+    area.addEventListener('change', () => {
+      fetch(WORKER_NOTE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ worker: area.dataset.worker, text: area.value })
+      }).then(r => r.json()).then(data => {
+        const t = area.nextElementSibling;
+        if (t && data.edited) t.textContent = data.edited;
+      });
+    });
+  });
 
   // allow horizontal scrolling with Shift + wheel over the schedule
   const wrapper = document.querySelector('.schedule-wrapper');

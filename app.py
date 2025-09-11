@@ -38,6 +38,8 @@ load_extra_conflicts = _schedule_mod.load_extra_conflicts
 save_extra_conflicts = _schedule_mod.save_extra_conflicts
 load_notes = _schedule_mod.load_notes
 save_notes = _schedule_mod.save_notes
+load_worker_notes = _schedule_mod.load_worker_notes
+save_worker_notes = _schedule_mod.save_worker_notes
 load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
@@ -1126,6 +1128,7 @@ def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
+    worker_notes_raw = load_worker_notes()
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -1249,6 +1252,17 @@ def calendar_view():
     note_map = {}
     for n in notes:
         note_map.setdefault(n['date'], []).append(n['description'])
+    worker_note_map = {}
+    for w, info in worker_notes_raw.items():
+        text = info.get('text', '')
+        ts = info.get('edited')
+        fmt = ''
+        if ts:
+            try:
+                fmt = datetime.fromisoformat(ts).strftime('%H:%M %d/%m')
+            except ValueError:
+                fmt = ''
+        worker_note_map[w] = {'text': text, 'edited': fmt}
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
@@ -1277,6 +1291,7 @@ def calendar_view():
         palette=COLORS,
         unplanned_with=unplanned_with,
         unplanned_without=unplanned_without,
+        worker_notes=worker_note_map,
     )
 
 
@@ -1657,6 +1672,23 @@ def delete_note(nid):
     return redirect(next_url)
 
 
+@app.route('/update_worker_note', methods=['POST'])
+def update_worker_note():
+    data = request.get_json() or {}
+    worker = data.get('worker')
+    text = data.get('text', '')
+    if not worker:
+        return jsonify({'error': 'Falta recurso'}), 400
+    notes = load_worker_notes()
+    notes[worker] = {
+        'text': text,
+        'edited': datetime.now().isoformat(timespec='minutes'),
+    }
+    save_worker_notes(notes)
+    dt = datetime.fromisoformat(notes[worker]['edited'])
+    return jsonify({'edited': dt.strftime('%H:%M %d/%m')})
+
+
 @app.route('/observaciones')
 def observation_list():
     projects = [p for p in get_projects() if p.get('observations')]
@@ -1746,6 +1778,7 @@ def complete():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
+    worker_notes_raw = load_worker_notes()
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -1887,6 +1920,17 @@ def complete():
     note_map = {}
     for n in notes:
         note_map.setdefault(n['date'], []).append(n['description'])
+    worker_note_map = {}
+    for w, info in worker_notes_raw.items():
+        text = info.get('text', '')
+        ts = info.get('edited')
+        fmt = ''
+        if ts:
+            try:
+                fmt = datetime.fromisoformat(ts).strftime('%H:%M %d/%m')
+            except ValueError:
+                fmt = ''
+        worker_note_map[w] = {'text': text, 'edited': fmt}
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
@@ -1918,6 +1962,7 @@ def complete():
         palette=COLORS,
         unplanned_with=unplanned_with,
         unplanned_without=unplanned_without,
+        worker_notes=worker_note_map,
     )
 
 

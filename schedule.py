@@ -8,6 +8,7 @@ PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 NOTES_FILE = os.path.join(DATA_DIR, 'notes.json')
+WORKER_NOTES_FILE = os.path.join(DATA_DIR, 'worker_notes.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
@@ -157,6 +158,19 @@ def load_notes():
 def save_notes(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(NOTES_FILE, 'w') as f:
+        json.dump(data, f)
+
+
+def load_worker_notes():
+    if os.path.exists(WORKER_NOTES_FILE):
+        with open(WORKER_NOTES_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_worker_notes(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_NOTES_FILE, 'w') as f:
         json.dump(data, f)
 
 
