@@ -198,23 +198,17 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
-.links-table {
-    border-collapse: collapse;
+.columna-1 .proj-name {
+    font-weight: bold;
 }
 
-.links-table td {
-    border: 1px solid #ccc;
-    padding: 4px;
+.columna-1 .project-row {
+    padding: 4px 0;
     max-width: 200px;
     word-break: break-word;
 }
 
-.links-table td.project-name {
-    font-weight: bold;
-    background: #eee;
-}
-
-.links-table .link-title {
+.columna-1 .link-title {
     display: block;
     margin-left: 10px;
 }

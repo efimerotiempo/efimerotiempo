@@ -61,24 +61,20 @@
     {% endfor %}
     </tbody>
 </table>
-<table class="links-table columna-1">
-    <caption>Columna 1</caption>
-    <tbody>
+<div class="columna-1">
+    <h3>Columna 1</h3>
     {% for item in project_links %}
-        <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <td class="project-name">
-                <span class="proj-name">{{ item.project }}</span>
-                {% if item.client %}
-                    <br><span class="proj-client">{{ item.client }}</span>
-                {% endif %}
-                {% for link in item.links %}
-                    <br><span class="link-title">{{ link }}</span>
-                {% endfor %}
-            </td>
-        </tr>
+        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
+            <span class="proj-name">{{ item.project }}</span>
+            {% if item.client %}
+                <br><span class="proj-client">{{ item.client }}</span>
+            {% endif %}
+            {% for link in item.links %}
+                <br><span class="link-title">{{ link }}</span>
+            {% endfor %}
+        </div>
     {% endfor %}
-    </tbody>
-</table>
+</div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -154,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cli = (t.dataset.client || '').toLowerCase();
       t.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
     });
-    document.querySelectorAll('.links-table .project-row').forEach(row => {
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
       const show = (!q || proj.includes(q) || cli.includes(q));

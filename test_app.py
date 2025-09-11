@@ -682,9 +682,9 @@ def test_calendar_pedidos_includes_child_links(monkeypatch):
     html = resp.get_data(as_text=True)
 
     import re
-    cell_pattern = re.compile(
-        r'<td class="project-name">[\s\S]*?ProjA[\s\S]*?Child1[\s\S]*?</td>',
+    row_pattern = re.compile(
+        r'<div class="project-row"[^>]*>[\s\S]*?ProjA[\s\S]*?Child1[\s\S]*?</div>',
         re.MULTILINE,
     )
-    assert cell_pattern.search(html)
+    assert row_pattern.search(html)
 
