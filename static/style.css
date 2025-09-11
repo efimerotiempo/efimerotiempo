@@ -60,6 +60,12 @@ table.schedule td.weekend-cell {
     margin-left: 4px;
     white-space: nowrap;
 }
+.task-date {
+    margin-left: 4px;
+    white-space: nowrap;
+    font-size: 0.9em;
+    color: #555;
+}
 .task.vacation {
     display: block;
 }

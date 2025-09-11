@@ -398,7 +398,11 @@ def load_compras_raw():
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
-        compras_raw[cid] = {'card': card, 'stored_date': entry.get('stored_title_date')}
+        compras_raw[cid] = {
+            'card': card,
+            'stored_date': entry.get('stored_title_date'),
+            'prev_date': entry.get('previous_title_date'),
+        }
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
@@ -1416,11 +1420,15 @@ def calendar_pedidos():
     for data in compras_raw.values():
         card = data['card']
         stored_date = data.get('stored_date')
+        prev_date = data.get('prev_date')
         title = (card.get('title') or '').strip()
         project_name = title
         client_name = ''
         if ' - ' in title:
             project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
         # Determinar la fecha a usar: priorizar la almacenada del título
         if stored_date:
@@ -1429,6 +1437,8 @@ def calendar_pedidos():
                 d = date(today.year, month, day)
             except Exception:
                 d = parse_kanban_date(card.get('deadline'))
+        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
+            d = None
         else:
             m = re.search(r"\((\d{2})/(\d{2})\)", title)
             if m:
@@ -1440,10 +1450,6 @@ def calendar_pedidos():
             else:
                 d = parse_kanban_date(card.get('deadline'))
 
-        column = (card.get('columnname') or card.get('columnName') or '').strip()
-        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-
         entry = {
             'project': title,
             'color': column_colors.get(column, '#999999'),
@@ -1452,6 +1458,7 @@ def calendar_pedidos():
             'client': client_name,
             'column': column,
             'cid': cid,
+            'prev_date': prev_date,
         }
 
         # --- CALENDARIO PRINCIPAL ---
@@ -1763,7 +1770,23 @@ def update_pedido_date():
         card = entry.get('card') or {}
         existing = card.get('taskid') or card.get('cardId') or card.get('id')
         if str(existing) == cid:
-            entry['stored_title_date'] = stored
+            if stored is not None:
+                entry['stored_title_date'] = stored
+                entry.pop('previous_title_date', None)
+            else:
+                prev = entry.get('stored_title_date')
+                if not prev:
+                    title = (card.get('title') or '').strip()
+                    m = re.search(r"\((\d{2})/(\d{2})\)", title)
+                    if m:
+                        prev = f"{int(m.group(1)):02d}/{int(m.group(2)):02d}"
+                    else:
+                        d_dead = parse_kanban_date(card.get('deadline'))
+                        if d_dead:
+                            prev = f"{d_dead.day:02d}/{d_dead.month:02d}"
+                entry['previous_title_date'] = prev
+                entry['stored_title_date'] = None
+                card['deadline'] = None
             updated = True
             break
     if updated:

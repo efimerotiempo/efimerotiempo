@@ -54,6 +54,7 @@
                  data-client="{{ t.get('client') or '' }}"
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
+                {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
             </div>
             {% endfor %}

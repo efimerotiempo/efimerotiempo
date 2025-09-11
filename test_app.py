@@ -930,6 +930,48 @@ def test_update_pedido_date(monkeypatch):
     assert re.search(r'data-date="2025-05-12"[\s\S]*ProjA', html)
 
 
+def test_move_pedido_to_unconfirmed_remembers_date(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "20",
+                "title": "ProjB - Client2",
+                "columnname": "Planif. OTROS",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-07-10",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Planif. OTROS": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 7, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post("/update_pedido_date", json={"cid": "20", "date": None}, headers=auth)
+    assert resp.status_code == 200
+    assert store[0].get("stored_title_date") is None
+    assert store[0].get("previous_title_date") == "10/07"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjB[\s\S]*10/07', html)
+
+
 def test_calendar_renders_worker_note(monkeypatch):
     auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
     monkeypatch.setattr(app, "get_projects", lambda: [])
