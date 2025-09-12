@@ -1239,6 +1239,10 @@ def home():
 def calendar_view():
     projects = get_projects()
     schedule, conflicts = schedule_projects(projects)
+    if request.args.get('json'):
+        _sort_cell_tasks(schedule)
+        hours_map = load_daily_hours()
+        return jsonify({'schedule': schedule, 'hours': hours_map})
     today = date.today()
     worker_notes_raw = load_worker_notes()
     unplanned_raw = []

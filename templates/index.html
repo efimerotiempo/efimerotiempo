@@ -285,6 +285,7 @@
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
+  const CAL_URL = "{{ url_for('calendar_view') }}?json=1";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -347,11 +348,26 @@
       if (folder && !folder.querySelector('.task')) folder.remove();
     }
   }
+  function refreshCalendar() {
+    fetch(CAL_URL)
+      .then(r => r.json())
+      .then(data => {
+        const sched = data.schedule || {};
+        for (const [worker, days] of Object.entries(sched)) {
+          for (const [day, tasks] of Object.entries(days)) {
+            for (const t of tasks) {
+              moveTask({ ...t, date: day }, { worker });
+            }
+          }
+        }
+      });
+  }
   function afterMove(data, req) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== req.date) localStorage.setItem(SCROLL_KEY2, data.date);
     moveTask(data, req);
     if (data.warning) showDeadline(data.warning);
+    refreshCalendar();
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -471,7 +487,7 @@
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ date: f.dataset.date, hours: val })
-      }).then(() => location.reload());
+      }).then(() => refreshCalendar());
     });
   });
 
