@@ -8,6 +8,7 @@ PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
 NOTES_FILE = os.path.join(DATA_DIR, 'notes.json')
+WORKER_NOTES_FILE = os.path.join(DATA_DIR, 'worker_notes.json')
 VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
@@ -160,6 +161,19 @@ def save_notes(data):
         json.dump(data, f)
 
 
+def load_worker_notes():
+    if os.path.exists(WORKER_NOTES_FILE):
+        with open(WORKER_NOTES_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_worker_notes(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_NOTES_FILE, 'w') as f:
+        json.dump(data, f)
+
+
 def load_vacations():
     if os.path.exists(VACATIONS_FILE):
         with open(VACATIONS_FILE, 'r') as f:
@@ -270,29 +284,6 @@ def schedule_projects(projects):
                     'start_date': '',
                     'pid': f"vac-{worker}-{day.isoformat()}"
                 })
-    # Place frozen phases first so other tasks respect their positions
-    for p in projects:
-        for t in p.get('frozen_tasks', []):
-            w = t['worker']
-            day = t['day']
-            entry = t.copy()
-            entry.pop('worker', None)
-            entry.pop('day', None)
-            try:
-                day_obj = date.fromisoformat(day)
-            except Exception:
-                day_obj = date.today()
-            start_time, end_time = _calc_datetimes(day_obj, entry.get('start', 0), entry.get('hours', 0))
-            entry.setdefault('start', 0)
-            entry['start_time'] = start_time
-            entry['end_time'] = end_time
-            worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
-
-    # Sort frozen tasks chronologically
-    for w, days in worker_schedule.items():
-        for d, lst in days.items():
-            lst.sort(key=lambda x: x.get('start', 0))
-
     conflicts = []
     for project in projects:
         planned = project.get('planned', True)
@@ -306,26 +297,44 @@ def schedule_projects(projects):
                 current = date.today()
                 project['start_date'] = current.isoformat()
         hour = 0
-        frozen_end = {}
+        frozen_map = {}
         for t in project.get('frozen_tasks', []):
-            ph = t.get('phase')
-            try:
-                d = date.fromisoformat(t['day'])
-            except Exception:
-                continue
-            if ph in PHASE_ORDER:
-                prev = frozen_end.get(ph)
-                if not prev or d > prev:
-                    frozen_end[ph] = d
+            frozen_map.setdefault(t.get('phase'), []).append(t)
         end_date = current
         assigned = project.get('assigned', {})
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
                 continue
-            if phase in frozen_end:
-                current = next_workday(frozen_end[phase])
-                end_date = max(end_date, frozen_end[phase])
+            if phase in frozen_map:
+                segs = frozen_map[phase]
+                last_day = date.min
+                for seg in segs:
+                    w = seg['worker']
+                    day = seg['day']
+                    entry = seg.copy()
+                    entry.pop('worker', None)
+                    entry.pop('day', None)
+                    try:
+                        d_obj = date.fromisoformat(day)
+                    except Exception:
+                        d_obj = date.today()
+                    start_time, end_time = _calc_datetimes(
+                        d_obj, entry.get('start', 0), entry.get('hours', 0)
+                    )
+                    entry.setdefault('start', 0)
+                    entry['start_time'] = start_time
+                    entry['end_time'] = end_time
+                    worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
+                    worker_schedule[w][day].sort(key=lambda x: x.get('start', 0))
+                    try:
+                        d = date.fromisoformat(day)
+                    except Exception:
+                        d = date.today()
+                    if d > last_day:
+                        last_day = d
+                current = next_workday(last_day)
+                end_date = max(end_date, last_day)
                 hour = 0
                 continue
 
@@ -555,55 +564,42 @@ def assign_phase(
         day_str = day.isoformat()
         tasks = schedule.get(day_str, [])
         tasks.sort(key=lambda t: t.get('start', 0))
-        used = max((t.get('start', 0) + t['hours'] for t in tasks), default=0)
-        start = max(hour, used)
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
         if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento') and phase not in ('mecanizar', 'tratamiento'):
             day_limit = hours_map.get(day_str, HOURS_PER_DAY)
             limit = min(limit, day_limit)
+
+        if phase in ('tratamiento', 'mecanizar'):
+            start = 0
+            available = HOURS_PER_DAY
+        else:
+            start = hour
+            next_task_start = None
+            for t in tasks:
+                if start + 1e-9 <= t.get('start', 0):
+                    next_task_start = t.get('start', 0)
+                    break
+                start = max(start, t.get('start', 0) + t['hours'])
+            if next_task_start is None:
+                next_task_start = limit if limit != float('inf') else HOURS_PER_DAY
+            if limit != float('inf') and start >= limit:
+                day = next_workday(day)
+                hour = 0
+                continue
+            available = next_task_start - start
+            if limit != float('inf'):
+                available = min(available, limit - start)
+            if available <= 0:
+                day = next_workday(day)
+                hour = 0
+                continue
+
+        allocate = min(remaining, available)
         if phase in ('tratamiento', 'mecanizar'):
             # These phases can accumulate unlimited projects per day but
             # each project aporta como mucho ocho horas diarias. Tras asignar
             # un bloque de trabajo se pasa al siguiente día.
-            allocate = min(remaining, HOURS_PER_DAY)
-            late = bool(due_dt and day > due_dt)
-            start_time, end_time = _calc_datetimes(day, used, allocate)
-            task = {
-                'project': project_name,
-                'client': client,
-                'phase': phase,
-                'hours': allocate,
-                'start': used,
-                'start_time': start_time,
-                'end_time': end_time,
-                'late': late,
-                'color': color,
-                'due_date': due_date,
-                'start_date': start_date,
-                'pid': pid,
-                'part': part,
-                'frozen': project_frozen,
-                'blocked': project_blocked,
-                'material_date': material_date,
-                'auto': auto,
-            }
-            tasks.append(task)
-            phase_entries.append((task, day))
-            tasks.sort(key=lambda t: t.get('start', 0))
-            schedule[day_str] = tasks
-            remaining -= allocate
-            last_day = day
-            day = next_workday(day)
-            hour = 0
-            continue
-
-        if limit != float('inf') and start >= limit:
-            day = next_workday(day)
-            hour = 0
-            continue
-        available = limit - start if limit != float('inf') else HOURS_PER_DAY
-        if available > 0:
-            allocate = min(remaining, available)
+            allocate = min(allocate, HOURS_PER_DAY)
             late = bool(due_dt and day > due_dt)
             start_time, end_time = _calc_datetimes(day, start, allocate)
             task = {
@@ -631,11 +627,39 @@ def assign_phase(
             schedule[day_str] = tasks
             remaining -= allocate
             last_day = day
-            hour = start + allocate
-            if hour >= limit and limit != float('inf'):
-                day = next_workday(day)
-                hour = 0
-        else:
+            day = next_workday(day)
+            hour = 0
+            continue
+
+        late = bool(due_dt and day > due_dt)
+        start_time, end_time = _calc_datetimes(day, start, allocate)
+        task = {
+            'project': project_name,
+            'client': client,
+            'phase': phase,
+            'hours': allocate,
+            'start': start,
+            'start_time': start_time,
+            'end_time': end_time,
+            'late': late,
+            'color': color,
+            'due_date': due_date,
+            'start_date': start_date,
+            'pid': pid,
+            'part': part,
+            'frozen': project_frozen,
+            'blocked': project_blocked,
+            'material_date': material_date,
+            'auto': auto,
+        }
+        tasks.append(task)
+        phase_entries.append((task, day))
+        tasks.sort(key=lambda t: t.get('start', 0))
+        schedule[day_str] = tasks
+        remaining -= allocate
+        last_day = day
+        hour = start + allocate
+        if hour >= limit and limit != float('inf'):
             day = next_workday(day)
             hour = 0
     project_late = bool(due_dt and last_day > due_dt)
