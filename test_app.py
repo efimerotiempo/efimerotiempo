@@ -1240,10 +1240,11 @@ def test_refresh_updates_hours_and_removes(monkeypatch):
     client = app.app.test_client()
     html = client.get("/calendar", headers=auth).get_data(as_text=True)
     idx = html.index("function moveTask")
-    snippet = html[idx:idx+400]
+    snippet = html[idx:idx+800]
     assert "task.dataset.hours" in snippet
     assert "task.querySelector('.task-hours')" in snippet
+    assert "querySelectorAll" in snippet
     idx2 = html.index("function refreshCalendar")
     snippet2 = html[idx2:idx2+800]
-    assert "seen = new Set" in snippet2 or "seen = new Set();" in snippet2
+    assert "dataset.rc" in snippet2
     assert "el.remove();" in snippet2

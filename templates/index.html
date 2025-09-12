@@ -333,9 +333,18 @@
     return folder.querySelector('.folder-content');
   }
   function moveTask(data, req) {
-    const sel = `.task[data-pid="${data.pid}"][data-phase="${data.phase}"]` + (data.part ? `[data-part="${data.part}"]` : ':not([data-part])');
-    const task = document.querySelector(sel);
+    const sel = `.task[data-pid="${data.pid}"][data-phase="${data.phase}"]` +
+      (data.part ? `[data-part="${data.part}"]` : ':not([data-part])');
+    const tasks = document.querySelectorAll(sel);
+    let task = null;
+    for (const el of tasks) {
+      if (!el.dataset.rc || el.dataset.rc === '0') {
+        task = el;
+        break;
+      }
+    }
     if (!task) return;
+    if (task.dataset.rc !== undefined) task.dataset.rc = '1';
     task.dataset.day = data.date;
     task.dataset.hours = data.hours;
     const hoursEl = task.querySelector('.task-hours');
@@ -363,26 +372,26 @@
     }
   }
   function refreshCalendar() {
+    const all = document.querySelectorAll('.task');
+    all.forEach(el => { el.dataset.rc = '0'; });
     fetch(CAL_URL)
       .then(r => r.json())
       .then(data => {
         const sched = data.schedule || {};
-        const seen = new Set();
         for (const [worker, days] of Object.entries(sched)) {
           for (const [day, tasks] of Object.entries(days)) {
             for (const t of tasks) {
-              const key = `${t.pid}|${t.phase}|${t.part ?? ''}`;
-              seen.add(key);
               moveTask({ ...t, date: day }, { worker });
             }
           }
         }
-        document.querySelectorAll('.task').forEach(el => {
-          const key = `${el.dataset.pid}|${el.dataset.phase}|${el.dataset.part || ''}`;
-          if (!seen.has(key)) {
+        all.forEach(el => {
+          if (el.dataset.rc !== '1') {
             const folder = el.closest('.unplanned-folder');
             el.remove();
             if (folder && !folder.querySelector('.task')) folder.remove();
+          } else {
+            delete el.dataset.rc;
           }
         });
       });
