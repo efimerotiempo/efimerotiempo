@@ -72,7 +72,7 @@ table.schedule td.weekend-cell {
 .task.dim { opacity: 0.3; }
 .task.highlight {
     font-weight: bold;
-    border: 3px solid #000;
+    border: 4px solid #000;
 }
 .task.moved {
     border: 3px solid #000;
@@ -223,6 +223,8 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .proj-name {
     font-weight: bold;
+    display: block;
+    cursor: pointer;
 }
 
 .columna-1 .proj-client {
@@ -244,9 +246,14 @@ table.pedidos-calendar td.week-label {
     cursor: pointer;
 }
 
+
 .columna-1 .link-title.highlight {
     font-weight: bold;
-    border: 3px solid #000;
+    border: 4px solid #000;
+}
+
+.columna-1 .proj-name.highlight {
+    border: 4px solid #000;
 }
 
 
