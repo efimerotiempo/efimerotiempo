@@ -823,8 +823,23 @@ let dragInfo = null;
           ev.stopPropagation();
           fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), {
             method: 'POST',
-            credentials: 'same-origin'
-          }).then(() => location.reload());
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: '{}'
+          }).then(resp => {
+            if (!resp.ok) { alert('Error'); return; }
+            const nowFrozen = t.classList.toggle('frozen');
+            t.setAttribute('draggable', nowFrozen ? 'false' : 'true');
+            const info = PROJECT_DATA[freeze.dataset.pid];
+            let arr = info.frozen_phases || [];
+            if (nowFrozen) {
+              if (!arr.includes(freeze.dataset.phase)) arr.push(freeze.dataset.phase);
+            } else {
+              arr = arr.filter(p => p !== freeze.dataset.phase);
+            }
+            info.frozen_phases = arr;
+            freeze.textContent = nowFrozen ? 'Descongelar' : 'Congelar';
+          });
         });
       }
       const startForm = document.getElementById('start-form');

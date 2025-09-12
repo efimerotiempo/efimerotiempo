@@ -1177,3 +1177,27 @@ def test_modals_escape_and_reload(monkeypatch):
     assert "e.key === 'Escape'" in html2
     assert "showDeadline(data.warning, () => location.reload())" not in html2
 
+
+def test_freeze_no_reload(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    idx = html.index("/toggle_freeze/")
+    snippet = html[idx:idx+300]
+    assert "location.reload" not in snippet
+    assert "'Content-Type': 'application/json'" in snippet
+
+    html2 = client.get("/complete", headers=auth).get_data(as_text=True)
+    idx2 = html2.index("/toggle_freeze/")
+    snippet2 = html2[idx2:idx2+300]
+    assert "location.reload" not in snippet2
+    assert "'Content-Type': 'application/json'" in snippet2
