@@ -29,6 +29,7 @@
                  data-phase="{{ t.get('phase') or '' }}"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
@@ -48,10 +49,12 @@
                  data-pid="{{ t.get('pid') or '' }}"
                  data-phase="{{ t.get('phase') or '' }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
+                {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
             </div>
             {% endfor %}
@@ -61,30 +64,20 @@
     {% endfor %}
     </tbody>
 </table>
-<table class="links-table columna-1">
-    <caption>Columna 1</caption>
-    <tbody>
+<div class="columna-1">
+    <h3>Columna 1</h3>
     {% for item in project_links %}
-        <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <td class="project-name">
-                <span class="proj-name">{{ item.project }}</span>
-                {% if item.client %}
-                    <br><span class="proj-client">{{ item.client }}</span>
-                {% endif %}
-            </td>
-        </tr>
-        {% if item.links %}
-        <tr class="links-row">
-            <td class="project-links">
-                {% for link in item.links %}
-                    <span class="link-title">{{ link }}</span>
-                {% endfor %}
-            </td>
-        </tr>
-        {% endif %}
+        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
+            <span class="proj-name">{{ item.project }}</span>
+            {% if item.client %}
+                <span class="proj-client">{{ item.client }}</span>
+            {% endif %}
+            {% for link in item.links %}
+                <span class="link-title">{{ link }}</span>
+            {% endfor %}
+        </div>
     {% endfor %}
-    </tbody>
-</table>
+</div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -102,7 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         part: t.dataset.part,
-        worker: t.dataset.worker
+        worker: t.dataset.worker,
+        cid: t.dataset.cid
       };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
@@ -124,6 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
           credentials: 'same-origin',
           body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
         }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: cell.dataset.date})
+        }).then(resp => { if (resp.ok) location.reload(); });
       } else if (dragged) {
         cell.appendChild(dragged);
         dragged = null;
@@ -136,7 +137,16 @@ document.addEventListener('DOMContentLoaded', () => {
     unconfirmedCell.addEventListener('dragover', e => e.preventDefault());
     unconfirmedCell.addEventListener('drop', e => {
       e.preventDefault();
-      if (dragged) {
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
+      if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: null})
+        }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (dragged) {
         unconfirmedCell.appendChild(dragged);
         dragged = null;
       }
@@ -160,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cli = (t.dataset.client || '').toLowerCase();
       t.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
     });
-    document.querySelectorAll('.links-table .project-row').forEach(row => {
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
       const show = (!q || proj.includes(q) || cli.includes(q));
@@ -171,6 +181,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  const source = new EventSource("{{ url_for('event_stream') }}");
+  source.onmessage = () => {
+    fetch("{{ url_for('project_links_api') }}")
+      .then(r => r.json())
+      .then(items => {
+        const container = document.querySelector('.columna-1');
+        container.querySelectorAll('.project-row').forEach(r => r.remove());
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'project-row';
+          div.dataset.project = item.project;
+          div.dataset.client = item.client || '';
+          let html = `<span class="proj-name">${item.project}</span>`;
+          if (item.client) {
+            html += `<br><span class="proj-client">${item.client}</span>`;
+          }
+          item.links.forEach(link => {
+            html += `<br><span class="link-title">${link}</span>`;
+          });
+          div.innerHTML = html;
+          container.appendChild(div);
+        });
+        filterInput.dispatchEvent(new Event('input'));
+      });
+  };
 });
 </script>
 {% endblock %}

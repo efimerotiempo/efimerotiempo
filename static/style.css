@@ -46,6 +46,9 @@ table.schedule td.weekend-cell {
     border: 3px solid transparent;
     background: #fff;
 }
+.task.frozen {
+    background: #cce5ff;
+}
 .task-main {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -56,6 +59,12 @@ table.schedule td.weekend-cell {
 .task-hours {
     margin-left: 4px;
     white-space: nowrap;
+}
+.task-date {
+    margin-left: 4px;
+    white-space: nowrap;
+    font-size: 0.9em;
+    color: #555;
 }
 .task.vacation {
     display: block;
@@ -152,8 +161,25 @@ table.schedule td.resource-col {
 }
 
 table.schedule td.resource-col {
-    font-size: 1.5em;
+    font-size: 1em;
     line-height: 1;
+}
+
+.resource-col .worker-label {
+    font-size: 1.5em;
+}
+
+.worker-note {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 2.4em;
+    font-weight: bold;
+}
+
+.worker-note-time {
+    font-size: 0.8em;
+    color: #555;
+    font-weight: normal;
 }
 
 table.pedidos-calendar {
@@ -195,25 +221,26 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
-.links-table {
-    border-collapse: collapse;
+.columna-1 .proj-name {
+    font-weight: bold;
 }
 
-.links-table td {
-    border: 1px solid #ccc;
-    padding: 4px;
+.columna-1 .proj-client {
+    display: block;
+    margin-top: 2px;
+}
+
+.columna-1 .project-row {
+    padding: 4px 0;
+    margin-bottom: 16px;
     max-width: 200px;
     word-break: break-word;
 }
 
-.links-table td.project-name {
-    font-weight: bold;
-    background: #eee;
-}
-
-.links-table td.project-links .link-title {
-    display: inline-block;
-    margin-right: 6px;
+.columna-1 .link-title {
+    display: block;
+    margin-left: 10px;
+    margin-top: 4px;
 }
 
 
@@ -410,6 +437,9 @@ tr.collapsed td:not(:first-child) { display: none; }
 .projects-table tr.proj-highlight {
     font-weight: bold;
     border: 3px solid #000;
+}
+.projects-table tr.frozen {
+    border: 3px solid blue !important;
 }
 .projects-table tbody tr form { display: none; }
 .projects-table tr.proj-highlight form {

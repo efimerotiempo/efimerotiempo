@@ -1,7 +1,7 @@
 import copy
 import json
 import base64
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import re
 
 import pytest
@@ -82,6 +82,7 @@ def test_webhook_updates_only_changed_fields(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -149,6 +150,7 @@ def test_webhook_updates_fecha_cliente(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -211,6 +213,7 @@ def test_webhook_creates_mecanizado_tratamiento(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -278,6 +281,7 @@ def test_webhook_preserves_existing_mecanizado_tratamiento(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -322,6 +326,7 @@ def test_title_update_replaces_old_pedido(monkeypatch):
         },
         "timestamp": "t1",
     }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False, card=payload["card"]: card)
     response = client.post("/kanbanize-webhook", json=payload)
 
     assert response.status_code == 200
@@ -359,6 +364,12 @@ def test_pedido_title_date_persistence(monkeypatch):
 
     client = app.app.test_client()
 
+    current_payload = {}
+    def fake_fetch(cid, with_links=False):
+        return current_payload.get("card", {"taskid": cid})
+
+    monkeypatch.setattr(app, "_fetch_kanban_card", fake_fetch)
+
     payload1 = {
         "card": {
             "taskid": 1,
@@ -369,6 +380,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t1",
     }
+    current_payload = payload1
     client.post("/kanbanize-webhook", json=payload1)
     assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
 
@@ -382,6 +394,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t2",
     }
+    current_payload = payload2
     client.post("/kanbanize-webhook", json=payload2)
     assert card_store[0]["stored_title_date"] == f"{d1_day:02d}/{month_str}"
 
@@ -401,6 +414,7 @@ def test_pedido_title_date_persistence(monkeypatch):
         },
         "timestamp": "t3",
     }
+    current_payload = payload3
     client.post("/kanbanize-webhook", json=payload3)
     assert card_store[0]["stored_title_date"] == f"{d2_day:02d}/{month_str}"
 
@@ -613,3 +627,624 @@ def test_gantt_view(monkeypatch):
     assert "startOfDay" in body
     assert "+ 1)*pxPerDay" in body
 
+
+def test_delete_project_cleans_conflicts(monkeypatch):
+    today = date.today().isoformat()
+    projects = [
+        {"id": "p1", "name": "Proj1", "client": "C1", "phases": {}, "start_date": today},
+        {"id": "p2", "name": "Proj2", "client": "C2", "phases": {}, "start_date": today},
+    ]
+    extras_store = [
+        {"id": "1", "project": "Proj1", "client": "C1", "message": "x", "key": "k1", "pid": "p1"},
+        {"id": "2", "project": "Proj2", "client": "C2", "message": "y", "key": "k2", "pid": "p2"},
+    ]
+    dismissed_store = [
+        "Proj1|No se cumple la fecha de entrega",
+        "Proj2|No se cumple la fecha de entrega",
+        "kanban-p1",
+        "kanban-p2",
+    ]
+
+    monkeypatch.setattr(app, "compute_schedule_map", lambda projs: {})
+    monkeypatch.setattr(app, "save_projects", lambda projs: None)
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: list(extras_store))
+
+    def fake_save_extra(data):
+        extras_store[:] = data
+
+    monkeypatch.setattr(app, "save_extra_conflicts", fake_save_extra)
+    monkeypatch.setattr(app, "load_dismissed", lambda: list(dismissed_store))
+
+    def fake_save_dismissed(data):
+        dismissed_store[:] = data
+
+    monkeypatch.setattr(app, "save_dismissed", fake_save_dismissed)
+
+    app.remove_project_and_preserve_schedule(projects, "p1")
+
+    assert all(c.get("pid") != "p1" for c in extras_store)
+    assert all("Proj1|" not in k and k != "kanban-p1" for k in dismissed_store)
+
+
+def test_calendar_pedidos_includes_child_links(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        },
+        {
+            "card": {
+                "taskid": "2",
+                "title": "Child1",
+                "columnname": "X",
+                "lanename": "Seguimiento compras",
+                "links": {"parent": [{"taskid": "1"}]},
+            }
+        },
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+
+    import re
+    row_pattern = re.compile(
+        r'<div class="project-row"[^>]*>[\s\S]*?ProjA[\s\S]*?Child1[\s\S]*?</div>',
+        re.MULTILINE,
+    )
+    assert row_pattern.search(html)
+
+
+def test_project_links_endpoint(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        },
+        {
+            "card": {
+                "taskid": "2",
+                "title": "Child1",
+                "columnname": "X",
+                "lanename": "Seguimiento compras",
+                "links": {"parent": [{"taskid": "1"}]},
+            }
+        },
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/project_links", headers=auth)
+    assert resp.get_json() == [
+        {"project": "ProjA", "client": "Client1", "links": ["Child1"]}
+    ]
+
+
+def test_project_links_omit_projects_without_children(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            }
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.get("/project_links", headers=auth)
+    assert resp.get_json() == []
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "ProjA" not in html
+
+
+def test_calendar_pedidos_child_links_from_parent(monkeypatch):
+    cards = [
+        {
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+                "links": {"child": [{"taskid": "2"}]},
+            }
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: cards)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid: {"title": "Child1"} if cid == "2" else None)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Child1" in html
+
+
+def test_calendar_pedidos_limits_past_weeks(monkeypatch):
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2024, 6, 19)
+
+        @classmethod
+        def fromisoformat(cls, s):
+            return date.fromisoformat(s)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    compras = {
+        "1": {
+            "card": {
+                "taskid": "1",
+                "title": "T1",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2024-05-01",
+            }
+        },
+        "2": {
+            "card": {
+                "taskid": "2",
+                "title": "T2",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2024-05-30",
+            }
+        },
+    }
+
+    monkeypatch.setattr(
+        app, "load_compras_raw", lambda: (compras, {"Plegado/Curvado": "#111"})
+    )
+    monkeypatch.setattr(app, "build_project_links", lambda cr: [])
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+
+    assert 'data-date="2024-05-27"' in html
+    assert 'data-date="2024-05-20"' not in html
+    assert re.search(r'data-date="2024-05-27"[\s\S]*T1', html)
+    assert re.search(r'data-date="2024-05-30"[\s\S]*T2', html)
+
+
+def test_webhook_enriches_child_links(monkeypatch):
+    card_store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "1",
+                "title": "ProjA - Client1",
+                "columnname": "Administración",
+                "lanename": "Acero al Carbono",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: list(card_store))
+
+    def fake_save(cards):
+        card_store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+
+    enriched = {
+        "taskid": "2",
+        "title": "Child1",
+        "columnname": "X",
+        "lanename": "Seguimiento compras",
+        "links": {"parent": [{"taskid": "1"}]},
+    }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=False: enriched)
+
+    client = app.app.test_client()
+    payload = {
+        "card": {
+            "taskid": "2",
+            "laneName": "Seguimiento compras",
+            "columnName": "X",
+            "title": "Child1",
+        },
+        "timestamp": "t1",
+    }
+    client.post("/kanbanize-webhook", json=payload)
+
+    assert card_store[-1]["card"].get("links") == {"parent": [{"taskid": "1"}]}
+
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Administración": "#111", "X": "#222"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Child1" in html
+
+
+def test_webhook_triggers_broadcast(monkeypatch):
+    events = []
+    monkeypatch.setattr(app, "broadcast_event", lambda data: events.append(data))
+    monkeypatch.setattr(app, "save_kanban_cards", lambda cards: None)
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: [])
+    payload = {
+        "card": {
+            "taskid": "5",
+            "laneName": "Seguimiento compras",
+            "columnName": "X",
+            "title": "Card5",
+        },
+        "timestamp": "t1",
+    }
+    monkeypatch.setattr(app, "_fetch_kanban_card", lambda cid, with_links=True, card=payload["card"]: card)
+    client = app.app.test_client()
+    resp = client.post("/kanbanize-webhook", json=payload)
+    assert resp.status_code == 200
+    assert events == [{"type": "kanban_update"}]
+
+
+def test_update_worker_note(monkeypatch):
+    store = {}
+    monkeypatch.setattr(app, "load_worker_notes", lambda: store.copy())
+    def fake_save(data):
+        store.update(data)
+    monkeypatch.setattr(app, "save_worker_notes", fake_save)
+    fake_now = datetime(2025, 1, 2, 15, 30)
+    class FakeDT(datetime):
+        @classmethod
+        def now(cls):
+            return fake_now
+        @classmethod
+        def fromisoformat(cls, s):
+            return datetime.fromisoformat(s)
+    monkeypatch.setattr(app, "datetime", FakeDT)
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post("/update_worker_note", json={"worker": "Irene", "text": "Hola"}, headers=auth)
+    assert resp.status_code == 200
+    assert store["Irene"]["text"] == "Hola"
+    assert store["Irene"]["edited"] == fake_now.isoformat(timespec="minutes")
+    assert resp.get_json()["edited"] == "15:30 02/01"
+
+
+def test_update_pedido_date(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "stored_title_date": "03/05",
+            "card": {
+                "taskid": "10",
+                "title": "ProjA - Client1",
+                "columnname": "Plegado/Curvado",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-05-03",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Plegado/Curvado": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 5, 1)
+
+        @classmethod
+        def fromisoformat(cls, s):
+            return date.fromisoformat(s)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post(
+        "/update_pedido_date",
+        json={"cid": "10", "date": "2025-05-12"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    assert store[0]["stored_title_date"] == "12/05"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'data-date="2025-05-12"[\s\S]*ProjA', html)
+
+
+def test_move_pedido_to_unconfirmed_remembers_date(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "20",
+                "title": "ProjB - Client2",
+                "columnname": "Planif. OTROS",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-07-10",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Planif. OTROS": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 7, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post("/update_pedido_date", json={"cid": "20", "date": None}, headers=auth)
+    assert resp.status_code == 200
+    assert store[0].get("stored_title_date") is None
+    assert store[0].get("previous_title_date") == "10/07"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjB[\s\S]*10/07', html)
+
+
+def test_move_pedido_from_calendar_to_unconfirmed_visible(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "30",
+                "title": "ProjC - Client3",
+                "columnname": "Plegado/curvado - Fabricación",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-08-20",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(
+        app, "load_column_colors", lambda: {"Plegado/curvado - Fabricación": "#111"}
+    )
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 8, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.post(
+        "/update_pedido_date", json={"cid": "30", "date": None}, headers=auth
+    )
+    assert resp.status_code == 200
+    assert store[0].get("previous_title_date") == "20/08"
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjC[\s\S]*20/08', html)
+
+
+def test_unconfirmed_ignores_disallowed_columns(monkeypatch):
+    store = [
+        {
+            "timestamp": "t0",
+            "card": {
+                "taskid": "40",
+                "title": "ProjD - Client4",
+                "columnname": "Random",
+                "lanename": "Seguimiento compras",
+                "deadline": "2025-09-15",
+            },
+        }
+    ]
+    monkeypatch.setattr(app, "load_kanban_cards", lambda: store)
+
+    def fake_save(cards):
+        store[:] = cards
+
+    monkeypatch.setattr(app, "save_kanban_cards", fake_save)
+    monkeypatch.setattr(app, "broadcast_event", lambda data: None)
+    monkeypatch.setattr(app, "load_column_colors", lambda: {"Random": "#111"})
+    monkeypatch.setattr(app, "save_column_colors", lambda c: None)
+
+    class FakeDate(date):
+        @classmethod
+        def today(cls):
+            return date(2025, 9, 1)
+
+    monkeypatch.setattr(app, "date", FakeDate)
+
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+
+    resp = client.post("/update_pedido_date", json={"cid": "40", "date": None}, headers=auth)
+    assert resp.status_code == 200
+
+    resp = client.get("/calendario-pedidos", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert re.search(r'class="unconfirmed"[\s\S]*ProjD', html) is None
+
+
+def test_calendar_renders_worker_note(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {"Irene": {"text": "Nota", "edited": "2025-01-02T15:30"}})
+    resp = app.app.test_client().get("/calendar", headers=auth)
+    html = resp.get_data(as_text=True)
+    assert "Nota" in html
+    assert "15:30 02/01" in html
+
+
+@pytest.mark.parametrize(
+    "confirmed,expected",[(False, app.DEADLINE_MSG),(True, app.CLIENT_DEADLINE_MSG)]
+)
+def test_move_phase_warns_but_allows_plan(monkeypatch, confirmed, expected):
+    projects = [{
+        "id": "p1",
+        "name": "Proj1",
+        "client": "C1",
+        "start_date": "2024-05-06",
+        "due_date": "2024-05-10",
+        "due_confirmed": confirmed,
+        "phases": {"montar": 8},
+        "assigned": {"montar": "Mikel"},
+        "auto_hours": {},
+        "color": "#fff",
+    }]
+    monkeypatch.setattr(app, "load_projects", lambda: projects)
+    def fake_save(projs):
+        projects[:] = copy.deepcopy(projs)
+    monkeypatch.setattr(app, "save_projects", fake_save)
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post(
+        "/move",
+        json={"pid": "p1", "phase": "montar", "date": "2024-05-13", "worker": "Mikel"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["warning"].startswith(expected)
+    assert projects[0]["segment_starts"]["montar"][0] == "2024-05-13"
+
+
+def test_modals_escape_and_reload(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    assert "e.key === 'Escape'" in html
+    assert "showDeadline(data.warning, () => location.reload())" not in html
+
+    html2 = client.get("/complete", headers=auth).get_data(as_text=True)
+    assert "e.key === 'Escape'" in html2
+    assert "showDeadline(data.warning, () => location.reload())" not in html2
+
+
+def test_freeze_no_reload(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    idx = html.index("/toggle_freeze/")
+    snippet = html[idx:idx+300]
+    assert "location.reload" not in snippet
+    assert "'Content-Type': 'application/json'" in snippet
+
+    html2 = client.get("/complete", headers=auth).get_data(as_text=True)
+    idx2 = html2.index("/toggle_freeze/")
+    snippet2 = html2[idx2:idx2+300]
+    assert "location.reload" not in snippet2
+    assert "'Content-Type': 'application/json'" in snippet2
+
+
+def test_refresh_after_move_and_hours(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    assert "/calendar?json=1" in html
+    idx = html.index("function afterMove")
+    snippet = html[idx:idx+400]
+    assert "refreshCalendar()" in snippet
+    idx2 = html.index(".hours-form")
+    snippet2 = html[idx2:idx2+600]
+    assert "refreshCalendar" in snippet2
+    assert "location.reload" not in snippet2
+
+
+def test_refresh_updates_hours_and_removes(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    idx = html.index("function moveTask")
+    snippet = html[idx:idx+800]
+    assert "task.dataset.hours" in snippet
+    assert "task.querySelector('.task-hours')" in snippet
+    assert "querySelectorAll" in snippet
+    idx2 = html.index("function refreshCalendar")
+    snippet2 = html[idx2:idx2+800]
+    assert "dataset.rc" in snippet2
+    assert "el.remove();" in snippet2
