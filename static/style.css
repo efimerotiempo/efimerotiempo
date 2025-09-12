@@ -230,6 +230,7 @@ table.pedidos-calendar td.week-label {
 .columna-1 .proj-client {
     display: block;
     margin-top: 2px;
+    cursor: pointer;
 }
 
 .columna-1 .project-row {
@@ -253,6 +254,10 @@ table.pedidos-calendar td.week-label {
 }
 
 .columna-1 .proj-name.highlight {
+    border: 4px solid #000;
+}
+
+.columna-1 .proj-client.highlight {
     border: 4px solid #000;
 }
 

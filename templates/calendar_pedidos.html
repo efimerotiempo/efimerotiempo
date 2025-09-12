@@ -70,10 +70,10 @@
         <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
             <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
-                <span class="proj-client">{{ item.client }}</span>
+                <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title" data-project="{{ item.project }}">{{ item.project }} - {{ link }}</span>
+                <span class="link-title" data-project="{{ item.project }}">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
@@ -228,9 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
           let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
-          if (item.client) { html += `<br><span class="proj-client">${item.client}</span>`; }
+          if (item.client) {
+            html += `<br><span class="proj-client" data-project="${item.project}">${item.client}</span>`;
+          }
           item.links.forEach(link => {
-            html += `<br><span class="link-title" data-project="${item.project}">${item.project} - ${link}</span>`;
+            html += `<br><span class="link-title" data-project="${item.project}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
