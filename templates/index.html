@@ -337,6 +337,20 @@
     const task = document.querySelector(sel);
     if (!task) return;
     task.dataset.day = data.date;
+    task.dataset.hours = data.hours;
+    const hoursEl = task.querySelector('.task-hours');
+    if (hoursEl) {
+      if (data.hours) {
+        hoursEl.innerHTML = data.auto ? `<span class="auto-hour">${data.hours}h</span>` : `${data.hours}h`;
+      } else {
+        hoursEl.remove();
+      }
+    } else if (data.hours) {
+      const span = document.createElement('span');
+      span.className = 'task-hours';
+      span.innerHTML = data.auto ? `<span class="auto-hour">${data.hours}h</span>` : `${data.hours}h`;
+      task.appendChild(span);
+    }
     if (req.worker === 'Sin planificar') {
       const content = ensureFolder(data.pid, task);
       content.appendChild(task);
@@ -353,13 +367,24 @@
       .then(r => r.json())
       .then(data => {
         const sched = data.schedule || {};
+        const seen = new Set();
         for (const [worker, days] of Object.entries(sched)) {
           for (const [day, tasks] of Object.entries(days)) {
             for (const t of tasks) {
+              const key = `${t.pid}|${t.phase}|${t.part ?? ''}`;
+              seen.add(key);
               moveTask({ ...t, date: day }, { worker });
             }
           }
         }
+        document.querySelectorAll('.task').forEach(el => {
+          const key = `${el.dataset.pid}|${el.dataset.phase}|${el.dataset.part || ''}`;
+          if (!seen.has(key)) {
+            const folder = el.closest('.unplanned-folder');
+            el.remove();
+            if (folder && !folder.querySelector('.task')) folder.remove();
+          }
+        });
       });
   }
   function afterMove(data, req) {

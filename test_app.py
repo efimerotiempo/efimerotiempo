@@ -1224,3 +1224,26 @@ def test_refresh_after_move_and_hours(monkeypatch):
     snippet2 = html[idx2:idx2+600]
     assert "refreshCalendar" in snippet2
     assert "location.reload" not in snippet2
+
+
+def test_refresh_updates_hours_and_removes(monkeypatch):
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    monkeypatch.setattr(app, "get_projects", lambda: [])
+    monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
+    monkeypatch.setattr(app, "active_workers", lambda today=None: ["Irene"])
+    monkeypatch.setattr(app, "load_notes", lambda: [])
+    monkeypatch.setattr(app, "load_extra_conflicts", lambda: [])
+    monkeypatch.setattr(app, "load_dismissed", lambda: [])
+    monkeypatch.setattr(app, "load_daily_hours", lambda: {})
+    monkeypatch.setattr(app, "load_worker_notes", lambda: {})
+
+    client = app.app.test_client()
+    html = client.get("/calendar", headers=auth).get_data(as_text=True)
+    idx = html.index("function moveTask")
+    snippet = html[idx:idx+400]
+    assert "task.dataset.hours" in snippet
+    assert "task.querySelector('.task-hours')" in snippet
+    idx2 = html.index("function refreshCalendar")
+    snippet2 = html[idx2:idx2+800]
+    assert "seen = new Set" in snippet2 or "seen = new Set();" in snippet2
+    assert "el.remove();" in snippet2
