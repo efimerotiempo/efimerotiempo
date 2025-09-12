@@ -440,11 +440,49 @@
     deadlineModal.style.display = 'block';
     deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
   }
-  function afterMove(data, originalDate) {
+  function ensureFolder(pid, task) {
+    let folder = document.querySelector(`.unplanned-folder[data-pid="${pid}"]`);
+    if (!folder) {
+      const proj = task.dataset.project;
+      const client = task.dataset.client;
+      const due = task.dataset.due;
+      folder = document.createElement('div');
+      folder.className = 'unplanned-folder';
+      folder.dataset.pid = pid;
+      folder.innerHTML = `<div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> ${proj} - ${client}${due ? ` - <span class=\"folder-due\">${due}</span>` : ''}</div><div class="folder-content" style="display:none;"></div>`;
+      const list = document.querySelector('.unplanned-list');
+      list.appendChild(folder);
+      const btn = folder.querySelector('.folder-toggle');
+      const content = folder.querySelector('.folder-content');
+      btn.addEventListener('click', () => {
+        const open = content.style.display !== 'none';
+        content.style.display = open ? 'none' : 'block';
+        btn.innerHTML = open ? '&#43;' : '&#8722;';
+      });
+    }
+    return folder.querySelector('.folder-content');
+  }
+  function moveTask(data, req) {
+    const sel = `.task[data-pid="${data.pid}"][data-phase="${data.phase}"]` + (data.part ? `[data-part="${data.part}"]` : ':not([data-part])');
+    const task = document.querySelector(sel);
+    if (!task) return;
+    task.dataset.day = data.date;
+    if (req.worker === 'Sin planificar') {
+      const content = ensureFolder(data.pid, task);
+      content.appendChild(task);
+    } else {
+      const row = document.querySelector(`tr[data-worker="${req.worker}"]`);
+      const cell = row ? row.querySelector(`td[data-date="${data.date}"]`) : null;
+      if (cell) cell.appendChild(task);
+      const folder = task.closest('.unplanned-folder');
+      if (folder && !folder.querySelector('.task')) folder.remove();
+    }
+  }
+  function afterMove(data, req) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
-    if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-    if (data.warning) showDeadline(data.warning, () => location.reload());
-    else location.reload();
+    if (data.date !== req.date) localStorage.setItem(SCROLL_KEY2, data.date);
+    moveTask(data, req);
+    if (data.warning) showDeadline(data.warning);
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -720,7 +758,7 @@ let dragInfo = null;
                 else alert(data.error || 'Error');
                 return;
               }
-              afterMove(data, today);
+              afterMove(data, {date: today, worker: 'Sin planificar'});
             });
         });
       }
@@ -992,7 +1030,7 @@ let dragInfo = null;
               return;
             }
             sessionStorage.removeItem('undoMove');
-            afterMove(data, req.date);
+            afterMove(data, {date: req.date, worker: req.worker});
           });
       }
     }
@@ -1076,7 +1114,7 @@ let dragInfo = null;
         else alert(data.error || 'Error');
         return;
       }
-      afterMove(data, moveData.date);
+      afterMove(data, moveData);
     });
   }
   if (blockUnfreeze) {
@@ -1128,7 +1166,7 @@ let dragInfo = null;
             else alert(data.error || 'Error');
             return;
           }
-          afterMove(data, today);
+          afterMove(data, {date: today, worker: 'Sin planificar'});
         });
     });
   }

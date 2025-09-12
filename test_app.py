@@ -1171,9 +1171,9 @@ def test_modals_escape_and_reload(monkeypatch):
     client = app.app.test_client()
     html = client.get("/calendar", headers=auth).get_data(as_text=True)
     assert "e.key === 'Escape'" in html
-    assert "showDeadline(data.warning, () => location.reload())" in html
+    assert "showDeadline(data.warning, () => location.reload())" not in html
 
     html2 = client.get("/complete", headers=auth).get_data(as_text=True)
     assert "e.key === 'Escape'" in html2
-    assert "showDeadline(data.warning, () => location.reload())" in html2
+    assert "showDeadline(data.warning, () => location.reload())" not in html2
 
