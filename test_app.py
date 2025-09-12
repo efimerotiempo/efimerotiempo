@@ -1124,7 +1124,40 @@ def test_calendar_renders_worker_note(monkeypatch):
     assert "15:30 02/01" in html
 
 
-def test_modals_escape_and_no_reload(monkeypatch):
+@pytest.mark.parametrize(
+    "confirmed,expected",[(False, app.DEADLINE_MSG),(True, app.CLIENT_DEADLINE_MSG)]
+)
+def test_move_phase_warns_but_allows_plan(monkeypatch, confirmed, expected):
+    projects = [{
+        "id": "p1",
+        "name": "Proj1",
+        "client": "C1",
+        "start_date": "2024-05-06",
+        "due_date": "2024-05-10",
+        "due_confirmed": confirmed,
+        "phases": {"montar": 8},
+        "assigned": {"montar": "Mikel"},
+        "auto_hours": {},
+        "color": "#fff",
+    }]
+    monkeypatch.setattr(app, "load_projects", lambda: projects)
+    def fake_save(projs):
+        projects[:] = copy.deepcopy(projs)
+    monkeypatch.setattr(app, "save_projects", fake_save)
+    client = app.app.test_client()
+    auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
+    resp = client.post(
+        "/move",
+        json={"pid": "p1", "phase": "montar", "date": "2024-05-13", "worker": "Mikel"},
+        headers=auth,
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["warning"].startswith(expected)
+    assert projects[0]["segment_starts"]["montar"][0] == "2024-05-13"
+
+
+def test_modals_escape_and_reload(monkeypatch):
     auth = {"Authorization": "Basic " + base64.b64encode(b"admin:secreto").decode()}
     monkeypatch.setattr(app, "get_projects", lambda: [])
     monkeypatch.setattr(app, "schedule_projects", lambda projects: ({"Irene": {}}, []))
@@ -1138,9 +1171,9 @@ def test_modals_escape_and_no_reload(monkeypatch):
     client = app.app.test_client()
     html = client.get("/calendar", headers=auth).get_data(as_text=True)
     assert "e.key === 'Escape'" in html
-    assert "showDeadline(data.warning, () => location.reload())" not in html
+    assert "showDeadline(data.warning, () => location.reload())" in html
 
     html2 = client.get("/complete", headers=auth).get_data(as_text=True)
     assert "e.key === 'Escape'" in html2
-    assert "showDeadline(data.warning, () => location.reload())" not in html2
+    assert "showDeadline(data.warning, () => location.reload())" in html2
 

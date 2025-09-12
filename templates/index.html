@@ -312,7 +312,7 @@
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-    if (data.warning) showDeadline(data.warning);
+    if (data.warning) showDeadline(data.warning, () => location.reload());
     else location.reload();
   }
   const splitCancel = document.getElementById('split-cancel');
