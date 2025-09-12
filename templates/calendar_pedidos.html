@@ -182,6 +182,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let currentHighlight = null;
+
+  function setHighlight(proj) {
+    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const rows = document.querySelectorAll('.columna-1 .project-row');
+    tasks.forEach(t => t.classList.remove('highlight'));
+    rows.forEach(r => r.classList.remove('highlight'));
+    if (proj) {
+      tasks.forEach(t => {
+        if (t.dataset.project === proj) t.classList.add('highlight');
+      });
+      rows.forEach(r => {
+        if (r.dataset.project === proj) r.classList.add('highlight');
+      });
+      currentHighlight = proj;
+    } else {
+      currentHighlight = null;
+    }
+  }
+
+  function attachHighlightHandlers() {
+    document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
+      t.addEventListener('click', () => {
+        const proj = t.dataset.project;
+        setHighlight(currentHighlight === proj ? null : proj);
+      });
+    });
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const proj = row.dataset.project;
+        setHighlight(currentHighlight === proj ? null : proj);
+      });
+    });
+  }
+
+  attachHighlightHandlers();
+
   const source = new EventSource("{{ url_for('event_stream') }}");
   source.onmessage = () => {
     fetch("{{ url_for('project_links_api') }}")
@@ -205,6 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
+        attachHighlightHandlers();
+        if (currentHighlight) setHighlight(currentHighlight);
       });
   };
 });
