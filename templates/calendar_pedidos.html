@@ -73,7 +73,7 @@
                 <span class="proj-client">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title">{{ link }}</span>
+                <span class="link-title" data-project="{{ link }}">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
@@ -182,6 +182,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let currentHighlight = null;
+
+  function setHighlight(proj) {
+    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const links = document.querySelectorAll('.columna-1 .link-title');
+    tasks.forEach(t => t.classList.remove('highlight'));
+    links.forEach(l => l.classList.remove('highlight'));
+    if (proj) {
+      tasks.forEach(t => { if (t.dataset.project === proj) t.classList.add('highlight'); });
+      links.forEach(l => { if (l.dataset.project === proj) l.classList.add('highlight'); });
+      currentHighlight = proj;
+    } else {
+      currentHighlight = null;
+    }
+  }
+
+  function attachHighlightHandlers() {
+    document.querySelector('.pedidos-calendar').addEventListener('click', e => {
+      const t = e.target.closest('.task');
+      if (!t) return;
+      const proj = t.dataset.project;
+      setHighlight(currentHighlight === proj ? null : proj);
+    });
+    document.querySelector('.columna-1').addEventListener('click', e => {
+      const link = e.target.closest('.link-title');
+      if (!link) return;
+      const proj = link.dataset.project;
+      setHighlight(currentHighlight === proj ? null : proj);
+    });
+  }
+
+  attachHighlightHandlers();
+
   const source = new EventSource("{{ url_for('event_stream') }}");
   source.onmessage = () => {
     fetch("{{ url_for('project_links_api') }}")
@@ -195,16 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
           let html = `<span class="proj-name">${item.project}</span>`;
-          if (item.client) {
-            html += `<br><span class="proj-client">${item.client}</span>`;
-          }
+          if (item.client) { html += `<br><span class="proj-client">${item.client}</span>`; }
           item.links.forEach(link => {
-            html += `<br><span class="link-title">${link}</span>`;
+            html += `<br><span class="link-title" data-project="${link}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
+        if (currentHighlight) setHighlight(currentHighlight);
       });
   };
 });
