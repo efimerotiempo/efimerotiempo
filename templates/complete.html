@@ -443,7 +443,7 @@
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-    if (data.warning) showDeadline(data.warning, () => location.reload());
+    if (data.warning) showDeadline(data.warning);
     else location.reload();
   }
   const splitCancel = document.getElementById('split-cancel');
@@ -460,7 +460,7 @@
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
           body: JSON.stringify({ pid })
-        }).then(() => location.reload());
+        });
       });
       break;
     }
@@ -1304,5 +1304,16 @@ if (NEW_CONFLICTS.length) {
     showNextConflict();
   });
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (deadlineModal.style.display === 'block') deadlineClose.click();
+    if (conflictModal.style.display === 'block') conflictClose.click();
+    if (splitModal.style.display === 'block') splitCancel.click();
+    if (blockModal.style.display === 'block') blockCancel.click();
+    if (bugModal.style.display === 'block') bugCancel.click();
+    if (obsModal && obsModal.style.display === 'block') obsCancel.click();
+  }
+});
 </script>
 {% endblock %}
