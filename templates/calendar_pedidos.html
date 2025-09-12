@@ -68,12 +68,12 @@
     <h3>Columna 1</h3>
     {% for item in project_links %}
         <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
+            <span class="proj-name">{{ item.project }}</span>
             {% if item.client %}
                 <span class="proj-client">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title" data-project="{{ item.project }}">{{ link }}</span>
+                <span class="link-title" data-project="{{ link }}">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
@@ -186,12 +186,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function setHighlight(proj) {
     const tasks = document.querySelectorAll('.pedidos-calendar .task');
-    const colItems = document.querySelectorAll('.columna-1 [data-project]');
+    const links = document.querySelectorAll('.columna-1 .link-title');
     tasks.forEach(t => t.classList.remove('highlight'));
-    colItems.forEach(i => i.classList.remove('highlight'));
+    links.forEach(l => l.classList.remove('highlight'));
     if (proj) {
       tasks.forEach(t => { if (t.dataset.project === proj) t.classList.add('highlight'); });
-      colItems.forEach(i => { if (i.dataset.project === proj) i.classList.add('highlight'); });
+      links.forEach(l => { if (l.dataset.project === proj) l.classList.add('highlight'); });
       currentHighlight = proj;
     } else {
       currentHighlight = null;
@@ -206,9 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
       setHighlight(currentHighlight === proj ? null : proj);
     });
     document.querySelector('.columna-1').addEventListener('click', e => {
-      const el = e.target.closest('[data-project]');
-      if (!el) return;
-      const proj = el.dataset.project;
+      const link = e.target.closest('.link-title');
+      if (!link) return;
+      const proj = link.dataset.project;
       setHighlight(currentHighlight === proj ? null : proj);
     });
   }
@@ -227,10 +227,10 @@ document.addEventListener('DOMContentLoaded', () => {
           div.className = 'project-row';
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
-          let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
+          let html = `<span class="proj-name">${item.project}</span>`;
           if (item.client) { html += `<br><span class="proj-client">${item.client}</span>`; }
           item.links.forEach(link => {
-            html += `<br><span class="link-title" data-project="${item.project}">${link}</span>`;
+            html += `<br><span class="link-title" data-project="${link}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
