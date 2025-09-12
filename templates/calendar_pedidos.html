@@ -68,12 +68,12 @@
     <h3>Columna 1</h3>
     {% for item in project_links %}
         <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <span class="proj-name">{{ item.project }}</span>
+            <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
                 <span class="proj-client">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title">{{ link }}</span>
+                <span class="link-title" data-project="{{ item.project }}">{{ item.project }} - {{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
@@ -182,6 +182,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let currentHighlight = null;
+
+  function setHighlight(proj) {
+    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const colItems = document.querySelectorAll('.columna-1 [data-project]');
+    tasks.forEach(t => t.classList.remove('highlight'));
+    colItems.forEach(i => i.classList.remove('highlight'));
+    if (proj) {
+      tasks.forEach(t => { if (t.dataset.project === proj) t.classList.add('highlight'); });
+      colItems.forEach(i => { if (i.dataset.project === proj) i.classList.add('highlight'); });
+      currentHighlight = proj;
+    } else {
+      currentHighlight = null;
+    }
+  }
+
+  function attachHighlightHandlers() {
+    document.querySelector('.pedidos-calendar').addEventListener('click', e => {
+      const t = e.target.closest('.task');
+      if (!t) return;
+      const proj = t.dataset.project;
+      setHighlight(currentHighlight === proj ? null : proj);
+    });
+    document.querySelector('.columna-1').addEventListener('click', e => {
+      const el = e.target.closest('[data-project]');
+      if (!el) return;
+      const proj = el.dataset.project;
+      setHighlight(currentHighlight === proj ? null : proj);
+    });
+  }
+
+  attachHighlightHandlers();
+
   const source = new EventSource("{{ url_for('event_stream') }}");
   source.onmessage = () => {
     fetch("{{ url_for('project_links_api') }}")
@@ -194,17 +227,16 @@ document.addEventListener('DOMContentLoaded', () => {
           div.className = 'project-row';
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
-          let html = `<span class="proj-name">${item.project}</span>`;
-          if (item.client) {
-            html += `<br><span class="proj-client">${item.client}</span>`;
-          }
+          let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
+          if (item.client) { html += `<br><span class="proj-client">${item.client}</span>`; }
           item.links.forEach(link => {
-            html += `<br><span class="link-title">${link}</span>`;
+            html += `<br><span class="link-title" data-project="${item.project}">${item.project} - ${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
+        if (currentHighlight) setHighlight(currentHighlight);
       });
   };
 });
