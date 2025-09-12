@@ -3234,7 +3234,7 @@ def kanbanize_webhook():
             if due_date_obj:
                 existing['due_date'] = due_date_obj.isoformat()
                 existing['due_confirmed'] = due_confirmed_flag
-                existing['due_warning'] = True
+                existing['due_warning'] = False
             else:
                 existing['due_date'] = ''
                 existing['due_confirmed'] = False
@@ -3306,7 +3306,7 @@ def kanbanize_webhook():
             'source': 'api',
             'kanban_id': task_id,
             'due_confirmed': due_confirmed_flag,
-            'due_warning': bool(due_date_obj),
+            'due_warning': False,
         }
         projects.append(project)
         save_projects(projects)
