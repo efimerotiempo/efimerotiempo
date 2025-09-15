@@ -31,6 +31,7 @@
                  data-worker="{{ t.get('worker') or '' }}"
                  data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
+                 data-title="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="border-color: {{ t.get('color', '#999999') }};">
@@ -45,14 +46,15 @@
         {% if loop.first %}
         <td class="unconfirmed" rowspan="{{ weeks|length }}">
             {% for t in unconfirmed %}
-            <div class="task" draggable="true"
-                 data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="{{ t.get('phase') or '' }}"
-                 data-worker="{{ t.get('worker') or '' }}"
-                 data-cid="{{ t.get('cid') or '' }}"
-                 data-project="{{ t.project }}"
-                 data-client="{{ t.get('client') or '' }}"
-                 style="border-color: {{ t.get('color', '#999999') }};">
+              <div class="task" draggable="true"
+                   data-pid="{{ t.get('pid') or '' }}"
+                   data-phase="{{ t.get('phase') or '' }}"
+                   data-worker="{{ t.get('worker') or '' }}"
+                   data-cid="{{ t.get('cid') or '' }}"
+                   data-project="{{ t.project }}"
+                   data-title="{{ t.project }}"
+                   data-client="{{ t.get('client') or '' }}"
+                   style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
                 {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
@@ -73,7 +75,7 @@
                 <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title" data-project="{{ item.project }}">{{ link }}</span>
+                <span class="link-title" data-title="{{ link }}">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
@@ -184,15 +186,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentHighlight = null;
 
-  function setHighlight(proj) {
+  function setHighlight(title) {
     const tasks = document.querySelectorAll('.pedidos-calendar .task');
-    const colItems = document.querySelectorAll('.columna-1 [data-project]');
+    const links = document.querySelectorAll('.columna-1 .link-title');
     tasks.forEach(t => t.classList.remove('highlight'));
-    colItems.forEach(i => i.classList.remove('highlight'));
-    if (proj) {
-      tasks.forEach(t => { if (t.dataset.project === proj) t.classList.add('highlight'); });
-      colItems.forEach(i => { if (i.dataset.project === proj) i.classList.add('highlight'); });
-      currentHighlight = proj;
+    links.forEach(l => l.classList.remove('highlight'));
+    if (title) {
+      tasks.forEach(t => { if (t.dataset.title === title) t.classList.add('highlight'); });
+      links.forEach(l => { if (l.dataset.title === title) l.classList.add('highlight'); });
+      currentHighlight = title;
     } else {
       currentHighlight = null;
     }
@@ -202,14 +204,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.pedidos-calendar').addEventListener('click', e => {
       const t = e.target.closest('.task');
       if (!t) return;
-      const proj = t.dataset.project;
-      setHighlight(currentHighlight === proj ? null : proj);
+      const title = t.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
     });
     document.querySelector('.columna-1').addEventListener('click', e => {
-      const el = e.target.closest('[data-project]');
+      const el = e.target.closest('.link-title');
       if (!el) return;
-      const proj = el.dataset.project;
-      setHighlight(currentHighlight === proj ? null : proj);
+      const title = el.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
     });
   }
 
@@ -232,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `<br><span class="proj-client" data-project="${item.project}">${item.client}</span>`;
           }
           item.links.forEach(link => {
-            html += `<br><span class="link-title" data-project="${item.project}">${link}</span>`;
+            html += `<br><span class="link-title" data-title="${link}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
