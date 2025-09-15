@@ -1553,6 +1553,8 @@ def gantt_view():
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
     for worker, days in sched.items():
+        if worker == UNPLANNED:
+            continue
         for day, tasks in days.items():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
