@@ -27,7 +27,8 @@
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
   .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
   .summary-row.project-row { cursor:pointer; font-weight:bold; }
-  .summary-row.phase-row { padding-left:16px; }
+  .summary-row.phase-row { padding-left:16px; opacity:0.5; }
+  .gantt-row.phase-row { opacity:0.5; }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
   .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
@@ -135,7 +136,7 @@ function render(){
     summaryBody.appendChild(summaryRow);
 
     const rowDiv = document.createElement('div');
-    rowDiv.className = 'gantt-row';
+    rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
     const bar = document.createElement('div');
     bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
     const s = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
