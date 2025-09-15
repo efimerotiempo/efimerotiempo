@@ -223,10 +223,12 @@ table.pedidos-calendar td.week-label {
 }
 
 .columna-1-content {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(8, auto);
+    grid-auto-columns: 200px;
+    gap: 4px 16px;
     overflow-x: auto;
-    width: calc(200px * 8);
 }
 
 .columna-1 .proj-name {
@@ -243,8 +245,7 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .project-row {
     padding: 4px 0;
-    margin-right: 16px;
-    flex: 0 0 200px;
+    width: 200px;
     word-break: break-word;
 }
 
