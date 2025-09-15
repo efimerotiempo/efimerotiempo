@@ -33,6 +33,7 @@
                  data-project="{{ t.project }}"
                  data-title="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
+                 data-due="{{ d.date.isoformat() }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -70,7 +71,7 @@
     <h3>Columna 1</h3>
     <div class="columna-1-content">
     {% for item in project_links %}
-        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
+        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due or '' }}">
             <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
                 <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
@@ -188,6 +189,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentHighlight = null;
 
+  function updateDueWarnings() {
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
+      const projDue = row.dataset.due;
+      if (!projDue) return;
+      row.querySelectorAll('.link-title').forEach(link => {
+        const title = link.dataset.title;
+        const tasks = Array.from(document.querySelectorAll(`.pedidos-calendar .task[data-title="${title}"]`));
+        const taskDue = tasks
+          .map(t => t.dataset.due)
+          .filter(Boolean)
+          .sort()[0];
+        if (taskDue) {
+          const diff = (new Date(projDue) - new Date(taskDue)) / 86400000;
+          if (diff >= 3) {
+            link.classList.add('due-late');
+          } else {
+            link.classList.remove('due-late');
+          }
+        } else {
+          link.classList.remove('due-late');
+        }
+      });
+    });
+  }
+
   function setHighlight(title) {
     const tasks = document.querySelectorAll('.pedidos-calendar .task');
     const links = document.querySelectorAll('.columna-1 .link-title');
@@ -218,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   attachHighlightHandlers();
+  updateDueWarnings();
 
   const source = new EventSource("{{ url_for('event_stream') }}");
   source.onmessage = () => {
@@ -231,6 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
           div.className = 'project-row';
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
+          if (item.due) div.dataset.due = item.due;
           let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
           if (item.client) {
             html += `<span class="proj-client" data-project="${item.project}">${item.client}</span>`;
@@ -243,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         filterInput.dispatchEvent(new Event('input'));
         if (currentHighlight) setHighlight(currentHighlight);
+        updateDueWarnings();
       });
   };
 });

@@ -456,6 +456,7 @@ def build_project_links(compras_raw):
             project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
+        due = parse_kanban_date(card.get('deadline'))
         if (
             lane_name.strip() in ['Acero al Carbono', 'Inoxidable - Aluminio']
             and column not in ['Ready to Archive', 'Hacer Albaran']
@@ -465,7 +466,12 @@ def build_project_links(compras_raw):
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
                 if child_links:
-                    links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                    links_table.append({
+                        'project': project_name,
+                        'client': client_name,
+                        'links': child_links,
+                        'due': due.isoformat() if due else None
+                    })
                     seen_links.add(key)
     return links_table
 
