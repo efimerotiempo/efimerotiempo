@@ -36,6 +36,8 @@
   .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
+  .day-cell.today { background-color: rgba(255,0,0,0.3); }
+  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
 </style>
 <script>
 const projects = {{ projects|safe }};
@@ -90,15 +92,27 @@ function render(){
   body.style.width = width + 'px';
   body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
   header.style.background = body.style.background;
+  const todayStr = new Date().toISOString().split('T')[0];
+  let todayIndex = null;
 
   for(let i=0;i<totalDays;i++){
     const d = new Date(minStart + i*dayMs);
+    const iso = d.toISOString().split('T')[0];
     const cell = document.createElement('div');
     cell.className = 'day-cell';
     cell.style.left = (i*pxPerDay) + 'px';
     cell.style.width = pxPerDay + 'px';
     cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
+    if(iso === todayStr){ cell.classList.add('today'); todayIndex = i; }
     header.appendChild(cell);
+  }
+
+  if(todayIndex !== null){
+    const highlight = document.createElement('div');
+    highlight.className = 'today-column';
+    highlight.style.left = (todayIndex*pxPerDay) + 'px';
+    highlight.style.width = pxPerDay + 'px';
+    body.appendChild(highlight);
   }
 
   const rows = [];
