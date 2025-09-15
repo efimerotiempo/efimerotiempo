@@ -1565,16 +1565,26 @@ def gantt_view():
             continue
         start = min(t['start_time'] for t in tasks)
         end = max(t['end_time'] for t in tasks)
-        phases = []
+        phase_map = {}
         for t in tasks:
-            phases.append({
-                'id': f"{pid}-{t['phase']}-{t.get('part', '')}",
-                'name': t['phase'],
-                'start': t['start_time'],
-                'end': t['end_time'],
-                'color': t.get('color', p.get('color')),
-                'worker': t.get('worker'),
-            })
+            key = t['phase']
+            entry = phase_map.get(key)
+            if not entry:
+                entry = {
+                    'id': f"{pid}-{key}",
+                    'name': key,
+                    'start': t['start_time'],
+                    'end': t['end_time'],
+                    'color': t.get('color', p.get('color')),
+                    'worker': t.get('worker'),
+                }
+                phase_map[key] = entry
+            else:
+                if t['start_time'] < entry['start']:
+                    entry['start'] = t['start_time']
+                if t['end_time'] > entry['end']:
+                    entry['end'] = t['end_time']
+        phases = list(phase_map.values())
         gantt_projects.append({
             'id': pid,
             'name': p['name'],
