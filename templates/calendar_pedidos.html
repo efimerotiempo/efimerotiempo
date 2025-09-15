@@ -68,6 +68,7 @@
 </table>
 <div class="columna-1">
     <h3>Columna 1</h3>
+    <div class="columna-1-content">
     {% for item in project_links %}
         <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
             <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
@@ -79,6 +80,7 @@
             {% endfor %}
         </div>
     {% endfor %}
+    </div>
 </div>
 </div>
 <script>
@@ -222,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch("{{ url_for('project_links_api') }}")
       .then(r => r.json())
       .then(items => {
-        const container = document.querySelector('.columna-1');
+        const container = document.querySelector('.columna-1-content');
         container.querySelectorAll('.project-row').forEach(r => r.remove());
         items.forEach(item => {
           const div = document.createElement('div');
@@ -231,10 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.client = item.client || '';
           let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
           if (item.client) {
-            html += `<br><span class="proj-client" data-project="${item.project}">${item.client}</span>`;
+            html += `<span class="proj-client" data-project="${item.project}">${item.client}</span>`;
           }
           item.links.forEach(link => {
-            html += `<br><span class="link-title" data-title="${link}">${link}</span>`;
+            html += `<span class="link-title" data-title="${link}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
