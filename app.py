@@ -233,6 +233,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Tubo/perfil/llanta/chapa',
     'Oxicorte',
     'Laser',
+    'Premecanizado',
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
