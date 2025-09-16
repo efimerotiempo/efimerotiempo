@@ -8,11 +8,13 @@
   <button id="zoom_out">-</button>
   <button id="sort_start">Ordenar por inicio</button>
   <button id="sort_due">Ordenar por límite</button>
+  <button id="go_today">HOY</button>
 </div>
 <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
     <div class="summary-header">Resumen</div>
     <div id="gantt_summary_body"></div>
+    <div id="summary-resizer" class="summary-resizer"></div>
   </div>
   <div id="gantt_main" class="gantt-main">
     <div id="gantt_header" class="gantt-header"></div>
@@ -21,13 +23,14 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:250px; overflow-x:auto; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; }
+  .gantt-summary { width:250px; overflow-x:hidden; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
   .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
   .summary-row.project-row { cursor:pointer; font-weight:bold; }
-  .summary-row.phase-row { padding-left:16px; }
+  .summary-row.phase-row { padding-left:16px; opacity:0.5; }
+  .gantt-row.phase-row { opacity:0.5; }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
   .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
@@ -36,6 +39,8 @@
   .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
+  .day-cell.today { background-color: rgba(255,0,0,0.3); }
+  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
 </style>
 <script>
 const projects = {{ projects|safe }};
@@ -46,7 +51,34 @@ const header = document.getElementById('gantt_header');
 const body = document.getElementById('gantt_body');
 const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
 let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+let pxPerDay = 40 * zoom;
+let todayIndex = null;
+let initialScroll = true;
 const BAR_HEIGHT = 30;
+
+const summaryResizer = document.getElementById('summary-resizer');
+const SUMMARY_WIDTH_KEY = 'ganttSummaryWidth';
+const savedSummaryWidth = localStorage.getItem(SUMMARY_WIDTH_KEY);
+if(savedSummaryWidth){ summaryContainer.style.width = savedSummaryWidth + 'px'; }
+if(summaryResizer){
+  let startX, startWidth;
+  const onMouseMove = e => {
+    const dx = e.clientX - startX;
+    const newWidth = Math.max(150, startWidth + dx);
+    summaryContainer.style.width = newWidth + 'px';
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    localStorage.setItem(SUMMARY_WIDTH_KEY, summaryContainer.offsetWidth);
+  };
+  summaryResizer.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    startWidth = summaryContainer.offsetWidth;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+}
 
 function formatDate(d){return d.split('T')[0];}
 
@@ -84,21 +116,33 @@ function render(){
   const minStart = Math.min(...allStarts);
   const maxEnd = Math.max(...allEnds);
   const totalDays = Math.round((maxEnd - minStart)/dayMs) + 1;
-  const pxPerDay = 40 * zoom;
+  pxPerDay = 40 * zoom;
   const width = totalDays * pxPerDay;
   header.style.width = width + 'px';
   body.style.width = width + 'px';
   body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
   header.style.background = body.style.background;
+  const todayStr = new Date().toISOString().split('T')[0];
+  todayIndex = null;
 
   for(let i=0;i<totalDays;i++){
     const d = new Date(minStart + i*dayMs);
+    const iso = d.toISOString().split('T')[0];
     const cell = document.createElement('div');
     cell.className = 'day-cell';
     cell.style.left = (i*pxPerDay) + 'px';
     cell.style.width = pxPerDay + 'px';
     cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
+    if(iso === todayStr){ cell.classList.add('today'); todayIndex = i; }
     header.appendChild(cell);
+  }
+
+  if(todayIndex !== null){
+    const highlight = document.createElement('div');
+    highlight.className = 'today-column';
+    highlight.style.left = (todayIndex*pxPerDay) + 'px';
+    highlight.style.width = pxPerDay + 'px';
+    body.appendChild(highlight);
   }
 
   const rows = [];
@@ -121,7 +165,7 @@ function render(){
     summaryBody.appendChild(summaryRow);
 
     const rowDiv = document.createElement('div');
-    rowDiv.className = 'gantt-row';
+    rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
     const bar = document.createElement('div');
     bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
     const s = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
@@ -139,7 +183,13 @@ function render(){
 
   const totalHeight = rows.length * BAR_HEIGHT;
   summaryBody.style.height = totalHeight + 'px';
-  body.style.height = totalHeight + 'px';
+    body.style.height = totalHeight + 'px';
+  if(initialScroll){ scrollToToday(); initialScroll=false; }
+}
+
+function scrollToToday(){
+  if(todayIndex === null) return;
+  main.scrollLeft = todayIndex * pxPerDay - main.clientWidth/2 + pxPerDay/2;
 }
 
 function toggleProject(id){
@@ -154,6 +204,7 @@ document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setIt
 document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
 document.getElementById('sort_start').onclick = ()=>sortProjects('start');
 document.getElementById('sort_due').onclick = ()=>sortProjects('due');
+document.getElementById('go_today').onclick = scrollToToday;
 
 let syncing = false;
 function syncScroll(source, target){
