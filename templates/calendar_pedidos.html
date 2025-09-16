@@ -71,7 +71,7 @@
     <h3>Columna 1</h3>
     <div class="columna-1-content">
     {% for item in project_links %}
-        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due or '' }}">
+        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due or '' }}" data-montar="{{ item.montar_start or '' }}">
             <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
                 <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
@@ -189,24 +189,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentHighlight = null;
 
+  function parseISODateParts(value) {
+    const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+    return { year, month, day };
+  }
+
+  function diffInDays(later, earlier) {
+    const laterParts = parseISODateParts(later);
+    const earlierParts = parseISODateParts(earlier);
+    if (!laterParts || !earlierParts) return null;
+    const laterUtc = Date.UTC(laterParts.year, laterParts.month, laterParts.day);
+    const earlierUtc = Date.UTC(earlierParts.year, earlierParts.month, earlierParts.day);
+    return Math.round((laterUtc - earlierUtc) / 86400000);
+  }
+
+  function buildTaskMap() {
+    const map = new Map();
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      if (!title) return;
+      if (!map.has(title)) map.set(title, []);
+      map.get(title).push(task);
+    });
+    return map;
+  }
+
   function updateDueWarnings() {
+    const taskMap = buildTaskMap();
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const projDue = row.dataset.due;
-      if (!projDue) return;
+      const montarStart = row.dataset.montar || '';
+      const projectDue = row.dataset.due || '';
       row.querySelectorAll('.link-title').forEach(link => {
         const title = link.dataset.title;
-        const tasks = Array.from(document.querySelectorAll(`.pedidos-calendar .task[data-title="${title}"]`));
-        const taskDue = tasks
+        const tasks = taskMap.get(title) || [];
+        if (!montarStart || tasks.length === 0) {
+          link.classList.remove('due-late');
+          return;
+        }
+        const calendarDates = tasks
           .map(t => t.dataset.due)
           .filter(Boolean)
-          .sort()[0];
-        if (taskDue) {
-          const diff = (new Date(projDue) - new Date(taskDue)) / 86400000;
-          if (diff >= 3) {
-            link.classList.add('due-late');
-          } else {
-            link.classList.remove('due-late');
-          }
+          .sort();
+        const candidates = [];
+        if (calendarDates.length) {
+          candidates.push(calendarDates[0]);
+        }
+        if (projectDue) {
+          candidates.push(projectDue);
+        }
+        if (!candidates.length) {
+          link.classList.remove('due-late');
+          return;
+        }
+        candidates.sort();
+        const referenceDate = candidates[0];
+        const diff = diffInDays(montarStart, referenceDate);
+        if (diff !== null && diff >= 3) {
+          link.classList.add('due-late');
         } else {
           link.classList.remove('due-late');
         }
@@ -258,7 +302,8 @@ document.addEventListener('DOMContentLoaded', () => {
           div.className = 'project-row';
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
-          if (item.due) div.dataset.due = item.due;
+          div.dataset.montar = item.montar_start || '';
+          div.dataset.due = item.due || '';
           let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
           if (item.client) {
             html += `<span class="proj-client" data-project="${item.project}">${item.client}</span>`;

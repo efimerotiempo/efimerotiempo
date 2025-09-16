@@ -476,6 +476,29 @@ def build_project_links(compras_raw):
     return links_table
 
 
+def attach_phase_starts(links_table, projects=None):
+    """Attach the scheduled start date of the ``montar`` phase to each link."""
+
+    if projects is None:
+        projects = load_projects()
+    start_mapping = phase_start_map(projects)
+    montar_by_name = {}
+    for proj in projects:
+        phase_starts = start_mapping.get(proj['id'], {})
+        montar_start = phase_starts.get('montar')
+        if montar_start:
+            montar_by_name[proj['name']] = montar_start
+
+    enriched = []
+    for item in links_table:
+        entry = dict(item)
+        montar_start = montar_by_name.get(item['project'])
+        if montar_start:
+            entry['montar_start'] = montar_start
+        enriched.append(entry)
+    return enriched
+
+
 def load_column_colors():
     if os.path.exists(KANBAN_COLUMN_COLORS_FILE):
         with open(KANBAN_COLUMN_COLORS_FILE, 'r') as f:
@@ -1417,7 +1440,8 @@ def calendar_view():
 def calendar_pedidos():
     today = date.today()
     compras_raw, column_colors = load_compras_raw()
-    links_table = build_project_links(compras_raw)
+    projects = load_projects()
+    links_table = attach_phase_starts(build_project_links(compras_raw), projects)
 
     # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
     pedidos = {}
@@ -1549,7 +1573,7 @@ def calendar_pedidos():
 @app.route('/project_links')
 def project_links_api():
     compras_raw, _ = load_compras_raw()
-    links = build_project_links(compras_raw)
+    links = attach_phase_starts(build_project_links(compras_raw))
     return jsonify(links)
 
 
