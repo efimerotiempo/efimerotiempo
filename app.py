@@ -234,6 +234,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Oxicorte',
     'Laser',
     'Premecanizado',
+    'Planif. Premec.',
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
@@ -253,6 +254,17 @@ PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tratamiento',
     'Planf. TAU',
     'Planif. OTROS',
+}
+
+PEDIDOS_EXTRA_LANE_COLUMNS = {
+    'Planif. Premec.',
+    'Premecanizado',
+}
+
+PROJECT_LINK_LANES = {
+    'acero al carbono',
+    'inoxidable - aluminio',
+    'seguimiento compras',
 }
 
 
@@ -458,8 +470,9 @@ def build_project_links(compras_raw):
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
+        lane_key = lane_name.lower()
         if (
-            lane_name.strip() in ['Acero al Carbono', 'Inoxidable - Aluminio']
+            lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
             key = (project_name, client_name)
@@ -1459,6 +1472,18 @@ def calendar_pedidos():
             project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        lane_key = lane_name.lower()
+        column_allowed = (
+            column in PEDIDOS_ALLOWED_COLUMNS
+            or column in PEDIDOS_UNCONFIRMED_COLUMNS
+        )
+        lane_allowed = (
+            lane_key == "seguimiento compras"
+            or (
+                lane_key in {"acero al carbono", "inoxidable - aluminio"}
+                and column in PEDIDOS_EXTRA_LANE_COLUMNS
+            )
+        )
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
         # Determinar la fecha a usar: priorizar la almacenada del título
@@ -1492,29 +1517,15 @@ def calendar_pedidos():
             'prev_date': prev_date,
         }
 
-        # --- CALENDARIO PRINCIPAL ---
         if (
-            lane_name.strip().lower() == "seguimiento compras"
+            lane_allowed
             and column not in PEDIDOS_HIDDEN_COLUMNS
-            and (
-                column in PEDIDOS_ALLOWED_COLUMNS
-                or column in PEDIDOS_UNCONFIRMED_COLUMNS
-            )
+            and column_allowed
         ):
-            if d:  # con fecha
+            if d:
                 pedidos.setdefault(d, []).append(entry)
-
-        # --- LISTA SIN FECHA CONFIRMADA ---
-        if (
-            lane_name.strip().lower() == "seguimiento compras"
-            and column not in PEDIDOS_HIDDEN_COLUMNS
-            and (
-                column in PEDIDOS_ALLOWED_COLUMNS
-                or column in PEDIDOS_UNCONFIRMED_COLUMNS
-            )
-            and not d
-        ):
-            unconfirmed.append(entry)
+            else:
+                unconfirmed.append(entry)
 
 
     # --- ARMAR CALENDARIO SEMANAL ---
