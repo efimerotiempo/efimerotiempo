@@ -490,3 +490,45 @@ tr.collapsed td:not(:first-child) { display: none; }
     color: hotpink;
     font-weight: bold;
 }
+.resource-table {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 1rem;
+}
+
+.resource-table th,
+.resource-table td {
+    border: 1px solid #ccc;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+}
+
+.resource-order-header {
+    width: 5.5rem;
+}
+
+.resource-move {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: stretch;
+}
+
+.resource-move .move-btn {
+    background: #f3f3f3;
+    border: 1px solid #bbb;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1.1;
+    padding: 0.2rem 0;
+}
+
+.resource-move .move-btn:hover,
+.resource-move .move-btn:focus {
+    background: #e3e3e3;
+}
+
+.resource-visible {
+    text-align: center;
+}

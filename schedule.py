@@ -13,6 +13,7 @@ VACATIONS_FILE = os.path.join(DATA_DIR, 'vacations.json')
 DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
+WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -65,13 +66,42 @@ def save_extra_workers(workers):
         json.dump(workers, f)
 
 
-def _build_workers(extra=None):
+def load_worker_order():
+    if os.path.exists(WORKER_ORDER_FILE):
+        with open(WORKER_ORDER_FILE, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                return []
+        if isinstance(data, list):
+            return [w for w in data if isinstance(w, str)]
+    return []
+
+
+def save_worker_order(order):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_ORDER_FILE, 'w') as f:
+        json.dump(order, f)
+
+
+def _build_workers(extra=None, order=None):
     workers = BASE_WORKERS.copy()
     if extra is None:
         extra = load_extra_workers()
     for w in extra:
         workers[w] = BASE_WORKERS['Eneko'][:]
     workers.update(TAIL_WORKERS)
+    if order is None:
+        order = load_worker_order()
+    if order:
+        ordered = {}
+        for name in order:
+            if name in workers and name not in ordered:
+                ordered[name] = workers[name]
+        for name, phases in workers.items():
+            if name not in ordered:
+                ordered[name] = phases
+        return ordered
     return workers
 
 
@@ -99,10 +129,33 @@ def add_worker(name):
     if name not in extras:
         extras.append(name)
         save_extra_workers(extras)
+    if os.path.exists(WORKER_ORDER_FILE):
+        order = load_worker_order()
+        if name not in order:
+            order = order[:]
+            order.append(name)
+            save_worker_order(order)
     new_workers = _build_workers(extras)
     WORKERS.clear()
     WORKERS.update(new_workers)
     HOURS_LIMITS[name] = HOURS_PER_DAY
+
+
+def set_worker_order(order):
+    visible_workers = [w for w in WORKERS if w != UNPLANNED]
+    cleaned = []
+    seen = set()
+    for name in order:
+        if name in visible_workers and name not in seen:
+            cleaned.append(name)
+            seen.add(name)
+    for name in visible_workers:
+        if name not in seen:
+            cleaned.append(name)
+    save_worker_order(cleaned)
+    new_workers = _build_workers()
+    WORKERS.clear()
+    WORKERS.update(new_workers)
 
 
 def load_projects():

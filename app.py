@@ -47,6 +47,7 @@ load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
+set_worker_order = _schedule_mod.set_worker_order
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
@@ -1964,6 +1965,9 @@ def resources():
         active = request.form.getlist('worker')
         inactive = [w for w in workers if w not in active]
         save_inactive_workers(inactive)
+        order = request.form.getlist('order')
+        if order:
+            set_worker_order(order)
         get_projects()
         return redirect(url_for('resources'))
     return render_template('resources.html', workers=workers, inactive=inactive)
