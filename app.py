@@ -394,7 +394,7 @@ def last_kanban_card(cid):
 
 
 def load_compras_raw():
-    allowed_lanes = {'seguimiento compras'}
+    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
     compras_raw = {}
     column_colors = load_column_colors()
     updated_colors = False
