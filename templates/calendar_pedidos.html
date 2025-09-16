@@ -221,40 +221,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateDueWarnings() {
     const taskMap = buildTaskMap();
+    const dueLateTitles = new Set();
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const montarStart = row.dataset.montar || '';
       const projectDue = row.dataset.due || '';
       row.querySelectorAll('.link-title').forEach(link => {
         const title = link.dataset.title;
         const tasks = taskMap.get(title) || [];
-        if (!montarStart || tasks.length === 0) {
-          link.classList.remove('due-late');
-          return;
-        }
         const calendarDates = tasks
           .map(t => t.dataset.due)
           .filter(Boolean)
           .sort();
-        const candidates = [];
+        let referenceDate = '';
         if (calendarDates.length) {
-          candidates.push(calendarDates[0]);
+          referenceDate = calendarDates[0];
+        } else if (projectDue) {
+          referenceDate = projectDue;
         }
-        if (projectDue) {
-          candidates.push(projectDue);
+        let isLate = false;
+        if (montarStart && referenceDate) {
+          const diff = diffInDays(referenceDate, montarStart);
+          if (diff !== null && diff <= 3) {
+            isLate = true;
+            dueLateTitles.add(title);
+          }
         }
-        if (!candidates.length) {
-          link.classList.remove('due-late');
-          return;
-        }
-        candidates.sort();
-        const referenceDate = candidates[0];
-        const diff = diffInDays(montarStart, referenceDate);
-        if (diff !== null && diff >= 3) {
-          link.classList.add('due-late');
-        } else {
-          link.classList.remove('due-late');
-        }
+        link.classList.toggle('due-late', isLate);
       });
+    });
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      task.classList.toggle('due-late', dueLateTitles.has(title));
     });
   }
 

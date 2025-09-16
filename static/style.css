@@ -260,6 +260,11 @@ table.pedidos-calendar td.week-label {
     color: red;
 }
 
+.pedidos-calendar .task.due-late {
+    color: red;
+    border-color: red;
+}
+
 
 .columna-1 .link-title.highlight {
     font-weight: bold;

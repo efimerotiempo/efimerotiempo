@@ -394,7 +394,7 @@ def last_kanban_card(cid):
 
 
 def load_compras_raw():
-    allowed_lanes = {'seguimiento compras', 'acero al carbono', 'inoxidable - aluminio'}
+    allowed_lanes = {'seguimiento compras'}
     compras_raw = {}
     column_colors = load_column_colors()
     updated_colors = False
@@ -511,6 +511,96 @@ def attach_phase_starts(links_table, projects=None):
             entry['montar_start'] = montar_start
         enriched.append(entry)
     return enriched
+
+
+def compute_pedidos_entries(compras_raw, column_colors, today):
+    pedidos = {}
+    unconfirmed = []
+    calendar_titles = set()
+
+    for data in compras_raw.values():
+        card = data['card']
+        stored_date = data.get('stored_date')
+        prev_date = data.get('prev_date')
+        title = (card.get('title') or '').strip()
+        if not title:
+            continue
+
+        client_name = ''
+        if ' - ' in title:
+            _, client_name = [p.strip() for p in title.split(' - ', 1)]
+
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        lane_key = lane_name.lower()
+
+        column_allowed = (
+            column in PEDIDOS_ALLOWED_COLUMNS
+            or column in PEDIDOS_UNCONFIRMED_COLUMNS
+        )
+
+        if not column_allowed or lane_key != 'seguimiento compras':
+            continue
+
+        if column in PEDIDOS_HIDDEN_COLUMNS:
+            continue
+
+        cid = card.get('taskid') or card.get('cardId') or card.get('id')
+
+        if stored_date:
+            try:
+                day, month = [int(x) for x in stored_date.split('/')]
+                d = date(today.year, month, day)
+            except Exception:
+                d = parse_kanban_date(card.get('deadline'))
+        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
+            d = None
+        else:
+            m = re.search(r"\((\d{2})/(\d{2})\)", title)
+            if m:
+                day, month = int(m.group(1)), int(m.group(2))
+                try:
+                    d = date(today.year, month, day)
+                except ValueError:
+                    d = parse_kanban_date(card.get('deadline'))
+            else:
+                d = parse_kanban_date(card.get('deadline'))
+
+        entry = {
+            'project': title,
+            'color': column_colors.get(column, '#999999'),
+            'hours': None,
+            'lane': lane_name,
+            'client': client_name,
+            'column': column,
+            'cid': cid,
+            'prev_date': prev_date,
+        }
+
+        if d:
+            pedidos.setdefault(d, []).append(entry)
+        else:
+            unconfirmed.append(entry)
+
+        calendar_titles.add(title)
+
+    return pedidos, unconfirmed, calendar_titles
+
+
+def filter_project_links_by_titles(links_table, valid_titles):
+    if not valid_titles:
+        return []
+
+    valid = set(valid_titles)
+    filtered = []
+    for item in links_table:
+        matches = [link for link in item['links'] if link in valid]
+        if not matches:
+            continue
+        entry = dict(item)
+        entry['links'] = matches
+        filtered.append(entry)
+    return filtered
 
 
 def load_column_colors():
@@ -1455,77 +1545,11 @@ def calendar_pedidos():
     today = date.today()
     compras_raw, column_colors = load_compras_raw()
     projects = load_projects()
-    links_table = attach_phase_starts(build_project_links(compras_raw), projects)
-
-    # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
-    pedidos = {}
-    unconfirmed = []
-
-    for data in compras_raw.values():
-        card = data['card']
-        stored_date = data.get('stored_date')
-        prev_date = data.get('prev_date')
-        title = (card.get('title') or '').strip()
-        project_name = title
-        client_name = ''
-        if ' - ' in title:
-            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
-        column = (card.get('columnname') or card.get('columnName') or '').strip()
-        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        lane_key = lane_name.lower()
-        column_allowed = (
-            column in PEDIDOS_ALLOWED_COLUMNS
-            or column in PEDIDOS_UNCONFIRMED_COLUMNS
-        )
-        lane_allowed = (
-            lane_key == "seguimiento compras"
-            or (
-                lane_key in {"acero al carbono", "inoxidable - aluminio"}
-                and column in PEDIDOS_EXTRA_LANE_COLUMNS
-            )
-        )
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-
-        # Determinar la fecha a usar: priorizar la almacenada del título
-        if stored_date:
-            try:
-                day, month = [int(x) for x in stored_date.split('/')]
-                d = date(today.year, month, day)
-            except Exception:
-                d = parse_kanban_date(card.get('deadline'))
-        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
-            d = None
-        else:
-            m = re.search(r"\((\d{2})/(\d{2})\)", title)
-            if m:
-                day, month = int(m.group(1)), int(m.group(2))
-                try:
-                    d = date(today.year, month, day)
-                except ValueError:
-                    d = parse_kanban_date(card.get('deadline'))
-            else:
-                d = parse_kanban_date(card.get('deadline'))
-
-        entry = {
-            'project': title,
-            'color': column_colors.get(column, '#999999'),
-            'hours': None,
-            'lane': lane_name,
-            'client': client_name,
-            'column': column,
-            'cid': cid,
-            'prev_date': prev_date,
-        }
-
-        if (
-            lane_allowed
-            and column not in PEDIDOS_HIDDEN_COLUMNS
-            and column_allowed
-        ):
-            if d:
-                pedidos.setdefault(d, []).append(entry)
-            else:
-                unconfirmed.append(entry)
+    raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+    pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
+        compras_raw, column_colors, today
+    )
+    links_table = filter_project_links_by_titles(raw_links, calendar_titles)
 
 
     # --- ARMAR CALENDARIO SEMANAL ---
@@ -1584,8 +1608,13 @@ def calendar_pedidos():
 
 @app.route('/project_links')
 def project_links_api():
-    compras_raw, _ = load_compras_raw()
-    links = attach_phase_starts(build_project_links(compras_raw))
+    today = date.today()
+    compras_raw, column_colors = load_compras_raw()
+    raw_links = attach_phase_starts(build_project_links(compras_raw))
+    _, _, calendar_titles = compute_pedidos_entries(
+        compras_raw, column_colors, today
+    )
+    links = filter_project_links_by_titles(raw_links, calendar_titles)
     return jsonify(links)
 
 
