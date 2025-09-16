@@ -72,7 +72,7 @@ table.schedule td.weekend-cell {
 .task.dim { opacity: 0.3; }
 .task.highlight {
     font-weight: bold;
-    border: 3px solid #000;
+    border: 4px solid #000;
 }
 .task.moved {
     border: 3px solid #000;
@@ -135,6 +135,7 @@ table.schedule td.weekend-cell {
 .unplanned-panel h3 { margin: 0; }
 .unplanned-list { overflow-y: auto; flex: 1; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
+.summary-resizer { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
 .unplanned-folder.dim { opacity: 0.3; }
 .folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
@@ -221,19 +222,30 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
+.columna-1-content {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(8, auto);
+    grid-auto-columns: 200px;
+    gap: 4px 16px;
+    overflow-x: auto;
+}
+
 .columna-1 .proj-name {
     font-weight: bold;
+    display: block;
+    cursor: pointer;
 }
 
 .columna-1 .proj-client {
     display: block;
     margin-top: 2px;
+    cursor: pointer;
 }
 
 .columna-1 .project-row {
     padding: 4px 0;
-    margin-bottom: 16px;
-    max-width: 200px;
+    width: 200px;
     word-break: break-word;
 }
 
@@ -241,6 +253,25 @@ table.pedidos-calendar td.week-label {
     display: block;
     margin-left: 10px;
     margin-top: 4px;
+    cursor: pointer;
+}
+
+.columna-1 .link-title.due-late {
+    color: red;
+}
+
+
+.columna-1 .link-title.highlight {
+    font-weight: bold;
+    border: 4px solid #000;
+}
+
+.columna-1 .proj-name.highlight {
+    border: 4px solid #000;
+}
+
+.columna-1 .proj-client.highlight {
+    border: 4px solid #000;
 }
 
 

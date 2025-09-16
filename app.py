@@ -233,6 +233,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Tubo/perfil/llanta/chapa',
     'Oxicorte',
     'Laser',
+    'Premecanizado',
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
@@ -456,6 +457,7 @@ def build_project_links(compras_raw):
             project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
+        due = parse_kanban_date(card.get('deadline'))
         if (
             lane_name.strip() in ['Acero al Carbono', 'Inoxidable - Aluminio']
             and column not in ['Ready to Archive', 'Hacer Albaran']
@@ -465,9 +467,37 @@ def build_project_links(compras_raw):
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
                 if child_links:
-                    links_table.append({'project': project_name, 'client': client_name, 'links': child_links})
+                    links_table.append({
+                        'project': project_name,
+                        'client': client_name,
+                        'links': child_links,
+                        'due': due.isoformat() if due else None
+                    })
                     seen_links.add(key)
     return links_table
+
+
+def attach_phase_starts(links_table, projects=None):
+    """Attach the scheduled start date of the ``montar`` phase to each link."""
+
+    if projects is None:
+        projects = load_projects()
+    start_mapping = phase_start_map(projects)
+    montar_by_name = {}
+    for proj in projects:
+        phase_starts = start_mapping.get(proj['id'], {})
+        montar_start = phase_starts.get('montar')
+        if montar_start:
+            montar_by_name[proj['name']] = montar_start
+
+    enriched = []
+    for item in links_table:
+        entry = dict(item)
+        montar_start = montar_by_name.get(item['project'])
+        if montar_start:
+            entry['montar_start'] = montar_start
+        enriched.append(entry)
+    return enriched
 
 
 def load_column_colors():
@@ -1411,7 +1441,8 @@ def calendar_view():
 def calendar_pedidos():
     today = date.today()
     compras_raw, column_colors = load_compras_raw()
-    links_table = build_project_links(compras_raw)
+    projects = load_projects()
+    links_table = attach_phase_starts(build_project_links(compras_raw), projects)
 
     # --- CONSTRUIR PEDIDOS Y NO CONFIRMADOS ---
     pedidos = {}
@@ -1543,7 +1574,7 @@ def calendar_pedidos():
 @app.route('/project_links')
 def project_links_api():
     compras_raw, _ = load_compras_raw()
-    links = build_project_links(compras_raw)
+    links = attach_phase_starts(build_project_links(compras_raw))
     return jsonify(links)
 
 
@@ -1553,6 +1584,8 @@ def gantt_view():
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
     for worker, days in sched.items():
+        if worker == UNPLANNED:
+            continue
         for day, tasks in days.items():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
@@ -1565,16 +1598,26 @@ def gantt_view():
             continue
         start = min(t['start_time'] for t in tasks)
         end = max(t['end_time'] for t in tasks)
-        phases = []
+        phase_map = {}
         for t in tasks:
-            phases.append({
-                'id': f"{pid}-{t['phase']}-{t.get('part', '')}",
-                'name': t['phase'],
-                'start': t['start_time'],
-                'end': t['end_time'],
-                'color': t.get('color', p.get('color')),
-                'worker': t.get('worker'),
-            })
+            key = t['phase']
+            entry = phase_map.get(key)
+            if not entry:
+                entry = {
+                    'id': f"{pid}-{key}",
+                    'name': key,
+                    'start': t['start_time'],
+                    'end': t['end_time'],
+                    'color': t.get('color', p.get('color')),
+                    'worker': t.get('worker'),
+                }
+                phase_map[key] = entry
+            else:
+                if t['start_time'] < entry['start']:
+                    entry['start'] = t['start_time']
+                if t['end_time'] > entry['end']:
+                    entry['end'] = t['end_time']
+        phases = list(phase_map.values())
         gantt_projects.append({
             'id': pid,
             'name': p['name'],
@@ -3234,7 +3277,7 @@ def kanbanize_webhook():
             if due_date_obj:
                 existing['due_date'] = due_date_obj.isoformat()
                 existing['due_confirmed'] = due_confirmed_flag
-                existing['due_warning'] = True
+                existing['due_warning'] = False
             else:
                 existing['due_date'] = ''
                 existing['due_confirmed'] = False
@@ -3306,7 +3349,7 @@ def kanbanize_webhook():
             'source': 'api',
             'kanban_id': task_id,
             'due_confirmed': due_confirmed_flag,
-            'due_warning': bool(due_date_obj),
+            'due_warning': False,
         }
         projects.append(project)
         save_projects(projects)

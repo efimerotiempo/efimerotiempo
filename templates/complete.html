@@ -402,7 +402,6 @@
 </div>
 <script>
   const PROJECT_DATA = {{ project_data|tojson }};
-  console.log(PROJECT_DATA);
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
   const MOVE_URL = "{{ url_for('move_phase') }}";
