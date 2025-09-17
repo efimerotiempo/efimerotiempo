@@ -31,7 +31,9 @@
                  data-worker="{{ t.get('worker') or '' }}"
                  data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
+                 data-title="{{ t.project }}"
                  data-client="{{ t.get('client') or '' }}"
+                 data-due="{{ d.date.isoformat() }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -45,14 +47,15 @@
         {% if loop.first %}
         <td class="unconfirmed" rowspan="{{ weeks|length }}">
             {% for t in unconfirmed %}
-            <div class="task" draggable="true"
-                 data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="{{ t.get('phase') or '' }}"
-                 data-worker="{{ t.get('worker') or '' }}"
-                 data-cid="{{ t.get('cid') or '' }}"
-                 data-project="{{ t.project }}"
-                 data-client="{{ t.get('client') or '' }}"
-                 style="border-color: {{ t.get('color', '#999999') }};">
+              <div class="task" draggable="true"
+                   data-pid="{{ t.get('pid') or '' }}"
+                   data-phase="{{ t.get('phase') or '' }}"
+                   data-worker="{{ t.get('worker') or '' }}"
+                   data-cid="{{ t.get('cid') or '' }}"
+                   data-project="{{ t.project }}"
+                   data-title="{{ t.project }}"
+                   data-client="{{ t.get('client') or '' }}"
+                   style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
                 {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
@@ -66,17 +69,19 @@
 </table>
 <div class="columna-1">
     <h3>Columna 1</h3>
+    <div class="columna-1-content">
     {% for item in project_links %}
-        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <span class="proj-name">{{ item.project }}</span>
+        <div class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due or '' }}" data-montar="{{ item.montar_start or '' }}">
+            <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
-                <span class="proj-client">{{ item.client }}</span>
+                <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
             {% endif %}
             {% for link in item.links %}
-                <span class="link-title">{{ link }}</span>
+                <span class="link-title" data-title="{{ link }}">{{ link }}</span>
             {% endfor %}
         </div>
     {% endfor %}
+    </div>
 </div>
 </div>
 <script>
@@ -182,29 +187,133 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let currentHighlight = null;
+
+  function parseISODateParts(value) {
+    const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+    return { year, month, day };
+  }
+
+  function diffInDays(later, earlier) {
+    const laterParts = parseISODateParts(later);
+    const earlierParts = parseISODateParts(earlier);
+    if (!laterParts || !earlierParts) return null;
+    const laterUtc = Date.UTC(laterParts.year, laterParts.month, laterParts.day);
+    const earlierUtc = Date.UTC(earlierParts.year, earlierParts.month, earlierParts.day);
+    return Math.round((laterUtc - earlierUtc) / 86400000);
+  }
+
+  function buildTaskMap() {
+    const map = new Map();
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      if (!title) return;
+      if (!map.has(title)) map.set(title, []);
+      map.get(title).push(task);
+    });
+    return map;
+  }
+
+  function updateDueWarnings() {
+    const taskMap = buildTaskMap();
+    const dueLateTitles = new Set();
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
+      const montarStart = row.dataset.montar || '';
+      const projectDue = row.dataset.due || '';
+      row.querySelectorAll('.link-title').forEach(link => {
+        const title = link.dataset.title;
+        const tasks = taskMap.get(title) || [];
+        const calendarDates = tasks
+          .map(t => t.dataset.due)
+          .filter(Boolean)
+          .sort();
+        let referenceDate = '';
+        if (calendarDates.length) {
+          referenceDate = calendarDates[0];
+        } else if (projectDue) {
+          referenceDate = projectDue;
+        }
+        let isLate = false;
+        if (montarStart && referenceDate) {
+          const diff = diffInDays(referenceDate, montarStart);
+          if (diff !== null && diff <= 3) {
+            isLate = true;
+            dueLateTitles.add(title);
+          }
+        }
+        link.classList.toggle('due-late', isLate);
+      });
+    });
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      task.classList.toggle('due-late', dueLateTitles.has(title));
+    });
+  }
+
+  function setHighlight(title) {
+    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const links = document.querySelectorAll('.columna-1 .link-title');
+    tasks.forEach(t => t.classList.remove('highlight'));
+    links.forEach(l => l.classList.remove('highlight'));
+    if (title) {
+      tasks.forEach(t => { if (t.dataset.title === title) t.classList.add('highlight'); });
+      links.forEach(l => { if (l.dataset.title === title) l.classList.add('highlight'); });
+      currentHighlight = title;
+    } else {
+      currentHighlight = null;
+    }
+  }
+
+  function attachHighlightHandlers() {
+    document.querySelector('.pedidos-calendar').addEventListener('click', e => {
+      const t = e.target.closest('.task');
+      if (!t) return;
+      const title = t.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
+    });
+    document.querySelector('.columna-1').addEventListener('click', e => {
+      const el = e.target.closest('.link-title');
+      if (!el) return;
+      const title = el.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
+    });
+  }
+
+  attachHighlightHandlers();
+  updateDueWarnings();
+
   const source = new EventSource("{{ url_for('event_stream') }}");
   source.onmessage = () => {
     fetch("{{ url_for('project_links_api') }}")
       .then(r => r.json())
       .then(items => {
-        const container = document.querySelector('.columna-1');
+        const container = document.querySelector('.columna-1-content');
         container.querySelectorAll('.project-row').forEach(r => r.remove());
         items.forEach(item => {
           const div = document.createElement('div');
           div.className = 'project-row';
           div.dataset.project = item.project;
           div.dataset.client = item.client || '';
-          let html = `<span class="proj-name">${item.project}</span>`;
+          div.dataset.montar = item.montar_start || '';
+          div.dataset.due = item.due || '';
+          let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
           if (item.client) {
-            html += `<br><span class="proj-client">${item.client}</span>`;
+            html += `<span class="proj-client" data-project="${item.project}">${item.client}</span>`;
           }
           item.links.forEach(link => {
-            html += `<br><span class="link-title">${link}</span>`;
+            html += `<span class="link-title" data-title="${link}">${link}</span>`;
           });
           div.innerHTML = html;
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
+        if (currentHighlight) setHighlight(currentHighlight);
+        updateDueWarnings();
       });
   };
 });
