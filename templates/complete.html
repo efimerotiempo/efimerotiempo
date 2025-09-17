@@ -632,8 +632,18 @@ let dragInfo = null;
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      if (info.due_date && info.due_date !== '0') html += `<div>Límite: ${info.due_date}</div>`;
-      if (info.material_confirmed_date && info.material_confirmed_date !== '0') html += `<div>Material confirmado: ${info.material_confirmed_date}</div>`;
+        if (info.due_date && info.due_date !== '0') html += `<div>Límite: ${info.due_date}</div>`;
+        if (info.material_confirmed_date && info.material_confirmed_date !== '0') html += `<div>Material confirmado: ${info.material_confirmed_date}</div>`;
+        const kanbanFields = info.kanban_display_fields || {};
+        const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+        if (kanbanEntries.length) {
+          html += '<div class="kanban-extra-fields">';
+          kanbanEntries.forEach(([label, value]) => {
+            const displayValue = `${value}`;
+            html += `<div>${label}: ${displayValue}</div>`;
+          });
+          html += '</div>';
+        }
         const phaseLines = [];
         PHASES.forEach(ph => {
           if (ph === 'dibujo' || ph === 'pedidos') return;

@@ -134,6 +134,8 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
+KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
+
 SSE_CLIENTS = []
 
 
@@ -1153,6 +1155,9 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
+        if not isinstance(p.get('kanban_display_fields'), dict):
+            p['kanban_display_fields'] = {}
+            changed = True
         column_value = p.get('kanban_column')
         if column_value is None:
             p['kanban_column'] = ''
@@ -1340,6 +1345,7 @@ def _kanban_card_to_project(card):
         fields = dict(fields_raw)
     else:
         fields = {}
+    popup_raw = {field: fields.get(field) for field in KANBAN_POPUP_FIELDS}
     for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
         fields.pop(k, None)
 
@@ -1393,6 +1399,34 @@ def _kanban_card_to_project(card):
         if prep:
             phases['recepcionar material'] = prep
 
+    def _bool_flag(value):
+        if isinstance(value, str):
+            return value.strip().lower() not in ('', '0', 'false', 'no')
+        return bool(value)
+
+    def _clean_display_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        if isinstance(value, bool):
+            return 'Sí' if value else None
+        if isinstance(value, (int, float)):
+            return str(value) if value != 0 else None
+        text = str(value).strip()
+        return text or None
+
+    display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+        cleaned = _clean_display_value(popup_raw.get(field))
+        if cleaned:
+            display_fields[field] = cleaned
+    if _bool_flag(popup_raw.get('MECANIZADO')):
+        display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
+    if _bool_flag(popup_raw.get('TRATAMIENTO')):
+        display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+
     project = {
         'id': str(uuid.uuid4()),
         'name': project_name,
@@ -1407,6 +1441,7 @@ def _kanban_card_to_project(card):
         'auto_hours': auto_hours,
         'image': None,
         'kanban_attachments': [],
+        'kanban_display_fields': display_fields,
         'planned': False,
         'source': 'api',
     }
@@ -1579,6 +1614,7 @@ def calendar_view():
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
@@ -2203,6 +2239,7 @@ def complete():
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
@@ -3186,6 +3223,7 @@ def kanbanize_webhook():
         custom = dict(raw_custom)
     else:
         custom = {}
+    popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
     for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
         custom.pop(k, None)
     card['customFields'] = custom
@@ -3292,6 +3330,31 @@ def kanbanize_webhook():
     prep_hours, mont_hours = prep_raw, mont_raw
     sold2_hours, sold_hours = sold2_raw, sold_raw
     pint_hours, mont2_hours = pint_raw, mont2_raw
+
+    def _clean_display_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        if isinstance(value, bool):
+            return 'Sí' if value else None
+        if isinstance(value, (int, float)):
+            return str(value) if value != 0 else None
+        text = str(value).strip()
+        return text or None
+
+    display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+        cleaned = _clean_display_value(popup_raw.get(field))
+        if cleaned:
+            display_fields[field] = cleaned
+    if mecan_flag:
+        mecan_value = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
+        display_fields['MECANIZADO'] = mecan_value
+    if trat_flag:
+        trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+        display_fields['TRATAMIENTO'] = trat_value
 
     phase_hours_new_raw = {
         'recepcionar material': prep_raw,
@@ -3449,6 +3512,9 @@ def kanbanize_webhook():
         if prev_kanban_files != kanban_files and existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
             changed = True
+        if existing.get('kanban_display_fields') != display_fields:
+            existing['kanban_display_fields'] = display_fields
+            changed = True
 
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
@@ -3503,6 +3569,7 @@ def kanbanize_webhook():
             'auto_hours': new_auto,
             'image': image_path,
             'kanban_attachments': kanban_files,
+            'kanban_display_fields': display_fields,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
