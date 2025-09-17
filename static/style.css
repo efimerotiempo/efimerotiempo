@@ -70,6 +70,7 @@ table.schedule td.weekend-cell {
     display: block;
 }
 .task.dim { opacity: 0.3; }
+.task.filter-muted { opacity: 0.35; }
 .task.highlight {
     font-weight: bold;
     border: 4px solid #000;
@@ -139,6 +140,7 @@ table.schedule td.weekend-cell {
 .summary-resizer { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .unplanned-folder { border: 1px solid #ccc; margin-bottom: 5px; }
 .unplanned-folder.dim { opacity: 0.3; }
+.unplanned-folder.filter-muted { opacity: 0.35; }
 .folder-header { background: #eee; padding: 2px; display: flex; align-items: center; }
 .folder-header .folder-toggle { margin-right: 5px; }
 .folder-header .folder-due { color: deeppink; font-weight: bold; }

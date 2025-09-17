@@ -1566,23 +1566,27 @@ def calendar_view():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
+    filter_active = bool(project_filter or client_filter)
 
-    # filter tasks by project and client
-    if project_filter or client_filter:
+    def matches_filters(name, client):
+        project_name = (name or '').lower()
+        client_name = (client or '').lower()
+        if project_filter and project_filter.lower() not in project_name:
+            return False
+        if client_filter and client_filter.lower() not in client_name:
+            return False
+        return True
+
+    if filter_active:
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
-                schedule[worker][day] = [
-                    t
-                    for t in tasks
-                    if (not project_filter or project_filter.lower() in t['project'].lower())
-                    and (not client_filter or client_filter.lower() in t['client'].lower())
-                ]
-        unplanned_list = [
-            g
-            for g in unplanned_list
-            if (not project_filter or project_filter.lower() in g['project'].lower())
-            and (not client_filter or client_filter.lower() in g['client'].lower())
-        ]
+                for t in tasks:
+                    t['filter_match'] = matches_filters(t['project'], t['client'])
+        for g in unplanned_list:
+            match = matches_filters(g['project'], g['client'])
+            g['filter_match'] = match
+            for t in g['tasks']:
+                t['filter_match'] = matches_filters(t['project'], t['client'])
 
     # Ensure started phases appear before unstarted ones within each cell
     _sort_cell_tasks(schedule)
@@ -1631,6 +1635,7 @@ def calendar_view():
         today=today,
         project_filter=project_filter,
         client_filter=client_filter,
+        filter_active=filter_active,
         notes=note_map,
         project_data=project_map,
         start_map=start_map,
@@ -2176,28 +2181,32 @@ def complete():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
+    filter_active = bool(project_filter or client_filter)
 
-    if project_filter or client_filter:
+    def matches_filters(name, client):
+        project_name = (name or '').lower()
+        client_name = (client or '').lower()
+        if project_filter and project_filter.lower() not in project_name:
+            return False
+        if client_filter and client_filter.lower() not in client_name:
+            return False
+        return True
+
+    if filter_active:
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
-                schedule[worker][day] = [
-                    t
-                    for t in tasks
-                    if (not project_filter or project_filter.lower() in t['project'].lower())
-                    and (not client_filter or client_filter.lower() in t['client'].lower())
-                ]
+                for t in tasks:
+                    t['filter_match'] = matches_filters(t['project'], t['client'])
         filtered_projects = [
             p
             for p in projects
-            if (not project_filter or project_filter.lower() in p['name'].lower())
-            and (not client_filter or client_filter.lower() in p['client'].lower())
+            if matches_filters(p['name'], p['client'])
         ]
-        unplanned_list = [
-            g
-            for g in unplanned_list
-            if (not project_filter or project_filter.lower() in g['project'].lower())
-            and (not client_filter or client_filter.lower() in g['client'].lower())
-        ]
+        for g in unplanned_list:
+            match = matches_filters(g['project'], g['client'])
+            g['filter_match'] = match
+            for t in g['tasks']:
+                t['filter_match'] = matches_filters(t['project'], t['client'])
     else:
         filtered_projects = projects
 
@@ -2255,6 +2264,7 @@ def complete():
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
+        filter_active=filter_active,
         projects=filtered_projects,
         sort_option=sort_option,
         today=today,
