@@ -496,6 +496,7 @@ def attach_phase_starts(links_table, projects=None):
 
     if projects is None:
         projects = load_projects()
+    projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
     for proj in projects:
@@ -1216,6 +1217,40 @@ def get_projects():
     return projects
 
 
+def _phase_value_has_hours(value):
+    """Return ``True`` if *value* represents a positive amount of hours."""
+
+    if isinstance(value, list):
+        return any(_phase_value_has_hours(v) for v in value)
+    if isinstance(value, dict):
+        return any(_phase_value_has_hours(v) for v in value.values())
+    if isinstance(value, bool):
+        return bool(value)
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def project_has_hours(project):
+    """Return ``True`` if any project phase has a positive number of hours."""
+
+    phases = project.get('phases') or {}
+    return any(_phase_value_has_hours(v) for v in phases.values())
+
+
+def filter_visible_projects(projects):
+    """Filter *projects* down to those with at least one phase with hours."""
+
+    return [p for p in projects if project_has_hours(p)]
+
+
+def get_visible_projects():
+    """Return the list of projects that should appear in the UI tabs."""
+
+    return filter_visible_projects(get_projects())
+
+
 def expand_for_display(projects):
     """Return a list of project rows including extra ones for split phases."""
     rows = []
@@ -1371,7 +1406,7 @@ def home():
 
 @app.route('/calendar')
 def calendar_view():
-    projects = get_projects()
+    projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
     worker_notes_raw = load_worker_notes()
@@ -1545,7 +1580,7 @@ def calendar_view():
 def calendar_pedidos():
     today = date.today()
     compras_raw, column_colors = load_compras_raw()
-    projects = load_projects()
+    projects = get_visible_projects()
     raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
@@ -1611,7 +1646,9 @@ def calendar_pedidos():
 def project_links_api():
     today = date.today()
     compras_raw, column_colors = load_compras_raw()
-    raw_links = attach_phase_starts(build_project_links(compras_raw))
+    raw_links = attach_phase_starts(
+        build_project_links(compras_raw), get_visible_projects()
+    )
     _, _, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
@@ -1621,7 +1658,7 @@ def project_links_api():
 
 @app.route('/gantt')
 def gantt_view():
-    projects = load_projects()
+    projects = get_visible_projects()
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
     for worker, days in sched.items():
@@ -1673,7 +1710,7 @@ def gantt_view():
 
 @app.route('/projects')
 def project_list():
-    projects = get_projects()
+    projects = get_visible_projects()
     # Compute deadlines to show whether each project meets its due date
     proj_copy = copy.deepcopy(projects)
     schedule_projects(proj_copy)
@@ -1888,7 +1925,7 @@ def update_pedido_date():
 
 @app.route('/observaciones')
 def observation_list():
-    projects = [p for p in get_projects() if p.get('observations')]
+    projects = [p for p in get_visible_projects() if p.get('observations')]
     return render_template('observations.html', projects=projects)
 
 
@@ -1975,7 +2012,7 @@ def resources():
 
 @app.route('/complete')
 def complete():
-    projects = get_projects()
+    projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
     today = date.today()
     worker_notes_raw = load_worker_notes()
@@ -3423,7 +3460,7 @@ def kanbanize_webhook():
 
 @app.route('/hours')
 def hours():
-    projects = get_projects()
+    projects = get_visible_projects()
     schedule, _ = schedule_projects(copy.deepcopy(projects))
     rows = []
     for days in schedule.values():
