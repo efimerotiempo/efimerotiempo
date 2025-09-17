@@ -83,7 +83,7 @@
                 {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                 </span>
                 {% if t.hours %}
-                <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
                 {% endif %}
             </div>
             {% endif %}
@@ -152,7 +152,7 @@
                     {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                     </span>
                     {% if t.hours %}
-                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -181,7 +181,7 @@
                     {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                     </span>
                     {% if t.hours %}
-                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
                     {% endif %}
                 </div>
                 {% endfor %}
