@@ -490,19 +490,22 @@ let dragInfo = null;
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
-      let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
+      let html = `<div class="popup-section popup-header"><strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong></div>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      if (info.due_date && info.due_date !== '0') html += `<div>Límite: ${info.due_date}</div>`;
-      if (info.material_confirmed_date && info.material_confirmed_date !== '0') html += `<div>Material confirmado: ${info.material_confirmed_date}</div>`;
+      const metaLines = [];
+      if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+      if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
+      if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
       const kanbanFields = info.kanban_display_fields || {};
       const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
       if (kanbanEntries.length) {
-        html += '<div class="kanban-extra-fields">';
+        let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
         kanbanEntries.forEach(([label, value]) => {
           const displayValue = `${value}`;
-          html += `<div>${label}: ${displayValue}</div>`;
+          kanbanHtml += `<div>${label}: ${displayValue}</div>`;
         });
-        html += '</div>';
+        kanbanHtml += '</div>';
+        html += kanbanHtml;
       }
       const phaseLines = [];
       PHASES.forEach(ph => {
@@ -522,36 +525,41 @@ let dragInfo = null;
           phaseLines.push(line);
         }
       });
-      html += phaseLines.join('');
+      let phaseSection = '';
+      if (phaseLines.length) phaseSection += phaseLines.join('');
       if (t.dataset.phase === 'pedidos') {
         const acopio = info.phases['pedidos'];
-        if (acopio && acopio !== '0') html += `<div>Plazo acopio: ${acopio}</div>`;
+        if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
       }
-      html += `<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-      html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
-      html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
+      if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+      const actionLines = [];
+      actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
+      actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+      let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
       if (Array.isArray(info.phases[t.dataset.phase])) {
-        html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+        splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
       }
-      html += `</div>`;
-      html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
-      html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
-      html += `<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`;
+      splitLine += `</div>`;
+      actionLines.push(splitLine);
+      actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
+      actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`);
+      actionLines.push(`<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`);
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
-        html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+        actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
       }
       if (info.kanban_attachments && info.kanban_attachments.length) {
         info.kanban_attachments.forEach(att => {
           const url = att.url;
           const name = (att.name || '').toLowerCase();
           if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
-            html += `<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+            actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
           } else {
-            html += `<div><a href="${url}" target="_blank">${att.name || url}</a></div>`;
+            actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
           }
         });
       }
+      if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
