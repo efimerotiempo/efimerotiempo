@@ -2761,7 +2761,11 @@ def move_phase():
 
 
 def remove_project_and_preserve_schedule(projects, pid):
-    """Remove a project and keep other projects' schedules intact."""
+    """Remove a project and keep other projects' schedules intact.
+
+    Returns the removed project dictionary when found so callers can reuse
+    metadata (e.g. project name or client) after the removal took place.
+    """
     mapping = compute_schedule_map(projects)
     removed = None
     for p in projects:
@@ -2769,7 +2773,7 @@ def remove_project_and_preserve_schedule(projects, pid):
             removed = p
             break
     if not removed:
-        return
+        return None
     projects.remove(removed)
     # Drop any persisted conflicts tied to the removed project so stale
     # warnings do not linger in the interface.
@@ -2814,6 +2818,7 @@ def remove_project_and_preserve_schedule(projects, pid):
                     wl.append(None)
                 wl[part] = worker
     save_projects(projects)
+    return removed
 
 @app.route('/delete_project/<pid>', methods=['POST'])
 def delete_project(pid):
@@ -3093,15 +3098,43 @@ def kanbanize_webhook():
         name_candidates = [n for n in name_candidates if n]
 
         pid = None
+        matched_project = None
         for p in projects:
             if p.get('kanban_id') == cid or (name_candidates and p.get('name') in name_candidates):
                 if cid and not p.get('kanban_id'):
                     p['kanban_id'] = cid
                 pid = p['id']
+                matched_project = p
                 break
         if pid:
-            remove_project_and_preserve_schedule(projects, pid)
+            removed_project = remove_project_and_preserve_schedule(projects, pid)
             save_projects(projects)
+
+            archived_info = removed_project or matched_project or {}
+            if name_candidates:
+                fallback_name = name_candidates[0]
+            elif cid:
+                fallback_name = f"Tarjeta {cid}"
+            else:
+                fallback_name = 'Proyecto'
+            project_name = archived_info.get('name') or fallback_name
+            client_name = archived_info.get('client') or pick(card, 'client', 'Cliente', 'customer') or ''
+
+            extras = load_extra_conflicts()
+            conflict_id = str(uuid.uuid4())
+            extras.insert(
+                0,
+                {
+                    'id': conflict_id,
+                    'project': project_name,
+                    'client': client_name,
+                    'message': 'Se ha archivado.',
+                    'key': f"kanban-archived-{conflict_id}",
+                    'source': 'kanbanize',
+                },
+            )
+            save_extra_conflicts(extras)
+            broadcast_event({"type": "kanban_update"})
             return jsonify({"mensaje": "Proyecto eliminado"}), 200
         else:
             print("Aviso: no se encontró proyecto para cid/nombre:", cid, name_candidates)
