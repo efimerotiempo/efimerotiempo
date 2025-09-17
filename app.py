@@ -1153,6 +1153,28 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
+        column_value = p.get('kanban_column')
+        if column_value is None:
+            p['kanban_column'] = ''
+            changed = True
+        elif not isinstance(column_value, str):
+            p['kanban_column'] = str(column_value)
+            changed = True
+        archived_value = p.get('kanban_archived')
+        if isinstance(archived_value, bool):
+            pass
+        elif isinstance(archived_value, str):
+            normalized = archived_value.strip().lower() in (
+                'true', '1', 'yes', 'si', 'sí'
+            )
+            p['kanban_archived'] = normalized
+            changed = True
+        else:
+            normalized = bool(archived_value)
+            if archived_value is None:
+                normalized = False
+            p['kanban_archived'] = normalized
+            changed = True
         p.setdefault('observations', '')
         p.setdefault('due_confirmed', False)
         p.setdefault('due_warning', False)
@@ -1242,7 +1264,17 @@ def project_has_hours(project):
 def filter_visible_projects(projects):
     """Filter *projects* down to those with at least one phase with hours."""
 
-    return [p for p in projects if project_has_hours(p)]
+    visible = []
+    for p in projects:
+        if not project_has_hours(p):
+            continue
+        if p.get('kanban_archived'):
+            continue
+        column = (p.get('kanban_column') or '').strip().lower()
+        if column == 'ready to archive':
+            continue
+        visible.append(p)
+    return visible
 
 
 def get_visible_projects():
@@ -3372,9 +3404,21 @@ def kanbanize_webhook():
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
     new_auto = {f['nombre']: True for f in fases if f.get('auto')}
+    if isinstance(column, str):
+        clean_column = column.strip()
+    elif column:
+        clean_column = str(column).strip()
+    else:
+        clean_column = ''
 
     if existing:
         changed = False
+        if existing.get('kanban_column') != clean_column:
+            existing['kanban_column'] = clean_column
+            changed = True
+        if existing.get('kanban_archived'):
+            existing['kanban_archived'] = False
+            changed = True
         if existing.get('kanban_id') != task_id:
             existing['kanban_id'] = task_id
             changed = True
@@ -3464,6 +3508,8 @@ def kanbanize_webhook():
             'kanban_id': task_id,
             'due_confirmed': due_confirmed_flag,
             'due_warning': False,
+            'kanban_column': clean_column,
+            'kanban_archived': False,
         }
         projects.append(project)
         save_projects(projects)
