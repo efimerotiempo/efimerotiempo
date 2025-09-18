@@ -1741,6 +1741,35 @@ def gantt_view():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
 
+    def _pick_deadline_start(project):
+        candidates = [
+            project.get('due_date'),
+            project.get('client_date'),
+            project.get('client_due_date'),
+            project.get('customer_date'),
+        ]
+        for value in candidates:
+            if not value:
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            try:
+                return date.fromisoformat(text).isoformat()
+            except ValueError:
+                parsed = parse_input_date(text)
+                if parsed:
+                    return parsed.isoformat()
+        display_fields = project.get('kanban_display_fields') or {}
+        for label in ('Fecha Cliente', 'Fecha cliente'):
+            raw = display_fields.get(label)
+            if not raw:
+                continue
+            parsed = parse_input_date(str(raw).strip())
+            if parsed:
+                return parsed.isoformat()
+        return ''
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1777,6 +1806,7 @@ def gantt_view():
             'end': end,
             'due_date': p.get('due_date'),
             'color': p.get('color'),
+            'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
     return render_template('gantt.html', projects=json.dumps(gantt_projects))

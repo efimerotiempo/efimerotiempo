@@ -41,6 +41,18 @@
   .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
+  .project-bar .deadline-highlight {
+    position:absolute;
+    top:-2px;
+    height:calc(100% + 4px);
+    border:3px solid #d00;
+    border-radius:4px;
+    pointer-events:none;
+    box-sizing:border-box;
+    font-weight:bold;
+    background:transparent;
+    z-index:1;
+  }
   .day-cell.today { background-color: rgba(255,0,0,0.3); }
   .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
   .gantt-controls input { margin-left:8px; padding:4px; }
@@ -149,7 +161,15 @@ function render(){
   header.innerHTML = '';
   if(!projects.length){return;}
   const dayMs = 24*60*60*1000;
-  const startOfDay = d => new Date(d.split('T')[0] + 'T00:00:00');
+  const startOfDay = d => {
+    const raw = (d ?? '').toString().trim();
+    if(!raw){
+      return new Date(NaN);
+    }
+    const normalized = raw.replace(' ', 'T');
+    const base = normalized.split('T')[0];
+    return new Date(base + 'T00:00:00');
+  };
   const allStarts = [];
   const allEnds = [];
   projects.forEach(p=>{
@@ -226,6 +246,21 @@ function render(){
     bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
     bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
     if(r.type==='project'){
+      const deadlineRaw = r.project.deadline_start || r.project.due_date || r.project.client_date || r.project.client_due_date;
+      const deadlineDate = startOfDay(deadlineRaw);
+      const deadlineMs = deadlineDate.getTime();
+      if(!Number.isNaN(deadlineMs) && e >= deadlineMs){
+        const visibleStart = Math.max(deadlineMs, s);
+        const leftPx = ((visibleStart - s)/dayMs) * pxPerDay;
+        const widthDays = Math.max(0, Math.round((e - visibleStart)/dayMs)) + 1;
+        if(widthDays > 0){
+          const highlight = document.createElement('div');
+          highlight.className = 'deadline-highlight';
+          highlight.style.left = Math.max(0, leftPx) + 'px';
+          highlight.style.width = (widthDays * pxPerDay) + 'px';
+          bar.appendChild(highlight);
+        }
+      }
       bar.onclick = ()=>toggleProject(r.project.id);
     }
     rowDiv.appendChild(bar);
