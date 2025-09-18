@@ -525,6 +525,7 @@ def build_project_links(compras_raw):
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
         lane_key = lane_name.lower()
+        custom_id = get_card_custom_id(card)
         base_display = title or project_name or ''
         if custom_id and base_display:
             if base_display.lower().startswith(custom_id.lower()):
@@ -567,17 +568,32 @@ def attach_phase_starts(links_table, projects=None):
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
+        name = (proj['name'] or '').strip()
+        if not name:
+            continue
         if montar_start:
-            montar_by_name[proj['name']] = montar_start
-        ids_by_name[proj['name']] = proj['id']
+            montar_by_name[name] = montar_start
+        ids_by_name[name] = proj['id']
+
+        split_name, _ = split_project_and_client(name)
+        if split_name and split_name != name:
+            if montar_start and split_name not in montar_by_name:
+                montar_by_name[split_name] = montar_start
+            ids_by_name.setdefault(split_name, proj['id'])
 
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = montar_by_name.get(item['project'])
+        montar_start = (
+            montar_by_name.get((item.get('project') or '').strip())
+            or montar_by_name.get((item.get('title') or '').strip())
+        )
         if montar_start:
             entry['montar_start'] = montar_start
-        pid = ids_by_name.get(item['project'])
+        pid = (
+            ids_by_name.get((item.get('project') or '').strip())
+            or ids_by_name.get((item.get('title') or '').strip())
+        )
         if pid:
             entry['pid'] = pid
         enriched.append(entry)
