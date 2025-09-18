@@ -134,6 +134,8 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
+KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
+
 SSE_CLIENTS = []
 
 
@@ -1153,6 +1155,31 @@ def get_projects():
         p.setdefault('blocked', False)
         p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
+        if not isinstance(p.get('kanban_display_fields'), dict):
+            p['kanban_display_fields'] = {}
+            changed = True
+        column_value = p.get('kanban_column')
+        if column_value is None:
+            p['kanban_column'] = ''
+            changed = True
+        elif not isinstance(column_value, str):
+            p['kanban_column'] = str(column_value)
+            changed = True
+        archived_value = p.get('kanban_archived')
+        if isinstance(archived_value, bool):
+            pass
+        elif isinstance(archived_value, str):
+            normalized = archived_value.strip().lower() in (
+                'true', '1', 'yes', 'si', 'sí'
+            )
+            p['kanban_archived'] = normalized
+            changed = True
+        else:
+            normalized = bool(archived_value)
+            if archived_value is None:
+                normalized = False
+            p['kanban_archived'] = normalized
+            changed = True
         p.setdefault('observations', '')
         p.setdefault('due_confirmed', False)
         p.setdefault('due_warning', False)
@@ -1242,7 +1269,17 @@ def project_has_hours(project):
 def filter_visible_projects(projects):
     """Filter *projects* down to those with at least one phase with hours."""
 
-    return [p for p in projects if project_has_hours(p)]
+    visible = []
+    for p in projects:
+        if not project_has_hours(p):
+            continue
+        if p.get('kanban_archived'):
+            continue
+        column = (p.get('kanban_column') or '').strip().lower()
+        if column == 'ready to archive':
+            continue
+        visible.append(p)
+    return visible
 
 
 def get_visible_projects():
@@ -1308,6 +1345,7 @@ def _kanban_card_to_project(card):
         fields = dict(fields_raw)
     else:
         fields = {}
+    popup_raw = {field: fields.get(field) for field in KANBAN_POPUP_FIELDS}
     for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
         fields.pop(k, None)
 
@@ -1361,6 +1399,34 @@ def _kanban_card_to_project(card):
         if prep:
             phases['recepcionar material'] = prep
 
+    def _bool_flag(value):
+        if isinstance(value, str):
+            return value.strip().lower() not in ('', '0', 'false', 'no')
+        return bool(value)
+
+    def _clean_display_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        if isinstance(value, bool):
+            return 'Sí' if value else None
+        if isinstance(value, (int, float)):
+            return str(value) if value != 0 else None
+        text = str(value).strip()
+        return text or None
+
+    display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+        cleaned = _clean_display_value(popup_raw.get(field))
+        if cleaned:
+            display_fields[field] = cleaned
+    if _bool_flag(popup_raw.get('MECANIZADO')):
+        display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
+    if _bool_flag(popup_raw.get('TRATAMIENTO')):
+        display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+
     project = {
         'id': str(uuid.uuid4()),
         'name': project_name,
@@ -1375,6 +1441,7 @@ def _kanban_card_to_project(card):
         'auto_hours': auto_hours,
         'image': None,
         'kanban_attachments': [],
+        'kanban_display_fields': display_fields,
         'planned': False,
         'source': 'api',
     }
@@ -1499,23 +1566,27 @@ def calendar_view():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
+    filter_active = bool(project_filter or client_filter)
 
-    # filter tasks by project and client
-    if project_filter or client_filter:
+    def matches_filters(name, client):
+        project_name = (name or '').lower()
+        client_name = (client or '').lower()
+        if project_filter and project_filter.lower() not in project_name:
+            return False
+        if client_filter and client_filter.lower() not in client_name:
+            return False
+        return True
+
+    if filter_active:
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
-                schedule[worker][day] = [
-                    t
-                    for t in tasks
-                    if (not project_filter or project_filter.lower() in t['project'].lower())
-                    and (not client_filter or client_filter.lower() in t['client'].lower())
-                ]
-        unplanned_list = [
-            g
-            for g in unplanned_list
-            if (not project_filter or project_filter.lower() in g['project'].lower())
-            and (not client_filter or client_filter.lower() in g['client'].lower())
-        ]
+                for t in tasks:
+                    t['filter_match'] = matches_filters(t['project'], t['client'])
+        for g in unplanned_list:
+            match = matches_filters(g['project'], g['client'])
+            g['filter_match'] = match
+            for t in g['tasks']:
+                t['filter_match'] = matches_filters(t['project'], t['client'])
 
     # Ensure started phases appear before unstarted ones within each cell
     _sort_cell_tasks(schedule)
@@ -1547,6 +1618,7 @@ def calendar_view():
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
@@ -1563,6 +1635,7 @@ def calendar_view():
         today=today,
         project_filter=project_filter,
         client_filter=client_filter,
+        filter_active=filter_active,
         notes=note_map,
         project_data=project_map,
         start_map=start_map,
@@ -1668,6 +1741,35 @@ def gantt_view():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
 
+    def _pick_deadline_start(project):
+        candidates = [
+            project.get('due_date'),
+            project.get('client_date'),
+            project.get('client_due_date'),
+            project.get('customer_date'),
+        ]
+        for value in candidates:
+            if not value:
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            try:
+                return date.fromisoformat(text).isoformat()
+            except ValueError:
+                parsed = parse_input_date(text)
+                if parsed:
+                    return parsed.isoformat()
+        display_fields = project.get('kanban_display_fields') or {}
+        for label in ('Fecha Cliente', 'Fecha cliente'):
+            raw = display_fields.get(label)
+            if not raw:
+                continue
+            parsed = parse_input_date(str(raw).strip())
+            if parsed:
+                return parsed.isoformat()
+        return ''
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1704,6 +1806,7 @@ def gantt_view():
             'end': end,
             'due_date': p.get('due_date'),
             'color': p.get('color'),
+            'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
     return render_template('gantt.html', projects=json.dumps(gantt_projects))
@@ -2108,28 +2211,32 @@ def complete():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
+    filter_active = bool(project_filter or client_filter)
 
-    if project_filter or client_filter:
+    def matches_filters(name, client):
+        project_name = (name or '').lower()
+        client_name = (client or '').lower()
+        if project_filter and project_filter.lower() not in project_name:
+            return False
+        if client_filter and client_filter.lower() not in client_name:
+            return False
+        return True
+
+    if filter_active:
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
-                schedule[worker][day] = [
-                    t
-                    for t in tasks
-                    if (not project_filter or project_filter.lower() in t['project'].lower())
-                    and (not client_filter or client_filter.lower() in t['client'].lower())
-                ]
+                for t in tasks:
+                    t['filter_match'] = matches_filters(t['project'], t['client'])
         filtered_projects = [
             p
             for p in projects
-            if (not project_filter or project_filter.lower() in p['name'].lower())
-            and (not client_filter or client_filter.lower() in p['client'].lower())
+            if matches_filters(p['name'], p['client'])
         ]
-        unplanned_list = [
-            g
-            for g in unplanned_list
-            if (not project_filter or project_filter.lower() in g['project'].lower())
-            and (not client_filter or client_filter.lower() in g['client'].lower())
-        ]
+        for g in unplanned_list:
+            match = matches_filters(g['project'], g['client'])
+            g['filter_match'] = match
+            for t in g['tasks']:
+                t['filter_match'] = matches_filters(t['project'], t['client'])
     else:
         filtered_projects = projects
 
@@ -2171,6 +2278,7 @@ def complete():
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
@@ -2186,6 +2294,7 @@ def complete():
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
+        filter_active=filter_active,
         projects=filtered_projects,
         sort_option=sort_option,
         today=today,
@@ -2761,7 +2870,11 @@ def move_phase():
 
 
 def remove_project_and_preserve_schedule(projects, pid):
-    """Remove a project and keep other projects' schedules intact."""
+    """Remove a project and keep other projects' schedules intact.
+
+    Returns the removed project dictionary when found so callers can reuse
+    metadata (e.g. project name or client) after the removal took place.
+    """
     mapping = compute_schedule_map(projects)
     removed = None
     for p in projects:
@@ -2769,7 +2882,7 @@ def remove_project_and_preserve_schedule(projects, pid):
             removed = p
             break
     if not removed:
-        return
+        return None
     projects.remove(removed)
     # Drop any persisted conflicts tied to the removed project so stale
     # warnings do not linger in the interface.
@@ -2814,6 +2927,7 @@ def remove_project_and_preserve_schedule(projects, pid):
                     wl.append(None)
                 wl[part] = worker
     save_projects(projects)
+    return removed
 
 @app.route('/delete_project/<pid>', methods=['POST'])
 def delete_project(pid):
@@ -3093,15 +3207,43 @@ def kanbanize_webhook():
         name_candidates = [n for n in name_candidates if n]
 
         pid = None
+        matched_project = None
         for p in projects:
             if p.get('kanban_id') == cid or (name_candidates and p.get('name') in name_candidates):
                 if cid and not p.get('kanban_id'):
                     p['kanban_id'] = cid
                 pid = p['id']
+                matched_project = p
                 break
         if pid:
-            remove_project_and_preserve_schedule(projects, pid)
+            removed_project = remove_project_and_preserve_schedule(projects, pid)
             save_projects(projects)
+
+            archived_info = removed_project or matched_project or {}
+            if name_candidates:
+                fallback_name = name_candidates[0]
+            elif cid:
+                fallback_name = f"Tarjeta {cid}"
+            else:
+                fallback_name = 'Proyecto'
+            project_name = archived_info.get('name') or fallback_name
+            client_name = archived_info.get('client') or pick(card, 'client', 'Cliente', 'customer') or ''
+
+            extras = load_extra_conflicts()
+            conflict_id = str(uuid.uuid4())
+            extras.insert(
+                0,
+                {
+                    'id': conflict_id,
+                    'project': project_name,
+                    'client': client_name,
+                    'message': 'Se ha archivado.',
+                    'key': f"kanban-archived-{conflict_id}",
+                    'source': 'kanbanize',
+                },
+            )
+            save_extra_conflicts(extras)
+            broadcast_event({"type": "kanban_update"})
             return jsonify({"mensaje": "Proyecto eliminado"}), 200
         else:
             print("Aviso: no se encontró proyecto para cid/nombre:", cid, name_candidates)
@@ -3121,6 +3263,7 @@ def kanbanize_webhook():
         custom = dict(raw_custom)
     else:
         custom = {}
+    popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
     for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
         custom.pop(k, None)
     card['customFields'] = custom
@@ -3227,6 +3370,31 @@ def kanbanize_webhook():
     prep_hours, mont_hours = prep_raw, mont_raw
     sold2_hours, sold_hours = sold2_raw, sold_raw
     pint_hours, mont2_hours = pint_raw, mont2_raw
+
+    def _clean_display_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        if isinstance(value, bool):
+            return 'Sí' if value else None
+        if isinstance(value, (int, float)):
+            return str(value) if value != 0 else None
+        text = str(value).strip()
+        return text or None
+
+    display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+        cleaned = _clean_display_value(popup_raw.get(field))
+        if cleaned:
+            display_fields[field] = cleaned
+    if mecan_flag:
+        mecan_value = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
+        display_fields['MECANIZADO'] = mecan_value
+    if trat_flag:
+        trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+        display_fields['TRATAMIENTO'] = trat_value
 
     phase_hours_new_raw = {
         'recepcionar material': prep_raw,
@@ -3339,9 +3507,21 @@ def kanbanize_webhook():
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
     new_auto = {f['nombre']: True for f in fases if f.get('auto')}
+    if isinstance(column, str):
+        clean_column = column.strip()
+    elif column:
+        clean_column = str(column).strip()
+    else:
+        clean_column = ''
 
     if existing:
         changed = False
+        if existing.get('kanban_column') != clean_column:
+            existing['kanban_column'] = clean_column
+            changed = True
+        if existing.get('kanban_archived'):
+            existing['kanban_archived'] = False
+            changed = True
         if existing.get('kanban_id') != task_id:
             existing['kanban_id'] = task_id
             changed = True
@@ -3371,6 +3551,9 @@ def kanbanize_webhook():
             changed = True
         if prev_kanban_files != kanban_files and existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
+            changed = True
+        if existing.get('kanban_display_fields') != display_fields:
+            existing['kanban_display_fields'] = display_fields
             changed = True
 
         existing_phases = existing.setdefault('phases', {})
@@ -3426,11 +3609,14 @@ def kanbanize_webhook():
             'auto_hours': new_auto,
             'image': image_path,
             'kanban_attachments': kanban_files,
+            'kanban_display_fields': display_fields,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
             'due_confirmed': due_confirmed_flag,
             'due_warning': False,
+            'kanban_column': clean_column,
+            'kanban_archived': False,
         }
         projects.append(project)
         save_projects(projects)

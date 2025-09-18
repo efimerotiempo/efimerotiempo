@@ -122,10 +122,11 @@
         {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
         <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
+            {% set matches_filter = t.get('filter_match', True) %}
             {% if t.phase == 'vacaciones' %}
-            <div class="task vacation" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
+            <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -190,11 +191,13 @@
             <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for g in unplanned_with %}
-            <div class="unplanned-folder" data-pid="{{ g.pid }}">
+            {% set folder_match = g.get('filter_match', True) %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                {% set matches_filter = t.get('filter_match', True) %}
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -219,11 +222,13 @@
             <hr class="unplanned-divider" />
             {% endif %}
             {% for g in unplanned_without %}
-            <div class="unplanned-folder" data-pid="{{ g.pid }}">
+            {% set folder_match = g.get('filter_match', True) %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
-                <div class="task{% if t.frozen %} frozen{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %}>
+                {% set matches_filter = t.get('filter_match', True) %}
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -448,6 +453,8 @@
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
   const PROJECT_FILTER = {{ project_filter|tojson }};
+  const CLIENT_FILTER = {{ client_filter|tojson }};
+  const FILTER_ACTIVE = {{ filter_active|tojson }};
 
   for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
     if (proj.due_warning) {
@@ -492,8 +499,29 @@
   }
   document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
 
+  function adjustWorkerNoteFont(area) {
+    const textLength = (area.value || '').replace(/\s+/g, ' ').trim().length;
+    const minSize = 1.2;
+    const maxSize = 3.0;
+    const minChars = 10;
+    const maxChars = 60;
+    let size;
+    if (!textLength || textLength <= minChars) {
+      size = maxSize;
+    } else if (textLength >= maxChars) {
+      size = minSize;
+    } else {
+      const ratio = (textLength - minChars) / (maxChars - minChars);
+      size = maxSize - (maxSize - minSize) * ratio;
+    }
+    area.style.fontSize = size + 'em';
+  }
+
   document.querySelectorAll('.worker-note').forEach(area => {
+    adjustWorkerNoteFont(area);
+    area.addEventListener('input', () => adjustWorkerNoteFont(area));
     area.addEventListener('change', () => {
+      adjustWorkerNoteFont(area);
       fetch(WORKER_NOTE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -530,35 +558,10 @@
       });
     });
   });
-
-
-
-
   const wrapper = document.querySelector('.schedule-wrapper');
   const SCROLL_KEY = 'calendarScroll';
-  if (PROJECT_FILTER) {
-    const projTasks = document.querySelectorAll('.schedule .task');
-    if (projTasks.length) {
-      let earliest = projTasks[0];
-      let earliestDate = new Date(projTasks[0].dataset.day);
-      projTasks.forEach(t => {
-        const dt = new Date(t.dataset.day);
-        if (dt < earliestDate) {
-          earliestDate = dt;
-          earliest = t;
-        }
-      });
-      earliest.scrollIntoView({behavior: 'auto', inline: 'center'});
-    } else {
-      const savedScroll = sessionStorage.getItem(SCROLL_KEY);
-      if (savedScroll !== null) {
-        wrapper.scrollLeft = parseFloat(savedScroll);
-      } else {
-        const todayCell = document.querySelector('th.today');
-        if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
-      }
-    }
-  } else {
+
+  function restoreScrollPosition() {
     const savedScroll = sessionStorage.getItem(SCROLL_KEY);
     if (savedScroll !== null) {
       wrapper.scrollLeft = parseFloat(savedScroll);
@@ -566,6 +569,29 @@
       const todayCell = document.querySelector('th.today');
       if (todayCell) todayCell.scrollIntoView({behavior: 'auto', inline: 'center'});
     }
+  }
+
+  if (FILTER_ACTIVE) {
+    const matchingTasks = Array.from(document.querySelectorAll('.schedule .task[data-filter-match="true"]'));
+    let earliestTask = null;
+    let earliestDate = null;
+    matchingTasks.forEach(t => {
+      const value = t.dataset.day;
+      if (!value) return;
+      const dt = new Date(value);
+      if (Number.isNaN(dt.getTime())) return;
+      if (!earliestDate || dt < earliestDate) {
+        earliestDate = dt;
+        earliestTask = t;
+      }
+    });
+    if (earliestTask) {
+      earliestTask.scrollIntoView({behavior: 'auto', inline: 'center'});
+    } else {
+      restoreScrollPosition();
+    }
+  } else {
+    restoreScrollPosition();
   }
   wrapper.addEventListener('scroll', () => {
     sessionStorage.setItem(SCROLL_KEY, wrapper.scrollLeft);
@@ -630,10 +656,23 @@ let dragInfo = null;
         }
       });
         const info = PROJECT_DATA[t.dataset.pid];
-        let html = `<strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong>`;
+        let html = `<div class="popup-section popup-header"><strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong></div>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      if (info.due_date && info.due_date !== '0') html += `<div>Límite: ${info.due_date}</div>`;
-      if (info.material_confirmed_date && info.material_confirmed_date !== '0') html += `<div>Material confirmado: ${info.material_confirmed_date}</div>`;
+        const metaLines = [];
+        if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+        if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
+        if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
+        const kanbanFields = info.kanban_display_fields || {};
+        const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+        if (kanbanEntries.length) {
+          let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
+          kanbanEntries.forEach(([label, value]) => {
+            const displayValue = `${value}`;
+            kanbanHtml += `<div>${label}: ${displayValue}</div>`;
+          });
+          kanbanHtml += '</div>';
+          html += kanbanHtml;
+        }
         const phaseLines = [];
         PHASES.forEach(ph => {
           if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -652,36 +691,41 @@ let dragInfo = null;
             phaseLines.push(line);
           }
         });
-        html += phaseLines.join('');
+        let phaseSection = '';
+        if (phaseLines.length) phaseSection += phaseLines.join('');
         if (t.dataset.phase === 'pedidos') {
           const acopio = info.phases['pedidos'];
-          if (acopio && acopio !== '0') html += `<div>Plazo acopio: ${acopio}</div>`;
+          if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
         }
-        html += `<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`;
-        html += `<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`;
-        html += `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
+        if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+        const actionLines = [];
+        actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
+        actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
         if (Array.isArray(info.phases[t.dataset.phase])) {
-          html += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
         }
-        html += `</div>`;
-        html += `<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`;
-        html += `<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`;
-        html += `<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`;
+        splitLine += `</div>`;
+        actionLines.push(splitLine);
+        actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
+        actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`);
+        actionLines.push(`<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`);
         if (info.image) {
           const imgUrl = `${STATIC_URL}${info.image}`;
-          html += `<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+          actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
         }
         if (info.kanban_attachments && info.kanban_attachments.length) {
           info.kanban_attachments.forEach(att => {
             const url = att.url;
             const name = (att.name || '').toLowerCase();
             if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
-              html += `<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`;
+              actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
             } else {
-              html += `<div><a href="${url}" target="_blank">${att.name || url}</a></div>`;
+              actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
             }
           });
         }
+        if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';

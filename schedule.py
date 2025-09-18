@@ -869,7 +869,7 @@ def compute_schedule_map(projects):
                 pid = t['pid']
                 mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours'], t.get('part')))
     for lst in mapping.values():
-        lst.sort()
+        lst.sort(key=lambda item: (item[1], item[0], item[4] or ''))
     return mapping
 
 
@@ -879,5 +879,8 @@ def phase_start_map(projects):
     result = {}
     for pid, items in mapping.items():
         for worker, day, phase, hours, _ in items:
-            result.setdefault(pid, {}).setdefault(phase, day)
+            phases = result.setdefault(pid, {})
+            current = phases.get(phase)
+            if current is None or day < current:
+                phases[phase] = day
     return result
