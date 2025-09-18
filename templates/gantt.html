@@ -23,6 +23,30 @@
     <div id="gantt_body" class="gantt-body"></div>
   </div>
 </div>
+<div id="info-popup" class="info-popup"></div>
+<div id="deadline-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <div id="deadline-text" style="color:orange;font-weight:bold"></div>
+    <button id="deadline-close">Cerrar</button>
+  </div>
+</div>
+<div id="split-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <form id="split-form">
+      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br>
+      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br>
+      <button type="submit">Aceptar</button>
+      <button type="button" id="split-cancel">Cancelar</button>
+    </form>
+  </div>
+</div>
+<div id="obs-modal" class="modal">
+  <div class="modal-content">
+    <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
+    <button id="obs-save" type="button">Guardar</button>
+    <button id="obs-cancel" type="button">Cancelar</button>
+  </div>
+</div>
 <style>
   .gantt-wrapper { display:flex; }
   .gantt-summary { width:250px; overflow-x:hidden; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; }
@@ -59,12 +83,40 @@
 </style>
 <script>
 const allProjects = {{ projects|safe }};
+const PROJECT_DATA = {{ project_data|tojson }};
+const START_DATA = {{ start_map|tojson }};
+const PHASES = {{ phases|tojson }};
+const STATIC_URL = "{{ url_for('static', filename='') }}";
+const MOVE_URL = "{{ url_for('move_phase') }}";
+const DELETE_URL = "{{ url_for('delete_phase') }}";
+const START_URL = "{{ url_for('update_phase_start') }}";
+const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+const DEADLINE_MSG = 'Fecha cliente soprepasada.';
+const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
+const LAST_KEY = 'lastMoved';
+const SCROLL_KEY2 = 'scrollDate';
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
 const summaryBody = document.getElementById('gantt_summary_body');
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
 const body = document.getElementById('gantt_body');
+const popup = document.getElementById('info-popup');
+const deadlineModal = document.getElementById('deadline-modal');
+const deadlineText = document.getElementById('deadline-text');
+const deadlineClose = document.getElementById('deadline-close');
+const splitModal = document.getElementById('split-modal');
+const splitForm = document.getElementById('split-form');
+const splitPart1 = document.getElementById('split-part1');
+const splitPart2 = document.getElementById('split-part2');
+const splitCancel = document.getElementById('split-cancel');
+const obsModal = document.getElementById('obs-modal');
+const obsText = document.getElementById('obs-text');
+const obsSave = document.getElementById('obs-save');
+const obsCancel = document.getElementById('obs-cancel');
 const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
 let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
 let pxPerDay = 40 * zoom;
@@ -72,6 +124,9 @@ let todayIndex = null;
 let initialScroll = true;
 const BAR_HEIGHT = 30;
 let currentSort = localStorage.getItem('ganttSort') || null;
+const DAY_MS = 24*60*60*1000;
+let timelineMinStart = null;
+let timelinePxPerDay = pxPerDay;
 
 const projectFilterInput = document.getElementById('filter_project');
 const clientFilterInput = document.getElementById('filter_client');
@@ -82,6 +137,326 @@ const savedProjectFilter = localStorage.getItem(FILTER_PROJECT_KEY) || '';
 const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
+
+document.addEventListener('click', () => {
+  if (popup) popup.style.display = 'none';
+});
+if (popup) {
+  popup.addEventListener('click', (e) => e.stopPropagation());
+}
+
+function makeDraggable(el) {
+  if (!el) return;
+  let startX, startY, startLeft, startTop;
+  const onMouseMove = (ev) => {
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+    el.style.left = startLeft + dx + 'px';
+    el.style.top = startTop + dy + 'px';
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+  el.addEventListener('mousedown', (ev) => {
+    if (ev.target.closest('input, textarea, select, button')) return;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    const rect = el.getBoundingClientRect();
+    startLeft = rect.left + window.scrollX;
+    startTop = rect.top + window.scrollY;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+}
+
+document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
+
+function showDeadline(text = DEADLINE_MSG, after = null) {
+  if (!deadlineModal || !deadlineText || !deadlineClose) return;
+  deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+  deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
+  deadlineModal.style.display = 'block';
+  deadlineClose.onclick = () => {
+    deadlineModal.style.display = 'none';
+    if (after) after();
+  };
+}
+
+function afterMove(data, originalDate) {
+  localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+  if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+  if (data.warning) showDeadline(data.warning, () => location.reload());
+  else location.reload();
+}
+
+if (obsCancel) {
+  obsCancel.addEventListener('click', () => { if (obsModal) obsModal.style.display = 'none'; });
+}
+if (obsModal) {
+  obsModal.addEventListener('click', (e) => { if (e.target === obsModal) obsModal.style.display = 'none'; });
+}
+if (obsSave) {
+  obsSave.addEventListener('click', () => {
+    if (!obsModal) return;
+    const pid = obsModal.dataset.pid;
+    const txt = obsText.value;
+    const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ observations: txt })
+    }).then(() => {
+      if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+      obsModal.style.display = 'none';
+    });
+  });
+}
+
+if (splitCancel) {
+  splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
+}
+if (splitForm) {
+  splitForm.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    fetch(SPLIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        pid: splitModal.dataset.pid,
+        phase: splitModal.dataset.phase,
+        date: splitModal.dataset.date,
+        part1: splitPart1.value,
+        part2: splitPart2.value
+      })
+    }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+  });
+}
+
+function buildPhaseSection(info, context) {
+  const phaseLines = [];
+  PHASES.forEach(ph => {
+    if (ph === 'dibujo' || ph === 'pedidos') return;
+    const raw = info.phases ? info.phases[ph] : null;
+    let total = 0;
+    if (Array.isArray(raw)) total = raw.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+    else total = parseInt(raw) || 0;
+    if (total > 0) {
+      const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
+      const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
+      let line = `<div${cls}>${ph}: ${total}h`;
+      if (ph === context.phase) {
+        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+      }
+      line += `</div>`;
+      phaseLines.push(line);
+    }
+  });
+  let section = '';
+  if (phaseLines.length) section += phaseLines.join('');
+  if (context.phase === 'pedidos') {
+    const acopio = info.phases ? info.phases['pedidos'] : null;
+    if (acopio && acopio !== '0') section += `<div>Plazo acopio: ${acopio}</div>`;
+  }
+  return section;
+}
+
+function openPhasePopup(context, anchorRect) {
+  if (!popup) return;
+  const info = PROJECT_DATA[context.pid];
+  if (!info) return;
+  const headerParts = [info.name];
+  if (info.blocked) headerParts[0] += ' <span class="blocked-sign">\u{1F6AB}</span>';
+  headerParts.push(info.client || '');
+  if (context.phase) headerParts.push(context.phase);
+  let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
+  const metaLines = [];
+  if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+  if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
+  if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
+  const kanbanFields = info.kanban_display_fields || {};
+  const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+  if (kanbanEntries.length) {
+    let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
+    kanbanEntries.forEach(([label, value]) => {
+      kanbanHtml += `<div>${label}: ${value}</div>`;
+    });
+    kanbanHtml += '</div>';
+    html += kanbanHtml;
+  }
+  const phaseSection = buildPhaseSection(info, context);
+  if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+  const actionLines = [];
+  if (context.phase) {
+    const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
+    actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
+    actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+    let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day}">Dividir fase aquí</button>`;
+    if (info.phases && Array.isArray(info.phases[context.phase])) {
+      splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+    }
+    splitLine += `</div>`;
+    actionLines.push(splitLine);
+    actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
+    actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-part="${context.part || ''}">Sin planificar</button></div>`);
+  }
+  actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
+  if (info.image) {
+    const imgUrl = `${STATIC_URL}${info.image}`;
+    actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+  }
+  if (info.kanban_attachments && info.kanban_attachments.length) {
+    info.kanban_attachments.forEach(att => {
+      const url = att.url;
+      const name = (att.name || '').toLowerCase();
+      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+        actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+      } else {
+        actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
+      }
+    });
+  }
+  if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
+  popup.innerHTML = html;
+  popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
+  popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
+  popup.style.display = 'block';
+
+  const del = document.getElementById('del-btn');
+  if (del) {
+    del.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('¿Borrar fase?')) {
+        fetch(DELETE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+        }).then(() => location.reload());
+      }
+    });
+  }
+  const unplan = document.getElementById('unplan-btn');
+  if (unplan) {
+    unplan.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const today = new Date().toISOString().slice(0,10);
+      const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+      if (unplan.dataset.part) body.part = unplan.dataset.part;
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
+      })
+        .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
+            else alert(data.error || 'Error');
+            return;
+          }
+          afterMove(data, today);
+        });
+    });
+  }
+  const obsBtn = document.getElementById('obs-btn');
+  if (obsBtn && obsModal) {
+    obsBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const pid = obsBtn.dataset.pid;
+      obsModal.dataset.pid = pid;
+      obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
+      obsModal.style.display = 'block';
+    });
+  }
+  const splitBtn = document.getElementById('split-btn');
+  if (splitBtn && splitModal) {
+    splitBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      splitModal.dataset.pid = splitBtn.dataset.pid;
+      splitModal.dataset.phase = splitBtn.dataset.phase;
+      splitModal.dataset.date = splitBtn.dataset.date;
+      splitPart1.value = '';
+      splitPart2.value = '';
+      splitModal.style.display = 'block';
+    });
+  }
+  const unsplitBtn = document.getElementById('unsplit-btn');
+  if (unsplitBtn) {
+    unsplitBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('¿Deshacer división de esta fase?')) {
+        fetch(UNSPLIT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: unsplitBtn.dataset.pid, phase: unsplitBtn.dataset.phase })
+        }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+      }
+    });
+  }
+  const freeze = document.getElementById('freeze-btn');
+  if (freeze) {
+    freeze.addEventListener('click', ev => {
+      ev.stopPropagation();
+      fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), { method: 'POST', credentials: 'same-origin' })
+        .then(() => location.reload());
+    });
+  }
+  const startForm = document.getElementById('start-form');
+  if (startForm) {
+    startForm.addEventListener('submit', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const btn = document.getElementById('start-btn');
+      const val = document.getElementById('start-input').value;
+      fetch(START_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+      }).then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+        }
+        return resp.json();
+      }).then(d => {
+        if (d) {
+          localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+          if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+        }
+        location.reload();
+      });
+    });
+  }
+  const hoursForm = document.getElementById('phase-hours-form');
+  if (hoursForm) {
+    hoursForm.addEventListener('submit', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const btn = hoursForm.querySelector('button');
+      const val = document.getElementById('phase-hours-input').value;
+      fetch(PHASE_HOURS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+      }).then(resp => {
+        if (resp.ok) {
+          const url = new URL(location);
+          url.searchParams.set('highlight', btn.dataset.pid);
+          location.href = url;
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
+    });
+  }
+}
 
 const summaryResizer = document.getElementById('summary-resizer');
 const SUMMARY_WIDTH_KEY = 'ganttSummaryWidth';
@@ -160,7 +535,7 @@ function render(){
   body.innerHTML = '';
   header.innerHTML = '';
   if(!projects.length){return;}
-  const dayMs = 24*60*60*1000;
+  const dayMs = DAY_MS;
   const startOfDay = d => {
     const raw = (d ?? '').toString().trim();
     if(!raw){
@@ -187,7 +562,9 @@ function render(){
   const minStart = Math.min(...allStarts);
   const maxEnd = Math.max(...allEnds);
   const totalDays = Math.round((maxEnd - minStart)/dayMs) + 1;
+  timelineMinStart = minStart;
   pxPerDay = 40 * zoom;
+  timelinePxPerDay = pxPerDay;
   const width = totalDays * pxPerDay;
   header.style.width = width + 'px';
   body.style.width = width + 'px';
@@ -239,10 +616,10 @@ function render(){
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
     const bar = document.createElement('div');
     bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
-    const s = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
-    const e = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
-    bar.style.left = ((s - minStart)/dayMs*pxPerDay) + 'px';
-    bar.style.width = (((e - s)/dayMs + 1)*pxPerDay) + 'px';
+    const startMs = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
+    const endMs = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
+    bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+    bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
     bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
     bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
     if(r.type==='project'){
@@ -258,11 +635,11 @@ function render(){
         const deadlineMs = deadlineDate.getTime();
         if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
         seenDeadlines.add(deadlineMs);
-        if(deadlineMs <= e){
+        if(deadlineMs <= endMs){
           const highlightStart = Math.max(deadlineMs, minStart);
-          if(highlightStart <= e){
+          if(highlightStart <= endMs){
             const leftPx = ((highlightStart - minStart)/dayMs) * pxPerDay;
-            const widthDays = Math.round((e - highlightStart)/dayMs) + 1;
+            const widthDays = Math.round((endMs - highlightStart)/dayMs) + 1;
             if(widthDays > 0){
               const highlight = document.createElement('div');
               highlight.className = 'deadline-highlight';
@@ -273,7 +650,61 @@ function render(){
           }
         }
       });
-      bar.onclick = ()=>toggleProject(r.project.id);
+      bar.addEventListener('click', evt => {
+        evt.stopPropagation();
+        const barWidthDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+        let dayOffset = Math.floor(relativePx / pxPerDay);
+        if(dayOffset > barWidthDays) dayOffset = barWidthDays;
+        let clickedMs = startMs + dayOffset * dayMs;
+        const phases = Array.isArray(r.project.phases) ? r.project.phases : [];
+        let chosen = null;
+        let minDist = Infinity;
+        phases.forEach(ph => {
+          const phStart = startOfDay(ph.start).getTime();
+          const phEnd = startOfDay(ph.end).getTime();
+          let dist = 0;
+          if(clickedMs < phStart) dist = phStart - clickedMs;
+          else if(clickedMs > phEnd) dist = clickedMs - phEnd;
+          if(dist < minDist){
+            minDist = dist;
+            chosen = { data: ph, start: phStart, end: phEnd };
+          }
+        });
+        if(chosen){
+          if(clickedMs < chosen.start) clickedMs = chosen.start;
+          if(clickedMs > chosen.end) clickedMs = chosen.end;
+        } else {
+          if(clickedMs < startMs) clickedMs = startMs;
+          if(clickedMs > endMs) clickedMs = endMs;
+        }
+        const isoDay = new Date(clickedMs).toISOString().split('T')[0];
+        openPhasePopup({
+          pid: r.project.id,
+          phase: chosen ? chosen.data.name : '',
+          day: isoDay,
+          worker: chosen && chosen.data.worker ? chosen.data.worker : '',
+          part: ''
+        }, bar.getBoundingClientRect());
+      });
+    } else {
+      bar.addEventListener('click', evt => {
+        evt.stopPropagation();
+        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+        const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+        let dayOffset = Math.floor(relativePx / pxPerDay);
+        if(dayOffset > totalDays) dayOffset = totalDays;
+        let clickedMs = startMs + dayOffset * dayMs;
+        if(clickedMs > endMs) clickedMs = endMs;
+        const isoDay = new Date(clickedMs).toISOString().split('T')[0];
+        openPhasePopup({
+          pid: r.project.id,
+          phase: r.phase.name,
+          day: isoDay,
+          worker: r.phase.worker || '',
+          part: ''
+        }, bar.getBoundingClientRect());
+      });
     }
     rowDiv.appendChild(bar);
     body.appendChild(rowDiv);

@@ -1770,6 +1770,17 @@ def gantt_view():
                 return parsed.isoformat()
         return ''
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+        }
+
+    start_map = phase_start_map(projects)
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1809,7 +1820,13 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return render_template('gantt.html', projects=json.dumps(gantt_projects))
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
+    )
 
 @app.route('/projects')
 def project_list():
