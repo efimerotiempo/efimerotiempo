@@ -32,6 +32,7 @@
                  data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
                  data-title="{{ t.project }}"
+                 data-code="{{ t.get('custom_card_id') or '' }}"
                  data-client="{{ t.get('client') or '' }}"
                  data-due="{{ d.date.isoformat() }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
@@ -54,6 +55,7 @@
                    data-cid="{{ t.get('cid') or '' }}"
                    data-project="{{ t.project }}"
                    data-title="{{ t.project }}"
+                   data-code="{{ t.get('custom_card_id') or '' }}"
                    data-client="{{ t.get('client') or '' }}"
                    style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -75,10 +77,16 @@
              data-pid="{{ item.pid or '' }}"
              data-project="{{ (item.project or item.title)|trim }}"
              data-title="{{ (item.title or item.project)|trim }}"
+             data-display="{{ (item.display_title or item.title or item.project)|trim }}"
              data-client="{{ item.client }}"
+             data-code="{{ item.custom_card_id or '' }}"
              data-due="{{ item.due or '' }}"
              data-montar="{{ item.montar_start or '' }}">
-            <span class="proj-name" data-project="{{ (item.project or item.title)|trim }}">{{ (item.project or item.title)|trim }}</span>
+            <span class="proj-name"
+                  data-project="{{ (item.project or item.title)|trim }}"
+                  data-code="{{ item.custom_card_id or '' }}">
+              {{ (item.display_title or item.title or item.project)|trim }}
+            </span>
             {% if item.client %}
                 <span class="proj-client" data-project="{{ (item.project or item.title)|trim }}"> — {{ item.client }}</span>
             {% endif %}
@@ -551,13 +559,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
       const proj = (t.dataset.project || '').toLowerCase();
       const cli = (t.dataset.client || '').toLowerCase();
-      t.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
+      const code = (t.dataset.code || '').toLowerCase();
+      t.style.display = (!q || proj.includes(q) || cli.includes(q) || code.includes(q)) ? '' : 'none';
     });
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
       const title = (row.dataset.title || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q));
+      const display = (row.dataset.display || '').toLowerCase();
+      const code = (row.dataset.code || '').toLowerCase();
+      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
       row.style.display = show ? '' : 'none';
       const next = row.nextElementSibling;
       if (next && next.classList.contains('links-row')) {
@@ -699,8 +710,11 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.client = item.client || '';
           div.dataset.montar = item.montar_start || '';
           div.dataset.due = item.due || '';
-          const display = projectValue;
-          let html = `<span class="proj-name" data-project="${projectValue}">${display}</span>`;
+          const display = (item.display_title || fullTitle || projectValue).trim();
+          const code = (item.custom_card_id || '').trim();
+          div.dataset.display = display;
+          div.dataset.code = code;
+          let html = `<span class="proj-name" data-project="${projectValue}" data-code="${code}">${display}</span>`;
           if (item.client) {
             html += `<span class="proj-client" data-project="${projectValue}"> — ${item.client}</span>`;
           }

@@ -141,6 +141,26 @@ PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
 SSE_CLIENTS = []
 
 
+def get_card_custom_id(card):
+    """Return the Kanban custom card identifier (e.g. ``OF 1234``) if present."""
+
+    if not isinstance(card, dict):
+        return ''
+
+    for key in (
+        'customCardId',
+        'customcardid',
+        'customId',
+        'customid',
+    ):
+        value = card.get(key)
+        if value:
+            text = str(value).strip()
+            if text:
+                return text
+    return ''
+
+
 def broadcast_event(data):
     for q in list(SSE_CLIENTS):
         q.put(data)
@@ -465,6 +485,7 @@ def build_project_links(compras_raw):
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
+        custom_id = get_card_custom_id(card)
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid) if cid else None
         links_info = card.get('links') or {}
@@ -504,6 +525,14 @@ def build_project_links(compras_raw):
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
         lane_key = lane_name.lower()
+        base_display = title or project_name or ''
+        if custom_id and base_display:
+            if base_display.lower().startswith(custom_id.lower()):
+                display_title = base_display
+            else:
+                display_title = f"{custom_id} - {base_display}"
+        else:
+            display_title = base_display or custom_id
         if (
             lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
@@ -516,7 +545,9 @@ def build_project_links(compras_raw):
                     links_table.append({
                         'project': project_name,
                         'title': title,
+                        'display_title': display_title,
                         'client': client_name,
+                        'custom_card_id': custom_id,
                         'links': child_links,
                         'due': due.isoformat() if due else None
                     })
@@ -567,6 +598,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             continue
 
         _, client_name = split_project_and_client(title)
+        custom_id = get_card_custom_id(card)
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -613,6 +645,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'column': column,
             'cid': cid,
             'prev_date': prev_date,
+            'custom_card_id': custom_id,
         }
 
         if d:
