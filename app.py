@@ -501,11 +501,13 @@ def attach_phase_starts(links_table, projects=None):
     projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
+    ids_by_name = {}
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
         if montar_start:
             montar_by_name[proj['name']] = montar_start
+        ids_by_name[proj['name']] = proj['id']
 
     enriched = []
     for item in links_table:
@@ -513,6 +515,9 @@ def attach_phase_starts(links_table, projects=None):
         montar_start = montar_by_name.get(item['project'])
         if montar_start:
             entry['montar_start'] = montar_start
+        pid = ids_by_name.get(item['project'])
+        if pid:
+            entry['pid'] = pid
         enriched.append(entry)
     return enriched
 
@@ -1706,12 +1711,25 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+        }
+    start_map = phase_start_map(projects)
+
     return render_template(
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
         unconfirmed=unconfirmed,
         project_links=links_table,
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
     )
 
 
@@ -1770,6 +1788,17 @@ def gantt_view():
                 return parsed.isoformat()
         return ''
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+        }
+
+    start_map = phase_start_map(projects)
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1809,7 +1838,13 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return render_template('gantt.html', projects=json.dumps(gantt_projects))
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
+    )
 
 @app.route('/projects')
 def project_list():
