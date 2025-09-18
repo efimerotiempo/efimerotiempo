@@ -71,14 +71,8 @@
     <h3>Columna 1</h3>
     <div class="columna-1-content">
     {% for item in project_links %}
-        <div class="project-row"
-             data-pid="{{ item.pid or '' }}"
-             data-project="{{ item.project }}"
-             data-title="{{ (item.title or item.project)|trim }}"
-             data-client="{{ item.client }}"
-             data-due="{{ item.due or '' }}"
-             data-montar="{{ item.montar_start or '' }}">
-            <span class="proj-name" data-project="{{ item.project }}">{{ item.title or item.project }}</span>
+        <div class="project-row" data-pid="{{ item.pid or '' }}" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due or '' }}" data-montar="{{ item.montar_start or '' }}">
+            <span class="proj-name" data-project="{{ item.project }}">{{ item.project }}</span>
             {% if item.client %}
                 <span class="proj-client" data-project="{{ item.project }}">{{ item.client }}</span>
             {% endif %}
@@ -555,9 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
-      const title = (row.dataset.title || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q));
+      const show = (!q || proj.includes(q) || cli.includes(q));
       row.style.display = show ? '' : 'none';
       const next = row.nextElementSibling;
       if (next && next.classList.contains('links-row')) {
@@ -693,12 +686,10 @@ document.addEventListener('DOMContentLoaded', () => {
           div.className = 'project-row';
           div.dataset.pid = item.pid || '';
           div.dataset.project = item.project;
-          div.dataset.title = (item.title || item.project || '').trim();
           div.dataset.client = item.client || '';
           div.dataset.montar = item.montar_start || '';
           div.dataset.due = item.due || '';
-          const display = item.title || item.project;
-          let html = `<span class="proj-name" data-project="${item.project}">${display}</span>`;
+          let html = `<span class="proj-name" data-project="${item.project}">${item.project}</span>`;
           if (item.client) {
             html += `<span class="proj-client" data-project="${item.project}">${item.client}</span>`;
           }
