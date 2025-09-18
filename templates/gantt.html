@@ -41,7 +41,7 @@
   .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
-  .project-bar .deadline-highlight {
+  .gantt-row .deadline-highlight {
     position:absolute;
     top:-2px;
     height:calc(100% + 4px);
@@ -259,15 +259,17 @@ function render(){
         if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
         seenDeadlines.add(deadlineMs);
         if(deadlineMs <= e){
-          const visibleStart = Math.max(deadlineMs, s);
-          const leftPx = ((visibleStart - s)/dayMs) * pxPerDay;
-          const widthDays = Math.max(0, Math.round((e - visibleStart)/dayMs)) + 1;
-          if(widthDays > 0){
-            const highlight = document.createElement('div');
-            highlight.className = 'deadline-highlight';
-            highlight.style.left = Math.max(0, leftPx) + 'px';
-            highlight.style.width = (widthDays * pxPerDay) + 'px';
-            bar.appendChild(highlight);
+          const highlightStart = Math.max(deadlineMs, minStart);
+          if(highlightStart <= e){
+            const leftPx = ((highlightStart - minStart)/dayMs) * pxPerDay;
+            const widthDays = Math.round((e - highlightStart)/dayMs) + 1;
+            if(widthDays > 0){
+              const highlight = document.createElement('div');
+              highlight.className = 'deadline-highlight';
+              highlight.style.left = leftPx + 'px';
+              highlight.style.width = (widthDays * pxPerDay) + 'px';
+              rowDiv.appendChild(highlight);
+            }
           }
         }
       });
