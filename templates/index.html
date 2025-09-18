@@ -905,7 +905,7 @@ let dragInfo = null;
     const target = new Date(moveData.date);
     const next = new Date(nextStart);
     if (Number.isNaN(target.getTime()) || Number.isNaN(next.getTime())) return false;
-    return target < next;
+    return target > next;
   }
 
   function attemptMove(moveData, mode, beforeMaterial) {
