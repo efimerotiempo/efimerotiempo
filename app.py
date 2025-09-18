@@ -136,6 +136,8 @@ TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
 KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
 
+PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
+
 SSE_CLIENTS = []
 
 
@@ -427,6 +429,37 @@ def load_compras_raw():
     return compras_raw, column_colors
 
 
+def split_project_and_client(title):
+    title = (title or '').strip()
+    if not title:
+        return '', ''
+
+    match = PROJECT_TITLE_PATTERN.search(title)
+    if not match:
+        return title, ''
+
+    start = match.start()
+    end = match.end()
+    tail = title[end:]
+    separator = re.search(r'\s+-\s+', tail)
+    if separator:
+        end += separator.start()
+    else:
+        end = len(title)
+
+    project = title[start:end].strip(' -')
+    before = title[:start].strip(' -')
+    after = title[end:].strip(' -')
+
+    client_parts = [part for part in (before, after) if part]
+    client = ' - '.join(client_parts)
+
+    if not project:
+        project = title
+
+    return project, client
+
+
 def build_project_links(compras_raw):
     children_by_parent = {}
     for data in compras_raw.values():
@@ -466,10 +499,7 @@ def build_project_links(compras_raw):
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
-        project_name = title
-        client_name = ''
-        if ' - ' in title:
-            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
+        project_name, client_name = split_project_and_client(title)
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
@@ -478,13 +508,14 @@ def build_project_links(compras_raw):
             lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
-            key = (project_name, client_name)
+            key = (project_name, client_name, title)
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
                 if child_links:
                     links_table.append({
                         'project': project_name,
+                        'title': title,
                         'client': client_name,
                         'links': child_links,
                         'due': due.isoformat() if due else None
@@ -501,11 +532,13 @@ def attach_phase_starts(links_table, projects=None):
     projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
+    ids_by_name = {}
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
         if montar_start:
             montar_by_name[proj['name']] = montar_start
+        ids_by_name[proj['name']] = proj['id']
 
     enriched = []
     for item in links_table:
@@ -513,6 +546,9 @@ def attach_phase_starts(links_table, projects=None):
         montar_start = montar_by_name.get(item['project'])
         if montar_start:
             entry['montar_start'] = montar_start
+        pid = ids_by_name.get(item['project'])
+        if pid:
+            entry['pid'] = pid
         enriched.append(entry)
     return enriched
 
@@ -530,9 +566,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
         if not title:
             continue
 
-        client_name = ''
-        if ' - ' in title:
-            _, client_name = [p.strip() for p in title.split(' - ', 1)]
+        _, client_name = split_project_and_client(title)
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -1706,12 +1740,25 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+        }
+    start_map = phase_start_map(projects)
+
     return render_template(
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
         unconfirmed=unconfirmed,
         project_links=links_table,
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
     )
 
 
@@ -1770,6 +1817,17 @@ def gantt_view():
                 return parsed.isoformat()
         return ''
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+        }
+
+    start_map = phase_start_map(projects)
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1809,7 +1867,13 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return render_template('gantt.html', projects=json.dumps(gantt_projects))
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
+    )
 
 @app.route('/projects')
 def project_list():
