@@ -160,6 +160,52 @@ document.addEventListener('DOMContentLoaded', () => {
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
 
+  function norm(value) {
+    return (value || '').toString().trim().toLowerCase();
+  }
+
+  function resolveRowPid(row) {
+    if (!row) return null;
+    let pid = row.dataset.pid;
+    if (pid && PROJECT_DATA[pid]) return pid;
+
+    const code = norm(row.dataset.code);
+    const project = norm(row.dataset.project);
+    const title = norm(row.dataset.title);
+    const display = norm(row.dataset.display);
+    const client = norm(row.dataset.client);
+
+    for (const [candidatePid, info] of Object.entries(PROJECT_DATA)) {
+      if (!info) continue;
+      const name = norm(info.name);
+      if (!name) continue;
+      const [nameProject, ...rest] = name.split(' - ');
+      const nameClient = norm(rest.join(' - '));
+      const projectMatch = norm(nameProject);
+      const codeMatch = norm(info.custom_card_id);
+
+      if (code && codeMatch && code === codeMatch) {
+        pid = candidatePid;
+      } else if (code && name.includes(code)) {
+        pid = candidatePid;
+      } else if (project && projectMatch === project) {
+        pid = candidatePid;
+      } else if (title && (name === title || name.startsWith(title) || title.startsWith(name))) {
+        pid = candidatePid;
+      } else if (display && name === display) {
+        pid = candidatePid;
+      } else if (project && name.includes(project) && (!client || !nameClient || client === nameClient)) {
+        pid = candidatePid;
+      }
+
+      if (pid) {
+        row.dataset.pid = pid;
+        return pid;
+      }
+    }
+    return null;
+  }
+
   function showDeadline(text = DEADLINE_MSG, after = null) {
     if (!deadlineModal || !deadlineText || !deadlineClose) return;
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
@@ -685,13 +731,14 @@ document.addEventListener('DOMContentLoaded', () => {
   updateDueWarnings();
 
   const projectList = document.querySelector('.columna-1');
+  document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
   if (projectList) {
     projectList.addEventListener('click', e => {
       const trigger = e.target.closest('.proj-code, .proj-title');
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
-      const pid = row.dataset.pid;
+      const pid = resolveRowPid(row);
       if (!pid || !PROJECT_DATA[pid]) return;
       e.stopPropagation();
       const rect = trigger.getBoundingClientRect();
@@ -735,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
             html += `<span class="link-title" data-title="${link}">${link}</span>`;
           });
           div.innerHTML = html;
+          resolveRowPid(div);
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
