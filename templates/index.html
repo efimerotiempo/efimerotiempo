@@ -898,14 +898,44 @@ let dragInfo = null;
     return null;
   }
 
+  function getPrevPhaseStart(pid, phase) {
+    if (!pid || !phase) return null;
+    const orderIndex = PHASES.indexOf(phase);
+    if (orderIndex <= 0) return null;
+    const phaseStarts = START_DATA[pid];
+    if (!phaseStarts) return null;
+    for (let i = orderIndex - 1; i >= 0; i--) {
+      const prevPhase = PHASES[i];
+      const prevStart = phaseStarts[prevPhase];
+      if (prevStart && prevStart !== '0') {
+        return prevStart;
+      }
+    }
+    return null;
+  }
+
   function violatesPhaseOrder(moveData) {
     if (!moveData || !moveData.date) return false;
-    const nextStart = getNextPhaseStart(moveData.pid, moveData.phase);
-    if (!nextStart) return false;
     const target = new Date(moveData.date);
-    const next = new Date(nextStart);
-    if (Number.isNaN(target.getTime()) || Number.isNaN(next.getTime())) return false;
-    return target > next;
+    if (Number.isNaN(target.getTime())) return false;
+
+    const prevStart = getPrevPhaseStart(moveData.pid, moveData.phase);
+    if (prevStart) {
+      const prev = new Date(prevStart);
+      if (!Number.isNaN(prev.getTime()) && target < prev) {
+        return true;
+      }
+    }
+
+    const nextStart = getNextPhaseStart(moveData.pid, moveData.phase);
+    if (nextStart) {
+      const next = new Date(nextStart);
+      if (!Number.isNaN(next.getTime()) && target > next) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function attemptMove(moveData, mode, beforeMaterial) {
