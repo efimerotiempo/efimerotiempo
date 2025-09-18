@@ -36,7 +36,7 @@
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
   .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
-  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; box-sizing:border-box; }
   .gantt-body { position:relative; }
   .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
@@ -53,8 +53,11 @@
     background:transparent;
     z-index:1;
   }
-  .day-cell.today { background-color: rgba(255,0,0,0.3); }
-  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
+  .day-cell.today { background:transparent; border-left:3px solid #000; border-right:3px solid #000; font-weight:bold; }
+  .today-column { position:absolute; top:0; bottom:0; border-left:3px solid #000; border-right:3px solid #000; pointer-events:none; box-sizing:border-box; background:transparent; z-index:2; }
+  .deadline-column { position:absolute; top:0; bottom:0; border-left:2px solid #d00; border-right:2px solid #d00; pointer-events:none; box-sizing:border-box; z-index:0; }
+  .day-cell.deadline-overdue { border:2px solid #d00; font-weight:bold; }
+  .day-cell.today.deadline-overdue { border-left:3px solid #000; border-right:3px solid #000; border-top:2px solid #d00; border-bottom:2px solid #d00; }
   .gantt-controls input { margin-left:8px; padding:4px; }
 </style>
 <script>
@@ -172,11 +175,21 @@ function render(){
   };
   const allStarts = [];
   const allEnds = [];
+  const deadlineTimes = [];
   projects.forEach(p=>{
     const ps = startOfDay(p.start);
     const pe = startOfDay(p.end);
-    allStarts.push(ps.getTime());
-    allEnds.push(pe.getTime());
+    const psMs = ps.getTime();
+    const peMs = pe.getTime();
+    allStarts.push(psMs);
+    allEnds.push(peMs);
+    const deadlineRaw = p.deadline_start || p.due_date || p.client_date || p.client_due_date;
+    const deadlineDate = startOfDay(deadlineRaw);
+    const deadlineMs = deadlineDate.getTime();
+    p._deadlineMs = deadlineMs;
+    if(!Number.isNaN(deadlineMs) && deadlineMs <= peMs){
+      deadlineTimes.push(deadlineMs);
+    }
     p.phases.forEach(ph=>{
       const s = startOfDay(ph.start);
       const e = startOfDay(ph.end);
@@ -184,8 +197,12 @@ function render(){
       allEnds.push(e.getTime());
     });
   });
-  const minStart = Math.min(...allStarts);
-  const maxEnd = Math.max(...allEnds);
+  let minStart = Math.min(...allStarts);
+  let maxEnd = Math.max(...allEnds);
+  if(deadlineTimes.length){
+    minStart = Math.min(minStart, ...deadlineTimes);
+    maxEnd = Math.max(maxEnd, ...deadlineTimes);
+  }
   const totalDays = Math.round((maxEnd - minStart)/dayMs) + 1;
   pxPerDay = 40 * zoom;
   const width = totalDays * pxPerDay;
@@ -196,6 +213,21 @@ function render(){
   const todayStr = new Date().toISOString().split('T')[0];
   todayIndex = null;
 
+  const overdueColumns = new Set();
+  projects.forEach(p=>{
+    const s = startOfDay(p.start).getTime();
+    const e = startOfDay(p.end).getTime();
+    const deadlineMs = p._deadlineMs;
+    if(Number.isNaN(deadlineMs)) return;
+    if(e < deadlineMs) return;
+    const rangeStart = deadlineMs;
+    const startIdx = Math.max(0, Math.floor((rangeStart - minStart) / dayMs));
+    const endIdx = Math.max(startIdx, Math.floor((e - minStart) / dayMs));
+    for(let idx = startIdx; idx <= endIdx; idx++){
+      overdueColumns.add(idx);
+    }
+  });
+
   for(let i=0;i<totalDays;i++){
     const d = new Date(minStart + i*dayMs);
     const iso = d.toISOString().split('T')[0];
@@ -205,6 +237,9 @@ function render(){
     cell.style.width = pxPerDay + 'px';
     cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
     if(iso === todayStr){ cell.classList.add('today'); todayIndex = i; }
+    if(overdueColumns.has(i)){
+      cell.classList.add('deadline-overdue');
+    }
     header.appendChild(cell);
   }
 
@@ -215,6 +250,15 @@ function render(){
     highlight.style.width = pxPerDay + 'px';
     body.appendChild(highlight);
   }
+
+  const overdueIndices = Array.from(overdueColumns).sort((a,b)=>a-b);
+  overdueIndices.forEach(idx=>{
+    const column = document.createElement('div');
+    column.className = 'deadline-column';
+    column.style.left = (idx*pxPerDay) + 'px';
+    column.style.width = pxPerDay + 'px';
+    body.appendChild(column);
+  });
 
   const rows = [];
   projects.forEach(p=>{
