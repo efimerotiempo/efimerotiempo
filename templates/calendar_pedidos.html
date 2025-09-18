@@ -82,11 +82,18 @@
              data-code="{{ item.custom_card_id or '' }}"
              data-due="{{ item.due or '' }}"
              data-montar="{{ item.montar_start or '' }}">
-            <span class="proj-name"
-                  data-project="{{ (item.project or item.title)|trim }}"
-                  data-code="{{ item.custom_card_id or '' }}">
-              {{ (item.display_title or item.title or item.project)|trim }}
-            </span>
+            {% set project_value = (item.project or item.title)|trim %}
+            {% set title_value = (item.title or item.project)|trim %}
+            {% set code_value = (item.custom_card_id or '')|trim %}
+            {% if code_value %}
+                <span class="proj-code"
+                      data-project="{{ project_value }}"
+                      data-code="{{ code_value }}">{{ code_value }}</span>
+                <span class="proj-sep"> - </span>
+            {% endif %}
+            <span class="proj-title"
+                  data-project="{{ project_value }}"
+                  data-code="{{ code_value }}">{{ title_value or project_value }}</span>
             {% if item.client %}
                 <span class="proj-client" data-project="{{ (item.project or item.title)|trim }}"> — {{ item.client }}</span>
             {% endif %}
@@ -680,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const projectList = document.querySelector('.columna-1');
   if (projectList) {
     projectList.addEventListener('click', e => {
-      const trigger = e.target.closest('.proj-name, .proj-client');
+      const trigger = e.target.closest('.proj-code, .proj-title');
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
@@ -714,7 +721,13 @@ document.addEventListener('DOMContentLoaded', () => {
           const code = (item.custom_card_id || '').trim();
           div.dataset.display = display;
           div.dataset.code = code;
-          let html = `<span class="proj-name" data-project="${projectValue}" data-code="${code}">${display}</span>`;
+          let html = '';
+          if (code) {
+            html += `<span class="proj-code" data-project="${projectValue}" data-code="${code}">${code}</span>`;
+            html += `<span class="proj-sep"> - </span>`;
+          }
+          const titleText = (fullTitle || projectValue) || '';
+          html += `<span class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</span>`;
           if (item.client) {
             html += `<span class="proj-client" data-project="${projectValue}"> — ${item.client}</span>`;
           }
