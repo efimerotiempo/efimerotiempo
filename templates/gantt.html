@@ -55,9 +55,25 @@
   }
   .day-cell.today { background:transparent; border-left:3px solid #000; border-right:3px solid #000; font-weight:bold; }
   .today-column { position:absolute; top:0; bottom:0; border-left:3px solid #000; border-right:3px solid #000; pointer-events:none; box-sizing:border-box; background:transparent; z-index:2; }
-  .deadline-column { position:absolute; top:0; bottom:0; border-left:2px solid #d00; border-right:2px solid #d00; pointer-events:none; box-sizing:border-box; z-index:0; }
-  .day-cell.deadline-overdue { border:2px solid #d00; font-weight:bold; }
-  .day-cell.today.deadline-overdue { border-left:3px solid #000; border-right:3px solid #000; border-top:2px solid #d00; border-bottom:2px solid #d00; }
+  .deadline-column {
+    position:absolute;
+    top:0;
+    bottom:0;
+    border-left:2px solid #d00;
+    border-right:2px solid #d00;
+    background:rgba(221, 0, 0, 0.12);
+    pointer-events:none;
+    box-sizing:border-box;
+    z-index:0;
+  }
+  .day-cell.deadline-overdue {
+    border-top:2px solid #d00;
+    border-bottom:2px solid #d00;
+    font-weight:bold;
+  }
+  .day-cell.deadline-overdue-start { border-left:2px solid #d00; }
+  .day-cell.deadline-overdue-end { border-right:2px solid #d00; }
+  .day-cell.today.deadline-overdue { border-top:2px solid #d00; border-bottom:2px solid #d00; }
   .gantt-controls input { margin-left:8px; padding:4px; }
 </style>
 <script>
@@ -220,13 +236,46 @@ function render(){
     const deadlineMs = p._deadlineMs;
     if(Number.isNaN(deadlineMs)) return;
     if(e < deadlineMs) return;
-    const rangeStart = deadlineMs;
+    const rangeStart = Math.max(deadlineMs, s);
+    if(rangeStart > e) return;
     const startIdx = Math.max(0, Math.floor((rangeStart - minStart) / dayMs));
     const endIdx = Math.max(startIdx, Math.floor((e - minStart) / dayMs));
     for(let idx = startIdx; idx <= endIdx; idx++){
       overdueColumns.add(idx);
     }
   });
+
+  const overdueStates = new Map();
+  const overdueSpans = [];
+  const overdueIndices = Array.from(overdueColumns).sort((a,b)=>a-b);
+  if(overdueIndices.length){
+    let spanStart = overdueIndices[0];
+    let prev = spanStart;
+    for(let i=1;i<overdueIndices.length;i++){
+      const idx = overdueIndices[i];
+      if(idx === prev + 1){
+        prev = idx;
+        continue;
+      }
+      overdueSpans.push([spanStart, prev]);
+      spanStart = idx;
+      prev = idx;
+    }
+    overdueSpans.push([spanStart, prev]);
+    overdueSpans.forEach(([startIdx, endIdx])=>{
+      for(let i=startIdx;i<=endIdx;i++){
+        let state = 'middle';
+        if(i === startIdx && i === endIdx){
+          state = 'single';
+        } else if(i === startIdx){
+          state = 'start';
+        } else if(i === endIdx){
+          state = 'end';
+        }
+        overdueStates.set(i, state);
+      }
+    });
+  }
 
   for(let i=0;i<totalDays;i++){
     const d = new Date(minStart + i*dayMs);
@@ -237,8 +286,15 @@ function render(){
     cell.style.width = pxPerDay + 'px';
     cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
     if(iso === todayStr){ cell.classList.add('today'); todayIndex = i; }
-    if(overdueColumns.has(i)){
+    const overdueState = overdueStates.get(i);
+    if(overdueState){
       cell.classList.add('deadline-overdue');
+      if(overdueState === 'start' || overdueState === 'single'){
+        cell.classList.add('deadline-overdue-start');
+      }
+      if(overdueState === 'end' || overdueState === 'single'){
+        cell.classList.add('deadline-overdue-end');
+      }
     }
     header.appendChild(cell);
   }
@@ -251,12 +307,11 @@ function render(){
     body.appendChild(highlight);
   }
 
-  const overdueIndices = Array.from(overdueColumns).sort((a,b)=>a-b);
-  overdueIndices.forEach(idx=>{
+  overdueSpans.forEach(([startIdx, endIdx])=>{
     const column = document.createElement('div');
     column.className = 'deadline-column';
-    column.style.left = (idx*pxPerDay) + 'px';
-    column.style.width = pxPerDay + 'px';
+    column.style.left = (startIdx*pxPerDay) + 'px';
+    column.style.width = ((endIdx - startIdx + 1) * pxPerDay) + 'px';
     body.appendChild(column);
   });
 
