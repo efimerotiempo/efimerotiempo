@@ -478,13 +478,14 @@ def build_project_links(compras_raw):
             lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
-            key = (project_name, client_name)
+            key = (project_name, client_name, title)
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
                 if child_links:
                     links_table.append({
                         'project': project_name,
+                        'title': title,
                         'client': client_name,
                         'links': child_links,
                         'due': due.isoformat() if due else None
