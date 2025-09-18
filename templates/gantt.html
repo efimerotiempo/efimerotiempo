@@ -258,7 +258,7 @@ function render(){
         const deadlineMs = deadlineDate.getTime();
         if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
         seenDeadlines.add(deadlineMs);
-        if(deadlineMs < e){
+        if(deadlineMs <= e){
           const visibleStart = Math.max(deadlineMs, s);
           const leftPx = ((visibleStart - s)/dayMs) * pxPerDay;
           const widthDays = Math.max(0, Math.round((e - visibleStart)/dayMs)) + 1;
