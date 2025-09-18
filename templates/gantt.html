@@ -246,21 +246,31 @@ function render(){
     bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
     bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
     if(r.type==='project'){
-      const deadlineRaw = r.project.deadline_start || r.project.due_date || r.project.client_date || r.project.client_due_date;
-      const deadlineDate = startOfDay(deadlineRaw);
-      const deadlineMs = deadlineDate.getTime();
-      if(!Number.isNaN(deadlineMs) && e >= deadlineMs){
-        const visibleStart = Math.max(deadlineMs, s);
-        const leftPx = ((visibleStart - s)/dayMs) * pxPerDay;
-        const widthDays = Math.max(0, Math.round((e - visibleStart)/dayMs)) + 1;
-        if(widthDays > 0){
-          const highlight = document.createElement('div');
-          highlight.className = 'deadline-highlight';
-          highlight.style.left = Math.max(0, leftPx) + 'px';
-          highlight.style.width = (widthDays * pxPerDay) + 'px';
-          bar.appendChild(highlight);
+      const deadlineSources = [
+        r.project.deadline_start,
+        r.project.due_date,
+        r.project.client_date,
+        r.project.client_due_date
+      ];
+      const seenDeadlines = new Set();
+      deadlineSources.forEach(raw => {
+        const deadlineDate = startOfDay(raw);
+        const deadlineMs = deadlineDate.getTime();
+        if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
+        seenDeadlines.add(deadlineMs);
+        if(deadlineMs < e){
+          const visibleStart = Math.max(deadlineMs, s);
+          const leftPx = ((visibleStart - s)/dayMs) * pxPerDay;
+          const widthDays = Math.max(0, Math.round((e - visibleStart)/dayMs)) + 1;
+          if(widthDays > 0){
+            const highlight = document.createElement('div');
+            highlight.className = 'deadline-highlight';
+            highlight.style.left = Math.max(0, leftPx) + 'px';
+            highlight.style.width = (widthDays * pxPerDay) + 'px';
+            bar.appendChild(highlight);
+          }
         }
-      }
+      });
       bar.onclick = ()=>toggleProject(r.project.id);
     }
     rowDiv.appendChild(bar);
