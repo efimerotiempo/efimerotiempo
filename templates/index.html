@@ -909,14 +909,23 @@ let dragInfo = null;
       attemptMove(moveData, 'split', beforeMaterial);
     });
   });
+  function getPhaseSequence(pid) {
+    const info = PROJECT_DATA[pid];
+    if (info && Array.isArray(info.phase_sequence) && info.phase_sequence.length) {
+      return info.phase_sequence;
+    }
+    return PHASES;
+  }
+
   function getNextPhaseStart(pid, phase) {
     if (!pid || !phase) return null;
-    const orderIndex = PHASES.indexOf(phase);
+    const sequence = getPhaseSequence(pid);
+    const orderIndex = sequence.indexOf(phase);
     if (orderIndex === -1) return null;
     const phaseStarts = START_DATA[pid];
     if (!phaseStarts) return null;
-    for (let i = orderIndex + 1; i < PHASES.length; i++) {
-      const nextPhase = PHASES[i];
+    for (let i = orderIndex + 1; i < sequence.length; i++) {
+      const nextPhase = sequence[i];
       const nextStart = phaseStarts[nextPhase];
       if (nextStart && nextStart !== '0') {
         return nextStart;
@@ -927,12 +936,13 @@ let dragInfo = null;
 
   function getPrevPhaseStart(pid, phase) {
     if (!pid || !phase) return null;
-    const orderIndex = PHASES.indexOf(phase);
+    const sequence = getPhaseSequence(pid);
+    const orderIndex = sequence.indexOf(phase);
     if (orderIndex <= 0) return null;
     const phaseStarts = START_DATA[pid];
     if (!phaseStarts) return null;
     for (let i = orderIndex - 1; i >= 0; i--) {
-      const prevPhase = PHASES[i];
+      const prevPhase = sequence[i];
       const prevStart = phaseStarts[prevPhase];
       if (prevStart && prevStart !== '0') {
         return prevStart;

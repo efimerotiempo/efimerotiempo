@@ -1707,6 +1707,7 @@ def calendar_view():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -1798,6 +1799,7 @@ def calendar_pedidos():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -1875,6 +1877,7 @@ def gantt_view():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
 
     start_map = phase_start_map(projects)
@@ -2397,6 +2400,7 @@ def complete():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
