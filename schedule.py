@@ -320,6 +320,23 @@ def schedule_projects(projects):
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
+
+    def record_segment_start(project, phase_name, index, start_day, start_hour):
+        if start_day is None:
+            return
+        seg_map = project.setdefault('segment_starts', {})
+        hour_map = project.setdefault('segment_start_hours', {})
+        seg_list = seg_map.setdefault(phase_name, [])
+        hour_list = hour_map.setdefault(phase_name, [])
+        while len(seg_list) <= index:
+            seg_list.append(None)
+        while len(hour_list) <= index:
+            hour_list.append(None)
+        if seg_list[index] is None:
+            seg_list[index] = start_day.isoformat()
+        if hour_list[index] is None:
+            hour_list[index] = start_hour if start_hour is not None else 0
+
     for worker, days in vac_map.items():
         for day in days:
             if worker in worker_schedule:
@@ -405,7 +422,7 @@ def schedule_projects(projects):
                 worker = assigned.get(phase) if planned else UNPLANNED
                 if not worker or worker in inactive:
                     worker = UNPLANNED
-                current, hour, end_date = assign_pedidos(
+                current, hour, end_date, seg_start, seg_start_hour = assign_pedidos(
                     worker_schedule[worker],
                     current,
                     date.fromisoformat(val),
@@ -420,6 +437,7 @@ def schedule_projects(projects):
                     project_blocked=project.get('blocked', False),
                     material_date=project.get('material_confirmed_date'),
                 )
+                record_segment_start(project, phase, 0, seg_start, seg_start_hour)
             else:
                 segs = val if isinstance(val, list) else [val]
                 seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
@@ -467,7 +485,7 @@ def schedule_projects(projects):
                         current = override
                         hour = hour_override or 0
                         manual = True
-                    current, hour, end_date = assign_phase(
+                    current, hour, end_date, seg_start, seg_start_hour = assign_phase(
                         worker_schedule[worker],
                         current,
                         hour,
@@ -488,6 +506,7 @@ def schedule_projects(projects):
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
                     )
+                    record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
         if project.get('due_date'):
             try:
@@ -554,6 +573,8 @@ def assign_phase(
     remaining = hours
     last_day = day
     phase_entries = []
+    first_day = None
+    first_hour = 0
     due_dt = None
     if due_date:
         try:
@@ -592,6 +613,9 @@ def assign_phase(
                 'auto': auto,
             }
             tasks.append(task)
+            if first_day is None:
+                first_day = day
+                first_hour = used
             phase_entries.append((task, day))
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -608,7 +632,7 @@ def assign_phase(
                     task['due_status'] = 'met'
             else:
                 task['due_status'] = None
-        return day, hour, last_day
+        return day, hour, last_day, first_day, first_hour
 
     while remaining > 0:
         if day.weekday() in WEEKEND or (
@@ -677,6 +701,9 @@ def assign_phase(
                 'auto': auto,
             }
             tasks.append(task)
+            if first_day is None:
+                first_day = day
+                first_hour = start
             phase_entries.append((task, day))
             tasks.sort(key=lambda t: t.get('start', 0))
             schedule[day_str] = tasks
@@ -708,6 +735,9 @@ def assign_phase(
             'auto': auto,
         }
         tasks.append(task)
+        if first_day is None:
+            first_day = day
+            first_hour = start
         phase_entries.append((task, day))
         tasks.sort(key=lambda t: t.get('start', 0))
         schedule[day_str] = tasks
@@ -728,7 +758,7 @@ def assign_phase(
             task['due_status'] = None
     next_day = day
     next_hour = hour
-    return next_day, next_hour, last_day
+    return next_day, next_hour, last_day, first_day, first_hour
 
 
 def assign_pedidos(
@@ -756,6 +786,7 @@ def assign_pedidos(
         day = next_workday(day)
     last_day = day
     phase_entries = []
+    first_day = None
     due_dt = None
     if due_date:
         try:
@@ -790,6 +821,8 @@ def assign_pedidos(
             'material_date': material_date,
         }
         tasks.append(task)
+        if first_day is None:
+            first_day = day
         phase_entries.append((task, day))
         schedule[day_str] = tasks
         last_day = day
@@ -803,7 +836,7 @@ def assign_pedidos(
                 task['due_status'] = 'met'
         else:
             task['due_status'] = None
-    return next_workday(last_day), 0, last_day
+    return next_workday(last_day), 0, last_day, first_day, 0
 
 
 def _last_phase_info(schedule, phase):
