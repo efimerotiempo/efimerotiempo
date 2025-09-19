@@ -1,4 +1,26 @@
 {% extends 'base.html' %}
+
+{% macro render_note_row(cell_tag, cols, notes, today) %}
+    <tr class="notes-row">
+        <{{ cell_tag }} class="resource-col"></{{ cell_tag }}>
+        {% for c in cols %}
+        {% if c.type == 'day' %}
+        {% set d = c.dates[0] %}
+        {% set ms = notes.get(d.isoformat()) %}
+        <{{ cell_tag }} data-date="{{ d.isoformat() }}" class="note-cell{% if d == today %} today{% endif %}">
+            {% if ms %}
+                {% for m in ms %}
+                <div class="note-label">{{ m }}</div>
+                {% endfor %}
+            {% endif %}
+        </{{ cell_tag }}>
+        {% else %}
+        <{{ cell_tag }} colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></{{ cell_tag }}>
+        {% endif %}
+        {% endfor %}
+    </tr>
+{% endmacro %}
+
 {% block content %}
 <div class="complete-container">
     <div class="complete-top">
@@ -92,6 +114,7 @@
         {% endif %}
         {% endfor %}
     </tr>
+    {{ render_note_row('th', cols, notes, today) }}
     <tr class="day-row">
         <th class="resource-col">Recurso</th>
         {% for c in cols %}
@@ -162,24 +185,6 @@
         <th class="{% if d == today %}today{% endif %}">{{ day_names[d.weekday()] }} {{ d.strftime('%d/%m') }}</th>
         {% else %}
         <th colspan="2" class="weekend{% if today in c.dates %} today{% endif %}"></th>
-        {% endif %}
-        {% endfor %}
-    </tr>
-    <tr class="notes-row">
-        <td class="resource-col"></td>
-        {% for c in cols %}
-        {% if c.type == 'day' %}
-        {% set d = c.dates[0] %}
-        {% set ms = notes.get(d.isoformat()) %}
-        <td data-date="{{ d.isoformat() }}" class="note-cell{% if d == today %} today{% endif %}">
-            {% if ms %}
-                {% for m in ms %}
-                <div class="note-label">{{ m }}</div>
-                {% endfor %}
-            {% endif %}
-        </td>
-        {% else %}
-        <td colspan="2" class="weekend-cell{% if today in c.dates %} today{% endif %}"></td>
         {% endif %}
         {% endfor %}
     </tr>
