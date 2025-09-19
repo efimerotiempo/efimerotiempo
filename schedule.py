@@ -321,6 +321,50 @@ def schedule_projects(projects):
     hours_map = load_daily_hours()
     vac_map = _build_vacation_map()
 
+    def preload_frozen(schedule_map):
+        """Reserve the recorded slots for every frozen task before scheduling."""
+        for proj in projects:
+            for seg in proj.get('frozen_tasks', []) or []:
+                worker = seg.get('worker')
+                day = seg.get('day')
+                if not worker or not day:
+                    continue
+                try:
+                    day_obj = date.fromisoformat(day)
+                    day_key = day_obj.isoformat()
+                except Exception:
+                    day_obj = local_today()
+                    day_key = day_obj.isoformat()
+                entry = seg.copy()
+                entry.pop('worker', None)
+                entry.pop('day', None)
+                start = entry.get('start', 0) or 0
+                hours = entry.get('hours', 0) or 0
+                entry['start'] = start
+                entry['hours'] = hours
+                start_time, end_time = _calc_datetimes(day_obj, start, hours)
+                entry['start_time'] = start_time
+                entry['end_time'] = end_time
+                entry['frozen'] = True
+                tasks = schedule_map.setdefault(worker, {}).setdefault(day_key, [])
+                duplicate = False
+                for existing in tasks:
+                    if (
+                        existing.get('pid') == entry.get('pid')
+                        and existing.get('phase') == entry.get('phase')
+                        and existing.get('start') == entry.get('start')
+                        and existing.get('hours') == entry.get('hours')
+                        and existing.get('part') == entry.get('part')
+                    ):
+                        duplicate = True
+                        break
+                if duplicate:
+                    continue
+                tasks.append(entry)
+                tasks.sort(key=lambda t: t.get('start', 0))
+
+    preload_frozen(worker_schedule)
+
     def record_segment_start(project, phase_name, index, start_day, start_hour):
         if start_day is None:
             return
@@ -380,33 +424,20 @@ def schedule_projects(projects):
                 continue
             if phase in frozen_map:
                 segs = frozen_map[phase]
-                last_day = date.min
+                last_day = None
                 for seg in segs:
-                    w = seg['worker']
-                    day = seg['day']
-                    entry = seg.copy()
-                    entry.pop('worker', None)
-                    entry.pop('day', None)
-                    try:
-                        d_obj = date.fromisoformat(day)
-                    except Exception:
-                        d_obj = local_today()
-                    start_time, end_time = _calc_datetimes(
-                        d_obj, entry.get('start', 0), entry.get('hours', 0)
-                    )
-                    entry.setdefault('start', 0)
-                    entry['start_time'] = start_time
-                    entry['end_time'] = end_time
-                    worker_schedule.setdefault(w, {}).setdefault(day, []).append(entry)
-                    worker_schedule[w][day].sort(key=lambda x: x.get('start', 0))
+                    day = seg.get('day')
+                    if not day:
+                        continue
                     try:
                         d = date.fromisoformat(day)
                     except Exception:
                         d = local_today()
-                    if d > last_day:
+                    if last_day is None or d > last_day:
                         last_day = d
-                current = next_workday(last_day)
-                end_date = max(end_date, last_day)
+                if last_day is not None:
+                    current = next_workday(last_day)
+                    end_date = max(end_date, last_day)
                 hour = 0
                 continue
 
