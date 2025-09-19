@@ -748,7 +748,7 @@ let dragInfo = null;
       if (unplan) {
         unplan.addEventListener('click', ev => {
           ev.stopPropagation();
-          const today = new Date().toISOString().slice(0,10);
+          const today = madridDateISO();
           const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
           if (unplan.dataset.part) body.part = unplan.dataset.part;
           fetch(MOVE_URL, {
@@ -1154,7 +1154,7 @@ let dragInfo = null;
     unplanList.addEventListener('drop', e => {
       e.preventDefault();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const today = new Date().toISOString().slice(0,10);
+      const today = madridDateISO();
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }

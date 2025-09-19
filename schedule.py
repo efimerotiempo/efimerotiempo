@@ -3,6 +3,8 @@ import json
 import os
 import copy
 
+from localtime import local_today
+
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
@@ -233,7 +235,7 @@ def load_vacations():
             data = json.load(f)
     else:
         data = []
-    today = date.today()
+    today = local_today()
     filtered = []
     for v in data:
         end = v.get('end')
@@ -341,13 +343,13 @@ def schedule_projects(projects):
     for project in projects:
         planned = project.get('planned', True)
         if not planned:
-            current = date.today()
+            current = local_today()
             project['start_date'] = current.isoformat()
         else:
             try:
                 current = date.fromisoformat(project['start_date'])
             except Exception:
-                current = date.today()
+                current = local_today()
                 project['start_date'] = current.isoformat()
         hour = 0
         frozen_map = {}
@@ -371,7 +373,7 @@ def schedule_projects(projects):
                     try:
                         d_obj = date.fromisoformat(day)
                     except Exception:
-                        d_obj = date.today()
+                        d_obj = local_today()
                     start_time, end_time = _calc_datetimes(
                         d_obj, entry.get('start', 0), entry.get('hours', 0)
                     )
@@ -383,7 +385,7 @@ def schedule_projects(projects):
                     try:
                         d = date.fromisoformat(day)
                     except Exception:
-                        d = date.today()
+                        d = local_today()
                     if d > last_day:
                         last_day = d
                 current = next_workday(last_day)

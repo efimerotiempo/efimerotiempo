@@ -15,6 +15,8 @@ import importlib.util
 import random
 from queue import Queue
 
+from localtime import local_today, local_now
+
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
 # the required symbols from the loaded module.  This approach prevents
@@ -296,7 +298,7 @@ PROJECT_LINK_LANES = {
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
     if today is None:
-        today = date.today()
+        today = local_today()
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     if today >= IGOR_END and 'Igor' in workers:
         workers.remove('Igor')
@@ -326,7 +328,7 @@ def parse_input_date(value):
                 month = int(parts[1])
             except ValueError:
                 return None
-            year = date.today().year
+            year = local_today().year
             if len(parts) == 3:
                 try:
                     year = int(parts[2])
@@ -1279,7 +1281,7 @@ def get_projects():
             changed = True
 
         if not p.get('planned', True):
-            today_str = date.today().isoformat()
+            today_str = local_today().isoformat()
             if p.get('start_date') != today_str:
                 p['start_date'] = today_str
                 changed = True
@@ -1514,7 +1516,7 @@ def _kanban_card_to_project(card):
         'id': str(uuid.uuid4()),
         'name': project_name,
         'client': client,
-        'start_date': date.today().isoformat(),
+        'start_date': local_today().isoformat(),
         'due_date': due.isoformat() if due else '',
         'color': None,
         'phases': phases,
@@ -1558,7 +1560,7 @@ def home():
 def calendar_view():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -1734,7 +1736,7 @@ def calendar_view():
 
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
     raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
@@ -1813,7 +1815,7 @@ def calendar_pedidos():
 
 @app.route('/project_links')
 def project_links_api():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     raw_links = attach_phase_starts(
         build_project_links(compras_raw), get_visible_projects()
@@ -1997,7 +1999,7 @@ def add_project():
             'id': str(uuid.uuid4()),
             'name': data['name'],
             'client': data['client'],
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due.isoformat() if due else '',
             'material_confirmed_date': '',
             'color': color,
@@ -2039,7 +2041,7 @@ def add_project():
     return render_template(
         'add_project.html',
         phases=PHASE_ORDER,
-        today=date.today().isoformat(),
+        today=local_today().isoformat(),
         prefill=prefill,
     )
 
@@ -2084,7 +2086,7 @@ def update_worker_note():
     notes = load_worker_notes()
     notes[worker] = {
         'text': text,
-        'edited': datetime.now().isoformat(timespec='minutes'),
+        'edited': local_now().isoformat(timespec='minutes'),
     }
     save_worker_notes(notes)
     dt = datetime.fromisoformat(notes[worker]['edited'])
@@ -2159,7 +2161,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -2230,7 +2232,7 @@ def resources():
 def complete():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     visible = set(active_workers(today))
     unplanned_raw = []
@@ -2369,7 +2371,7 @@ def complete():
 
     points = split_markers(schedule)
 
-    today = date.today()
+    today = local_today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
@@ -2961,7 +2963,7 @@ def move_phase():
             })
     logs = load_tracker()
     logs.append({
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': local_now().isoformat(),
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -3105,7 +3107,7 @@ def report_bug():
         'tab': tab,
         'freq': freq,
         'detail': detail,
-        'date': datetime.now().isoformat(timespec='seconds'),
+        'date': local_now().isoformat(timespec='seconds'),
     }
     bugs.append(bug)
     save_bugs(bugs)
@@ -3713,7 +3715,7 @@ def kanbanize_webhook():
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
             'client': cliente,
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
             'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
             'color': _next_api_color(),

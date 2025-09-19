@@ -343,7 +343,7 @@ function openPhasePopup(context, anchorRect) {
   if (unplan) {
     unplan.addEventListener('click', ev => {
       ev.stopPropagation();
-      const today = new Date().toISOString().slice(0,10);
+      const today = madridDateISO();
       const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
       if (unplan.dataset.part) body.part = unplan.dataset.part;
       fetch(MOVE_URL, {
@@ -570,12 +570,12 @@ function render(){
   body.style.width = width + 'px';
   body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
   header.style.background = body.style.background;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = madridDateISO();
   todayIndex = null;
 
   for(let i=0;i<totalDays;i++){
     const d = new Date(minStart + i*dayMs);
-    const iso = d.toISOString().split('T')[0];
+    const iso = madridDateISO(d);
     const cell = document.createElement('div');
     cell.className = 'day-cell';
     cell.style.left = (i*pxPerDay) + 'px';
@@ -678,7 +678,7 @@ function render(){
           if(clickedMs < startMs) clickedMs = startMs;
           if(clickedMs > endMs) clickedMs = endMs;
         }
-        const isoDay = new Date(clickedMs).toISOString().split('T')[0];
+        const isoDay = madridDateISO(clickedMs);
         openPhasePopup({
           pid: r.project.id,
           phase: chosen ? chosen.data.name : '',
@@ -696,7 +696,7 @@ function render(){
         if(dayOffset > totalDays) dayOffset = totalDays;
         let clickedMs = startMs + dayOffset * dayMs;
         if(clickedMs > endMs) clickedMs = endMs;
-        const isoDay = new Date(clickedMs).toISOString().split('T')[0];
+        const isoDay = madridDateISO(clickedMs);
         openPhasePopup({
           pid: r.project.id,
           phase: r.phase.name,
