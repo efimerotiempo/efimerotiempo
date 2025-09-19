@@ -347,9 +347,11 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
-.schedule thead .day-row th { top: 0; }
+.schedule thead .notes-row th { top: 0; }
+.schedule thead .day-row th { top: 30px; }
 .schedule thead .hours-row th { top: 0; }
-.schedule thead.open .day-row th { top: 30px; }
+.schedule thead.open .notes-row th { top: 30px; }
+.schedule thead.open .day-row th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
