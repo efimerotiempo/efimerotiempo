@@ -347,9 +347,11 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
-.schedule thead .day-row th { top: 0; }
+.schedule thead .notes-row th { top: 0; }
+.schedule thead .day-row th { top: 30px; }
 .schedule thead .hours-row th { top: 0; }
-.schedule thead.open .day-row th { top: 30px; }
+.schedule thead.open .notes-row th { top: 30px; }
+.schedule thead.open .day-row th { top: 60px; }
 
 .projects-table thead th {
     position: sticky;
@@ -474,6 +476,25 @@ tr.collapsed td:not(:first-child) { display: none; }
 }
 .order-modal .conflict-content {
     max-width: 500px;
+}
+.material-modal .material-content {
+    max-width: 480px;
+}
+.material-modal .material-title {
+    font-size: 1.6em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.material-modal .material-list {
+    list-style: disc;
+    padding-left: 20px;
+    text-align: left;
+    margin-bottom: 16px;
+}
+.material-modal .material-list li {
+    font-weight: 600;
+    margin-bottom: 6px;
 }
 .order-warning-text {
     font-size: 2em;

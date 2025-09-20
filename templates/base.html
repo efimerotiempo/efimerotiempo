@@ -5,6 +5,31 @@
     <title>Planificador</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <script>
+      window.EFIMERO_TZ = 'Europe/Madrid';
+      const _madridDateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: window.EFIMERO_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      function madridDateISO(value) {
+        let date;
+        if (value instanceof Date) {
+          date = value;
+        } else if (typeof value === 'number') {
+          date = new Date(value);
+        } else if (value) {
+          date = new Date(value);
+        } else {
+          date = new Date();
+        }
+        if (Number.isNaN(date.valueOf())) {
+          return '';
+        }
+        return _madridDateFormatter.format(date);
+      }
+    </script>
 </head>
 <body>
     <nav>

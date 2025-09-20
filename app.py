@@ -15,6 +15,8 @@ import importlib.util
 import random
 from queue import Queue
 
+from localtime import local_today, local_now
+
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
 # the required symbols from the loaded module.  This approach prevents
@@ -136,7 +138,29 @@ TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
 KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
 
+PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
+
 SSE_CLIENTS = []
+
+
+def get_card_custom_id(card):
+    """Return the Kanban custom card identifier (e.g. ``OF 1234``) if present."""
+
+    if not isinstance(card, dict):
+        return ''
+
+    for key in (
+        'customCardId',
+        'customcardid',
+        'customId',
+        'customid',
+    ):
+        value = card.get(key)
+        if value:
+            text = str(value).strip()
+            if text:
+                return text
+    return ''
 
 
 def broadcast_event(data):
@@ -274,7 +298,7 @@ PROJECT_LINK_LANES = {
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
     if today is None:
-        today = date.today()
+        today = local_today()
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     if today >= IGOR_END and 'Igor' in workers:
         workers.remove('Igor')
@@ -304,7 +328,7 @@ def parse_input_date(value):
                 month = int(parts[1])
             except ValueError:
                 return None
-            year = date.today().year
+            year = local_today().year
             if len(parts) == 3:
                 try:
                     year = int(parts[2])
@@ -427,11 +451,43 @@ def load_compras_raw():
     return compras_raw, column_colors
 
 
+def split_project_and_client(title):
+    title = (title or '').strip()
+    if not title:
+        return '', ''
+
+    match = PROJECT_TITLE_PATTERN.search(title)
+    if not match:
+        return title, ''
+
+    start = match.start()
+    end = match.end()
+    tail = title[end:]
+    separator = re.search(r'\s+-\s+', tail)
+    if separator:
+        end += separator.start()
+    else:
+        end = len(title)
+
+    project = title[start:end].strip(' -')
+    before = title[:start].strip(' -')
+    after = title[end:].strip(' -')
+
+    client_parts = [part for part in (before, after) if part]
+    client = ' - '.join(client_parts)
+
+    if not project:
+        project = title
+
+    return project, client
+
+
 def build_project_links(compras_raw):
     children_by_parent = {}
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
+        custom_id = get_card_custom_id(card)
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid) if cid else None
         links_info = card.get('links') or {}
@@ -466,26 +522,35 @@ def build_project_links(compras_raw):
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
-        project_name = title
-        client_name = ''
-        if ' - ' in title:
-            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
+        project_name, client_name = split_project_and_client(title)
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
         lane_key = lane_name.lower()
+        custom_id = get_card_custom_id(card)
+        base_display = title or project_name or ''
+        if custom_id and base_display:
+            if base_display.lower().startswith(custom_id.lower()):
+                display_title = base_display
+            else:
+                display_title = f"{custom_id} - {base_display}"
+        else:
+            display_title = base_display or custom_id
         if (
             lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
-            key = (project_name, client_name)
+            key = (project_name, client_name, title)
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
                 if child_links:
                     links_table.append({
                         'project': project_name,
+                        'title': title,
+                        'display_title': display_title,
                         'client': client_name,
+                        'custom_card_id': custom_id,
                         'links': child_links,
                         'due': due.isoformat() if due else None
                     })
@@ -501,18 +566,38 @@ def attach_phase_starts(links_table, projects=None):
     projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
+    ids_by_name = {}
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
+        name = (proj['name'] or '').strip()
+        if not name:
+            continue
         if montar_start:
-            montar_by_name[proj['name']] = montar_start
+            montar_by_name[name] = montar_start
+        ids_by_name[name] = proj['id']
+
+        split_name, _ = split_project_and_client(name)
+        if split_name and split_name != name:
+            if montar_start and split_name not in montar_by_name:
+                montar_by_name[split_name] = montar_start
+            ids_by_name.setdefault(split_name, proj['id'])
 
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = montar_by_name.get(item['project'])
+        montar_start = (
+            montar_by_name.get((item.get('project') or '').strip())
+            or montar_by_name.get((item.get('title') or '').strip())
+        )
         if montar_start:
             entry['montar_start'] = montar_start
+        pid = (
+            ids_by_name.get((item.get('project') or '').strip())
+            or ids_by_name.get((item.get('title') or '').strip())
+        )
+        if pid:
+            entry['pid'] = pid
         enriched.append(entry)
     return enriched
 
@@ -530,9 +615,8 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
         if not title:
             continue
 
-        client_name = ''
-        if ' - ' in title:
-            _, client_name = [p.strip() for p in title.split(' - ', 1)]
+        _, client_name = split_project_and_client(title)
+        custom_id = get_card_custom_id(card)
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -579,6 +663,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'column': column,
             'cid': cid,
             'prev_date': prev_date,
+            'custom_card_id': custom_id,
         }
 
         if d:
@@ -1196,7 +1281,7 @@ def get_projects():
             changed = True
 
         if not p.get('planned', True):
-            today_str = date.today().isoformat()
+            today_str = local_today().isoformat()
             if p.get('start_date') != today_str:
                 p['start_date'] = today_str
                 changed = True
@@ -1431,7 +1516,7 @@ def _kanban_card_to_project(card):
         'id': str(uuid.uuid4()),
         'name': project_name,
         'client': client,
-        'start_date': date.today().isoformat(),
+        'start_date': local_today().isoformat(),
         'due_date': due.isoformat() if due else '',
         'color': None,
         'phases': phases,
@@ -1475,7 +1560,7 @@ def home():
 def calendar_view():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -1622,6 +1707,7 @@ def calendar_view():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -1651,7 +1737,7 @@ def calendar_view():
 
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
     raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
@@ -1706,18 +1792,32 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+        }
+    start_map = phase_start_map(projects)
+
     return render_template(
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
         unconfirmed=unconfirmed,
         project_links=links_table,
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
     )
 
 
 @app.route('/project_links')
 def project_links_api():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     raw_links = attach_phase_starts(
         build_project_links(compras_raw), get_visible_projects()
@@ -1770,6 +1870,18 @@ def gantt_view():
                 return parsed.isoformat()
         return ''
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+        }
+
+    start_map = phase_start_map(projects)
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1809,7 +1921,13 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return render_template('gantt.html', projects=json.dumps(gantt_projects))
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
+    )
 
 @app.route('/projects')
 def project_list():
@@ -1884,7 +2002,7 @@ def add_project():
             'id': str(uuid.uuid4()),
             'name': data['name'],
             'client': data['client'],
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due.isoformat() if due else '',
             'material_confirmed_date': '',
             'color': color,
@@ -1926,7 +2044,7 @@ def add_project():
     return render_template(
         'add_project.html',
         phases=PHASE_ORDER,
-        today=date.today().isoformat(),
+        today=local_today().isoformat(),
         prefill=prefill,
     )
 
@@ -1971,7 +2089,7 @@ def update_worker_note():
     notes = load_worker_notes()
     notes[worker] = {
         'text': text,
-        'edited': datetime.now().isoformat(timespec='minutes'),
+        'edited': local_now().isoformat(timespec='minutes'),
     }
     save_worker_notes(notes)
     dt = datetime.fromisoformat(notes[worker]['edited'])
@@ -2046,7 +2164,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -2117,7 +2235,7 @@ def resources():
 def complete():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     visible = set(active_workers(today))
     unplanned_raw = []
@@ -2256,7 +2374,7 @@ def complete():
 
     points = split_markers(schedule)
 
-    today = date.today()
+    today = local_today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
@@ -2282,6 +2400,7 @@ def complete():
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -2848,7 +2967,7 @@ def move_phase():
             })
     logs = load_tracker()
     logs.append({
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': local_now().isoformat(),
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -2992,7 +3111,7 @@ def report_bug():
         'tab': tab,
         'freq': freq,
         'detail': detail,
-        'date': datetime.now().isoformat(timespec='seconds'),
+        'date': local_now().isoformat(timespec='seconds'),
     }
     bugs.append(bug)
     save_bugs(bugs)
@@ -3600,7 +3719,7 @@ def kanbanize_webhook():
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
             'client': cliente,
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
             'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
             'color': _next_api_color(),
