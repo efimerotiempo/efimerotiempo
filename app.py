@@ -544,17 +544,16 @@ def build_project_links(compras_raw):
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
-                if child_links:
-                    links_table.append({
-                        'project': project_name,
-                        'title': title,
-                        'display_title': display_title,
-                        'client': client_name,
-                        'custom_card_id': custom_id,
-                        'links': child_links,
-                        'due': due.isoformat() if due else None
-                    })
-                    seen_links.add(key)
+                links_table.append({
+                    'project': project_name,
+                    'title': title,
+                    'display_title': display_title,
+                    'client': client_name,
+                    'custom_card_id': custom_id,
+                    'links': child_links,
+                    'due': due.isoformat() if due else None
+                })
+                seen_links.add(key)
     return links_table
 
 
@@ -683,9 +682,13 @@ def filter_project_links_by_titles(links_table, valid_titles):
     valid = set(valid_titles)
     filtered = []
     for item in links_table:
-        matches = [link for link in item['links'] if link in valid]
-        if not matches:
-            continue
+        links = list(item.get('links') or [])
+        if links:
+            matches = [link for link in links if link in valid]
+            if not matches:
+                continue
+        else:
+            matches = []
         entry = dict(item)
         entry['links'] = matches
         filtered.append(entry)
