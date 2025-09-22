@@ -149,6 +149,123 @@ KANBAN_FIELD_ALIASES = {
     'CALDERERIA': ('CALDERERIA', 'CALDERERÍA'),
 }
 
+BOOL_POPUP_FIELDS = {'MECANIZADO', 'TRATAMIENTO'}
+
+_POPUP_DATE_PATTERNS = [
+    (re.compile(r'\b\d{4}-\d{1,2}-\d{1,2}\b'), '%Y-%m-%d'),
+    (re.compile(r'\b\d{4}/\d{1,2}/\d{1,2}\b'), '%Y/%m/%d'),
+    (re.compile(r'\b\d{1,2}/\d{1,2}/\d{4}\b'), '%d/%m/%Y'),
+    (re.compile(r'\b\d{1,2}-\d{1,2}-\d{4}\b'), '%d-%m-%Y'),
+    (re.compile(r'\b\d{1,2}/\d{1,2}/\d{2}\b'), '%d/%m/%y'),
+    (re.compile(r'\b\d{1,2}-\d{1,2}-\d{2}\b'), '%d-%m-%y'),
+    (re.compile(r'\b\d{1,2}\.\d{1,2}\.\d{4}\b'), '%d.%m.%Y'),
+]
+
+
+def _clean_popup_display_value(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, bool):
+        return 'Sí' if value else None
+    if isinstance(value, (int, float)):
+        return str(value) if value != 0 else None
+    text = str(value).strip()
+    return text or None
+
+
+def _truthy_popup_flag(value):
+    if isinstance(value, str):
+        return value.strip().lower() not in ('', '0', 'false', 'no')
+    return bool(value)
+
+
+def _parse_popup_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for pattern, fmt in _POPUP_DATE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            try:
+                return datetime.strptime(match.group(0), fmt).date()
+            except ValueError:
+                continue
+    fallback = re.search(r'\b(\d{1,2})[/-](\d{1,2})\b', text)
+    if fallback:
+        day = int(fallback.group(1))
+        month = int(fallback.group(2))
+        try:
+            return date(local_today().year, month, day)
+        except ValueError:
+            return None
+    dotted = re.search(r'\b(\d{1,2})\.(\d{1,2})\b', text)
+    if dotted:
+        day = int(dotted.group(1))
+        month = int(dotted.group(2))
+        try:
+            return date(local_today().year, month, day)
+        except ValueError:
+            return None
+    return None
+
+
+def build_popup_display_fields(popup_raw):
+    if not isinstance(popup_raw, dict):
+        return {}
+    entries = []
+    for idx, field in enumerate(KANBAN_POPUP_FIELDS):
+        raw_value = popup_raw.get(field)
+        if field in BOOL_POPUP_FIELDS:
+            if not _truthy_popup_flag(raw_value):
+                continue
+            cleaned = _clean_popup_display_value(raw_value) or 'Sí'
+        else:
+            cleaned = _clean_popup_display_value(raw_value)
+            if not cleaned:
+                continue
+        parsed = _parse_popup_date(cleaned) or _parse_popup_date(raw_value)
+        entries.append((idx, field, cleaned, parsed))
+    entries.sort(
+        key=lambda item: (0, item[3].toordinal(), item[0]) if item[3] else (1, item[0])
+    )
+    return {field: value for _, field, value, _ in entries}
+
+
+def sort_popup_display_fields(display_fields):
+    if not isinstance(display_fields, dict):
+        return {}
+    entries = []
+    for idx, (field, value) in enumerate(display_fields.items()):
+        cleaned = _clean_popup_display_value(value)
+        if cleaned is None:
+            continue
+        parsed = _parse_popup_date(cleaned) or _parse_popup_date(value)
+        try:
+            base_index = KANBAN_POPUP_FIELDS.index(field)
+        except ValueError:
+            base_index = len(KANBAN_POPUP_FIELDS) + idx
+        entries.append((base_index, idx, field, cleaned, parsed))
+    entries.sort(
+        key=lambda item: (
+            0,
+            item[4].toordinal(),
+            item[0],
+            item[1],
+        )
+        if item[4]
+        else (1, item[0], item[1])
+    )
+    return {field: value for _, _, field, value, _ in entries}
+
 
 def _get_popup_field(fields, key):
     """Return the value for a popup field handling alternate Kanban labels."""
@@ -1510,33 +1627,7 @@ def _kanban_card_to_project(card):
         if prep:
             phases['recepcionar material'] = prep
 
-    def _bool_flag(value):
-        if isinstance(value, str):
-            return value.strip().lower() not in ('', '0', 'false', 'no')
-        return bool(value)
-
-    def _clean_display_value(value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            text = value.strip()
-            return text or None
-        if isinstance(value, bool):
-            return 'Sí' if value else None
-        if isinstance(value, (int, float)):
-            return str(value) if value != 0 else None
-        text = str(value).strip()
-        return text or None
-
-    display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
-        cleaned = _clean_display_value(popup_raw.get(field))
-        if cleaned:
-            display_fields[field] = cleaned
-    if _bool_flag(popup_raw.get('MECANIZADO')):
-        display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-    if _bool_flag(popup_raw.get('TRATAMIENTO')):
-        display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+    display_fields = build_popup_display_fields(popup_raw)
 
     project = {
         'id': str(uuid.uuid4()),
@@ -1732,6 +1823,7 @@ def calendar_view():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
@@ -1824,6 +1916,7 @@ def calendar_pedidos():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
@@ -1902,6 +1995,7 @@ def gantt_view():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
@@ -2425,6 +2519,7 @@ def complete():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
@@ -3495,16 +3590,10 @@ def kanbanize_webhook():
     prev_mont2_raw = obtener_duracion_prev('Horas Montaje 2º') or obtener_duracion_prev('Horas Montaje 2°')
 
     def flag_val(campo):
-        v = custom.get(campo)
-        if isinstance(v, str):
-            return v.strip().lower() not in ("", "0", "false", "no")
-        return bool(v)
+        return _truthy_popup_flag(custom.get(campo))
 
     def flag_val_prev(campo):
-        v = prev_custom.get(campo)
-        if isinstance(v, str):
-            return v.strip().lower() not in ("", "0", "false", "no")
-        return bool(v)
+        return _truthy_popup_flag(prev_custom.get(campo))
 
     mecan_flag = flag_val('MECANIZADO')
     trat_flag = flag_val('TRATAMIENTO')
@@ -3516,30 +3605,7 @@ def kanbanize_webhook():
     sold2_hours, sold_hours = sold2_raw, sold_raw
     pint_hours, mont2_hours = pint_raw, mont2_raw
 
-    def _clean_display_value(value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            text = value.strip()
-            return text or None
-        if isinstance(value, bool):
-            return 'Sí' if value else None
-        if isinstance(value, (int, float)):
-            return str(value) if value != 0 else None
-        text = str(value).strip()
-        return text or None
-
-    display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
-        cleaned = _clean_display_value(popup_raw.get(field))
-        if cleaned:
-            display_fields[field] = cleaned
-    if mecan_flag:
-        mecan_value = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-        display_fields['MECANIZADO'] = mecan_value
-    if trat_flag:
-        trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
-        display_fields['TRATAMIENTO'] = trat_value
+    display_fields = build_popup_display_fields(popup_raw)
 
     phase_hours_new_raw = {
         'recepcionar material': prep_raw,
