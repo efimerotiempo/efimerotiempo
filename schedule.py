@@ -468,7 +468,6 @@ def schedule_projects(projects):
                     project['id'],
                     worker,
                     project_blocked=project.get('blocked', False),
-                    material_date=project.get('material_confirmed_date'),
                     ready_to_archive=ready_to_archive,
                 )
                 record_segment_start(project, phase, 0, seg_start, seg_start_hour)
@@ -536,7 +535,6 @@ def schedule_projects(projects):
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
                         project_blocked=project.get('blocked', False),
-                        material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
                         ready_to_archive=ready_to_archive,
@@ -579,7 +577,6 @@ def assign_phase(
     manual=False,
     project_frozen=False,
     project_blocked=False,
-    material_date=None,
     auto=False,
     due_confirmed=False,
     ready_to_archive=False,
@@ -644,11 +641,10 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
-                'blocked': project_blocked,
-                'material_date': material_date,
-                'auto': auto,
-                'ready_to_archive': ready_to_archive,
-            }
+            'blocked': project_blocked,
+            'auto': auto,
+            'ready_to_archive': ready_to_archive,
+        }
             tasks.append(task)
             if first_day is None:
                 first_day = day
@@ -733,11 +729,10 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
-                'blocked': project_blocked,
-                'material_date': material_date,
-                'auto': auto,
-                'ready_to_archive': ready_to_archive,
-            }
+            'blocked': project_blocked,
+            'auto': auto,
+            'ready_to_archive': ready_to_archive,
+        }
             tasks.append(task)
             if first_day is None:
                 first_day = day
@@ -769,7 +764,6 @@ def assign_phase(
             'part': part,
             'frozen': project_frozen,
             'blocked': project_blocked,
-            'material_date': material_date,
             'auto': auto,
         }
         tasks.append(task)
@@ -814,7 +808,6 @@ def assign_pedidos(
     *,
     project_frozen=False,
     project_blocked=False,
-    material_date=None,
     ready_to_archive=False,
 ):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
@@ -857,7 +850,6 @@ def assign_pedidos(
             'pid': pid,
             'frozen': project_frozen,
             'blocked': project_blocked,
-            'material_date': material_date,
             'ready_to_archive': ready_to_archive,
         }
         tasks.append(task)
