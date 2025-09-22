@@ -15,6 +15,8 @@ import importlib.util
 import random
 from queue import Queue
 
+from localtime import local_today, local_now
+
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
 # the required symbols from the loaded module.  This approach prevents
@@ -134,9 +136,171 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
-KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
+KANBAN_POPUP_FIELDS = [
+    'LANZAMIENTO',
+    'MATERIAL',
+    'CALDERERIA',
+    'MECANIZADO',
+    'TRATAMIENTO',
+    'PINTADO',
+]
+
+KANBAN_FIELD_ALIASES = {
+    'CALDERERIA': ('CALDERERIA', 'CALDERERÍA'),
+}
+
+BOOL_POPUP_FIELDS = {'MECANIZADO', 'TRATAMIENTO'}
+
+_POPUP_DATE_PATTERNS = [
+    (re.compile(r'\b\d{4}-\d{1,2}-\d{1,2}\b'), '%Y-%m-%d'),
+    (re.compile(r'\b\d{4}/\d{1,2}/\d{1,2}\b'), '%Y/%m/%d'),
+    (re.compile(r'\b\d{1,2}/\d{1,2}/\d{4}\b'), '%d/%m/%Y'),
+    (re.compile(r'\b\d{1,2}-\d{1,2}-\d{4}\b'), '%d-%m-%Y'),
+    (re.compile(r'\b\d{1,2}/\d{1,2}/\d{2}\b'), '%d/%m/%y'),
+    (re.compile(r'\b\d{1,2}-\d{1,2}-\d{2}\b'), '%d-%m-%y'),
+    (re.compile(r'\b\d{1,2}\.\d{1,2}\.\d{4}\b'), '%d.%m.%Y'),
+]
+
+
+def _clean_popup_display_value(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, bool):
+        return 'Sí' if value else None
+    if isinstance(value, (int, float)):
+        return str(value) if value != 0 else None
+    text = str(value).strip()
+    return text or None
+
+
+def _truthy_popup_flag(value):
+    if isinstance(value, str):
+        return value.strip().lower() not in ('', '0', 'false', 'no')
+    return bool(value)
+
+
+def _parse_popup_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for pattern, fmt in _POPUP_DATE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            try:
+                return datetime.strptime(match.group(0), fmt).date()
+            except ValueError:
+                continue
+    fallback = re.search(r'\b(\d{1,2})[/-](\d{1,2})\b', text)
+    if fallback:
+        day = int(fallback.group(1))
+        month = int(fallback.group(2))
+        try:
+            return date(local_today().year, month, day)
+        except ValueError:
+            return None
+    dotted = re.search(r'\b(\d{1,2})\.(\d{1,2})\b', text)
+    if dotted:
+        day = int(dotted.group(1))
+        month = int(dotted.group(2))
+        try:
+            return date(local_today().year, month, day)
+        except ValueError:
+            return None
+    return None
+
+
+def build_popup_display_fields(popup_raw):
+    if not isinstance(popup_raw, dict):
+        return {}
+    entries = []
+    for idx, field in enumerate(KANBAN_POPUP_FIELDS):
+        raw_value = popup_raw.get(field)
+        if field in BOOL_POPUP_FIELDS:
+            if not _truthy_popup_flag(raw_value):
+                continue
+            cleaned = _clean_popup_display_value(raw_value) or 'Sí'
+        else:
+            cleaned = _clean_popup_display_value(raw_value)
+            if not cleaned:
+                continue
+        parsed = _parse_popup_date(cleaned) or _parse_popup_date(raw_value)
+        entries.append((idx, field, cleaned, parsed))
+    entries.sort(
+        key=lambda item: (0, item[3].toordinal(), item[0]) if item[3] else (1, item[0])
+    )
+    return {field: value for _, field, value, _ in entries}
+
+
+def sort_popup_display_fields(display_fields):
+    if not isinstance(display_fields, dict):
+        return {}
+    entries = []
+    for idx, (field, value) in enumerate(display_fields.items()):
+        cleaned = _clean_popup_display_value(value)
+        if cleaned is None:
+            continue
+        parsed = _parse_popup_date(cleaned) or _parse_popup_date(value)
+        try:
+            base_index = KANBAN_POPUP_FIELDS.index(field)
+        except ValueError:
+            base_index = len(KANBAN_POPUP_FIELDS) + idx
+        entries.append((base_index, idx, field, cleaned, parsed))
+    entries.sort(
+        key=lambda item: (
+            0,
+            item[4].toordinal(),
+            item[0],
+            item[1],
+        )
+        if item[4]
+        else (1, item[0], item[1])
+    )
+    return {field: value for _, _, field, value, _ in entries}
+
+
+def _get_popup_field(fields, key):
+    """Return the value for a popup field handling alternate Kanban labels."""
+
+    aliases = KANBAN_FIELD_ALIASES.get(key)
+    if not aliases:
+        return fields.get(key)
+    for alias in aliases:
+        if alias in fields:
+            return fields.get(alias)
+    return None
+
+PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
 
 SSE_CLIENTS = []
+
+
+def get_card_custom_id(card):
+    """Return the Kanban custom card identifier (e.g. ``OF 1234``) if present."""
+
+    if not isinstance(card, dict):
+        return ''
+
+    for key in (
+        'customCardId',
+        'customcardid',
+        'customId',
+        'customid',
+    ):
+        value = card.get(key)
+        if value:
+            text = str(value).strip()
+            if text:
+                return text
+    return ''
 
 
 def broadcast_event(data):
@@ -274,7 +438,7 @@ PROJECT_LINK_LANES = {
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
     if today is None:
-        today = date.today()
+        today = local_today()
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     if today >= IGOR_END and 'Igor' in workers:
         workers.remove('Igor')
@@ -304,7 +468,7 @@ def parse_input_date(value):
                 month = int(parts[1])
             except ValueError:
                 return None
-            year = date.today().year
+            year = local_today().year
             if len(parts) == 3:
                 try:
                     year = int(parts[2])
@@ -427,11 +591,43 @@ def load_compras_raw():
     return compras_raw, column_colors
 
 
+def split_project_and_client(title):
+    title = (title or '').strip()
+    if not title:
+        return '', ''
+
+    match = PROJECT_TITLE_PATTERN.search(title)
+    if not match:
+        return title, ''
+
+    start = match.start()
+    end = match.end()
+    tail = title[end:]
+    separator = re.search(r'\s+-\s+', tail)
+    if separator:
+        end += separator.start()
+    else:
+        end = len(title)
+
+    project = title[start:end].strip(' -')
+    before = title[:start].strip(' -')
+    after = title[end:].strip(' -')
+
+    client_parts = [part for part in (before, after) if part]
+    client = ' - '.join(client_parts)
+
+    if not project:
+        project = title
+
+    return project, client
+
+
 def build_project_links(compras_raw):
     children_by_parent = {}
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
+        custom_id = get_card_custom_id(card)
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid) if cid else None
         links_info = card.get('links') or {}
@@ -466,30 +662,38 @@ def build_project_links(compras_raw):
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
-        project_name = title
-        client_name = ''
-        if ' - ' in title:
-            project_name, client_name = [p.strip() for p in title.split(' - ', 1)]
+        project_name, client_name = split_project_and_client(title)
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
         lane_key = lane_name.lower()
+        custom_id = get_card_custom_id(card)
+        base_display = title or project_name or ''
+        if custom_id and base_display:
+            if base_display.lower().startswith(custom_id.lower()):
+                display_title = base_display
+            else:
+                display_title = f"{custom_id} - {base_display}"
+        else:
+            display_title = base_display or custom_id
         if (
             lane_key in PROJECT_LINK_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
-            key = (project_name, client_name)
+            key = (project_name, client_name, title)
             if key not in seen_links:
                 cid = card.get('taskid') or card.get('cardId') or card.get('id')
                 child_links = children_by_parent.get(str(cid), [])
-                if child_links:
-                    links_table.append({
-                        'project': project_name,
-                        'client': client_name,
-                        'links': child_links,
-                        'due': due.isoformat() if due else None
-                    })
-                    seen_links.add(key)
+                links_table.append({
+                    'project': project_name,
+                    'title': title,
+                    'display_title': display_title,
+                    'client': client_name,
+                    'custom_card_id': custom_id,
+                    'links': child_links,
+                    'due': due.isoformat() if due else None
+                })
+                seen_links.add(key)
     return links_table
 
 
@@ -501,18 +705,38 @@ def attach_phase_starts(links_table, projects=None):
     projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
+    ids_by_name = {}
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
+        name = (proj['name'] or '').strip()
+        if not name:
+            continue
         if montar_start:
-            montar_by_name[proj['name']] = montar_start
+            montar_by_name[name] = montar_start
+        ids_by_name[name] = proj['id']
+
+        split_name, _ = split_project_and_client(name)
+        if split_name and split_name != name:
+            if montar_start and split_name not in montar_by_name:
+                montar_by_name[split_name] = montar_start
+            ids_by_name.setdefault(split_name, proj['id'])
 
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = montar_by_name.get(item['project'])
+        montar_start = (
+            montar_by_name.get((item.get('project') or '').strip())
+            or montar_by_name.get((item.get('title') or '').strip())
+        )
         if montar_start:
             entry['montar_start'] = montar_start
+        pid = (
+            ids_by_name.get((item.get('project') or '').strip())
+            or ids_by_name.get((item.get('title') or '').strip())
+        )
+        if pid:
+            entry['pid'] = pid
         enriched.append(entry)
     return enriched
 
@@ -530,9 +754,8 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
         if not title:
             continue
 
-        client_name = ''
-        if ' - ' in title:
-            _, client_name = [p.strip() for p in title.split(' - ', 1)]
+        _, client_name = split_project_and_client(title)
+        custom_id = get_card_custom_id(card)
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -579,6 +802,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'column': column,
             'cid': cid,
             'prev_date': prev_date,
+            'custom_card_id': custom_id,
         }
 
         if d:
@@ -598,9 +822,13 @@ def filter_project_links_by_titles(links_table, valid_titles):
     valid = set(valid_titles)
     filtered = []
     for item in links_table:
-        matches = [link for link in item['links'] if link in valid]
-        if not matches:
-            continue
+        links = list(item.get('links') or [])
+        if links:
+            matches = [link for link in links if link in valid]
+            if not matches:
+                continue
+        else:
+            matches = []
         entry = dict(item)
         entry['links'] = matches
         filtered.append(entry)
@@ -1196,7 +1424,7 @@ def get_projects():
             changed = True
 
         if not p.get('planned', True):
-            today_str = date.today().isoformat()
+            today_str = local_today().isoformat()
             if p.get('start_date') != today_str:
                 p['start_date'] = today_str
                 changed = True
@@ -1266,7 +1494,7 @@ def project_has_hours(project):
     return any(_phase_value_has_hours(v) for v in phases.values())
 
 
-def filter_visible_projects(projects):
+def filter_visible_projects(projects, *, include_ready_to_archive=False):
     """Filter *projects* down to those with at least one phase with hours."""
 
     visible = []
@@ -1276,16 +1504,18 @@ def filter_visible_projects(projects):
         if p.get('kanban_archived'):
             continue
         column = (p.get('kanban_column') or '').strip().lower()
-        if column == 'ready to archive':
+        if column == 'ready to archive' and not include_ready_to_archive:
             continue
         visible.append(p)
     return visible
 
 
-def get_visible_projects():
+def get_visible_projects(include_ready_to_archive=False):
     """Return the list of projects that should appear in the UI tabs."""
 
-    return filter_visible_projects(get_projects())
+    return filter_visible_projects(
+        get_projects(), include_ready_to_archive=include_ready_to_archive
+    )
 
 
 def expand_for_display(projects):
@@ -1345,8 +1575,8 @@ def _kanban_card_to_project(card):
         fields = dict(fields_raw)
     else:
         fields = {}
-    popup_raw = {field: fields.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    popup_raw = {field: _get_popup_field(fields, field) for field in KANBAN_POPUP_FIELDS}
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         fields.pop(k, None)
 
     project_name = (
@@ -1399,39 +1629,13 @@ def _kanban_card_to_project(card):
         if prep:
             phases['recepcionar material'] = prep
 
-    def _bool_flag(value):
-        if isinstance(value, str):
-            return value.strip().lower() not in ('', '0', 'false', 'no')
-        return bool(value)
-
-    def _clean_display_value(value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            text = value.strip()
-            return text or None
-        if isinstance(value, bool):
-            return 'Sí' if value else None
-        if isinstance(value, (int, float)):
-            return str(value) if value != 0 else None
-        text = str(value).strip()
-        return text or None
-
-    display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
-        cleaned = _clean_display_value(popup_raw.get(field))
-        if cleaned:
-            display_fields[field] = cleaned
-    if _bool_flag(popup_raw.get('MECANIZADO')):
-        display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-    if _bool_flag(popup_raw.get('TRATAMIENTO')):
-        display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
+    display_fields = build_popup_display_fields(popup_raw)
 
     project = {
         'id': str(uuid.uuid4()),
         'name': project_name,
         'client': client,
-        'start_date': date.today().isoformat(),
+        'start_date': local_today().isoformat(),
         'due_date': due.isoformat() if due else '',
         'color': None,
         'phases': phases,
@@ -1473,9 +1677,9 @@ def home():
 
 @app.route('/calendar')
 def calendar_view():
-    projects = get_visible_projects()
+    projects = get_visible_projects(include_ready_to_archive=True)
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -1621,7 +1825,9 @@ def calendar_view():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -1651,7 +1857,7 @@ def calendar_view():
 
 @app.route('/calendario-pedidos')
 def calendar_pedidos():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
     raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
@@ -1706,18 +1912,33 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+        }
+    start_map = phase_start_map(projects)
+
     return render_template(
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
         unconfirmed=unconfirmed,
         project_links=links_table,
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
     )
 
 
 @app.route('/project_links')
 def project_links_api():
-    today = date.today()
+    today = local_today()
     compras_raw, column_colors = load_compras_raw()
     raw_links = attach_phase_starts(
         build_project_links(compras_raw), get_visible_projects()
@@ -1770,6 +1991,19 @@ def gantt_view():
                 return parsed.isoformat()
         return ''
 
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+        }
+
+    start_map = phase_start_map(projects)
+
     gantt_projects = []
     for p in projects:
         pid = p['id']
@@ -1809,7 +2043,13 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return render_template('gantt.html', projects=json.dumps(gantt_projects))
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map=start_map,
+        phases=PHASE_ORDER,
+    )
 
 @app.route('/projects')
 def project_list():
@@ -1884,7 +2124,7 @@ def add_project():
             'id': str(uuid.uuid4()),
             'name': data['name'],
             'client': data['client'],
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due.isoformat() if due else '',
             'material_confirmed_date': '',
             'color': color,
@@ -1926,7 +2166,7 @@ def add_project():
     return render_template(
         'add_project.html',
         phases=PHASE_ORDER,
-        today=date.today().isoformat(),
+        today=local_today().isoformat(),
         prefill=prefill,
     )
 
@@ -1971,7 +2211,7 @@ def update_worker_note():
     notes = load_worker_notes()
     notes[worker] = {
         'text': text,
-        'edited': datetime.now().isoformat(timespec='minutes'),
+        'edited': local_now().isoformat(timespec='minutes'),
     }
     save_worker_notes(notes)
     dt = datetime.fromisoformat(notes[worker]['edited'])
@@ -2046,7 +2286,7 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=date.today().isoformat())
+    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -2115,9 +2355,9 @@ def resources():
 
 @app.route('/complete')
 def complete():
-    projects = get_visible_projects()
+    projects = get_visible_projects(include_ready_to_archive=True)
     schedule, conflicts = schedule_projects(projects)
-    today = date.today()
+    today = local_today()
     worker_notes_raw = load_worker_notes()
     visible = set(active_workers(today))
     unplanned_raw = []
@@ -2240,6 +2480,12 @@ def complete():
     else:
         filtered_projects = projects
 
+    filtered_projects = [
+        p
+        for p in filtered_projects
+        if (p.get('kanban_column') or '').strip().lower() != 'ready to archive'
+    ]
+
     # Order phases within each day: started ones first
     _sort_cell_tasks(schedule)
 
@@ -2256,7 +2502,7 @@ def complete():
 
     points = split_markers(schedule)
 
-    today = date.today()
+    today = local_today()
     start = today - timedelta(days=90)
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
@@ -2281,7 +2527,9 @@ def complete():
         p.setdefault('kanban_display_fields', {})
         project_map[p['id']] = {
             **p,
+            'kanban_display_fields': sort_popup_display_fields(p.get('kanban_display_fields')),
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
         }
     start_map = phase_start_map(projects)
 
@@ -2848,7 +3096,7 @@ def move_phase():
             })
     logs = load_tracker()
     logs.append({
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': local_now().isoformat(),
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -2992,7 +3240,7 @@ def report_bug():
         'tab': tab,
         'freq': freq,
         'detail': detail,
-        'date': datetime.now().isoformat(timespec='seconds'),
+        'date': local_now().isoformat(timespec='seconds'),
     }
     bugs.append(bug)
     save_bugs(bugs)
@@ -3263,8 +3511,8 @@ def kanbanize_webhook():
         custom = dict(raw_custom)
     else:
         custom = {}
-    popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    popup_raw = {field: _get_popup_field(custom, field) for field in KANBAN_POPUP_FIELDS}
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         custom.pop(k, None)
     card['customFields'] = custom
 
@@ -3278,7 +3526,7 @@ def kanbanize_webhook():
         prev_custom = dict(prev_raw_custom)
     else:
         prev_custom = {}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         prev_custom.pop(k, None)
 
     deadline_str = card.get('deadline')
@@ -3350,16 +3598,10 @@ def kanbanize_webhook():
     prev_mont2_raw = obtener_duracion_prev('Horas Montaje 2º') or obtener_duracion_prev('Horas Montaje 2°')
 
     def flag_val(campo):
-        v = custom.get(campo)
-        if isinstance(v, str):
-            return v.strip().lower() not in ("", "0", "false", "no")
-        return bool(v)
+        return _truthy_popup_flag(custom.get(campo))
 
     def flag_val_prev(campo):
-        v = prev_custom.get(campo)
-        if isinstance(v, str):
-            return v.strip().lower() not in ("", "0", "false", "no")
-        return bool(v)
+        return _truthy_popup_flag(prev_custom.get(campo))
 
     mecan_flag = flag_val('MECANIZADO')
     trat_flag = flag_val('TRATAMIENTO')
@@ -3371,30 +3613,7 @@ def kanbanize_webhook():
     sold2_hours, sold_hours = sold2_raw, sold_raw
     pint_hours, mont2_hours = pint_raw, mont2_raw
 
-    def _clean_display_value(value):
-        if value is None:
-            return None
-        if isinstance(value, str):
-            text = value.strip()
-            return text or None
-        if isinstance(value, bool):
-            return 'Sí' if value else None
-        if isinstance(value, (int, float)):
-            return str(value) if value != 0 else None
-        text = str(value).strip()
-        return text or None
-
-    display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
-        cleaned = _clean_display_value(popup_raw.get(field))
-        if cleaned:
-            display_fields[field] = cleaned
-    if mecan_flag:
-        mecan_value = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-        display_fields['MECANIZADO'] = mecan_value
-    if trat_flag:
-        trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
-        display_fields['TRATAMIENTO'] = trat_value
+    display_fields = build_popup_display_fields(popup_raw)
 
     phase_hours_new_raw = {
         'recepcionar material': prep_raw,
@@ -3600,7 +3819,7 @@ def kanbanize_webhook():
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
             'client': cliente,
-            'start_date': date.today().isoformat(),
+            'start_date': local_today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
             'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
             'color': _next_api_color(),
