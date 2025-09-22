@@ -151,6 +151,8 @@ KANBAN_FIELD_ALIASES = {
 
 BOOL_POPUP_FIELDS = {'MECANIZADO', 'TRATAMIENTO'}
 
+RECEPCION_PHASE = 'recepcionar material'
+
 _POPUP_DATE_PATTERNS = [
     (re.compile(r'\b\d{4}-\d{1,2}-\d{1,2}\b'), '%Y-%m-%d'),
     (re.compile(r'\b\d{4}/\d{1,2}/\d{1,2}\b'), '%Y/%m/%d'),
@@ -180,6 +182,67 @@ def _truthy_popup_flag(value):
     if isinstance(value, str):
         return value.strip().lower() not in ('', '0', 'false', 'no')
     return bool(value)
+
+
+def _has_auto_receiving_phase(project):
+    """Return True if the project keeps the auto-generated receiving phase."""
+
+    if not isinstance(project, dict):
+        return False
+    auto = project.get('auto_hours')
+    if not isinstance(auto, dict) or not auto.get(RECEPCION_PHASE):
+        return False
+    phases = project.get('phases')
+    if not isinstance(phases, dict):
+        return False
+    value = phases.get(RECEPCION_PHASE)
+    try:
+        return int(value) == 1
+    except Exception:
+        return False
+
+
+def _remove_auto_receiving_phase(project):
+    """Remove the automatic receiving phase when present."""
+
+    if not _has_auto_receiving_phase(project):
+        return False
+
+    phases = project.get('phases')
+    if not isinstance(phases, dict):
+        return False
+    if phases.pop(RECEPCION_PHASE, None) is None:
+        return False
+
+    auto = project.get('auto_hours')
+    if isinstance(auto, dict):
+        auto.pop(RECEPCION_PHASE, None)
+
+    assigned = project.get('assigned')
+    if isinstance(assigned, dict):
+        assigned.pop(RECEPCION_PHASE, None)
+
+    seg = project.get('segment_starts')
+    if isinstance(seg, dict):
+        seg.pop(RECEPCION_PHASE, None)
+        if not seg:
+            project.pop('segment_starts', None)
+
+    seg_workers = project.get('segment_workers')
+    if isinstance(seg_workers, dict):
+        seg_workers.pop(RECEPCION_PHASE, None)
+        if not seg_workers:
+            project.pop('segment_workers', None)
+
+    frozen = project.get('frozen_tasks')
+    if isinstance(frozen, list):
+        project['frozen_tasks'] = [
+            t for t in frozen if t.get('phase') != RECEPCION_PHASE
+        ]
+        if not project['frozen_tasks']:
+            project.pop('frozen_tasks', None)
+
+    return True
 
 
 def _parse_popup_date(value):
@@ -1602,6 +1665,8 @@ def _kanban_card_to_project(card):
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
     mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
+    mecan_flag = _truthy_popup_flag(fields.get('MECANIZADO'))
+    trat_flag = _truthy_popup_flag(fields.get('TRATAMIENTO'))
     phases = {}
     auto_hours = {}
     if (
@@ -1611,6 +1676,8 @@ def _kanban_card_to_project(card):
         and sold <= 0
         and pint <= 0
         and mont2 <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
@@ -1627,6 +1694,12 @@ def _kanban_card_to_project(card):
             phases['soldar'] = sold
         if prep:
             phases['recepcionar material'] = prep
+        if mecan_flag:
+            phases['mecanizar'] = 1
+            auto_hours['mecanizar'] = True
+        if trat_flag:
+            phases['tratamiento'] = 1
+            auto_hours['tratamiento'] = True
 
     display_fields = build_popup_display_fields(popup_raw)
 
@@ -2735,6 +2808,8 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if phase != RECEPCION_PHASE:
+            _remove_auto_receiving_phase(proj)
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
@@ -2810,6 +2885,11 @@ def update_project_row():
                 proj['segment_workers'].pop(ph, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        removed_auto = False
+        if ph != RECEPCION_PHASE:
+            removed_auto = _remove_auto_receiving_phase(proj)
+        if removed_auto:
+            modified.add(RECEPCION_PHASE)
         modified.add(ph)
 
     if data.get('phase_starts'):
@@ -3628,6 +3708,8 @@ def kanbanize_webhook():
         and sold_hours <= 0
         and pint_hours <= 0
         and mont2_hours <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         prep_hours = 1
         auto_prep = True
@@ -3768,6 +3850,9 @@ def kanbanize_webhook():
                 changed_phases[ph] = new_phases.get(ph, 0)
 
         for ph, hours in changed_phases.items():
+            if ph != RECEPCION_PHASE and hours > 0:
+                if _remove_auto_receiving_phase(existing):
+                    changed = True
             if ph in ("mecanizar", "tratamiento") and hours == 1:
                 existing_hours = existing_phases.get(ph)
                 if existing_hours not in (None, 0, ''):
