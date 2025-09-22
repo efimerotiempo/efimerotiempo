@@ -1494,7 +1494,7 @@ def project_has_hours(project):
     return any(_phase_value_has_hours(v) for v in phases.values())
 
 
-def filter_visible_projects(projects):
+def filter_visible_projects(projects, *, include_ready_to_archive=False):
     """Filter *projects* down to those with at least one phase with hours."""
 
     visible = []
@@ -1504,16 +1504,18 @@ def filter_visible_projects(projects):
         if p.get('kanban_archived'):
             continue
         column = (p.get('kanban_column') or '').strip().lower()
-        if column == 'ready to archive':
+        if column == 'ready to archive' and not include_ready_to_archive:
             continue
         visible.append(p)
     return visible
 
 
-def get_visible_projects():
+def get_visible_projects(include_ready_to_archive=False):
     """Return the list of projects that should appear in the UI tabs."""
 
-    return filter_visible_projects(get_projects())
+    return filter_visible_projects(
+        get_projects(), include_ready_to_archive=include_ready_to_archive
+    )
 
 
 def expand_for_display(projects):
@@ -1675,7 +1677,7 @@ def home():
 
 @app.route('/calendar')
 def calendar_view():
-    projects = get_visible_projects()
+    projects = get_visible_projects(include_ready_to_archive=True)
     schedule, conflicts = schedule_projects(projects)
     today = local_today()
     worker_notes_raw = load_worker_notes()
@@ -2353,7 +2355,7 @@ def resources():
 
 @app.route('/complete')
 def complete():
-    projects = get_visible_projects()
+    projects = get_visible_projects(include_ready_to_archive=True)
     schedule, conflicts = schedule_projects(projects)
     today = local_today()
     worker_notes_raw = load_worker_notes()
@@ -2477,6 +2479,12 @@ def complete():
                 t['filter_match'] = matches_filters(t['project'], t['client'])
     else:
         filtered_projects = projects
+
+    filtered_projects = [
+        p
+        for p in filtered_projects
+        if (p.get('kanban_column') or '').strip().lower() != 'ready to archive'
+    ]
 
     # Order phases within each day: started ones first
     _sort_cell_tasks(schedule)

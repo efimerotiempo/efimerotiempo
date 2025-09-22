@@ -418,6 +418,8 @@ def schedule_projects(projects):
             frozen_map.setdefault(t.get('phase'), []).append(t)
         end_date = current
         assigned = project.get('assigned', {})
+        ready_column = (project.get('kanban_column') or '').strip().lower()
+        ready_to_archive = ready_column == 'ready to archive'
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
@@ -467,6 +469,7 @@ def schedule_projects(projects):
                     worker,
                     project_blocked=project.get('blocked', False),
                     material_date=project.get('material_confirmed_date'),
+                    ready_to_archive=ready_to_archive,
                 )
                 record_segment_start(project, phase, 0, seg_start, seg_start_hour)
             else:
@@ -536,6 +539,7 @@ def schedule_projects(projects):
                         material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
+                        ready_to_archive=ready_to_archive,
                     )
                     record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
@@ -578,6 +582,7 @@ def assign_phase(
     material_date=None,
     auto=False,
     due_confirmed=False,
+    ready_to_archive=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -642,6 +647,7 @@ def assign_phase(
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
+                'ready_to_archive': ready_to_archive,
             }
             tasks.append(task)
             if first_day is None:
@@ -730,6 +736,7 @@ def assign_phase(
                 'blocked': project_blocked,
                 'material_date': material_date,
                 'auto': auto,
+                'ready_to_archive': ready_to_archive,
             }
             tasks.append(task)
             if first_day is None:
@@ -808,6 +815,7 @@ def assign_pedidos(
     project_frozen=False,
     project_blocked=False,
     material_date=None,
+    ready_to_archive=False,
 ):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
@@ -850,6 +858,7 @@ def assign_pedidos(
             'frozen': project_frozen,
             'blocked': project_blocked,
             'material_date': material_date,
+            'ready_to_archive': ready_to_archive,
         }
         tasks.append(task)
         if first_day is None:
