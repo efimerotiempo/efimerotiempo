@@ -1381,7 +1381,6 @@ def get_projects():
         p.pop('frozen', None)
         p.setdefault('frozen_tasks', [])
         p.setdefault('blocked', False)
-        p.setdefault('material_confirmed_date', '')
         p.setdefault('kanban_attachments', [])
         if not isinstance(p.get('kanban_display_fields'), dict):
             p['kanban_display_fields'] = {}
@@ -1697,7 +1696,6 @@ def calendar_view():
             {
                 'project': item['project'],
                 'client': item['client'],
-                'material_date': item.get('material_date'),
                 'due_date': item.get('due_date'),
                 'phases': {},
             },
@@ -1747,7 +1745,6 @@ def calendar_view():
                 'pid': pid,
                 'project': data['project'],
                 'client': data['client'],
-                'material_date': data.get('material_date'),
                 'due_date': data.get('due_date'),
                 'tasks': list(data['phases'].values()),
             }
@@ -1801,9 +1798,9 @@ def calendar_view():
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
 
-    unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
+    unplanned_list.sort(key=lambda g: g.get('due_date') or '9999-12-31')
+    unplanned_with = unplanned_list
+    unplanned_without = []
 
     note_map = {}
     for n in notes:
@@ -2126,7 +2123,6 @@ def add_project():
             'client': data['client'],
             'start_date': local_today().isoformat(),
             'due_date': due.isoformat() if due else '',
-            'material_confirmed_date': '',
             'color': color,
             'phases': {},
             'assigned': {},
@@ -2376,7 +2372,6 @@ def complete():
             {
                 'project': item['project'],
                 'client': item['client'],
-                'material_date': item.get('material_date'),
                 'due_date': item.get('due_date'),
                 'phases': {},
             },
@@ -2426,7 +2421,6 @@ def complete():
                 'pid': pid,
                 'project': data['project'],
                 'client': data['client'],
-                'material_date': data.get('material_date'),
                 'due_date': data.get('due_date'),
                 'tasks': list(data['phases'].values()),
             }
@@ -2496,9 +2490,9 @@ def complete():
 
     filtered_projects = expand_for_display(filtered_projects)
 
-    unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
+    unplanned_list.sort(key=lambda g: g.get('due_date') or '9999-12-31')
+    unplanned_with = unplanned_list
+    unplanned_without = []
 
     points = split_markers(schedule)
 
@@ -2771,9 +2765,6 @@ def update_project_row():
         proj['due_date'] = dd.isoformat() if dd else ''
     if 'client' in data:
         proj['client'] = data['client']
-    if 'material_confirmed_date' in data:
-        md = parse_input_date(data['material_confirmed_date'])
-        proj['material_confirmed_date'] = md.isoformat() if md else ''
     if 'color' in data:
         proj['color'] = data['color']
 
@@ -3541,9 +3532,6 @@ def kanbanize_webhook():
     else:
         due_date_obj = parse_kanban_date(fecha_cli_str)
         due_confirmed_flag = False
-    mat_str = custom.get('Fecha material confirmado')
-    material_date_obj = parse_kanban_date(mat_str)
-
     prev_deadline_str = prev_card.get('deadline')
     prev_fecha_cli_str = (
         prev_custom.get('Fecha Cliente')
@@ -3556,9 +3544,6 @@ def kanbanize_webhook():
     else:
         prev_due_date_obj = parse_kanban_date(prev_fecha_cli_str)
         prev_due_confirmed_flag = False
-    prev_mat_str = prev_custom.get('Fecha material confirmado')
-    prev_material_date_obj = parse_kanban_date(prev_mat_str)
-
     def obtener_duracion(campo):
         valor = custom.get(campo)
         if valor in [None, ""]:
@@ -3762,9 +3747,6 @@ def kanbanize_webhook():
                 existing['due_date'] = ''
                 existing['due_confirmed'] = False
             changed = True
-        if prev_material_date_obj != material_date_obj:
-            existing['material_confirmed_date'] = material_date_obj.isoformat() if material_date_obj else ''
-            changed = True
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
@@ -3821,7 +3803,6 @@ def kanbanize_webhook():
             'client': cliente,
             'start_date': local_today().isoformat(),
             'due_date': due_date_obj.isoformat() if due_date_obj else '',
-            'material_confirmed_date': material_date_obj.isoformat() if material_date_obj else '',
             'color': _next_api_color(),
             'phases': new_phases,
             'assigned': {f['nombre']: UNPLANNED for f in fases},

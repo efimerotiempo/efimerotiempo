@@ -19,7 +19,6 @@
         <th>Cliente</th>
         <th>Fecha inicio</th>
         <th>Fecha límite</th>
-        <th>Fecha material confirmado</th>
         <th>En plazo</th>
         <th>Planificado</th>
         {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
@@ -44,7 +43,6 @@
             </form>
         </td>
         <td>{{ p.due_date }}</td>
-        <td>{{ p.material_confirmed_date }}</td>
         <td>
             {% if p.met %}
                 <span class="ok">&#10004;</span>

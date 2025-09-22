@@ -124,24 +124,18 @@ derecha del todo, fuera del área
 desplazable del calendario. El ancho elegido se mantiene al cambiar de pestaña
 y volver a **Completo**. Un botón «Fases sin planificar» flotante permite
 mostrar de nuevo la columna cuando se oculta. Las carpetas se ordenan por la
-fecha **Material confirmado** de cada proyecto y una división separa los que
-cuentan con esa fecha de los que no. El título de cada carpeta muestra la
-**Fecha límite** del proyecto tras el nombre del cliente, y se actualiza si
+**Fecha límite** del proyecto cuando está definida. El título de cada carpeta
+muestra la **Fecha límite** tras el nombre del cliente, y se actualiza si
 cambia.
 
-La tabla de proyectos muestra, a la derecha de **Fecha límite**, la columna
-**Fecha material confirmado**, e incluye una columna indicando con un ✔ verde
-si está planificado o una ❌ si permanece sin planificar. A continuación se
-encuentra la columna **Imagen**, que permite abrir cada archivo cargado en una
-nueva pestaña. Además, al pulsar una fase en el calendario se visualizará la
-primera imagen adjunta como enlace clicable que abre la imagen original en una
-nueva pestaña, igual que si se hubiera cargado manualmente. La columna inicial
-del calendario muestra únicamente el nombre de cada persona y permanece fija a
-la izquierda para que siempre sea visible. La fecha de material confirmado
-también se visualiza en la ventana emergente al pulsar cualquier fase, tanto en
-el calendario como en la columna de fases sin planificar. Si se programa una
-fase en una fecha anterior a la de material confirmado, la planificación se
-realiza igualmente sin mostrar avisos adicionales.
+La tabla de proyectos incluye una columna indicando con un ✔ verde si está
+planificado o una ❌ si permanece sin planificar. A continuación se encuentra la
+columna **Imagen**, que permite abrir cada archivo cargado en una nueva pestaña.
+Además, al pulsar una fase en el calendario se visualizará la primera imagen
+adjunta como enlace clicable que abre la imagen original en una nueva pestaña,
+igual que si se hubiera cargado manualmente. La columna inicial del calendario
+muestra únicamente el nombre de cada persona y permanece fija a la izquierda
+para que siempre sea visible.
 
 Si una tarjeta tiene su **fecha límite** confirmada (campo "fecha tope"),
 al planificar una fase que exceda esa fecha se mostrará una ventana
