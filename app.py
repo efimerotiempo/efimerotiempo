@@ -139,6 +139,15 @@ TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
 
 PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
+_WHITESPACE_RE = re.compile(r'\s+')
+
+
+def normalize_key(text):
+    """Return a case-insensitive token with collapsed whitespace."""
+
+    if not text:
+        return ''
+    return _WHITESPACE_RE.sub(' ', str(text).strip()).casefold()
 
 SSE_CLIENTS = []
 
@@ -484,11 +493,12 @@ def split_project_and_client(title):
 
 def build_project_links(compras_raw):
     children_by_parent = {}
-    seguimiento_titles = set()
+    children_norms_by_parent = {}
+    seguimiento_titles = {}
     candidate_cards = []
-    excluded_columns = {col.lower() for col in PEDIDOS_HIDDEN_COLUMNS}
-    target_lanes = {'acero al carbono', 'inoxidable - aluminio'}
-    seguimiento_lane = 'seguimiento compras'
+    excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+    target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
+    seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
 
     for data in compras_raw.values():
@@ -516,14 +526,18 @@ def build_project_links(compras_raw):
             if isinstance(child_entries, list):
                 children.extend(child_entries)
 
-        if parents and title:
+        normalized_child_title = normalize_key(title)
+        if parents and normalized_child_title:
             for p in parents:
                 if isinstance(p, dict):
                     pid = p.get('taskid') or p.get('cardId') or p.get('id')
                     if pid:
-                        lst = children_by_parent.setdefault(str(pid), [])
-                        if title not in lst:
+                        key = str(pid)
+                        lst = children_by_parent.setdefault(key, [])
+                        norms = children_norms_by_parent.setdefault(key, set())
+                        if normalized_child_title not in norms:
                             lst.append(title)
+                            norms.add(normalized_child_title)
 
         if children and cid:
             for ch in children:
@@ -534,18 +548,23 @@ def build_project_links(compras_raw):
                         fetched = _fetch_kanban_card(child_id)
                         if fetched:
                             child_title = (fetched.get('title') or '').strip()
-                    if child_id and child_title:
+                    norm_child = normalize_key(child_title)
+                    if child_id and norm_child:
                         lst = children_by_parent.setdefault(cid, [])
-                        if child_title not in lst:
+                        norms = children_norms_by_parent.setdefault(cid, set())
+                        if norm_child not in norms:
                             lst.append(child_title)
+                            norms.add(norm_child)
 
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        lane_key = lane_name.lower()
+        lane_key = normalize_key(lane_name)
         column = (card.get('columnname') or card.get('columnName') or '').strip()
-        column_key = column.lower()
+        column_key = normalize_key(column)
 
-        if title and lane_key == seguimiento_lane and column_key not in excluded_columns:
-            seguimiento_titles.add(title)
+        if title and normalized_child_title and lane_key == seguimiento_lane and column_key not in excluded_columns:
+            titles = seguimiento_titles.setdefault(normalized_child_title, [])
+            if title not in titles:
+                titles.append(title)
 
         if cid and lane_key in target_lanes and cid not in seen_candidates:
             project_name, client_name = split_project_and_client(title)
@@ -572,7 +591,20 @@ def build_project_links(compras_raw):
     links_table = []
     for info in candidate_cards:
         child_links = children_by_parent.get(info['cid'], [])
-        matches = [title for title in child_links if title in seguimiento_titles]
+        matches = []
+        seen_norms = set()
+        for child_title in child_links:
+            norm_child = normalize_key(child_title)
+            if not norm_child or norm_child in seen_norms:
+                continue
+            lane_titles = seguimiento_titles.get(norm_child)
+            if lane_titles:
+                for lane_title in lane_titles:
+                    if lane_title not in matches:
+                        matches.append(lane_title)
+            elif child_title not in matches:
+                matches.append(child_title)
+            seen_norms.add(norm_child)
         if not matches:
             continue
         entry = {
