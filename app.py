@@ -484,6 +484,13 @@ def split_project_and_client(title):
 
 def build_project_links(compras_raw):
     children_by_parent = {}
+    seguimiento_titles = set()
+    candidate_cards = []
+    excluded_columns = {col.lower() for col in PEDIDOS_HIDDEN_COLUMNS}
+    target_lanes = {'acero al carbono', 'inoxidable - aluminio'}
+    seguimiento_lane = 'seguimiento compras'
+    seen_candidates = set()
+
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
@@ -517,44 +524,55 @@ def build_project_links(compras_raw):
                         if child_title not in lst:
                             lst.append(child_title)
 
-    links_table = []
-    seen_links = set()
-    for data in compras_raw.values():
-        card = data['card']
-        title = (card.get('title') or '').strip()
-        project_name, client_name = split_project_and_client(title)
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        column = (card.get('columnname') or card.get('columnName') or '').strip()
-        due = parse_kanban_date(card.get('deadline'))
         lane_key = lane_name.lower()
-        custom_id = get_card_custom_id(card)
-        base_display = title or project_name or ''
-        if custom_id and base_display:
-            if base_display.lower().startswith(custom_id.lower()):
-                display_title = base_display
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        column_key = column.lower()
+
+        if title and lane_key == seguimiento_lane and column_key not in excluded_columns:
+            seguimiento_titles.add(title)
+
+        if cid and lane_key in target_lanes and cid not in seen_candidates:
+            project_name, client_name = split_project_and_client(title)
+            due = parse_kanban_date(card.get('deadline'))
+            base_display = title or project_name or ''
+            if custom_id and base_display:
+                if base_display.lower().startswith(custom_id.lower()):
+                    display_title = base_display
+                else:
+                    display_title = f"{custom_id} - {base_display}"
             else:
-                display_title = f"{custom_id} - {base_display}"
+                display_title = base_display or custom_id
+            candidate_cards.append({
+                'cid': cid,
+                'project': project_name,
+                'title': title,
+                'display_title': display_title,
+                'client': client_name,
+                'custom_card_id': custom_id,
+                'due': due,
+            })
+            seen_candidates.add(cid)
+
+    links_table = []
+    for info in candidate_cards:
+        child_links = children_by_parent.get(info['cid'], [])
+        matches = [title for title in child_links if title in seguimiento_titles]
+        if not matches:
+            continue
+        entry = {
+            'project': info['project'],
+            'title': info['title'],
+            'display_title': info['display_title'],
+            'client': info['client'],
+            'custom_card_id': info['custom_card_id'],
+            'links': matches,
+        }
+        if info['due']:
+            entry['due'] = info['due'].isoformat()
         else:
-            display_title = base_display or custom_id
-        if (
-            lane_key in PROJECT_LINK_LANES
-            and column not in ['Ready to Archive', 'Hacer Albaran']
-        ):
-            key = (project_name, client_name, title)
-            if key not in seen_links:
-                cid = card.get('taskid') or card.get('cardId') or card.get('id')
-                child_links = children_by_parent.get(str(cid), [])
-                if child_links:
-                    links_table.append({
-                        'project': project_name,
-                        'title': title,
-                        'display_title': display_title,
-                        'client': client_name,
-                        'custom_card_id': custom_id,
-                        'links': child_links,
-                        'due': due.isoformat() if due else None
-                    })
-                    seen_links.add(key)
+            entry['due'] = None
+        links_table.append(entry)
     return links_table
 
 
