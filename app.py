@@ -499,8 +499,24 @@ def build_project_links(compras_raw):
         cid = str(cid) if cid else None
         links_info = card.get('links') or {}
 
-        parents = links_info.get('parent') if isinstance(links_info, dict) else []
-        if isinstance(parents, list) and title:
+        parents = []
+        children = []
+        if isinstance(links_info, dict):
+            parent_entries = links_info.get('parent')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+            parent_entries = links_info.get('parents')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+
+            child_entries = links_info.get('child')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
+            child_entries = links_info.get('children')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
+
+        if parents and title:
             for p in parents:
                 if isinstance(p, dict):
                     pid = p.get('taskid') or p.get('cardId') or p.get('id')
@@ -509,8 +525,7 @@ def build_project_links(compras_raw):
                         if title not in lst:
                             lst.append(title)
 
-        children = links_info.get('child') if isinstance(links_info, dict) else []
-        if isinstance(children, list) and cid:
+        if children and cid:
             for ch in children:
                 if isinstance(ch, dict):
                     child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
