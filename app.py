@@ -6,6 +6,7 @@ import copy
 import json
 import re
 import smtplib
+import unicodedata
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
@@ -139,15 +140,21 @@ TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
 
 PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
-_WHITESPACE_RE = re.compile(r'\s+')
+_NON_ALNUM_RE = re.compile(r'[^0-9a-z]+')
 
 
 def normalize_key(text):
-    """Return a case-insensitive token with collapsed whitespace."""
+    """Return a case-insensitive token stripped of diacritics and punctuation."""
 
     if not text:
         return ''
-    return _WHITESPACE_RE.sub(' ', str(text).strip()).casefold()
+
+    normalized = unicodedata.normalize('NFKD', str(text))
+    normalized = ''.join(
+        ch for ch in normalized if not unicodedata.category(ch).startswith('M')
+    )
+    normalized = normalized.casefold()
+    return _NON_ALNUM_RE.sub('', normalized)
 
 SSE_CLIENTS = []
 
