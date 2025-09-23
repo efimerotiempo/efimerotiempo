@@ -935,7 +935,13 @@ def compute_schedule_map(projects):
                 pid = t['pid']
                 mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours'], t.get('part')))
     for lst in mapping.values():
-        lst.sort(key=lambda item: (item[1], item[0], item[4] or ''))
+        lst.sort(
+            key=lambda item: (
+                item[1],
+                item[0],
+                '' if item[4] in (None, '') else str(item[4]),
+            )
+        )
     return mapping
 
 
