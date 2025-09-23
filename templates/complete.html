@@ -149,16 +149,14 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen or t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
-                {% if not t.ready_to_archive %}
-                    {% if t.due_status == 'after' %}
-                        <span class="due-after">&#10060;</span>
-                    {% elif t.due_status == 'before' %}
-                        <span class="due-before">&#10060;</span>
-                    {% elif t.due_status == 'met' %}
-                        <span class="due-ok">&#10004;</span>
-                    {% endif %}
+                {% if t.due_status == 'after' %}
+                    <span class="due-after">&#10060;</span>
+                {% elif t.due_status == 'before' %}
+                    <span class="due-before">&#10060;</span>
+                {% elif t.due_status == 'met' %}
+                    <span class="due-ok">&#10004;</span>
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -204,16 +202,14 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if not t.ready_to_archive %}
-                        {% if t.due_status == 'after' %}
-                            <span class="due-after">&#10060;</span>
-                        {% elif t.due_status == 'before' %}
-                            <span class="due-before">&#10060;</span>
-                        {% elif t.due_status == 'met' %}
-                            <span class="due-ok">&#10004;</span>
-                        {% endif %}
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -237,16 +233,14 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if not t.ready_to_archive %}
-                        {% if t.due_status == 'after' %}
-                            <span class="due-after">&#10060;</span>
-                        {% elif t.due_status == 'before' %}
-                            <span class="due-before">&#10060;</span>
-                        {% elif t.due_status == 'met' %}
-                            <span class="due-ok">&#10004;</span>
-                        {% endif %}
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -332,6 +326,7 @@
                 <th>Cliente</th>
                 <th>Fecha inicio</th>
                 <th>Fecha límite</th>
+                <th>Fecha material confirmado</th>
                 <th>En plazo</th>
                 <th>Planificado</th>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
@@ -356,6 +351,7 @@
                     </form>
                 </td>
                 <td>{{ p.due_date }}</td>
+                <td>{{ p.material_confirmed_date }}</td>
                 <td>
                     {% if p.met %}
                         <span class="ok">&#10004;</span>
@@ -623,10 +619,6 @@ let lastDrag = null;
 let dragInfo = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
-      if (t.dataset.readyArchive === 'true') {
-        e.preventDefault();
-        return;
-      }
       popup.style.display = 'none';
       const row = t.closest('[data-worker]');
       lastDrag = {
@@ -659,26 +651,21 @@ let dragInfo = null;
           f.classList.add('dim');
         }
       });
-      const projectRows = document.querySelectorAll('.projects-table tbody tr[data-pid]');
-      let matchedRow = false;
-      projectRows.forEach(row => {
+      document.querySelectorAll('.projects-table tbody tr[data-pid]').forEach(row => {
         if (row.dataset.pid === t.dataset.pid) {
-          matchedRow = true;
           row.classList.add('proj-highlight');
           row.classList.remove('proj-dim');
         } else {
-          row.classList.remove('proj-highlight');
           row.classList.add('proj-dim');
+          row.classList.remove('proj-highlight');
         }
       });
-      if (!matchedRow) {
-        projectRows.forEach(row => row.classList.remove('proj-dim'));
-      }
         const info = PROJECT_DATA[t.dataset.pid];
         let html = `<div class="popup-section popup-header"><strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong></div>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
         const metaLines = [];
         if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+        if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
         if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
         const kanbanFields = info.kanban_display_fields || {};
         const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
@@ -1107,15 +1094,16 @@ let dragInfo = null;
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
       const info = PROJECT_DATA[data.pid] || {};
+      const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      doMove(moveData, 'split');
+      doMove(moveData, 'split', beforeMaterial);
     });
   });
-  function doMove(moveData, mode) {
+  function doMove(moveData, mode, beforeMaterial) {
     moveData.mode = mode;
     fetch(MOVE_URL, {
       method: 'POST',
@@ -1127,7 +1115,7 @@ let dragInfo = null;
     .then(({ok, data}) => {
       if (!ok) {
         if (data.blocked) {
-          pendingBlock = { moveData, mode };
+          pendingBlock = { moveData, mode, beforeMaterial };
           blockText.textContent = `Hay una fase bloqueada (${data.blocked.name} - ${data.blocked.phase}). ¿Quieres descongelar la fase y que se aplace con el resto o que se atrase lo demás saltándose esa fase?`;
           blockModal.style.display = 'block';
           return;
@@ -1144,7 +1132,7 @@ let dragInfo = null;
       if (pendingBlock) {
         blockModal.style.display = 'none';
         pendingBlock.moveData.unblock = true;
-        doMove(pendingBlock.moveData, pendingBlock.mode);
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
         pendingBlock = null;
       }
     });
@@ -1154,7 +1142,7 @@ let dragInfo = null;
       if (pendingBlock) {
         blockModal.style.display = 'none';
         pendingBlock.moveData.skip_block = true;
-        doMove(pendingBlock.moveData, pendingBlock.mode);
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
         pendingBlock = null;
       }
     });

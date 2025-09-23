@@ -93,16 +93,14 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen or t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
-                {% if not t.ready_to_archive %}
-                    {% if t.due_status == 'after' %}
-                        <span class="due-after">&#10060;</span>
-                    {% elif t.due_status == 'before' %}
-                        <span class="due-before">&#10060;</span>
-                    {% elif t.due_status == 'met' %}
-                        <span class="due-ok">&#10004;</span>
-                    {% endif %}
+                {% if t.due_status == 'after' %}
+                    <span class="due-after">&#10060;</span>
+                {% elif t.due_status == 'before' %}
+                    <span class="due-before">&#10060;</span>
+                {% elif t.due_status == 'met' %}
+                    <span class="due-ok">&#10004;</span>
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -148,16 +146,14 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if not t.ready_to_archive %}
-                        {% if t.due_status == 'after' %}
-                            <span class="due-after">&#10060;</span>
-                        {% elif t.due_status == 'before' %}
-                            <span class="due-before">&#10060;</span>
-                        {% elif t.due_status == 'met' %}
-                            <span class="due-ok">&#10004;</span>
-                        {% endif %}
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -181,16 +177,14 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if t.ready_to_archive %} ready-archive{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.ready_to_archive else 'true' }}" style="border-color: {{ '#d0d0d0' if t.ready_to_archive else t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-ready-archive="{{ 'true' if t.ready_to_archive else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if not t.ready_to_archive %}
-                        {% if t.due_status == 'after' %}
-                            <span class="due-after">&#10060;</span>
-                        {% elif t.due_status == 'before' %}
-                            <span class="due-before">&#10060;</span>
-                        {% elif t.due_status == 'met' %}
-                            <span class="due-ok">&#10004;</span>
-                        {% endif %}
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
@@ -219,6 +213,13 @@
             <button id="order-ok" type="button">OK</button>
             <button id="order-cancel" type="button">Cancelar</button>
         </div>
+    </div>
+</div>
+<div id="material-modal" class="conflict-modal material-modal">
+    <div class="conflict-content material-content">
+        <div class="material-title">SIN MATERIAL:</div>
+        <ul id="material-list" class="material-list"></ul>
+        <button id="material-close" type="button">Cerrar</button>
     </div>
 </div>
 <div id="bug-modal" class="modal">
@@ -309,6 +310,7 @@
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
+  const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -329,6 +331,139 @@
   const orderModal = document.getElementById('order-modal');
   const orderOk = document.getElementById('order-ok');
   const orderCancel = document.getElementById('order-cancel');
+  const materialModal = document.getElementById('material-modal');
+  const materialList = document.getElementById('material-list');
+  const materialClose = document.getElementById('material-close');
+  let pendingMaterialCallback = null;
+  let pedidosLinksPromise = null;
+  const pedidosCache = {
+    entries: [],
+    byPid: new Map(),
+    byKey: new Map(),
+  };
+
+  function normalizePedidosKey(value) {
+    return (value || '').toString().trim().toLowerCase();
+  }
+
+  function indexPedidosLinks(items) {
+    const list = Array.isArray(items) ? items : [];
+    pedidosCache.entries = list;
+    const byPid = new Map();
+    const byKey = new Map();
+    list.forEach(item => {
+      const pid = item && item.pid;
+      if (pid) {
+        byPid.set(String(pid), item);
+      }
+      const keys = new Set();
+      ['project', 'title', 'display_title'].forEach(field => {
+        const val = item && item[field];
+        if (val) keys.add(normalizePedidosKey(val));
+      });
+      if (item && item.custom_card_id) {
+        keys.add(normalizePedidosKey(item.custom_card_id));
+      }
+      keys.forEach(key => {
+        if (!key) return;
+        if (!byKey.has(key)) {
+          byKey.set(key, item);
+        }
+      });
+    });
+    pedidosCache.byPid = byPid;
+    pedidosCache.byKey = byKey;
+  }
+
+  function ensurePedidosLinks() {
+    if (pedidosLinksPromise) return pedidosLinksPromise;
+    pedidosLinksPromise = fetch(PROJECT_LINKS_URL, { credentials: 'same-origin' })
+      .then(resp => {
+        if (!resp.ok) throw new Error('No se pudo cargar la Columna 1');
+        return resp.json();
+      })
+      .then(items => {
+        indexPedidosLinks(items);
+        return pedidosCache;
+      })
+      .catch(err => {
+        console.error(err);
+        indexPedidosLinks([]);
+        return pedidosCache;
+      });
+    return pedidosLinksPromise;
+  }
+
+  function findPedidosEntry(pid) {
+    if (!pid) return null;
+    const direct = pedidosCache.byPid.get(String(pid));
+    if (direct) return direct;
+    const info = PROJECT_DATA[pid];
+    if (!info) return null;
+    const keys = new Set();
+    if (info.name) {
+      const trimmed = info.name.trim();
+      if (trimmed) {
+        keys.add(normalizePedidosKey(trimmed));
+        const codeMatch = trimmed.match(/OF\s*\d{4}/i);
+        if (codeMatch) {
+          keys.add(normalizePedidosKey(codeMatch[0]));
+        }
+      }
+    }
+    for (const key of keys) {
+      if (pedidosCache.byKey.has(key)) {
+        return pedidosCache.byKey.get(key);
+      }
+    }
+    return null;
+  }
+
+  function finishMaterialCallback() {
+    if (typeof pendingMaterialCallback === 'function') {
+      const cb = pendingMaterialCallback;
+      pendingMaterialCallback = null;
+      cb();
+    }
+  }
+
+  function showMaterialWarning(entry, onClose) {
+    if (!materialModal || !materialList) {
+      onClose();
+      return;
+    }
+    const links = Array.isArray(entry && entry.links) ? entry.links : [];
+    if (!links.length) {
+      onClose();
+      return;
+    }
+    materialList.innerHTML = '';
+    links.forEach(link => {
+      const li = document.createElement('li');
+      li.textContent = link;
+      materialList.appendChild(li);
+    });
+    pendingMaterialCallback = onClose;
+    materialModal.style.display = 'block';
+  }
+
+  function hideMaterialWarning() {
+    if (materialModal) {
+      materialModal.style.display = 'none';
+    }
+    finishMaterialCallback();
+  }
+
+  if (materialClose) {
+    materialClose.addEventListener('click', hideMaterialWarning);
+  }
+  if (materialModal) {
+    materialModal.addEventListener('click', e => {
+      if (e.target === materialModal) hideMaterialWarning();
+    });
+  }
+
+  ensurePedidosLinks();
 
   let pendingBlock = null;
   let pendingOrder = null;
@@ -341,8 +476,20 @@
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-    if (data.warning) showDeadline(data.warning, () => location.reload());
-    else location.reload();
+    const finalize = () => {
+      if (data.warning) showDeadline(data.warning, () => location.reload());
+      else location.reload();
+    };
+    ensurePedidosLinks()
+      .then(() => {
+        const entry = findPedidosEntry(data.pid);
+        if (entry && Array.isArray(entry.links) && entry.links.length) {
+          showMaterialWarning(entry, finalize);
+        } else {
+          finalize();
+        }
+      })
+      .catch(() => finalize());
   }
   const splitCancel = document.getElementById('split-cancel');
   const filterForm = document.getElementById('filter-form');
@@ -512,10 +659,6 @@ let lastDrag = null;
 let dragInfo = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
-      if (t.dataset.readyArchive === 'true') {
-        e.preventDefault();
-        return;
-      }
       popup.style.display = 'none';
       const row = t.closest('[data-worker]');
       lastDrag = {
@@ -553,6 +696,7 @@ let dragInfo = null;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       const metaLines = [];
       if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+      if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
       if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
       const kanbanFields = info.kanban_display_fields || {};
       const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
@@ -747,6 +891,7 @@ let dragInfo = null;
             if (d) {
               localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
               if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+              // previously warned when scheduling before material confirmation, now proceed silently
             }
             location.reload();
           });
@@ -908,12 +1053,13 @@ let dragInfo = null;
       const date = cell.dataset.date;
       const worker = cell.closest('tr').dataset.worker;
       const info = PROJECT_DATA[data.pid] || {};
+      const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
       if (lastDrag) {
         sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
       }
       const start = getStartHour(cell, e.clientY);
       const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      attemptMove(moveData, 'split');
+      attemptMove(moveData, 'split', beforeMaterial);
     });
   });
   function getPhaseSequence(pid) {
@@ -982,15 +1128,15 @@ let dragInfo = null;
     return false;
   }
 
-  function attemptMove(moveData, mode) {
+  function attemptMove(moveData, mode, beforeMaterial) {
     if (violatesPhaseOrder(moveData) && orderModal) {
-      pendingOrder = { moveData, mode };
+      pendingOrder = { moveData, mode, beforeMaterial };
       orderModal.style.display = 'block';
       return;
     }
-    doMove(moveData, mode);
+    doMove(moveData, mode, beforeMaterial);
   }
-  function doMove(moveData, mode) {
+  function doMove(moveData, mode, beforeMaterial) {
     moveData.mode = mode;
     fetch(MOVE_URL, {
       method: 'POST',
@@ -1002,7 +1148,7 @@ let dragInfo = null;
     .then(({ok, data}) => {
       if (!ok) {
         if (data.blocked) {
-          pendingBlock = { moveData, mode };
+          pendingBlock = { moveData, mode, beforeMaterial };
           blockText.textContent = `Hay una fase bloqueada (${data.blocked.name} - ${data.blocked.phase}). ¿Quieres descongelar la fase y que se aplace con el resto o que se atrase lo demás saltándose esa fase?`;
           blockModal.style.display = 'block';
           return;
@@ -1019,7 +1165,7 @@ let dragInfo = null;
       if (pendingBlock) {
         blockModal.style.display = 'none';
         pendingBlock.moveData.unblock = true;
-        doMove(pendingBlock.moveData, pendingBlock.mode);
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
         pendingBlock = null;
       }
     });
@@ -1029,7 +1175,7 @@ let dragInfo = null;
       if (pendingBlock) {
         blockModal.style.display = 'none';
         pendingBlock.moveData.skip_block = true;
-        doMove(pendingBlock.moveData, pendingBlock.mode);
+        doMove(pendingBlock.moveData, pendingBlock.mode, pendingBlock.beforeMaterial);
         pendingBlock = null;
       }
     });
@@ -1043,10 +1189,10 @@ let dragInfo = null;
   if (orderOk) {
     orderOk.addEventListener('click', () => {
       if (pendingOrder) {
-        const { moveData, mode } = pendingOrder;
+        const { moveData, mode, beforeMaterial } = pendingOrder;
         pendingOrder = null;
         orderModal.style.display = 'none';
-        doMove(moveData, mode);
+        doMove(moveData, mode, beforeMaterial);
       } else {
         orderModal.style.display = 'none';
       }

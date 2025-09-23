@@ -275,6 +275,7 @@ function openPhasePopup(context, anchorRect) {
   let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
   const metaLines = [];
   if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+  if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
   if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
   const kanbanFields = info.kanban_display_fields || {};
   const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');

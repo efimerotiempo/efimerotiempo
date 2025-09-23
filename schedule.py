@@ -418,8 +418,6 @@ def schedule_projects(projects):
             frozen_map.setdefault(t.get('phase'), []).append(t)
         end_date = current
         assigned = project.get('assigned', {})
-        ready_column = (project.get('kanban_column') or '').strip().lower()
-        ready_to_archive = ready_column == 'ready to archive'
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
@@ -468,7 +466,7 @@ def schedule_projects(projects):
                     project['id'],
                     worker,
                     project_blocked=project.get('blocked', False),
-                    ready_to_archive=ready_to_archive,
+                    material_date=project.get('material_confirmed_date'),
                 )
                 record_segment_start(project, phase, 0, seg_start, seg_start_hour)
             else:
@@ -535,9 +533,9 @@ def schedule_projects(projects):
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
                         project_blocked=project.get('blocked', False),
+                        material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
-                        ready_to_archive=ready_to_archive,
                     )
                     record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
@@ -577,9 +575,9 @@ def assign_phase(
     manual=False,
     project_frozen=False,
     project_blocked=False,
+    material_date=None,
     auto=False,
     due_confirmed=False,
-    ready_to_archive=False,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -641,10 +639,10 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
-            'blocked': project_blocked,
-            'auto': auto,
-            'ready_to_archive': ready_to_archive,
-        }
+                'blocked': project_blocked,
+                'material_date': material_date,
+                'auto': auto,
+            }
             tasks.append(task)
             if first_day is None:
                 first_day = day
@@ -729,10 +727,10 @@ def assign_phase(
                 'pid': pid,
                 'part': part,
                 'frozen': project_frozen,
-            'blocked': project_blocked,
-            'auto': auto,
-            'ready_to_archive': ready_to_archive,
-        }
+                'blocked': project_blocked,
+                'material_date': material_date,
+                'auto': auto,
+            }
             tasks.append(task)
             if first_day is None:
                 first_day = day
@@ -764,6 +762,7 @@ def assign_phase(
             'part': part,
             'frozen': project_frozen,
             'blocked': project_blocked,
+            'material_date': material_date,
             'auto': auto,
         }
         tasks.append(task)
@@ -808,7 +807,7 @@ def assign_pedidos(
     *,
     project_frozen=False,
     project_blocked=False,
-    ready_to_archive=False,
+    material_date=None,
 ):
     """Assign the 'pedidos' phase as a continuous range without hour limits."""
     day = start_day
@@ -850,7 +849,7 @@ def assign_pedidos(
             'pid': pid,
             'frozen': project_frozen,
             'blocked': project_blocked,
-            'ready_to_archive': ready_to_archive,
+            'material_date': material_date,
         }
         tasks.append(task)
         if first_day is None:
@@ -936,17 +935,7 @@ def compute_schedule_map(projects):
                 pid = t['pid']
                 mapping.setdefault(pid, []).append((worker, day, t['phase'], t['hours'], t.get('part')))
     for lst in mapping.values():
-        def _map_key(item):
-            part = item[4]
-            return (
-                item[1],
-                item[0],
-                0 if part is None else 1,
-                "" if part is None else str(part),
-                item[2],
-            )
-
-        lst.sort(key=_map_key)
+        lst.sort(key=lambda item: (item[1], item[0], item[4] or ''))
     return mapping
 
 

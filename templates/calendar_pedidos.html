@@ -85,25 +85,21 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
-            <div class="project-header">
-                <strong class="proj-name"
-                        data-project="{{ project_value }}"
-                        data-code="{{ code_value }}">
-                    {% if code_value %}{{ code_value }} - {% endif %}{{ title_value or project_value }}
-                </strong>
-                {% if item.client %}
-                <span class="proj-client" data-project="{{ project_value }}">{{ item.client }}</span>
-                {% endif %}
-            </div>
-            {% if item.links %}
-            <ul class="child-links">
-                {% for link in item.links %}
-                <li class="child-item">
-                    <span class="link-title" data-title="{{ link }}">{{ link }}</span>
-                </li>
-                {% endfor %}
-            </ul>
+            {% if code_value %}
+                <span class="proj-code"
+                      data-project="{{ project_value }}"
+                      data-code="{{ code_value }}">{{ code_value }}</span>
+                <span class="proj-sep"> - </span>
             {% endif %}
+            <span class="proj-title"
+                  data-project="{{ project_value }}"
+                  data-code="{{ code_value }}">{{ title_value or project_value }}</span>
+            {% if item.client %}
+                <span class="proj-client" data-project="{{ (item.project or item.title)|trim }}"> — {{ item.client }}</span>
+            {% endif %}
+            {% for link in item.links %}
+                <span class="link-title" data-title="{{ link }}">{{ link }}</span>
+            {% endfor %}
         </div>
     {% endfor %}
     </div>
@@ -145,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
-  const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const DEADLINE_MSG = 'Fecha cliente soprepasada.';
   const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
@@ -164,8 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const obsText = document.getElementById('obs-text');
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
-
-  let projectLinksCache = {{ project_links|tojson }};
 
   function norm(value) {
     return (value || '').toString().trim().toLowerCase();
@@ -350,6 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
     const metaLines = [];
     if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+    if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
     if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
     const kanbanFields = info.kanban_display_fields || {};
     const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
@@ -629,6 +623,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const code = (row.dataset.code || '').toLowerCase();
       const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
       row.style.display = show ? '' : 'none';
+      const next = row.nextElementSibling;
+      if (next && next.classList.contains('links-row')) {
+        next.style.display = show ? '' : 'none';
+      }
     });
   });
 
@@ -714,102 +712,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const projectLinksContainer = document.querySelector('.columna-1-content');
-
-  function buildProjectLinkRow(item) {
-    if (!item) return null;
-    const div = document.createElement('div');
-    div.className = 'project-row';
-    const projectValue = ((item.project || item.title) || '').trim();
-    const fullTitle = (item.title || '').trim();
-    const display = (item.display_title || fullTitle || projectValue).trim();
-    const code = (item.custom_card_id || '').trim();
-
-    div.dataset.pid = item.pid || '';
-    div.dataset.project = projectValue;
-    div.dataset.title = fullTitle || projectValue;
-    div.dataset.display = display;
-    div.dataset.client = item.client || '';
-    div.dataset.code = code;
-    div.dataset.due = item.due || '';
-    div.dataset.montar = item.montar_start || '';
-
-    const header = document.createElement('div');
-    header.className = 'project-header';
-
-    const nameStrong = document.createElement('strong');
-    nameStrong.className = 'proj-name';
-    nameStrong.dataset.project = projectValue;
-    if (code) nameStrong.dataset.code = code;
-    const label = code ? `${code} - ${fullTitle || projectValue}` : (fullTitle || projectValue);
-    nameStrong.textContent = label;
-    header.appendChild(nameStrong);
-
-    if (item.client) {
-      const clientSpan = document.createElement('span');
-      clientSpan.className = 'proj-client';
-      clientSpan.dataset.project = projectValue;
-      clientSpan.textContent = item.client;
-      header.appendChild(clientSpan);
-    }
-
-    div.appendChild(header);
-
-    const links = Array.isArray(item.links) ? item.links.filter(Boolean) : [];
-    if (links.length) {
-      const list = document.createElement('ul');
-      list.className = 'child-links';
-      links.forEach(link => {
-        const listItem = document.createElement('li');
-        listItem.className = 'child-item';
-        const linkSpan = document.createElement('span');
-        linkSpan.className = 'link-title';
-        linkSpan.dataset.title = link;
-        linkSpan.textContent = link;
-        listItem.appendChild(linkSpan);
-        list.appendChild(listItem);
-      });
-      div.appendChild(list);
-    }
-
-    resolveRowPid(div);
-    return div;
-  }
-
-  function updateProjectLinks(items) {
-    if (!projectLinksContainer) return;
-    projectLinksContainer.querySelectorAll('.project-row').forEach(r => r.remove());
-    const fragment = document.createDocumentFragment();
-    (items || []).forEach(item => {
-      const row = buildProjectLinkRow(item);
-      if (row) fragment.appendChild(row);
-    });
-    projectLinksContainer.appendChild(fragment);
-    if (filterInput) filterInput.dispatchEvent(new Event('input'));
-    if (currentHighlight) setHighlight(currentHighlight);
-    updateDueWarnings();
-  }
-
-  function refreshProjectLinks() {
-    if (!PROJECT_LINKS_URL) return Promise.resolve(projectLinksCache);
-    return fetch(PROJECT_LINKS_URL, { credentials: 'same-origin' })
-      .then(resp => {
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return resp.json();
-      })
-      .then(items => {
-        if (!Array.isArray(items)) items = [];
-        projectLinksCache = items;
-        window.PROJECT_LINKS = items;
-        updateProjectLinks(items);
-        return items;
-      })
-      .catch(err => {
-        console.error('No se pudieron actualizar los enlaces de Kanban:', err);
-        return projectLinksCache;
-      });
-  }
-
   function attachHighlightHandlers() {
     document.querySelector('.pedidos-calendar').addEventListener('click', e => {
       const t = e.target.closest('.task');
@@ -827,16 +729,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   attachHighlightHandlers();
   updateDueWarnings();
-  if (Array.isArray(projectLinksCache) && projectLinksCache.length) {
-    window.PROJECT_LINKS = projectLinksCache;
-  }
-  refreshProjectLinks();
 
   const projectList = document.querySelector('.columna-1');
   document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
   if (projectList) {
     projectList.addEventListener('click', e => {
-      const trigger = e.target.closest('.proj-name, .proj-client');
+      const trigger = e.target.closest('.proj-code, .proj-title');
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
@@ -849,7 +747,49 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const source = new EventSource("{{ url_for('event_stream') }}");
-  source.onmessage = () => { refreshProjectLinks(); };
+  source.onmessage = () => {
+    fetch("{{ url_for('project_links_api') }}")
+      .then(r => r.json())
+      .then(items => {
+        const container = document.querySelector('.columna-1-content');
+        container.querySelectorAll('.project-row').forEach(r => r.remove());
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'project-row';
+          div.dataset.pid = item.pid || '';
+          const projectValue = (item.project || item.title || '').trim();
+          div.dataset.project = projectValue;
+          const fullTitle = (item.title || '').trim();
+          div.dataset.title = fullTitle || projectValue;
+          div.dataset.client = item.client || '';
+          div.dataset.montar = item.montar_start || '';
+          div.dataset.due = item.due || '';
+          const display = (item.display_title || fullTitle || projectValue).trim();
+          const code = (item.custom_card_id || '').trim();
+          div.dataset.display = display;
+          div.dataset.code = code;
+          let html = '';
+          if (code) {
+            html += `<span class="proj-code" data-project="${projectValue}" data-code="${code}">${code}</span>`;
+            html += `<span class="proj-sep"> - </span>`;
+          }
+          const titleText = (fullTitle || projectValue) || '';
+          html += `<span class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</span>`;
+          if (item.client) {
+            html += `<span class="proj-client" data-project="${projectValue}"> — ${item.client}</span>`;
+          }
+          item.links.forEach(link => {
+            html += `<span class="link-title" data-title="${link}">${link}</span>`;
+          });
+          div.innerHTML = html;
+          resolveRowPid(div);
+          container.appendChild(div);
+        });
+        filterInput.dispatchEvent(new Event('input'));
+        if (currentHighlight) setHighlight(currentHighlight);
+        updateDueWarnings();
+      });
+  };
 });
 </script>
 {% endblock %}
