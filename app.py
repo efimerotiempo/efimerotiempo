@@ -909,10 +909,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
 
 
 def filter_project_links_by_titles(links_table, valid_titles):
-    if not valid_titles:
-        return []
-
-    valid = set(valid_titles)
+    valid = set(valid_titles or [])
     filtered = []
     for item in links_table:
         links = list(item.get('links') or [])
