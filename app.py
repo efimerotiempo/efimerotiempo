@@ -496,7 +496,11 @@ PROJECT_LINK_LANES = {
     'acero al carbono',
     'inoxidable - aluminio',
     'seguimiento compras',
+    'producción',
+    'produccion',
 }
+
+COLUMN_ONE_PARENT_LANES = {'producción', 'produccion'}
 
 
 def active_workers(today=None):
@@ -688,10 +692,21 @@ def split_project_and_client(title):
 
 def build_project_links(compras_raw):
     children_by_parent = {}
+
+    def add_child(parent_id, child_title):
+        if not parent_id:
+            return
+        title = (child_title or '').strip()
+        if not title:
+            return
+        key = str(parent_id)
+        lst = children_by_parent.setdefault(key, [])
+        if title not in lst:
+            lst.append(title)
+
     for data in compras_raw.values():
         card = data['card']
         title = (card.get('title') or '').strip()
-        custom_id = get_card_custom_id(card)
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid) if cid else None
         links_info = card.get('links') or {}
@@ -699,27 +714,41 @@ def build_project_links(compras_raw):
         parents = links_info.get('parent') if isinstance(links_info, dict) else []
         if isinstance(parents, list) and title:
             for p in parents:
-                if isinstance(p, dict):
-                    pid = p.get('taskid') or p.get('cardId') or p.get('id')
-                    if pid:
-                        lst = children_by_parent.setdefault(str(pid), [])
-                        if title not in lst:
-                            lst.append(title)
+                if not isinstance(p, dict):
+                    continue
+                pid = p.get('taskid') or p.get('cardId') or p.get('id')
+                if not pid:
+                    continue
+                add_child(pid, title)
 
-        children = links_info.get('child') if isinstance(links_info, dict) else []
-        if isinstance(children, list) and cid:
-            for ch in children:
+        explicit_children = []
+        raw_children = card.get('children')
+        if isinstance(raw_children, list):
+            explicit_children.extend(raw_children)
+        if isinstance(links_info, dict):
+            link_children = links_info.get('child') or []
+            if isinstance(link_children, list):
+                explicit_children.extend(link_children)
+
+        if isinstance(explicit_children, list) and cid:
+            for ch in explicit_children:
+                child_title = ''
+                child_id = None
                 if isinstance(ch, dict):
-                    child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
                     child_title = (ch.get('title') or '').strip()
-                    if child_id and not child_title:
-                        fetched = _fetch_kanban_card(child_id)
-                        if fetched:
-                            child_title = (fetched.get('title') or '').strip()
-                    if child_id and child_title:
-                        lst = children_by_parent.setdefault(cid, [])
-                        if child_title not in lst:
-                            lst.append(child_title)
+                    child_id = (
+                        ch.get('taskid')
+                        or ch.get('cardId')
+                        or ch.get('id')
+                        or ch.get('card_id')
+                    )
+                elif isinstance(ch, str):
+                    child_title = ch.strip()
+                if child_id and not child_title:
+                    fetched = _fetch_kanban_card(child_id)
+                    if fetched:
+                        child_title = (fetched.get('title') or '').strip()
+                add_child(cid, child_title)
 
     links_table = []
     seen_links = set()
@@ -730,7 +759,7 @@ def build_project_links(compras_raw):
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         due = parse_kanban_date(card.get('deadline'))
-        lane_key = lane_name.lower()
+        lane_key = lane_name.casefold()
         custom_id = get_card_custom_id(card)
         base_display = title or project_name or ''
         if custom_id and base_display:
@@ -741,13 +770,13 @@ def build_project_links(compras_raw):
         else:
             display_title = base_display or custom_id
         if (
-            lane_key in PROJECT_LINK_LANES
+            lane_key in COLUMN_ONE_PARENT_LANES
             and column not in ['Ready to Archive', 'Hacer Albaran']
         ):
-            key = (project_name, client_name, title)
-            if key not in seen_links:
-                cid = card.get('taskid') or card.get('cardId') or card.get('id')
-                child_links = children_by_parent.get(str(cid), [])
+            cid = card.get('taskid') or card.get('cardId') or card.get('id')
+            cid = str(cid) if cid else None
+            if cid and cid not in seen_links:
+                child_links = children_by_parent.get(cid, [])
                 links_table.append({
                     'project': project_name,
                     'title': title,
@@ -757,7 +786,7 @@ def build_project_links(compras_raw):
                     'links': child_links,
                     'due': due.isoformat() if due else None
                 })
-                seen_links.add(key)
+                seen_links.add(cid)
     return links_table
 
 
@@ -889,8 +918,6 @@ def filter_project_links_by_titles(links_table, valid_titles):
         links = list(item.get('links') or [])
         if links:
             matches = [link for link in links if link in valid]
-            if not matches:
-                continue
         else:
             matches = []
         entry = dict(item)
