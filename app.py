@@ -501,12 +501,23 @@ def build_project_links(compras_raw):
     seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
 
+    card_index = {}
     for data in compras_raw.values():
         card = data['card']
+        if not isinstance(card, dict):
+            continue
+        card_id = card.get('taskid') or card.get('cardId') or card.get('id')
+        if card_id:
+            card_index[str(card_id)] = card
+
+    for data in compras_raw.values():
+        card = data['card']
+        if not isinstance(card, dict):
+            continue
         title = (card.get('title') or '').strip()
         custom_id = get_card_custom_id(card)
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-        cid = str(cid) if cid else None
+        cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
+        cid = str(cid_value) if cid_value else None
         links_info = card.get('links') or {}
 
         parents = []
@@ -544,6 +555,13 @@ def build_project_links(compras_raw):
                 if isinstance(ch, dict):
                     child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
                     child_title = (ch.get('title') or '').strip()
+                    child_key = str(child_id) if child_id else None
+                    if child_key:
+                        cached_card = card_index.get(child_key)
+                        if cached_card:
+                            canonical = (cached_card.get('title') or '').strip()
+                            if canonical:
+                                child_title = canonical
                     if child_id and not child_title:
                         fetched = _fetch_kanban_card(child_id)
                         if fetched:
