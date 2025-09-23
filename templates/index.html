@@ -366,10 +366,18 @@
 
   function parseISODate(value) {
     if (!value) return null;
-    const [datePart] = String(value).split('T');
-    const parts = datePart.split('-').map(Number);
-    if (parts.length !== 3 || parts.some(n => Number.isNaN(n))) return null;
-    const [year, month, day] = parts;
+    if (value instanceof Date) {
+      const time = value.getTime();
+      return Number.isNaN(time) ? null : new Date(time);
+    }
+    const text = String(value).trim();
+    if (!text || text === '0') return null;
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if ([year, month, day].some(n => Number.isNaN(n))) return null;
     const result = new Date(Date.UTC(year, month - 1, day));
     if (Number.isNaN(result.getTime())) return null;
     return result;
