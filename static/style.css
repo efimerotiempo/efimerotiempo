@@ -268,10 +268,26 @@ table.pedidos-calendar td.week-label {
     word-break: break-word;
 }
 
+.columna-1 .project-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.columna-1 .child-links {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+}
+
+.columna-1 .child-links .child-item + .child-item {
+    margin-top: 4px;
+}
+
 .columna-1 .link-title {
     display: block;
     margin-left: 10px;
-    margin-top: 4px;
+    margin-top: 0;
     cursor: pointer;
 }
 

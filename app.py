@@ -475,6 +475,7 @@ PEDIDOS_HIDDEN_COLUMNS = [
     "Material recepcionado",
     "Pdte. Verificación",
 ]
+PEDIDOS_HIDDEN_COLUMNS_LOWER = {c.lower() for c in PEDIDOS_HIDDEN_COLUMNS}
 
 PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tau',
@@ -832,7 +833,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
         if not column_allowed or lane_key != 'seguimiento compras':
             continue
 
-        if column in PEDIDOS_HIDDEN_COLUMNS:
+        if column.lower() in PEDIDOS_HIDDEN_COLUMNS_LOWER:
             continue
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
