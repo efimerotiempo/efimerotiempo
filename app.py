@@ -501,6 +501,7 @@ def split_project_and_client(title):
 def build_project_links(compras_raw):
     children_by_parent = {}
     children_norms_by_parent = {}
+    children_ids_by_parent = {}
     seguimiento_titles = {}
     candidate_cards = []
     excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
@@ -547,24 +548,31 @@ def build_project_links(compras_raw):
         normalized_child_title = normalize_key(title)
         if parents and normalized_child_title:
             for p in parents:
-                if isinstance(p, dict):
-                    pid = p.get('taskid') or p.get('cardId') or p.get('id')
-                    if pid:
-                        key = str(pid)
-                        lst = children_by_parent.setdefault(key, [])
-                        norms = children_norms_by_parent.setdefault(key, set())
-                        if normalized_child_title not in norms:
-                            lst.append(title)
-                            norms.add(normalized_child_title)
+                if not isinstance(p, dict):
+                    continue
+                pid = p.get('taskid') or p.get('cardId') or p.get('id')
+                if not pid:
+                    continue
+                key = str(pid)
+                lst = children_by_parent.setdefault(key, [])
+                norms = children_norms_by_parent.setdefault(key, set())
+                ids = children_ids_by_parent.setdefault(key, set())
+                if cid:
+                    if cid in ids:
+                        continue
+                    ids.add(cid)
+                elif normalized_child_title in norms:
+                    continue
+                lst.append((cid, title))
+                norms.add(normalized_child_title)
 
         if children and cid:
             for ch in children:
                 if isinstance(ch, dict):
                     child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
                     child_title = (ch.get('title') or '').strip()
-                    child_key = str(child_id) if child_id else None
-                    if child_key:
-                        cached_card = card_index.get(child_key)
+                    if child_id:
+                        cached_card = card_index.get(str(child_id))
                         if cached_card:
                             canonical = (cached_card.get('title') or '').strip()
                             if canonical:
@@ -574,11 +582,19 @@ def build_project_links(compras_raw):
                         if fetched:
                             child_title = (fetched.get('title') or '').strip()
                     norm_child = normalize_key(child_title)
-                    if child_id and norm_child:
+                    child_key = str(child_id) if child_id else None
+                    if (child_key or norm_child) and cid:
                         lst = children_by_parent.setdefault(cid, [])
                         norms = children_norms_by_parent.setdefault(cid, set())
-                        if norm_child not in norms:
-                            lst.append(child_title)
+                        ids = children_ids_by_parent.setdefault(cid, set())
+                        if child_key:
+                            if child_key in ids:
+                                continue
+                            ids.add(child_key)
+                        elif not norm_child or norm_child in norms:
+                            continue
+                        lst.append((child_key, child_title))
+                        if norm_child:
                             norms.add(norm_child)
 
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
@@ -586,10 +602,20 @@ def build_project_links(compras_raw):
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         column_key = normalize_key(column)
 
-        if title and normalized_child_title and lane_key == seguimiento_lane and column_key not in excluded_columns:
+        if (
+            title
+            and normalized_child_title
+            and lane_key == seguimiento_lane
+            and column_key not in excluded_columns
+        ):
             titles = seguimiento_titles.setdefault(normalized_child_title, [])
-            if title not in titles:
-                titles.append(title)
+            cid_entry = cid or ''
+            if cid_entry:
+                if not any(existing_id == cid_entry for existing_id, _ in titles):
+                    titles.append((cid_entry, title))
+            else:
+                if not any(existing_title == title for _, existing_title in titles):
+                    titles.append(('', title))
 
         if cid and lane_key in target_lanes and cid not in seen_candidates:
             project_name, client_name = split_project_and_client(title)
@@ -617,19 +643,42 @@ def build_project_links(compras_raw):
     for info in candidate_cards:
         child_links = children_by_parent.get(info['cid'], [])
         matches = []
+        match_ids = []
         seen_norms = set()
-        for child_title in child_links:
+        seen_ids = set()
+        for child_id, child_title in child_links:
             norm_child = normalize_key(child_title)
-            if not norm_child or norm_child in seen_norms:
+            child_id = child_id or ''
+            if not norm_child and not child_id:
                 continue
-            lane_titles = seguimiento_titles.get(norm_child)
+            if child_id and child_id in seen_ids:
+                continue
+            if norm_child and norm_child in seen_norms and not child_id:
+                continue
+            lane_titles = seguimiento_titles.get(norm_child) if norm_child else None
+            appended = False
             if lane_titles:
-                for lane_title in lane_titles:
-                    if lane_title not in matches:
-                        matches.append(lane_title)
-            elif child_title not in matches:
-                matches.append(child_title)
-            seen_norms.add(norm_child)
+                for lane_id, lane_title in lane_titles:
+                    lane_id = lane_id or ''
+                    if lane_id and lane_id in seen_ids:
+                        continue
+                    if lane_title in matches:
+                        continue
+                    matches.append(lane_title)
+                    match_ids.append(lane_id)
+                    if lane_id:
+                        seen_ids.add(lane_id)
+                    appended = True
+                if norm_child:
+                    seen_norms.add(norm_child)
+            if not appended:
+                if child_title not in matches:
+                    matches.append(child_title)
+                    match_ids.append(child_id)
+                    if child_id:
+                        seen_ids.add(child_id)
+                if norm_child:
+                    seen_norms.add(norm_child)
         if not matches:
             continue
         entry = {
@@ -640,6 +689,8 @@ def build_project_links(compras_raw):
             'custom_card_id': info['custom_card_id'],
             'links': matches,
         }
+        if any(match_ids):
+            entry['link_ids'] = match_ids
         if info['due']:
             entry['due'] = info['due'].isoformat()
         else:
@@ -766,29 +817,51 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
     return pedidos, unconfirmed, calendar_titles
 
 
-def filter_project_links_by_titles(links_table, valid_titles):
-    if not valid_titles:
+def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
+    if not links_table:
         return []
 
-    valid_norms = {normalize_key(title) for title in valid_titles if title}
-    if not valid_norms:
+    valid_norms = {normalize_key(title) for title in (valid_titles or []) if title}
+    valid_ids = {str(cid) for cid in (valid_ids or []) if cid}
+
+    if not valid_norms and not valid_ids:
         return []
 
     filtered = []
     for item in links_table:
+        link_titles = list(item.get('links') or [])
+        link_ids = list(item.get('link_ids') or [])
+        if len(link_ids) < len(link_titles):
+            link_ids.extend([''] * (len(link_titles) - len(link_ids)))
+
         matches = []
+        kept_ids = []
         seen_norms = set()
-        for link in item['links']:
-            norm_link = normalize_key(link)
-            if not norm_link or norm_link in seen_norms:
-                continue
-            if norm_link in valid_norms:
-                matches.append(link)
-                seen_norms.add(norm_link)
+        seen_ids = set()
+        for title, cid in zip(link_titles, link_ids):
+            text = title or ''
+            cid_str = str(cid).strip() if cid not in (None, '') else ''
+            norm_link = normalize_key(text)
+            allow = False
+            if cid_str and cid_str in valid_ids and cid_str not in seen_ids:
+                allow = True
+            elif norm_link and norm_link in valid_norms and norm_link not in seen_norms:
+                allow = True
+            if allow:
+                matches.append(text)
+                kept_ids.append(cid_str)
+                if norm_link:
+                    seen_norms.add(norm_link)
+                if cid_str:
+                    seen_ids.add(cid_str)
         if not matches:
             continue
         entry = dict(item)
         entry['links'] = matches
+        if any(kept_ids):
+            entry['link_ids'] = kept_ids
+        else:
+            entry.pop('link_ids', None)
         filtered.append(entry)
     return filtered
 
@@ -1845,7 +1918,19 @@ def calendar_pedidos():
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
-    links_table = filter_project_links_by_titles(raw_links, calendar_titles)
+    calendar_ids = set()
+    for entries in pedidos.values():
+        for item in entries:
+            cid = item.get('cid')
+            if cid:
+                calendar_ids.add(str(cid))
+    for item in unconfirmed:
+        cid = item.get('cid')
+        if cid:
+            calendar_ids.add(str(cid))
+    links_table = filter_project_links_by_titles(
+        raw_links, calendar_titles, calendar_ids
+    )
 
 
     # --- ARMAR CALENDARIO SEMANAL ---
@@ -1923,10 +2008,22 @@ def project_links_api():
     raw_links = attach_phase_starts(
         build_project_links(compras_raw), get_visible_projects()
     )
-    _, _, calendar_titles = compute_pedidos_entries(
+    pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
-    links = filter_project_links_by_titles(raw_links, calendar_titles)
+    calendar_ids = set()
+    for entries in pedidos.values():
+        for item in entries:
+            cid = item.get('cid')
+            if cid:
+                calendar_ids.add(str(cid))
+    for item in unconfirmed:
+        cid = item.get('cid')
+        if cid:
+            calendar_ids.add(str(cid))
+    links = filter_project_links_by_titles(
+        raw_links, calendar_titles, calendar_ids
+    )
     return jsonify(links)
 
 
