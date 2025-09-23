@@ -745,10 +745,21 @@ def filter_project_links_by_titles(links_table, valid_titles):
     if not valid_titles:
         return []
 
-    valid = set(valid_titles)
+    valid_norms = {normalize_key(title) for title in valid_titles if title}
+    if not valid_norms:
+        return []
+
     filtered = []
     for item in links_table:
-        matches = [link for link in item['links'] if link in valid]
+        matches = []
+        seen_norms = set()
+        for link in item['links']:
+            norm_link = normalize_key(link)
+            if not norm_link or norm_link in seen_norms:
+                continue
+            if norm_link in valid_norms:
+                matches.append(link)
+                seen_norms.add(norm_link)
         if not matches:
             continue
         entry = dict(item)
