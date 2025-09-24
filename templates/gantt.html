@@ -14,8 +14,8 @@
 </div>
 <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
-    <div id="gantt_summary_header" class="summary-header-row summary-grid"></div>
-    <div id="gantt_summary_body" class="summary-body"></div>
+    <div class="summary-header">Resumen</div>
+    <div id="gantt_summary_body"></div>
     <div id="summary-resizer" class="summary-resizer"></div>
   </div>
   <div id="gantt_main" class="gantt-main">
@@ -49,21 +49,13 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:600px; min-width:360px; overflow-x:auto; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; --summary-grid: 1fr; }
+  .gantt-summary { width:250px; overflow-x:hidden; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
-  .summary-grid { display:grid; grid-template-columns: var(--summary-grid); }
-  .summary-header-row { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; color:#000; z-index:2; }
-  .summary-header-row .summary-cell { font-weight:bold; line-height:1.2; padding:4px 8px; white-space:normal; }
-  .summary-body { position:relative; }
-  .summary-row { height:30px; border-bottom:1px solid #ddd; color:#000; }
-  .summary-row.project-row { font-weight:bold; }
-  .summary-cell { position:relative; padding:0 8px; display:flex; align-items:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box; }
-  .summary-text.project { cursor:pointer; }
-  .summary-text.phase { font-weight:normal; padding-left:16px; }
-  .summary-row.phase-row .summary-text { opacity:0.75; }
-  .summary-col-resizer { position:absolute; top:0; right:-3px; width:6px; cursor:col-resize; height:100%; user-select:none; }
-  .summary-col-resizer::after { content:''; position:absolute; top:0; bottom:0; left:2px; width:2px; background:rgba(0,0,0,0.2); }
+  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
+  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
+  .summary-row.project-row { cursor:pointer; font-weight:bold; }
+  .summary-row.phase-row { padding-left:16px; opacity:0.5; }
   .gantt-row.phase-row { opacity:0.5; }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
@@ -90,9 +82,9 @@
   .gantt-controls input { margin-left:8px; padding:4px; }
 </style>
 <script>
-let allProjects = {{ projects|safe }};
-let PROJECT_DATA = {{ project_data|tojson }};
-let START_DATA = {{ start_map|tojson }};
+const allProjects = {{ projects|safe }};
+const PROJECT_DATA = {{ project_data|tojson }};
+const START_DATA = {{ start_map|tojson }};
 const PHASES = {{ phases|tojson }};
 const STATIC_URL = "{{ url_for('static', filename='') }}";
 const MOVE_URL = "{{ url_for('move_phase') }}";
@@ -101,7 +93,6 @@ const START_URL = "{{ url_for('update_phase_start') }}";
 const SPLIT_URL = "{{ url_for('split_phase_route') }}";
 const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
 const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
-const GANTT_DATA_URL = "{{ url_for('gantt_data_api') }}";
 const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
 const DEADLINE_MSG = 'Fecha cliente soprepasada.';
 const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
@@ -109,7 +100,6 @@ const LAST_KEY = 'lastMoved';
 const SCROLL_KEY2 = 'scrollDate';
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
-const summaryHeaderRow = document.getElementById('gantt_summary_header');
 const summaryBody = document.getElementById('gantt_summary_body');
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
@@ -148,111 +138,6 @@ const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
 
-const SUMMARY_COLUMN_DEFS = [
-  { key: 'due_date', label: 'Fecha límite', defaultWidth: 140, minWidth: 100 },
-  { key: 'launch', label: 'LANZAMIENTO', defaultWidth: 140, minWidth: 100, fieldKeys: ['LANZAMIENTO'] },
-  { key: 'material', label: 'MATERIAL', defaultWidth: 140, minWidth: 100, fieldKeys: ['MATERIAL'] },
-  { key: 'caldereria', label: 'CALDERERÍA', defaultWidth: 140, minWidth: 100, fieldKeys: ['CALDERERIA', 'CALDERERÍA'] },
-  { key: 'mecanizado', label: 'MECANIZADO', defaultWidth: 140, minWidth: 100, fieldKeys: ['MECANIZADO'] },
-  { key: 'tratamiento', label: 'TRATAMIENTO', defaultWidth: 140, minWidth: 100, fieldKeys: ['TRATAMIENTO'] },
-  { key: 'pintar', label: 'PINTAR', defaultWidth: 140, minWidth: 100, fieldKeys: ['PINTAR', 'PINTADO'] },
-  { key: 'phase_start', label: 'Inicio fase planificada', defaultWidth: 170, minWidth: 120 },
-  { key: 'phase_end', label: 'Fin fase planificada', defaultWidth: 170, minWidth: 120 },
-  { key: 'summary', label: 'Resumen', defaultWidth: 260, minWidth: 180, isSummary: true },
-];
-
-const SUMMARY_COLUMN_STORAGE_KEY = 'ganttSummaryColumnWidths';
-
-function loadSummaryColumnWidths() {
-  let stored = {};
-  try {
-    const raw = localStorage.getItem(SUMMARY_COLUMN_STORAGE_KEY);
-    if (raw) stored = JSON.parse(raw) || {};
-  } catch (err) {
-    stored = {};
-  }
-  return SUMMARY_COLUMN_DEFS.map(col => {
-    const raw = stored[col.key];
-    const width = Number(raw);
-    if (Number.isFinite(width) && width > 0) {
-      return Math.max(col.minWidth || 60, width);
-    }
-    return col.defaultWidth;
-  });
-}
-
-let summaryColumnWidths = loadSummaryColumnWidths();
-
-function saveSummaryColumnWidths() {
-  const payload = {};
-  SUMMARY_COLUMN_DEFS.forEach((col, idx) => {
-    payload[col.key] = Math.max(col.minWidth || 60, Math.round(summaryColumnWidths[idx] || col.defaultWidth));
-  });
-  try {
-    localStorage.setItem(SUMMARY_COLUMN_STORAGE_KEY, JSON.stringify(payload));
-  } catch (err) {
-    console.warn('No se pudo guardar el tamaño de las columnas', err);
-  }
-}
-
-function updateSummaryGridColumns() {
-  if (!summaryContainer) return;
-  const template = summaryColumnWidths
-    .map((width, idx) => `${Math.max(SUMMARY_COLUMN_DEFS[idx].minWidth || 60, Math.round(width || SUMMARY_COLUMN_DEFS[idx].defaultWidth))}px`)
-    .join(' ');
-  summaryContainer.style.setProperty('--summary-grid', template);
-}
-
-function attachSummaryResizers() {
-  if (!summaryHeaderRow) return;
-  summaryHeaderRow.querySelectorAll('.summary-col-resizer').forEach(handle => {
-    handle.addEventListener('mousedown', ev => {
-      if (ev.button !== 0) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      const index = Number(handle.dataset.index);
-      if (!Number.isFinite(index)) return;
-      const startX = ev.clientX;
-      const startWidth = summaryColumnWidths[index] || SUMMARY_COLUMN_DEFS[index].defaultWidth;
-      const minWidth = SUMMARY_COLUMN_DEFS[index].minWidth || 60;
-      const onMouseMove = moveEv => {
-        const delta = moveEv.clientX - startX;
-        const next = Math.max(minWidth, startWidth + delta);
-        summaryColumnWidths[index] = next;
-        updateSummaryGridColumns();
-      };
-      const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        saveSummaryColumnWidths();
-      };
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = 'col-resize';
-    });
-  });
-}
-
-function buildSummaryHeader() {
-  if (!summaryHeaderRow) return;
-  summaryHeaderRow.innerHTML = '';
-  SUMMARY_COLUMN_DEFS.forEach((col, index) => {
-    const cell = document.createElement('div');
-    cell.className = 'summary-cell';
-    cell.textContent = col.label;
-    const handle = document.createElement('div');
-    handle.className = 'summary-col-resizer';
-    handle.dataset.index = index;
-    cell.appendChild(handle);
-    summaryHeaderRow.appendChild(cell);
-  });
-  attachSummaryResizers();
-}
-
-updateSummaryGridColumns();
-buildSummaryHeader();
-
 document.addEventListener('click', () => {
   if (popup) popup.style.display = 'none';
 });
@@ -286,66 +171,6 @@ function makeDraggable(el) {
 }
 
 document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
-
-function pickDateValue(...values) {
-  for (const value of values) {
-    const text = (value ?? '').toString().trim();
-    if (text && text !== '0') return text;
-  }
-  return '';
-}
-
-function getProjectInfo(row) {
-  if (!row || !row.project) return null;
-  const pid = row.project.id;
-  if (!pid) return null;
-  return (PROJECT_DATA && PROJECT_DATA[pid]) || null;
-}
-
-function getKanbanFieldsMap(info) {
-  if (!info) return {};
-  if (!info._kanbanFieldMap) {
-    const map = {};
-    const fields = info.kanban_display_fields || {};
-    Object.entries(fields).forEach(([label, value]) => {
-      const norm = normalizeColumnKey(label);
-      if (!norm || norm in map) return;
-      map[norm] = value;
-    });
-    info._kanbanFieldMap = map;
-  }
-  return info._kanbanFieldMap;
-}
-
-function getKanbanDateValue(info, labels) {
-  if (!info || !Array.isArray(labels)) return '';
-  const map = getKanbanFieldsMap(info);
-  for (const label of labels) {
-    const norm = normalizeColumnKey(label);
-    if (!norm) continue;
-    const raw = map[norm];
-    const text = (raw ?? '').toString().trim();
-    if (text && text !== '0') return text;
-  }
-  return '';
-}
-
-function formatDisplayDate(value) {
-  const text = (value ?? '').toString().trim();
-  if (!text || text === '0') return '';
-  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
-  const slash = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (slash) return `${slash[1]}/${slash[2]}/${slash[3]}`;
-  const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) {
-    const day = String(parsed.getUTCDate()).padStart(2, '0');
-    const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
-    const year = parsed.getUTCFullYear();
-    return `${day}/${month}/${year}`;
-  }
-  return text;
-}
 
 function showDeadline(text = DEADLINE_MSG, after = null) {
   if (!deadlineModal || !deadlineText || !deadlineClose) return;
@@ -709,7 +534,6 @@ function render(){
   summaryBody.innerHTML = '';
   body.innerHTML = '';
   header.innerHTML = '';
-  updateSummaryGridColumns();
   if(!projects.length){return;}
   const dayMs = DAY_MS;
   const startOfDay = d => {
@@ -779,43 +603,13 @@ function render(){
 
   rows.forEach(r=>{
     const summaryRow = document.createElement('div');
-    summaryRow.className = 'summary-row summary-grid ' + (r.type==='project'?'project-row':'phase-row');
-    const info = getProjectInfo(r);
-    const pid = r.project.id;
-    const startMap = (START_DATA && START_DATA[pid]) || null;
-    SUMMARY_COLUMN_DEFS.forEach(col => {
-      const cell = document.createElement('div');
-      cell.className = 'summary-cell';
-      let value = '';
-      if (col.isSummary) {
-        cell.classList.add('summary-text');
-        if (r.type === 'project') {
-          cell.classList.add('project');
-          value = `${r.project.name}${r.project.client ? ' - ' + r.project.client : ''}`;
-          cell.addEventListener('click', () => toggleProject(r.project.id));
-        } else {
-          cell.classList.add('phase');
-          value = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
-        }
-      } else if (col.key === 'due_date') {
-        value = formatDisplayDate(pickDateValue(r.project.due_date, info && info.due_date, r.project.deadline_start, info && info.deadline_start));
-      } else if (col.key === 'phase_start') {
-        if (r.type === 'phase') {
-          const startValue = pickDateValue(startMap && startMap[r.phase.name], r.phase.start);
-          value = formatDisplayDate(startValue);
-        }
-      } else if (col.key === 'phase_end') {
-        if (r.type === 'phase') {
-          value = formatDisplayDate(pickDateValue(r.phase.end));
-        }
-      } else if (col.fieldKeys) {
-        value = formatDisplayDate(getKanbanDateValue(info, col.fieldKeys));
-      }
-      cell.textContent = value || '';
-      if (value) cell.title = value;
-      else cell.removeAttribute('title');
-      summaryRow.appendChild(cell);
-    });
+    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
+    if(r.type==='project'){
+      summaryRow.textContent = `${r.project.name} - ${r.project.client}`;
+      summaryRow.onclick = ()=>toggleProject(r.project.id);
+    } else {
+      summaryRow.textContent = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
+    }
     summaryBody.appendChild(summaryRow);
 
     const rowDiv = document.createElement('div');
@@ -953,32 +747,6 @@ function syncScroll(source, target){
 
 main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
 summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
-
-if (window.EventSource) {
-  const ganttSource = new EventSource("{{ url_for('event_stream') }}");
-  let ganttRefreshTimer = null;
-  const queueGanttReload = () => {
-    if (ganttRefreshTimer) return;
-    ganttRefreshTimer = setTimeout(() => {
-      ganttRefreshTimer = null;
-      fetch(GANTT_DATA_URL, { credentials: 'same-origin' })
-        .then(resp => {
-          if (!resp.ok) throw new Error('No se pudo actualizar la vista Gantt');
-          return resp.json();
-        })
-        .then(data => {
-          allProjects = Array.isArray(data.projects) ? data.projects : [];
-          PROJECT_DATA = data.project_data || {};
-          START_DATA = data.start_map || {};
-          applyFilters(false);
-        })
-        .catch(err => console.error('Error al actualizar datos del Gantt', err));
-    }, 750);
-  };
-  ganttSource.onmessage = queueGanttReload;
-  window.addEventListener('beforeunload', () => ganttSource.close());
-}
-
 applyFilters(false);
 </script>
 {% endblock %}

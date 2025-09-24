@@ -2157,37 +2157,8 @@ def project_links_api():
     return jsonify(links)
 
 
-def _pick_deadline_start(project):
-    candidates = [
-        project.get('due_date'),
-        project.get('client_date'),
-        project.get('client_due_date'),
-        project.get('customer_date'),
-    ]
-    for value in candidates:
-        if not value:
-            continue
-        text = str(value).strip()
-        if not text:
-            continue
-        try:
-            return date.fromisoformat(text).isoformat()
-        except ValueError:
-            parsed = parse_input_date(text)
-            if parsed:
-                return parsed.isoformat()
-    display_fields = project.get('kanban_display_fields') or {}
-    for label in ('Fecha Cliente', 'Fecha cliente'):
-        raw = display_fields.get(label)
-        if not raw:
-            continue
-        parsed = parse_input_date(str(raw).strip())
-        if parsed:
-            return parsed.isoformat()
-    return ''
-
-
-def build_gantt_data():
+@app.route('/gantt')
+def gantt_view():
     projects = get_visible_projects()
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
@@ -2197,6 +2168,35 @@ def build_gantt_data():
         for day, tasks in days.items():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
+
+    def _pick_deadline_start(project):
+        candidates = [
+            project.get('due_date'),
+            project.get('client_date'),
+            project.get('client_due_date'),
+            project.get('customer_date'),
+        ]
+        for value in candidates:
+            if not value:
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            try:
+                return date.fromisoformat(text).isoformat()
+            except ValueError:
+                parsed = parse_input_date(text)
+                if parsed:
+                    return parsed.isoformat()
+        display_fields = project.get('kanban_display_fields') or {}
+        for label in ('Fecha Cliente', 'Fecha cliente'):
+            raw = display_fields.get(label)
+            if not raw:
+                continue
+            parsed = parse_input_date(str(raw).strip())
+            if parsed:
+                return parsed.isoformat()
+        return ''
 
     project_map = {}
     for p in projects:
@@ -2249,31 +2249,12 @@ def build_gantt_data():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
-    return gantt_projects, project_map, start_map
-
-
-@app.route('/gantt')
-def gantt_view():
-    gantt_projects, project_map, start_map = build_gantt_data()
     return render_template(
         'gantt.html',
         projects=json.dumps(gantt_projects),
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
-    )
-
-
-@app.route('/api/gantt')
-def gantt_data_api():
-    gantt_projects, project_map, start_map = build_gantt_data()
-    return jsonify(
-        {
-            'projects': gantt_projects,
-            'project_data': project_map,
-            'start_map': start_map,
-            'phases': PHASE_ORDER,
-        }
     )
 
 @app.route('/projects')
