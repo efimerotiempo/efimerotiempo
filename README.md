@@ -20,7 +20,7 @@ coloca automáticamente en el día actual y, si recargas la página, recuerda la
 posición en la que estabas. Puedes filtrar por nombre de proyecto y cliente desde
 los dos cuadros de búsqueda.
 
-Debajo del botón **Reportar bug** aparece otro llamado **Editar jornada laboral**.
+Debajo del botón **HOY** aparece otro llamado **Editar jornada laboral**.
 Al pulsarlo se despliega una fila con un desplegable por día. Por defecto la fila
 está oculta. Puedes elegir entre 1 y 9 horas de jornada (8 por defecto). Al
 reducirlas, las horas que no quepan se trasladan al siguiente día libre sin
@@ -84,20 +84,6 @@ En la vista **Completo**, al pinchar en una fase no solo se destacan en el calen
 las tareas del mismo proyecto, sino que también se marca su fila correspondiente en la
 tabla de proyectos mientras el resto aparece atenuado.
 Además, cada conflicto que aparece en la lista muestra su texto en un cuadro centrado hasta que se cierre.
-Por encima de la lista de **Conflictos** aparece un gran botón amarillo
-**Reportar bug**. Es unas diez veces más grande que un botón normal para que
-resulte muy visible. Al pulsarlo se abre un formulario donde debes indicar quién
-registra la incidencia, en qué pestaña ocurrió, con qué frecuencia sucede y una
-descripción detallada del problema. Todos los campos son obligatorios. Al
-enviar el formulario se asigna un número de BUG y se intenta enviar un correo
-con un resumen a `irodriguez@caldereria-cpk.es`. Puedes configurar el servidor
-SMTP mediante las variables de entorno `BUG_SMTP_HOST`, `BUG_SMTP_PORT`,
-`BUG_SMTP_USER`, `BUG_SMTP_PASS` y `BUG_SMTP_SSL` cuando sea necesario.
-
-Todas las incidencias se almacenan también en un archivo y pueden consultarse
-desde la pestaña **Bugs**, que muestra una tabla con su número, fecha,
-usuario, pestaña y detalle.
-
 Al crear nuevos proyectos, todas las fases se asignan por defecto a **Sin
 planificar**. Desde la tabla de proyectos o el calendario puedes moverlas a
 cualquier trabajador sin restricciones de habilidades; el planificador solo
