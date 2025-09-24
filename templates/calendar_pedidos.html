@@ -805,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const source = new EventSource("{{ url_for('event_stream') }}");
+  const source = new EventSource("{{ url_for('event_stream') }}", { withCredentials: true });
   source.onmessage = () => {
     fetch("{{ url_for('project_links_api') }}")
       .then(r => r.json())

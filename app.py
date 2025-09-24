@@ -95,7 +95,11 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.path.startswith("/static") or request.path.startswith("/kanbanize-webhook"):
+    if (
+        request.path.startswith("/static")
+        or request.path.startswith("/kanbanize-webhook")
+        or request.path == "/events"
+    ):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):

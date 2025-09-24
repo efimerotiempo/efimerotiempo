@@ -958,7 +958,7 @@ function refreshGanttData(){
 }
 
 try {
-  const source = new EventSource("{{ url_for('event_stream') }}");
+  const source = new EventSource("{{ url_for('event_stream') }}", { withCredentials: true });
   source.onmessage = evt => {
     if(!evt || !evt.data){
       return;
