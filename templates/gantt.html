@@ -14,8 +14,8 @@
 </div>
 <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
-    <div class="summary-header">Resumen</div>
-    <div id="gantt_summary_body"></div>
+    <div id="summary_header_row" class="summary-header-row"></div>
+    <div id="gantt_summary_body" class="summary-body"></div>
     <div id="summary-resizer" class="summary-resizer"></div>
   </div>
   <div id="gantt_main" class="gantt-main">
@@ -49,13 +49,20 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:250px; overflow-x:hidden; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; }
+  .gantt-summary { width:450px; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
-  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
-  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
-  .summary-row.project-row { cursor:pointer; font-weight:bold; }
-  .summary-row.phase-row { padding-left:16px; opacity:0.5; }
+  .summary-header-row { position:sticky; top:0; display:flex; background:#fff; border-bottom:1px solid #ddd; z-index:2; }
+  .summary-header-cell { display:flex; align-items:center; font-weight:bold; color:#000; padding:0 8px 0 4px; box-sizing:border-box; border-right:1px solid #eee; position:relative; height:30px; line-height:30px; white-space:nowrap; overflow:hidden; }
+  .summary-body { position:relative; }
+  .summary-row { display:flex; height:30px; border-bottom:1px solid #ddd; color:#000; }
+  .summary-cell { display:flex; align-items:center; padding:0 8px 0 4px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-right:1px solid #f0f0f0; }
+  .summary-cell[data-column='summary'] { font-weight:bold; cursor:pointer; }
+  .summary-row.phase-row .summary-cell[data-column='summary'] { font-weight:normal; cursor:default; padding-left:20px; }
+  .summary-row.phase-row .summary-cell { font-weight:normal; }
+  .summary-cell[data-column='summary'].clickable { cursor:pointer; }
+  .column-resizer { position:absolute; right:0; top:0; bottom:0; width:6px; cursor:col-resize; }
+  .column-resizer::after { content:''; position:absolute; left:2px; top:25%; bottom:25%; width:2px; background:#bbb; }
   .gantt-row.phase-row { opacity:0.5; }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
@@ -82,9 +89,9 @@
   .gantt-controls input { margin-left:8px; padding:4px; }
 </style>
 <script>
-const allProjects = {{ projects|safe }};
-const PROJECT_DATA = {{ project_data|tojson }};
-const START_DATA = {{ start_map|tojson }};
+let allProjects = {{ projects|safe }};
+let PROJECT_DATA = {{ project_data|tojson }};
+let START_DATA = {{ start_map|tojson }};
 const PHASES = {{ phases|tojson }};
 const STATIC_URL = "{{ url_for('static', filename='') }}";
 const MOVE_URL = "{{ url_for('move_phase') }}";
@@ -98,8 +105,29 @@ const DEADLINE_MSG = 'Fecha cliente soprepasada.';
 const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
 const LAST_KEY = 'lastMoved';
 const SCROLL_KEY2 = 'scrollDate';
+const GANTT_DATA_URL = "{{ url_for('gantt_data_api') }}";
+const SUMMARY_COLUMNS = [
+  { id: 'summary', label: 'Resumen', defaultWidth: 260 },
+  { id: 'due', label: 'Fecha límite', defaultWidth: 150 },
+  { id: 'lanzamiento', label: 'LANZAMIENTO', defaultWidth: 150 },
+  { id: 'material', label: 'MATERIAL', defaultWidth: 150 },
+  { id: 'caldereria', label: 'CALDERERÍA', defaultWidth: 150 },
+  { id: 'mecanizado', label: 'MECANIZADO', defaultWidth: 150 },
+  { id: 'tratamiento', label: 'TRATAMIENTO', defaultWidth: 150 },
+  { id: 'pintar', label: 'PINTAR', defaultWidth: 150 },
+  { id: 'phase_start', label: 'Fecha de inicio planificada de la fase', defaultWidth: 210 },
+  { id: 'phase_end', label: 'Fecha fin planificada de la fase', defaultWidth: 210 },
+];
+const COLUMN_WIDTHS_KEY = 'ganttSummaryColumns';
+let columnWidths = {};
+try {
+  columnWidths = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY) || '{}') || {};
+} catch (err) {
+  columnWidths = {};
+}
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
+const summaryHeaderRow = document.getElementById('summary_header_row');
 const summaryBody = document.getElementById('gantt_summary_body');
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
@@ -143,6 +171,142 @@ document.addEventListener('click', () => {
 });
 if (popup) {
   popup.addEventListener('click', (e) => e.stopPropagation());
+}
+
+function getColumnWidth(columnId) {
+  const config = SUMMARY_COLUMNS.find(c => c.id === columnId);
+  const stored = columnWidths[columnId];
+  const width = Number.isFinite(stored) ? stored : (config ? config.defaultWidth : 150);
+  return Math.max(80, width);
+}
+
+function applyColumnWidth(columnId) {
+  const width = getColumnWidth(columnId);
+  const selector = `[data-column="${columnId}"]`;
+  summaryContainer.querySelectorAll(selector).forEach(cell => {
+    cell.style.width = width + 'px';
+    cell.style.flex = `0 0 ${width}px`;
+  });
+}
+
+function applyAllColumnWidths() {
+  SUMMARY_COLUMNS.forEach(col => applyColumnWidth(col.id));
+}
+
+function setColumnWidth(columnId, width, persist = true) {
+  columnWidths[columnId] = Math.max(80, width);
+  applyColumnWidth(columnId);
+  if (persist) {
+    try {
+      localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(columnWidths));
+    } catch (err) {
+      // ignore storage issues
+    }
+  }
+}
+
+function initColumnResize(event, columnId) {
+  event.preventDefault();
+  event.stopPropagation();
+  const startX = event.clientX;
+  const startWidth = getColumnWidth(columnId);
+  const onMouseMove = ev => {
+    const delta = ev.clientX - startX;
+    setColumnWidth(columnId, startWidth + delta, false);
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setColumnWidth(columnId, getColumnWidth(columnId), true);
+  };
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+function buildSummaryHeader() {
+  if (!summaryHeaderRow) return;
+  summaryHeaderRow.innerHTML = '';
+  SUMMARY_COLUMNS.forEach(col => {
+    const headerCell = document.createElement('div');
+    headerCell.className = 'summary-header-cell';
+    headerCell.dataset.column = col.id;
+    headerCell.textContent = col.label;
+    const resizer = document.createElement('div');
+    resizer.className = 'column-resizer';
+    resizer.addEventListener('mousedown', ev => initColumnResize(ev, col.id));
+    headerCell.appendChild(resizer);
+    summaryHeaderRow.appendChild(headerCell);
+  });
+  applyAllColumnWidths();
+}
+
+function extractKanbanValue(info, labels) {
+  if (!info) return '';
+  const fields = info.kanban_display_fields || {};
+  const options = Array.isArray(labels) ? labels : [labels];
+  for (const label of options) {
+    const value = fields[label];
+    if (value === null || value === undefined) continue;
+    const text = `${value}`.trim();
+    if (text) {
+      return text;
+    }
+  }
+  return '';
+}
+
+function formatKanbanDateValue(value) {
+  if (value === null || value === undefined) return '';
+  const text = `${value}`.trim();
+  if (!text) return '';
+  const iso = madridDateISO(text);
+  return iso || text;
+}
+
+function summaryValueFor(columnId, row) {
+  const info = PROJECT_DATA[row.project.id] || {};
+  switch (columnId) {
+    case 'summary': {
+      if (row.type === 'project') {
+        const client = row.project.client ? ` - ${row.project.client}` : '';
+        return `${row.project.name}${client}`;
+      }
+      const worker = row.phase.worker ? ` - ${row.phase.worker}` : '';
+      return `${row.phase.name}${worker}`;
+    }
+    case 'due': {
+      const kanbanValue = extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']);
+      const base = kanbanValue || row.project.deadline_start || row.project.due_date || extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente']);
+      return formatKanbanDateValue(base);
+    }
+    case 'lanzamiento':
+      return formatKanbanDateValue(extractKanbanValue(info, 'LANZAMIENTO'));
+    case 'material':
+      return formatKanbanDateValue(extractKanbanValue(info, 'MATERIAL'));
+    case 'caldereria':
+      return formatKanbanDateValue(extractKanbanValue(info, ['CALDERERÍA', 'CALDERERIA']));
+    case 'mecanizado':
+      return formatKanbanDateValue(extractKanbanValue(info, 'MECANIZADO'));
+    case 'tratamiento':
+      return formatKanbanDateValue(extractKanbanValue(info, 'TRATAMIENTO'));
+    case 'pintar':
+      return formatKanbanDateValue(extractKanbanValue(info, ['PINTAR', 'PINTADO']));
+    case 'phase_start': {
+      if (row.type === 'phase') {
+        const planned = (START_DATA[row.project.id] && START_DATA[row.project.id][row.phase.name]) || row.phase.start;
+        return formatKanbanDateValue(planned);
+      }
+      return formatKanbanDateValue(row.project.start);
+    }
+    case 'phase_end': {
+      if (row.type === 'phase') {
+        return formatKanbanDateValue(row.phase.end);
+      }
+      return formatKanbanDateValue(row.project.end);
+    }
+    default:
+      return '';
+  }
 }
 
 function makeDraggable(el) {
@@ -534,6 +698,7 @@ function render(){
   summaryBody.innerHTML = '';
   body.innerHTML = '';
   header.innerHTML = '';
+  buildSummaryHeader();
   if(!projects.length){return;}
   const dayMs = DAY_MS;
   const startOfDay = d => {
@@ -604,12 +769,18 @@ function render(){
   rows.forEach(r=>{
     const summaryRow = document.createElement('div');
     summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
-    if(r.type==='project'){
-      summaryRow.textContent = `${r.project.name} - ${r.project.client}`;
-      summaryRow.onclick = ()=>toggleProject(r.project.id);
-    } else {
-      summaryRow.textContent = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
-    }
+    SUMMARY_COLUMNS.forEach(col => {
+      const cell = document.createElement('div');
+      cell.className = 'summary-cell summary-' + col.id;
+      cell.dataset.column = col.id;
+      const value = summaryValueFor(col.id, r) || '';
+      cell.textContent = value;
+      if(col.id === 'summary' && r.type==='project'){
+        cell.classList.add('clickable');
+        cell.addEventListener('click', ()=>toggleProject(r.project.id));
+      }
+      summaryRow.appendChild(cell);
+    });
     summaryBody.appendChild(summaryRow);
 
     const rowDiv = document.createElement('div');
@@ -710,9 +881,11 @@ function render(){
     body.appendChild(rowDiv);
   });
 
+  applyAllColumnWidths();
+
   const totalHeight = rows.length * BAR_HEIGHT;
   summaryBody.style.height = totalHeight + 'px';
-    body.style.height = totalHeight + 'px';
+  body.style.height = totalHeight + 'px';
   if(initialScroll){ scrollToToday(); initialScroll=false; }
 }
 
@@ -747,6 +920,40 @@ function syncScroll(source, target){
 
 main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
 summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
+
+function refreshGanttData(){
+  fetch(GANTT_DATA_URL, { credentials: 'same-origin' })
+    .then(resp => resp.ok ? resp.json() : null)
+    .then(data => {
+      if(!data) return;
+      allProjects = Array.isArray(data.projects) ? data.projects : [];
+      PROJECT_DATA = data.project_map || {};
+      START_DATA = data.start_map || {};
+      applyFilters(false);
+    })
+    .catch(err => console.error('Error actualizando Gantt', err));
+}
+
+try {
+  const source = new EventSource("{{ url_for('event_stream') }}");
+  source.onmessage = evt => {
+    if(!evt || !evt.data){
+      return;
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(evt.data);
+    } catch (err) {
+      payload = null;
+    }
+    if(!payload || !payload.type || payload.type === 'kanban_update'){
+      refreshGanttData();
+    }
+  };
+} catch (err) {
+  console.error('Error iniciando las actualizaciones en tiempo real', err);
+}
+
 applyFilters(false);
 </script>
 {% endblock %}
