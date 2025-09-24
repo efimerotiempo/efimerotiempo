@@ -31,9 +31,6 @@
     </form>
     <button id="today-btn">HOY</button>
 </div>
-<div class="bug-btn-container">
-    <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
-</div>
 <div class="hours-btn-container">
     <button id="hours-btn" type="button">Editar jornada laboral</button>
 </div>
@@ -220,44 +217,6 @@
         <div class="material-title">SIN MATERIAL:</div>
         <ul id="material-list" class="material-list"></ul>
         <button id="material-close" type="button">Cerrar</button>
-    </div>
-</div>
-<div id="bug-modal" class="modal">
-    <div class="modal-content">
-        <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
-            <label>Quién lo registra:
-                <select name="user" required>
-                    <option value="Unai">Unai</option>
-                    <option value="Pilar">Pilar</option>
-                    <option value="Ane">Ane</option>
-                    <option value="Irene">Irene</option>
-                </select>
-            </label><br>
-            <label>Pestaña:
-                <select name="tab" required>
-                    <option value="Completo">Completo</option>
-                    <option value="Calendario" selected>Calendario</option>
-                    <option value="Proyectos">Proyectos</option>
-                    <option value="Notas">Notas</option>
-                    <option value="Vacaciones">Vacaciones</option>
-                </select>
-            </label><br>
-            <label>Frecuencia:
-                <select name="freq" required>
-                    <option>Primera vez</option>
-                    <option>Un par</option>
-                    <option>Bastante a menudo</option>
-                    <option>Siempre. Estoy hasta los cojones.</option>
-                </select>
-            </label><br>
-            <label>Descripción:<br>
-                <textarea name="detail" rows="5" cols="40" required></textarea>
-            </label><br>
-            <div style="text-align:right;">
-                <button type="submit">Enviar</button>
-                <button type="button" id="bug-cancel">Cancelar</button>
-            </div>
-        </form>
     </div>
 </div>
 <div id="obs-modal" class="modal">
@@ -1376,18 +1335,10 @@ let dragInfo = null;
       btn.innerHTML = hidden ? '&#8722;' : '&#43;';
     });
   });
-  const bugBtn = document.getElementById('bug-btn');
-  const bugModal = document.getElementById('bug-modal');
-  const bugCancel = document.getElementById('bug-cancel');
   const obsModal = document.getElementById('obs-modal');
   const obsText = document.getElementById('obs-text');
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
-  if (bugBtn && bugModal) {
-    bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
-    bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
-    bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
-  }
   if (obsModal) {
     obsCancel.addEventListener('click', () => { obsModal.style.display = 'none'; });
     obsModal.addEventListener('click', e => { if (e.target === obsModal) obsModal.style.display = 'none'; });
@@ -1403,12 +1354,13 @@ let dragInfo = null;
     });
   }
 const CONFLICTS = {{ conflicts|tojson }};
+const DEADLINE_CONFLICTS = {{ deadline_conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
 const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = CONFLICTS.filter(
-  c => !seen[c.key] && c.message !== 'No se cumple la fecha de entrega'
+const NEW_CONFLICTS = [...CONFLICTS, ...DEADLINE_CONFLICTS].filter(
+  c => !seen[c.key]
 );
 let conflictIndex = 0;
 function showNextConflict() {
@@ -1437,7 +1389,6 @@ document.addEventListener('keydown', e => {
     if (conflictModal.style.display === 'block') conflictClose.click();
     if (splitModal.style.display === 'block') splitCancel.click();
     if (blockModal.style.display === 'block') blockCancel.click();
-    if (bugModal.style.display === 'block') bugCancel.click();
     if (obsModal && obsModal.style.display === 'block') obsCancel.click();
   }
 });

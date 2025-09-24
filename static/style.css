@@ -393,19 +393,6 @@ tr.collapsed td:not(:first-child) { display: none; }
     padding: 10px 20px;
 }
 
-.bug-btn-container {
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.bug-btn {
-    font-size: 1.5em;
-    padding: 10px 20px;
-    background: yellow;
-    border: 2px solid #333;
-    cursor: pointer;
-}
-
 .bugs-table thead th {
     position: sticky;
     top: 0;

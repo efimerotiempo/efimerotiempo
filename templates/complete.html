@@ -45,9 +45,6 @@
             </table>
         </form>
     </div>
-    <div class="bug-btn-container">
-        <button id="bug-btn" class="bug-btn" type="button">Reportar bug</button>
-    </div>
     <div class="hours-btn-container">
         <button id="hours-btn" type="button">Editar jornada laboral</button>
     </div>
@@ -262,42 +259,6 @@
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
-        <div id="bug-modal" class="modal">
-            <div class="modal-content">
-                <form id="bug-form" method="post" action="{{ url_for('report_bug') }}">
-                    <label>Quién lo registra:
-                        <select name="user" required>
-                            <option value="Unai">Unai</option>
-                            <option value="Pilar">Pilar</option>
-                            <option value="Ane">Ane</option>
-                            <option value="Irene">Irene</option>
-                        </select>
-                    </label><br>
-                    <label>Pestaña:
-                        <select name="tab" required>
-                            <option value="Completo">Completo</option>
-                            <option value="Calendario">Calendario</option>
-                            <option value="Proyectos">Proyectos</option>
-                            <option value="Notas">Notas</option>
-                            <option value="Vacaciones">Vacaciones</option>
-                        </select>
-                    </label><br>
-                    <label>Frecuencia:
-                        <select name="freq" required>
-                            <option>Primera vez</option>
-                            <option>Un par</option>
-                            <option>Bastante a menudo</option>
-                            <option>Siempre. Estoy hasta los cojones.</option>
-                        </select>
-                    </label><br>
-                    <label>Detalle:<br>
-                        <textarea name="detail" rows="4" required></textarea>
-                    </label><br>
-                    <button type="submit">Enviar</button>
-                </form>
-                <button type="button" id="bug-cancel">Cerrar</button>
-            </div>
-        </div>
         <div id="obs-modal" class="modal">
             <div class="modal-content">
                 <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
@@ -1253,18 +1214,10 @@ let dragInfo = null;
       projToggle.innerHTML = projDiv.classList.contains('collapsed') ? '&#43;' : '&#8722;';
     });
   }
-  const bugBtn = document.getElementById('bug-btn');
-  const bugModal = document.getElementById('bug-modal');
-  const bugCancel = document.getElementById('bug-cancel');
   const obsModal = document.getElementById('obs-modal');
   const obsText = document.getElementById('obs-text');
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
-  if (bugBtn && bugModal) {
-    bugBtn.addEventListener('click', () => { bugModal.style.display = 'block'; });
-    bugCancel.addEventListener('click', () => { bugModal.style.display = 'none'; });
-    bugModal.addEventListener('click', (e) => { if (e.target === bugModal) bugModal.style.display = 'none'; });
-  }
   if (obsModal) {
     obsCancel.addEventListener('click', () => { obsModal.style.display = 'none'; });
     obsModal.addEventListener('click', e => { if (e.target === obsModal) obsModal.style.display = 'none'; });
@@ -1324,13 +1277,14 @@ let dragInfo = null;
       });
     });
   });
-  const CONFLICTS = {{ conflicts|tojson }};
+const CONFLICTS = {{ conflicts|tojson }};
+const DEADLINE_CONFLICTS = {{ deadline_conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
 const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = CONFLICTS.filter(
-  c => !seen[c.key] && c.message !== 'No se cumple la fecha de entrega'
+const NEW_CONFLICTS = [...CONFLICTS, ...DEADLINE_CONFLICTS].filter(
+  c => !seen[c.key]
 );
 let conflictIndex = 0;
 function showNextConflict() {
@@ -1359,7 +1313,6 @@ document.addEventListener('keydown', e => {
     if (conflictModal.style.display === 'block') conflictClose.click();
     if (splitModal.style.display === 'block') splitCancel.click();
     if (blockModal.style.display === 'block') blockCancel.click();
-    if (bugModal.style.display === 'block') bugCancel.click();
     if (obsModal && obsModal.style.display === 'block') obsCancel.click();
   }
 });

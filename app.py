@@ -6,9 +6,7 @@ import os
 import copy
 import json
 import re
-import smtplib
 import unicodedata
-from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
 import urllib.parse
@@ -73,6 +71,7 @@ HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
+DEADLINE_CONFLICT_MESSAGE = 'No se cumple la fecha de entrega'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -132,7 +131,6 @@ MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
-BUGS_FILE = os.path.join(DATA_DIR, 'bugs.json')
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
@@ -183,6 +181,12 @@ def get_card_custom_id(card):
 def broadcast_event(data):
     for q in list(SSE_CLIENTS):
         q.put(data)
+
+
+def split_deadline_conflicts(conflicts):
+    deadline = [c for c in conflicts if c.get('message') == DEADLINE_CONFLICT_MESSAGE]
+    others = [c for c in conflicts if c.get('message') != DEADLINE_CONFLICT_MESSAGE]
+    return others, deadline
 
 
 @app.route('/events')
@@ -396,19 +400,6 @@ def format_dd_mm(value):
     if isinstance(value, date):
         return f"{value.day:02d}-{value.month:02d}"
     return ''
-
-
-def load_bugs():
-    if os.path.exists(BUGS_FILE):
-        with open(BUGS_FILE, 'r') as f:
-            return json.load(f)
-    return []
-
-
-def save_bugs(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(BUGS_FILE, 'w') as f:
-        json.dump(data, f)
 
 
 def load_kanban_cards():
@@ -1128,42 +1119,6 @@ def _parse_kanban_payload(req):
     if isinstance(data, dict):
         return data
     return None
-
-
-def send_bug_report(bug):
-    msg = EmailMessage()
-    msg['Subject'] = f"BUG {bug['id']} - {bug['tab']}"
-    sender = os.environ.get('BUG_SENDER', 'planificador@example.com')
-    msg['From'] = sender
-    msg['To'] = 'irodriguez@caldereria-cpk.es'
-    body = (
-        f"Registrado por: {bug['user']}\n"
-        f"Pesta\u00f1a: {bug['tab']}\n"
-        f"Frecuencia: {bug['freq']}\n\n"
-        f"{bug['detail']}\n"
-        f"Fecha: {bug['date']}"
-    )
-    msg.set_content(body)
-    host = os.environ.get('BUG_SMTP_HOST', 'localhost')
-    port = int(os.environ.get('BUG_SMTP_PORT', 25))
-    user = os.environ.get('BUG_SMTP_USER')
-    password = os.environ.get('BUG_SMTP_PASS')
-    use_ssl = os.environ.get('BUG_SMTP_SSL') == '1'
-    try:
-        if use_ssl:
-            server = smtplib.SMTP_SSL(host, port)
-        else:
-            server = smtplib.SMTP(host, port)
-        if user and password:
-            if not use_ssl:
-                server.starttls()
-            server.login(user, password)
-        server.send_message(msg)
-        server.quit()
-    except Exception as e:
-        print('Error sending bug report:', e)
-
-
 def build_calendar(start, end):
     """Return full days list, collapsed columns and week spans."""
     days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
@@ -1995,6 +1950,7 @@ def calendar_view():
     conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
+    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
@@ -2064,6 +2020,7 @@ def calendar_view():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
+        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         today=today,
         project_filter=project_filter,
@@ -2694,6 +2651,7 @@ def complete():
     conflicts.extend(extra)
     dismissed = load_dismissed()
     conflicts = [c for c in conflicts if c['key'] not in dismissed]
+    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
 
     sort_option = request.args.get('sort', 'created')
     orig_order = {p['id']: idx for idx, p in enumerate(projects)}
@@ -2781,6 +2739,7 @@ def complete():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
+        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
@@ -3451,6 +3410,7 @@ def clear_conflicts():
     """Mark all current conflicts as dismissed and clear extras."""
     projects = get_projects()
     _, conflicts = schedule_projects(projects)
+    conflicts, _ = split_deadline_conflicts(conflicts)
     extras = load_extra_conflicts()
     keys = [c['key'] for c in conflicts] + [e['key'] for e in extras]
     dismissed = load_dismissed()
@@ -3467,38 +3427,6 @@ def show_conflicts():
     """Restore all dismissed conflicts so they appear again."""
     save_dismissed([])
     return redirect(request.referrer or url_for('calendar_view'))
-
-
-@app.route('/report_bug', methods=['POST'])
-def report_bug():
-    user = request.form.get('user')
-    tab = request.form.get('tab')
-    freq = request.form.get('freq')
-    detail = request.form.get('detail', '').strip()
-    if not all([user, tab, freq, detail]):
-        return redirect(request.referrer or url_for('complete'))
-    bugs = load_bugs()
-    bug_id = len(bugs) + 1
-    bug = {
-        'id': bug_id,
-        'user': user,
-        'tab': tab,
-        'freq': freq,
-        'detail': detail,
-        'date': local_now().isoformat(timespec='seconds'),
-    }
-    bugs.append(bug)
-    save_bugs(bugs)
-    send_bug_report(bug)
-    return redirect(request.referrer or url_for('complete'))
-
-
-@app.route('/delete_bug/<bid>', methods=['POST'])
-def delete_bug(bid):
-    bugs = load_bugs()
-    bugs = [b for b in bugs if str(b.get('id')) != bid]
-    save_bugs(bugs)
-    return redirect(url_for('bug_list'))
 
 
 @app.route('/toggle_freeze/<pid>/<phase>', methods=['POST'])
@@ -4162,12 +4090,6 @@ def tracker():
     logs = load_tracker()
     logs.sort(key=lambda l: l.get('timestamp', ''), reverse=True)
     return render_template('tracker.html', logs=logs)
-
-
-@app.route('/bugs')
-def bug_list():
-    bugs = load_bugs()
-    return render_template('bugs.html', bugs=bugs)
 
 
 if __name__ == '__main__':
