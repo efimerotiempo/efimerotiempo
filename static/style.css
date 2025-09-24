@@ -327,13 +327,29 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .link-title {
     display: block;
+    width: -moz-fit-content;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
     margin-left: 10px;
     margin-top: 4px;
+    padding: 4px 8px;
     cursor: pointer;
+    font-size: 0.8em;
+    line-height: 1.1;
+    border: 1px solid #c7c7c7;
+    border-radius: 4px;
+    background: #fff;
+    white-space: normal;
+}
+
+.columna-1 .link-title:empty {
+    padding: 2px 8px;
 }
 
 .columna-1 .link-title.due-late {
     color: red;
+    border-color: red;
 }
 
 .pedidos-calendar .task.due-late {
