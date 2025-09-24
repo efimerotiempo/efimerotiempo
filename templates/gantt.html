@@ -275,34 +275,35 @@ function summaryValueFor(columnId, row) {
       return `${row.phase.name}${worker}`;
     }
     case 'due': {
+      if (row.type !== 'project') return '';
       const kanbanValue = extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']);
       const base = kanbanValue || row.project.deadline_start || row.project.due_date || extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente']);
       return formatKanbanDateValue(base);
     }
     case 'lanzamiento':
-      return formatKanbanDateValue(extractKanbanValue(info, 'LANZAMIENTO'));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'LANZAMIENTO')) : '';
     case 'material':
-      return formatKanbanDateValue(extractKanbanValue(info, 'MATERIAL'));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MATERIAL')) : '';
     case 'caldereria':
-      return formatKanbanDateValue(extractKanbanValue(info, ['CALDERERÍA', 'CALDERERIA']));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['CALDERERÍA', 'CALDERERIA'])) : '';
     case 'mecanizado':
-      return formatKanbanDateValue(extractKanbanValue(info, 'MECANIZADO'));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MECANIZADO')) : '';
     case 'tratamiento':
-      return formatKanbanDateValue(extractKanbanValue(info, 'TRATAMIENTO'));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'TRATAMIENTO')) : '';
     case 'pintar':
-      return formatKanbanDateValue(extractKanbanValue(info, ['PINTAR', 'PINTADO']));
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['PINTAR', 'PINTADO'])) : '';
     case 'phase_start': {
       if (row.type === 'phase') {
         const planned = (START_DATA[row.project.id] && START_DATA[row.project.id][row.phase.name]) || row.phase.start;
         return formatKanbanDateValue(planned);
       }
-      return formatKanbanDateValue(row.project.start);
+      return '';
     }
     case 'phase_end': {
       if (row.type === 'phase') {
         return formatKanbanDateValue(row.phase.end);
       }
-      return formatKanbanDateValue(row.project.end);
+      return '';
     }
     default:
       return '';
