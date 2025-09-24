@@ -545,6 +545,17 @@
       if (data.warning) showDeadline(data.warning, () => location.reload());
       else location.reload();
     };
+    if (Object.prototype.hasOwnProperty.call(data, 'material_blockers')) {
+      const directBlockers = Array.isArray(data.material_blockers)
+        ? data.material_blockers.filter(title => title && title.trim())
+        : [];
+      if (directBlockers.length) {
+        showMaterialWarning(directBlockers, finalize);
+      } else {
+        finalize();
+      }
+      return;
+    }
     ensurePedidosLinks()
       .then(() => {
         const entry = findPedidosEntry(data.pid);

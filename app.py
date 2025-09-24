@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
+from itertools import zip_longest
 import uuid
 import os
 import copy
@@ -308,6 +309,15 @@ PROJECT_LINK_LANES = {
     'acero al carbono',
     'inoxidable - aluminio',
     'seguimiento compras',
+}
+
+MATERIAL_EXCLUDED_COLUMNS = {
+    normalize_key('Ready to Archive'),
+    normalize_key('Ready to archieve'),
+    normalize_key('Material Recepcionado'),
+    normalize_key('Material recepcionado'),
+    normalize_key('Pdte. Verificación'),
+    normalize_key('Pndt. Verificación'),
 }
 
 
@@ -915,6 +925,118 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
             entry.pop('link_details', None)
         filtered.append(entry)
     return filtered
+
+
+def _extract_blocking_material_titles(entry, planned_day):
+    """Return titles that block scheduling because of material deadlines."""
+
+    if not entry or not isinstance(planned_day, date):
+        return []
+
+    details = entry.get('link_details')
+    raw_titles = entry.get('links')
+    if not details and not raw_titles:
+        return []
+
+    blocking = []
+    seen = set()
+    for detail, fallback in zip_longest(details or [], raw_titles or []):
+        if isinstance(detail, dict):
+            title = (detail.get('title') or fallback or '').strip()
+            column = detail.get('column')
+            deadline_str = detail.get('deadline')
+        else:
+            title = (fallback or '').strip()
+            column = None
+            deadline_str = None
+        if not title:
+            continue
+        norm_title = normalize_key(title)
+        if norm_title in seen:
+            continue
+        if column and normalize_key(column) in MATERIAL_EXCLUDED_COLUMNS:
+            continue
+        if not deadline_str:
+            continue
+        deadline = parse_kanban_date(deadline_str)
+        if not isinstance(deadline, date):
+            continue
+        if deadline > planned_day:
+            blocking.append(title)
+            seen.add(norm_title)
+    return blocking
+
+
+def _find_link_entry_for_project(project, links_table):
+    """Return the Columna 1 entry that corresponds to *project*."""
+
+    if not project:
+        return None
+
+    keys = set()
+    name = (project.get('name') or '').strip()
+    if name:
+        keys.add(normalize_key(name))
+        proj_name, _ = split_project_and_client(name)
+        if proj_name:
+            keys.add(normalize_key(proj_name))
+        code_match = re.search(r'OF\s*\d{4}', name, re.IGNORECASE)
+        if code_match:
+            keys.add(normalize_key(code_match.group(0)))
+
+    custom = (project.get('custom_card_id') or '').strip()
+    if custom:
+        keys.add(normalize_key(custom))
+
+    if not keys:
+        return None
+
+    for item in links_table or []:
+        for field in ('project', 'title', 'display_title', 'custom_card_id'):
+            value = item.get(field)
+            if not value:
+                continue
+            if normalize_key(value) in keys:
+                return item
+    return None
+
+
+def material_blockers_for_project(projects, pid, planned_day):
+    """Return Kanban Seguimiento Compras titles that block *pid* on *planned_day*."""
+
+    if not pid or not planned_day:
+        return []
+
+    if isinstance(planned_day, str):
+        try:
+            planned_date = date.fromisoformat(planned_day)
+        except ValueError:
+            return []
+    elif isinstance(planned_day, date):
+        planned_date = planned_day
+    else:
+        return []
+
+    str_pid = str(pid)
+    project = next((p for p in projects if str(p.get('id')) == str_pid), None)
+    if not project:
+        return []
+
+    compras_raw, _ = load_compras_raw()
+    base_links = build_project_links(compras_raw)
+    enriched_links = attach_phase_starts(base_links, projects)
+    entry = next(
+        (item for item in enriched_links if str(item.get('pid')) == str_pid),
+        None,
+    )
+    if not entry:
+        entry = _find_link_entry_for_project(project, enriched_links)
+    if not entry:
+        entry = _find_link_entry_for_project(project, base_links)
+    if not entry:
+        return []
+
+    return _extract_blocking_material_titles(entry, planned_date)
 
 
 def load_column_colors():
@@ -3225,11 +3347,14 @@ def move_phase():
     })
     save_tracker(logs)
 
+    blockers = material_blockers_for_project(projects, pid, new_day)
+
     resp = {
         'date': new_day,
         'pid': pid,
         'phase': phase,
         'part': part,
+        'material_blockers': blockers,
     }
     if warn and not ack_warning:
         resp['warning'] = warn
