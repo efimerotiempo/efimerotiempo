@@ -90,6 +90,69 @@ table.schedule td.weekend-cell {
     margin-top: 4px;
     cursor: pointer;
 }
+.info-popup .popup-field-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.info-popup .popup-label {
+    font-weight: 600;
+}
+.info-popup .popup-inline-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.info-popup .popup-inline-form input[type=date] {
+    margin: 0;
+}
+.info-popup .popup-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+.info-popup .popup-actions-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.info-popup .popup-action-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.info-popup .freeze-btn {
+    color: red;
+    font-weight: bold;
+}
+.info-popup .popup-actions-delete {
+    display: flex;
+    align-items: flex-start;
+}
+.info-popup .popup-actions-delete .phase-delete-btn {
+    font-size: 1.5em;
+    padding: 0.4em 0.8em;
+    margin-top: 0;
+}
+.info-popup .popup-attachments .attachment-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.info-popup .attachment-item {
+    max-width: 200px;
+}
+.info-popup .attachment-thumb {
+    max-width: 200px;
+    max-height: 150px;
+    display: block;
+}
+.info-popup .obs-btn {
+    font-weight: bold;
+}
 .slider { margin: 10px 0; }
 .slider input[type=range] {
     width: 100%;

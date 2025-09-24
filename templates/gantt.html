@@ -438,53 +438,97 @@ function openPhasePopup(context, anchorRect) {
   headerParts.push(info.client || '');
   if (context.phase) headerParts.push(context.phase);
   let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
-  const metaLines = [];
-  if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
-  if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
-  if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
-  const kanbanFields = info.kanban_display_fields || {};
-  const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
-  if (kanbanEntries.length) {
-    let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
-    kanbanEntries.forEach(([label, value]) => {
-      kanbanHtml += `<div>${label}: ${value}</div>`;
-    });
-    kanbanHtml += '</div>';
-    html += kanbanHtml;
+  const formatDateValue = (value) => {
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) {
+      const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
+      return formatted.join(', ');
+    }
+    const text = `${value}`.trim();
+    if (!text || text === '0') return '';
+    return formatKanbanDateValue(text);
+  };
+  const dateFieldLines = [];
+  const addDateField = (label, rawValues) => {
+    const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+    for (const raw of values) {
+      const formatted = formatDateValue(raw);
+      if (formatted) {
+        dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
+        return;
+      }
+    }
+  };
+  addDateField('Límite', [
+    extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
+    info.deadline_start,
+    info.due_date,
+    extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
+  ]);
+  addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
+  addDateField('MATERIAL', extractKanbanValue(info, 'MATERIAL'));
+  addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
+  addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
+  addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
+  addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
+  if (dateFieldLines.length) {
+    html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+  }
+  const segmentLines = [];
+  const segments = info.segment_starts || {};
+  ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach((segment) => {
+    const value = formatDateValue(segments[segment]);
+    if (value) {
+      segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+    }
+  });
+  if (segmentLines.length) {
+    html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
   }
   const phaseSection = buildPhaseSection(info, context);
   if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
   const actionLines = [];
+  const actionMain = [];
+  let deleteButton = '';
   if (context.phase) {
     const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
-    actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
-    actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
-    let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day}">Dividir fase aquí</button>`;
+    actionMain.push(`<div class="popup-action-line">Inicio de la fase: <form id="start-form" class="popup-inline-form"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
+    actionMain.push(`<div class="popup-action-line"><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" class="freeze-btn">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+    let splitLine = `<div class="popup-action-line"><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day}">Dividir fase aquí</button>`;
     if (info.phases && Array.isArray(info.phases[context.phase])) {
       splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
     }
     splitLine += `</div>`;
-    actionLines.push(splitLine);
-    actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
-    actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-part="${context.part || ''}">Sin planificar</button></div>`);
+    actionMain.push(splitLine);
+    deleteButton = `<button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button>`;
   }
-  actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
+  actionMain.push(`<div class="popup-action-line"><button id="obs-btn" data-pid="${context.pid}" class="obs-btn">Observaciones</button></div>`);
+  if (actionMain.length || deleteButton) {
+    const left = actionMain.join('');
+    const right = deleteButton ? `<div class="popup-actions-delete">${deleteButton}</div>` : '';
+    actionLines.push(`<div class="popup-actions-main">${left}</div>${right}`);
+    html += `<div class="popup-section popup-actions">${actionLines.join('')}</div>`;
+  }
+  const attachmentItems = [];
   if (info.image) {
     const imgUrl = `${STATIC_URL}${info.image}`;
-    actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+    attachmentItems.push(`<div class="attachment-item"><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" class="attachment-thumb" alt="Imagen del proyecto"></a></div>`);
   }
   if (info.kanban_attachments && info.kanban_attachments.length) {
     info.kanban_attachments.forEach(att => {
       const url = att.url;
-      const name = (att.name || '').toLowerCase();
-      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
-        actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+      const name = att.name || '';
+      const lower = name.toLowerCase();
+      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) {
+        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" class="attachment-thumb"></a></div>`);
       } else {
-        actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
+        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank">${name || url}</a></div>`);
       }
     });
   }
-  if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
+  if (attachmentItems.length) {
+    html += `<div class="popup-section popup-attachments"><div class="attachment-list">${attachmentItems.join('')}</div></div>`;
+  }
   popup.innerHTML = html;
   popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
   popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
