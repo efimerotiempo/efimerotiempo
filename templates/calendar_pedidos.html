@@ -96,7 +96,10 @@
                         data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
             </div>
             {% for link in item.links %}
-                <div class="link-title" data-title="{{ link }}">{{ link }}</div>
+                {% set link_text = (link|string) %}
+                {% set link_trimmed = link_text|trim %}
+                <div class="link-title{% if not link_trimmed %} is-empty{% endif %}"
+                     data-title="{{ link_text }}">{{ link_text }}</div>
             {% endfor %}
         </div>
     {% endfor %}
@@ -832,7 +835,21 @@ document.addEventListener('DOMContentLoaded', () => {
           html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
           html += '</div>';
           item.links.forEach(link => {
-            html += `<div class="link-title" data-title="${link}">${link}</div>`;
+            const linkText = (link ?? '').toString();
+            const linkTrimmed = linkText.trim();
+            const linkClass = linkTrimmed ? 'link-title' : 'link-title is-empty';
+            const safeAttr = linkText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+            const safeText = linkText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/'/g, '&#39;');
+            html += `<div class="${linkClass}" data-title="${safeAttr}">${safeText}</div>`;
           });
           div.innerHTML = html;
           resolveRowPid(div);

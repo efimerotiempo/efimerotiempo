@@ -307,6 +307,10 @@ table.pedidos-calendar td.week-label {
     padding: 4px 0;
     width: 200px;
     word-break: break-word;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
 }
 
 .columna-1 .proj-header {
@@ -326,25 +330,26 @@ table.pedidos-calendar td.week-label {
 }
 
 .columna-1 .link-title {
-    display: block;
-    width: -moz-fit-content;
-    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    flex-wrap: wrap;
     max-width: 100%;
     box-sizing: border-box;
     margin-left: 10px;
-    margin-top: 4px;
-    padding: 4px 8px;
+    padding: 4px 10px;
     cursor: pointer;
-    font-size: 0.8em;
-    line-height: 1.1;
+    font-size: 1rem;
+    line-height: 1.2;
     border: 1px solid #c7c7c7;
     border-radius: 4px;
     background: #fff;
     white-space: normal;
 }
 
-.columna-1 .link-title:empty {
-    padding: 2px 8px;
+.columna-1 .link-title.is-empty {
+    padding-top: 2px;
+    padding-bottom: 2px;
 }
 
 .columna-1 .link-title.due-late {
