@@ -133,7 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const START_DATA = {{ start_map|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
-  const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
@@ -157,6 +156,50 @@ document.addEventListener('DOMContentLoaded', () => {
   const obsText = document.getElementById('obs-text');
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
+
+  const normalizeKanbanLabel = (label) => {
+    return (label || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  };
+
+  function extractKanbanValue(info, labels) {
+    if (!info) return '';
+    const fields = info.kanban_display_fields || {};
+    const options = Array.isArray(labels) ? labels : [labels];
+    for (const label of options) {
+      const value = fields[label];
+      if (value === null || value === undefined) continue;
+      const text = `${value}`.trim();
+      if (text) {
+        return text;
+      }
+    }
+    const normalizedMap = {};
+    Object.entries(fields).forEach(([key, value]) => {
+      const normalized = normalizeKanbanLabel(key);
+      if (!(normalized in normalizedMap)) {
+        normalizedMap[normalized] = value;
+      }
+    });
+    for (const label of options) {
+      const normalized = normalizeKanbanLabel(label);
+      if (!(normalized in normalizedMap)) continue;
+      const raw = normalizedMap[normalized];
+      if (raw === null || raw === undefined) continue;
+      const text = `${raw}`.trim();
+      if (text) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  function formatKanbanDateValue(value) {
+    if (value === null || value === undefined) return '';
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const iso = madridDateISO(text);
+    return iso || text;
+  }
 
   function norm(value) {
     return (value || '').toString().trim().toLowerCase();
@@ -339,19 +382,59 @@ document.addEventListener('DOMContentLoaded', () => {
     headerParts.push(info.client || '');
     if (context.phase) headerParts.push(context.phase);
     let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
-    const metaLines = [];
-    if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
-    if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
-    if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
-    const kanbanFields = info.kanban_display_fields || {};
-    const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
-    if (kanbanEntries.length) {
-      let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
-      kanbanEntries.forEach(([label, value]) => {
-        kanbanHtml += `<div>${label}: ${value}</div>`;
-      });
-      kanbanHtml += '</div>';
-      html += kanbanHtml;
+    const formatDateValue = (value) => {
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) {
+        const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
+        return formatted.join(', ');
+      }
+      const text = `${value}`.trim();
+      if (!text || text === '0') return '';
+      return formatKanbanDateValue(text);
+    };
+
+    const dateFieldLines = [];
+    const addDateField = (label, rawValues) => {
+      const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+      for (const raw of values) {
+        const formatted = formatDateValue(raw);
+        if (formatted) {
+          dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
+          return;
+        }
+      }
+    };
+
+    addDateField('Límite', [
+      extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
+      info.deadline_start,
+      info.due_date,
+      extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
+    ]);
+    addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
+    addDateField('MATERIAL', [
+      extractKanbanValue(info, 'MATERIAL'),
+      info.material_confirmed_date
+    ]);
+    addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
+    addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
+    addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
+    addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
+
+    if (dateFieldLines.length) {
+      html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+    }
+
+    const segmentLines = [];
+    const segments = info.segment_starts || {};
+    ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach(segment => {
+      const value = formatDateValue(segments[segment]);
+      if (value) {
+        segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+      }
+    });
+    if (segmentLines.length) {
+      html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
     }
     const phaseSection = buildPhaseSection(info, context);
     if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
@@ -367,7 +450,6 @@ document.addEventListener('DOMContentLoaded', () => {
       splitLine += `</div>`;
       actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
-      actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-part="${context.part || ''}">Sin planificar</button></div>`);
     }
     actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
     if (info.image) {
@@ -403,30 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
           }).then(() => location.reload());
         }
-      });
-    }
-    const unplan = document.getElementById('unplan-btn');
-    if (unplan) {
-      unplan.addEventListener('click', ev => {
-        ev.stopPropagation();
-        const today = madridDateISO();
-        const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
-        if (unplan.dataset.part) body.part = unplan.dataset.part;
-        fetch(MOVE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(body)
-        })
-          .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
-          .then(({ ok, data }) => {
-            if (!ok) {
-              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-              else alert(data.error || 'Error');
-              return;
-            }
-            afterMove(data, today);
-          });
       });
     }
     const obsBtn = document.getElementById('obs-btn');

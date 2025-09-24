@@ -94,7 +94,6 @@ let PROJECT_DATA = {{ project_data|tojson }};
 let START_DATA = {{ start_map|tojson }};
 const PHASES = {{ phases|tojson }};
 const STATIC_URL = "{{ url_for('static', filename='') }}";
-const MOVE_URL = "{{ url_for('move_phase') }}";
 const DELETE_URL = "{{ url_for('delete_phase') }}";
 const START_URL = "{{ url_for('update_phase_start') }}";
 const SPLIT_URL = "{{ url_for('split_phase_route') }}";
@@ -546,30 +545,6 @@ function openPhasePopup(context, anchorRect) {
           body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
         }).then(() => location.reload());
       }
-    });
-  }
-  const unplan = document.getElementById('unplan-btn');
-  if (unplan) {
-    unplan.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const today = madridDateISO();
-      const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
-      if (unplan.dataset.part) body.part = unplan.dataset.part;
-      fetch(MOVE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify(body)
-      })
-        .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
-        .then(({ ok, data }) => {
-          if (!ok) {
-            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-            else alert(data.error || 'Error');
-            return;
-          }
-          afterMove(data, today);
-        });
     });
   }
   const obsBtn = document.getElementById('obs-btn');
