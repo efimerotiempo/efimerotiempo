@@ -646,8 +646,6 @@ if(summaryResizer){
   });
 }
 
-function formatDate(d){return d.split('T')[0];}
-
 function sortProjects(type, store=true){
   if(!type){
     currentSort = null;
@@ -792,7 +790,12 @@ function render(){
     bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
     bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
     bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
-    bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
+    if(r.type==='project'){
+      const clientSuffix = r.project.client ? ` - ${r.project.client}` : '';
+      bar.textContent = `${r.project.name}${clientSuffix}`;
+    } else {
+      bar.textContent = r.phase.name;
+    }
     if(r.type==='project'){
       const deadlineSources = [
         r.project.deadline_start,
