@@ -98,7 +98,7 @@ def _require_auth():
     if (
         request.path.startswith("/static")
         or request.path.startswith("/kanbanize-webhook")
-        or request.path == "/events"
+        or request.path.startswith("/events")
     ):
         return
     auth = request.authorization
