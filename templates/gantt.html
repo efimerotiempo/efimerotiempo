@@ -51,6 +51,10 @@
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
   .summary-columns { display:flex; flex:1; }
+  .summary-group-wrapper { display:flex; flex-direction:row; position:relative; flex:0 0 auto; }
+  .summary-column-group { display:flex; overflow:hidden; background:#fff; flex:0 0 auto; border-right:1px solid #ddd; }
+  .summary-column-group .summary-column { border-right:1px solid #ddd; }
+  .summary-column-group .summary-column:last-child { border-right:0; }
   .summary-column { position:relative; display:flex; flex-direction:column; border-right:1px solid #ddd; flex:0 0 auto; background:#fff; }
   .summary-column:last-child { border-right:0; }
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:30px; line-height:30px; font-weight:bold; color:#000; z-index:2; padding:0 6px; box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:0; }
@@ -59,14 +63,19 @@
   .summary-column.summary-main .summary-row.project-row { cursor:pointer; font-weight:bold; }
   .summary-column.summary-main .summary-row.phase-row { padding-left:16px; }
   .summary-column:not(.summary-main) .summary-row { justify-content:center; font-size:12px; }
+  .summary-row.summary-group-title-row { font-weight:bold; justify-content:center; background:#f9f9f9; pointer-events:none; }
+  .summary-column.summary-main .summary-row.summary-group-title-row { background:#fff; font-weight:normal; }
   .column-resizer { position:absolute; top:0; right:0; bottom:0; width:4px; cursor:col-resize; }
   .column-resizer:hover, .summary-column.resizing .column-resizer { background:rgba(0,0,0,0.1); }
+  .column-group-resizer { width:6px; flex:0 0 6px; cursor:col-resize; }
+  .column-group-resizer:hover, .column-group-resizer.active { background:rgba(0,0,0,0.1); }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
   .gantt-header { position:sticky; top:0; height:30px; line-height:30px; border-bottom:1px solid #ddd; background:#fff; box-sizing:border-box; }
   .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:30px; height:30px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .gantt-body { position:relative; }
   .gantt-row { height:30px; border-bottom:1px solid #ddd; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
   .gantt-row .deadline-highlight {
@@ -107,6 +116,9 @@ const summaryContainer = document.getElementById('gantt_summary');
 const summaryColumnsContainer = document.getElementById('gantt_summary_columns');
 const SUMMARY_COL_WIDTH_PREFIX = 'ganttSummaryColWidth-';
 const summaryColumnDefs = [];
+const DATE_GROUP_NAME = 'dates';
+const DATE_GROUP_WIDTH_KEY = 'ganttDateGroupWidth';
+let dateGroupContainerEl = null;
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
 const body = document.getElementById('gantt_body');
@@ -146,15 +158,15 @@ clientFilterInput.value = savedClientFilter;
 
 const BASE_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
-  { key: 'deadline', title: 'Fecha límite', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
-  { key: 'launch', title: 'LANZAMIENTO', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
-  { key: 'material', title: 'MATERIAL', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
-  { key: 'caldereria', title: 'CALDERERÍA', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['CALDERERÍA', 'CALDERERIA']) },
-  { key: 'mecanizado', title: 'MECANIZADO', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MECANIZADO']) },
-  { key: 'tratamiento', title: 'TRATAMIENTO', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['TRATAMIENTO']) },
-  { key: 'pintar', title: 'PINTAR', defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['PINTAR', 'PINTADO']) },
-  { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
-  { key: 'phase_end', title: 'Fecha fin planificada de la fase', defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
+  { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
+  { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
+  { key: 'material', title: 'MATERIAL', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
+  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['CALDERERÍA', 'CALDERERIA']) },
+  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MECANIZADO']) },
+  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['TRATAMIENTO']) },
+  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['PINTAR', 'PINTADO']) },
+  { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
+  { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
 ];
 
 initializeSummaryColumns();
@@ -167,6 +179,16 @@ function getStoredColumnWidth(key, fallback){
 
 function setStoredColumnWidth(key, width){
   localStorage.setItem(SUMMARY_COL_WIDTH_PREFIX + key, String(width));
+}
+
+function getStoredGroupWidth(fallback){
+  const raw = parseFloat(localStorage.getItem(DATE_GROUP_WIDTH_KEY));
+  if(!Number.isNaN(raw) && raw >= 0) return raw;
+  return fallback;
+}
+
+function setStoredGroupWidth(width){
+  localStorage.setItem(DATE_GROUP_WIDTH_KEY, String(Math.max(0, width)));
 }
 
 function setColumnWidth(element, width){
@@ -380,13 +402,25 @@ function setupColumnResizer(def, element, resizer){
       const delta = ev.clientX - startX;
       currentWidth = Math.max(def.minWidth || 100, startWidth + delta);
       setColumnWidth(element, currentWidth);
+      def.width = currentWidth;
     };
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       element.classList.remove('resizing');
       document.body.style.cursor = '';
+      def.width = currentWidth;
       setStoredColumnWidth(def.key, currentWidth);
+      if(def.group === DATE_GROUP_NAME && dateGroupContainerEl && dateGroupContainerEl.contains(element)){
+        const max = dateGroupContainerEl.scrollWidth;
+        let applied = parseFloat(dateGroupContainerEl.style.width);
+        if(Number.isNaN(applied) || applied < 0) applied = dateGroupContainerEl.getBoundingClientRect().width;
+        if(applied > max){
+          const clamped = Math.max(0, max);
+          dateGroupContainerEl.style.width = clamped + 'px';
+          setStoredGroupWidth(clamped);
+        }
+      }
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -397,6 +431,9 @@ function initializeSummaryColumns(){
   if(!summaryColumnsContainer) return;
   summaryColumnsContainer.innerHTML = '';
   summaryColumnDefs.length = 0;
+  dateGroupContainerEl = null;
+  const groupColumns = [];
+  let groupContainer = null;
   BASE_SUMMARY_COLUMNS.forEach(def => {
     const column = document.createElement('div');
     const extra = Array.isArray(def.classes) && def.classes.length ? ' ' + def.classes.join(' ') : '';
@@ -415,11 +452,84 @@ function initializeSummaryColumns(){
     const storedWidth = getStoredColumnWidth(def.key, def.defaultWidth);
     const width = Math.max(def.minWidth || 0, storedWidth);
     setColumnWidth(column, width);
-    setupColumnResizer(def, column, resizer);
-    summaryColumnsContainer.appendChild(column);
-    const storedDef = { ...def, element: column, body: bodyEl, resizer };
+    const storedDef = { ...def, element: column, body: bodyEl, resizer, width };
+    setupColumnResizer(storedDef, column, resizer);
+    if(def.group === DATE_GROUP_NAME){
+      if(!groupContainer){
+        groupContainer = document.createElement('div');
+        groupContainer.className = 'summary-column-group';
+      }
+      groupContainer.appendChild(column);
+      groupColumns.push(storedDef);
+    } else {
+      summaryColumnsContainer.appendChild(column);
+    }
     summaryColumnDefs.push(storedDef);
   });
+  if(groupContainer){
+    dateGroupContainerEl = groupContainer;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'summary-group-wrapper';
+    wrapper.appendChild(groupContainer);
+    const groupResizer = document.createElement('div');
+    groupResizer.className = 'column-group-resizer';
+    wrapper.appendChild(groupResizer);
+    summaryColumnsContainer.appendChild(wrapper);
+    const contentWidth = groupColumns.reduce((sum, def) => sum + (def.width || 0), 0);
+    const storedWidth = getStoredGroupWidth(contentWidth);
+    const appliedWidth = Math.max(0, Math.min(storedWidth, contentWidth));
+    groupContainer.style.width = appliedWidth + 'px';
+    if(storedWidth !== appliedWidth) setStoredGroupWidth(appliedWidth);
+    setupGroupResizer(groupContainer, groupResizer);
+  }
+}
+
+function setupGroupResizer(container, resizer){
+  if(!container || !resizer) return;
+  resizer.addEventListener('mousedown', event => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const rect = container.getBoundingClientRect();
+    let currentWidth = parseFloat(container.style.width);
+    if(Number.isNaN(currentWidth) || currentWidth < 0) currentWidth = rect.width;
+    const startWidth = currentWidth;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    const onMove = ev => {
+      const delta = ev.clientX - startX;
+      let width = startWidth + delta;
+      const max = container.scrollWidth;
+      if(max > 0) width = Math.min(width, max);
+      if(width < 0) width = 0;
+      container.style.width = width + 'px';
+      currentWidth = width;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      resizer.classList.remove('active');
+      const max = container.scrollWidth;
+      const finalWidth = Math.max(0, Math.min(currentWidth, max || currentWidth));
+      container.style.width = finalWidth + 'px';
+      setStoredGroupWidth(finalWidth);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function insertDateGroupTitleRow(){
+  const hasGroup = summaryColumnDefs.some(def => def.group === DATE_GROUP_NAME);
+  if(!hasGroup) return false;
+  summaryColumnDefs.forEach(def => {
+    if(!def.body) return;
+    const cell = document.createElement('div');
+    cell.className = 'summary-row summary-group-title-row';
+    cell.textContent = def.group === DATE_GROUP_NAME ? def.title : '';
+    def.body.appendChild(cell);
+  });
+  return true;
 }
 
 document.addEventListener('click', () => {
@@ -794,7 +904,20 @@ function render(){
   });
   body.innerHTML = '';
   header.innerHTML = '';
-  if(!projects.length){return;}
+  const hasGroupTitleRow = insertDateGroupTitleRow();
+  if(hasGroupTitleRow){
+    const spacerRow = document.createElement('div');
+    spacerRow.className = 'gantt-row summary-group-title-row';
+    body.appendChild(spacerRow);
+  }
+  if(!projects.length){
+    const totalHeight = (hasGroupTitleRow ? 1 : 0) * BAR_HEIGHT;
+    summaryColumnDefs.forEach(def => {
+      if(def.body) def.body.style.height = totalHeight + 'px';
+    });
+    body.style.height = totalHeight + 'px';
+    return;
+  }
   const dayMs = DAY_MS;
   const startOfDay = d => {
     const raw = (d ?? '').toString().trim();
@@ -970,7 +1093,8 @@ function render(){
     body.appendChild(rowDiv);
   });
 
-  const totalHeight = rows.length * BAR_HEIGHT;
+  const extraRows = hasGroupTitleRow ? 1 : 0;
+  const totalHeight = (rows.length + extraRows) * BAR_HEIGHT;
   summaryColumnDefs.forEach(def => {
     if(def.body) def.body.style.height = totalHeight + 'px';
   });
