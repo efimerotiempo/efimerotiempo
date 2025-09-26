@@ -5,19 +5,45 @@
     <title>Planificador</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <script>
+      window.EFIMERO_TZ = 'Europe/Madrid';
+      const _madridDateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: window.EFIMERO_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      function madridDateISO(value) {
+        let date;
+        if (value instanceof Date) {
+          date = value;
+        } else if (typeof value === 'number') {
+          date = new Date(value);
+        } else if (value) {
+          date = new Date(value);
+        } else {
+          date = new Date();
+        }
+        if (Number.isNaN(date.valueOf())) {
+          return '';
+        }
+        return _madridDateFormatter.format(date);
+      }
+    </script>
 </head>
 <body>
     <nav>
         <a href="{{ url_for('complete') }}">Completo</a> |
         <a href="{{ url_for('calendar_view') }}">Calendario</a> |
         <a href="{{ url_for('calendar_pedidos') }}">Calendario pedidos</a> |
+        <a href="{{ url_for('gantt_view') }}">Gantt</a> |
         <a href="{{ url_for('project_list') }}">Proyectos</a> |
         <a href="{{ url_for('note_list') }}">Notas</a> |
         <a href="{{ url_for('observation_list') }}">Observaciones</a> |
         <a href="{{ url_for('vacation_list') }}">Vacaciones</a> |
         <a href="{{ url_for('resources') }}">Recursos</a> |
-        <a href="{{ url_for('bug_list') }}">Bugs</a> |
         <a href="{{ url_for('hours') }}">Horas</a> |
+        <a href="{{ url_for('tracker') }}">Rastreador</a> |
         <a href="{{ url_for('add_project') }}">Añadir proyecto</a>
     </nav>
     <hr/>

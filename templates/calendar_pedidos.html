@@ -29,8 +29,12 @@
                  data-phase="{{ t.get('phase') or '' }}"
                  data-day="{{ d.date.isoformat() }}"
                  data-worker="{{ t.get('worker') or '' }}"
+                 data-cid="{{ t.get('cid') or '' }}"
                  data-project="{{ t.project }}"
+                 data-title="{{ t.project }}"
+                 data-code="{{ t.get('custom_card_id') or '' }}"
                  data-client="{{ t.get('client') or '' }}"
+                 data-due="{{ d.date.isoformat() }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -44,14 +48,18 @@
         {% if loop.first %}
         <td class="unconfirmed" rowspan="{{ weeks|length }}">
             {% for t in unconfirmed %}
-            <div class="task" draggable="true"
-                 data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="{{ t.get('phase') or '' }}"
-                 data-worker="{{ t.get('worker') or '' }}"
-                 data-project="{{ t.project }}"
-                 data-client="{{ t.get('client') or '' }}"
-                 style="border-color: {{ t.get('color', '#999999') }};">
+              <div class="task" draggable="true"
+                   data-pid="{{ t.get('pid') or '' }}"
+                   data-phase="{{ t.get('phase') or '' }}"
+                   data-worker="{{ t.get('worker') or '' }}"
+                   data-cid="{{ t.get('cid') or '' }}"
+                   data-project="{{ t.project }}"
+                   data-title="{{ t.project }}"
+                   data-code="{{ t.get('custom_card_id') or '' }}"
+                   data-client="{{ t.get('client') or '' }}"
+                   style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
+                {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
                 {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
             </div>
             {% endfor %}
@@ -61,28 +69,521 @@
     {% endfor %}
     </tbody>
 </table>
-<table class="links-table columna-1">
-    <caption>Columna 1</caption>
-    <tbody>
+<div class="columna-1">
+    <h3>Columna 1</h3>
+    <div class="columna-1-content">
     {% for item in project_links %}
-        <tr class="project-row" data-project="{{ item.project }}" data-client="{{ item.client }}">
-            <td class="project-name">{{ item.project }}{% if item.client %} - {{ item.client }}{% endif %}</td>
-        </tr>
-        {% if item.links %}
-        <tr class="links-row">
-            <td class="project-links">
-                {% for link in item.links %}
-                    <span class="link-title">{{ link }}</span>
-                {% endfor %}
-            </td>
-        </tr>
-        {% endif %}
+        <div class="project-row"
+             data-pid="{{ item.pid or '' }}"
+             data-project="{{ (item.project or item.title)|trim }}"
+             data-title="{{ (item.title or item.project)|trim }}"
+             data-display="{{ (item.display_title or item.title or item.project)|trim }}"
+             data-client="{{ item.client }}"
+             data-code="{{ item.custom_card_id or '' }}"
+             data-due="{{ item.due or '' }}"
+             data-montar="{{ item.montar_start or '' }}">
+            {% set project_value = (item.project or item.title)|trim %}
+            {% set title_value = (item.title or item.project)|trim %}
+            {% set code_value = (item.custom_card_id or '')|trim %}
+            <div class="proj-header">
+            {% if code_value %}
+                <span class="proj-code"
+                      data-project="{{ project_value }}"
+                      data-code="{{ code_value }}">{{ code_value }}</span>
+            {% endif %}
+                <strong class="proj-title"
+                        data-project="{{ project_value }}"
+                        data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
+            </div>
+            {% for link in item.links %}
+                {% set link_text = (link|string) %}
+                {% set link_trimmed = link_text|trim %}
+                <div class="link-title{% if not link_trimmed %} is-empty{% endif %}"
+                     data-title="{{ link_text }}">{{ link_text }}</div>
+            {% endfor %}
+        </div>
     {% endfor %}
-    </tbody>
-</table>
+    </div>
+</div>
+</div>
+<div id="info-popup" class="info-popup"></div>
+<div id="deadline-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <div id="deadline-text" style="color:orange;font-weight:bold"></div>
+    <button id="deadline-close">Cerrar</button>
+  </div>
+</div>
+<div id="split-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <form id="split-form">
+      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br>
+      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br>
+      <button type="submit">Aceptar</button>
+      <button type="button" id="split-cancel">Cancelar</button>
+    </form>
+  </div>
+</div>
+<div id="obs-modal" class="modal">
+  <div class="modal-content">
+    <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
+    <button id="obs-save" type="button">Guardar</button>
+    <button id="obs-cancel" type="button">Cancelar</button>
+  </div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  const PROJECT_DATA = {{ project_data|tojson }};
+  const START_DATA = {{ start_map|tojson }};
+  const PHASES = {{ phases|tojson }};
+  const STATIC_URL = "{{ url_for('static', filename='') }}";
+  const DELETE_URL = "{{ url_for('delete_phase') }}";
+  const START_URL = "{{ url_for('update_phase_start') }}";
+  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+  const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const DEADLINE_MSG = 'Fecha cliente soprepasada.';
+  const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
+  const LAST_KEY = 'lastMoved';
+  const SCROLL_KEY2 = 'scrollDate';
+  const popup = document.getElementById('info-popup');
+  const deadlineModal = document.getElementById('deadline-modal');
+  const deadlineText = document.getElementById('deadline-text');
+  const deadlineClose = document.getElementById('deadline-close');
+  const splitModal = document.getElementById('split-modal');
+  const splitForm = document.getElementById('split-form');
+  const splitPart1 = document.getElementById('split-part1');
+  const splitPart2 = document.getElementById('split-part2');
+  const splitCancel = document.getElementById('split-cancel');
+  const obsModal = document.getElementById('obs-modal');
+  const obsText = document.getElementById('obs-text');
+  const obsSave = document.getElementById('obs-save');
+  const obsCancel = document.getElementById('obs-cancel');
+
+  const normalizeKanbanLabel = (label) => {
+    return (label || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  };
+
+  function extractKanbanValue(info, labels) {
+    if (!info) return '';
+    const fields = info.kanban_display_fields || {};
+    const options = Array.isArray(labels) ? labels : [labels];
+    for (const label of options) {
+      const value = fields[label];
+      if (value === null || value === undefined) continue;
+      const text = `${value}`.trim();
+      if (text) {
+        return text;
+      }
+    }
+    const normalizedMap = {};
+    Object.entries(fields).forEach(([key, value]) => {
+      const normalized = normalizeKanbanLabel(key);
+      if (!(normalized in normalizedMap)) {
+        normalizedMap[normalized] = value;
+      }
+    });
+    for (const label of options) {
+      const normalized = normalizeKanbanLabel(label);
+      if (!(normalized in normalizedMap)) continue;
+      const raw = normalizedMap[normalized];
+      if (raw === null || raw === undefined) continue;
+      const text = `${raw}`.trim();
+      if (text) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  function formatKanbanDateValue(value) {
+    if (value === null || value === undefined) return '';
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const iso = madridDateISO(text);
+    return iso || text;
+  }
+
+  function norm(value) {
+    return (value || '').toString().trim().toLowerCase();
+  }
+
+  function resolveRowPid(row) {
+    if (!row) return null;
+    let pid = row.dataset.pid;
+    if (pid && PROJECT_DATA[pid]) return pid;
+
+    const code = norm(row.dataset.code);
+    const project = norm(row.dataset.project);
+    const title = norm(row.dataset.title);
+    const display = norm(row.dataset.display);
+    const client = norm(row.dataset.client);
+
+    for (const [candidatePid, info] of Object.entries(PROJECT_DATA)) {
+      if (!info) continue;
+      const name = norm(info.name);
+      if (!name) continue;
+      const [nameProject, ...rest] = name.split(' - ');
+      const nameClient = norm(rest.join(' - '));
+      const projectMatch = norm(nameProject);
+      const codeMatch = norm(info.custom_card_id);
+
+      if (code && codeMatch && code === codeMatch) {
+        pid = candidatePid;
+      } else if (code && name.includes(code)) {
+        pid = candidatePid;
+      } else if (project && projectMatch === project) {
+        pid = candidatePid;
+      } else if (title && (name === title || name.startsWith(title) || title.startsWith(name))) {
+        pid = candidatePid;
+      } else if (display && name === display) {
+        pid = candidatePid;
+      } else if (project && name.includes(project) && (!client || !nameClient || client === nameClient)) {
+        pid = candidatePid;
+      }
+
+      if (pid) {
+        row.dataset.pid = pid;
+        return pid;
+      }
+    }
+    return null;
+  }
+
+  function showDeadline(text = DEADLINE_MSG, after = null) {
+    if (!deadlineModal || !deadlineText || !deadlineClose) return;
+    deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
+    deadlineModal.style.display = 'block';
+    deadlineClose.onclick = () => {
+      deadlineModal.style.display = 'none';
+      if (after) after();
+    };
+  }
+
+  function afterMove(data, originalDate) {
+    localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+    if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+    if (data.warning) showDeadline(data.warning, () => location.reload());
+    else location.reload();
+  }
+
+  function makeDraggable(el) {
+    if (!el) return;
+    let startX, startY, startLeft, startTop;
+    const onMouseMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      el.style.left = startLeft + dx + 'px';
+      el.style.top = startTop + dy + 'px';
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    el.addEventListener('mousedown', (ev) => {
+      if (ev.target.closest('input, textarea, select, button')) return;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      const rect = el.getBoundingClientRect();
+      startLeft = rect.left + window.scrollX;
+      startTop = rect.top + window.scrollY;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  }
+
+  document.addEventListener('click', () => {
+    if (popup) popup.style.display = 'none';
+  });
+  if (popup) {
+    popup.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
+
+  if (obsCancel) {
+    obsCancel.addEventListener('click', () => { if (obsModal) obsModal.style.display = 'none'; });
+  }
+  if (obsModal) {
+    obsModal.addEventListener('click', (e) => { if (e.target === obsModal) obsModal.style.display = 'none'; });
+  }
+  if (obsSave) {
+    obsSave.addEventListener('click', () => {
+      if (!obsModal) return;
+      const pid = obsModal.dataset.pid;
+      const txt = obsText.value;
+      const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ observations: txt })
+      }).then(() => {
+        if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+        obsModal.style.display = 'none';
+      });
+    });
+  }
+
+  if (splitCancel) {
+    splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
+  }
+  if (splitForm) {
+    splitForm.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      fetch(SPLIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          pid: splitModal.dataset.pid,
+          phase: splitModal.dataset.phase,
+          date: splitModal.dataset.date,
+          part1: splitPart1.value,
+          part2: splitPart2.value
+        })
+      }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+    });
+  }
+
+  function buildPhaseSection(info, context) {
+    const phaseLines = [];
+    PHASES.forEach(ph => {
+      if (ph === 'dibujo' || ph === 'pedidos') return;
+      const raw = info.phases ? info.phases[ph] : null;
+      let total = 0;
+      if (Array.isArray(raw)) total = raw.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+      else total = parseInt(raw) || 0;
+      if (total > 0) {
+        const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
+        const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
+        let line = `<div${cls}>${ph}: ${total}h`;
+        if (ph === context.phase) {
+          line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+        }
+        line += `</div>`;
+        phaseLines.push(line);
+      }
+    });
+    let section = '';
+    if (phaseLines.length) section += phaseLines.join('');
+    if (context.phase === 'pedidos') {
+      const acopio = info.phases ? info.phases['pedidos'] : null;
+      if (acopio && acopio !== '0') section += `<div>Plazo acopio: ${acopio}</div>`;
+    }
+    return section;
+  }
+
+  function openPhasePopup(context, anchorRect) {
+    if (!popup) return;
+    const info = PROJECT_DATA[context.pid];
+    if (!info) return;
+    const headerParts = [info.name];
+    if (info.blocked) headerParts[0] += ' <span class="blocked-sign">\u{1F6AB}</span>';
+    headerParts.push(info.client || '');
+    if (context.phase) headerParts.push(context.phase);
+    let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
+    const formatDateValue = (value) => {
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) {
+        const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
+        return formatted.join(', ');
+      }
+      const text = `${value}`.trim();
+      if (!text || text === '0') return '';
+      return formatKanbanDateValue(text);
+    };
+
+    const dateFieldLines = [];
+    const addDateField = (label, rawValues) => {
+      const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+      for (const raw of values) {
+        const formatted = formatDateValue(raw);
+        if (formatted) {
+          dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
+          return;
+        }
+      }
+    };
+
+    addDateField('Límite', [
+      extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
+      info.deadline_start,
+      info.due_date,
+      extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
+    ]);
+    addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
+    addDateField('MATERIAL', [
+      extractKanbanValue(info, 'MATERIAL'),
+      info.material_confirmed_date
+    ]);
+    addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
+    addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
+    addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
+    addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
+
+    if (dateFieldLines.length) {
+      html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+    }
+
+    const segmentLines = [];
+    const segments = info.segment_starts || {};
+    ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach(segment => {
+      const value = formatDateValue(segments[segment]);
+      if (value) {
+        segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+      }
+    });
+    if (segmentLines.length) {
+      html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
+    }
+    const phaseSection = buildPhaseSection(info, context);
+    if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+    const actionLines = [];
+    if (context.phase) {
+      const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
+      actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
+      actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}">Dividir fase aquí</button>`;
+      if (info.phases && Array.isArray(info.phases[context.phase])) {
+        splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+      }
+      splitLine += `</div>`;
+      actionLines.push(splitLine);
+      actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
+    }
+    actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
+    if (info.image) {
+      const imgUrl = `${STATIC_URL}${info.image}`;
+      actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+    }
+    if (info.kanban_attachments && info.kanban_attachments.length) {
+      info.kanban_attachments.forEach(att => {
+        const url = att.url;
+        const name = (att.name || '').toLowerCase();
+        if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+          actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+        } else {
+          actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
+        }
+      });
+    }
+    if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
+    popup.innerHTML = html;
+    popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
+    popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
+    popup.style.display = 'block';
+
+    const del = document.getElementById('del-btn');
+    if (del) {
+      del.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (confirm('¿Borrar fase?')) {
+          fetch(DELETE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+          }).then(() => location.reload());
+        }
+      });
+    }
+    const obsBtn = document.getElementById('obs-btn');
+    if (obsBtn && obsModal) {
+      obsBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const pid = obsBtn.dataset.pid;
+        obsModal.dataset.pid = pid;
+        obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
+        obsModal.style.display = 'block';
+      });
+    }
+    const splitBtn = document.getElementById('split-btn');
+    if (splitBtn && splitModal) {
+      splitBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        splitModal.dataset.pid = splitBtn.dataset.pid;
+        splitModal.dataset.phase = splitBtn.dataset.phase;
+        splitModal.dataset.date = splitBtn.dataset.date;
+        splitPart1.value = '';
+        splitPart2.value = '';
+        splitModal.style.display = 'block';
+      });
+    }
+    const unsplitBtn = document.getElementById('unsplit-btn');
+    if (unsplitBtn) {
+      unsplitBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (confirm('¿Deshacer división de esta fase?')) {
+          fetch(UNSPLIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ pid: unsplitBtn.dataset.pid, phase: unsplitBtn.dataset.phase })
+          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+        }
+      });
+    }
+    const freeze = document.getElementById('freeze-btn');
+    if (freeze) {
+      freeze.addEventListener('click', ev => {
+        ev.stopPropagation();
+        fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), { method: 'POST', credentials: 'same-origin' })
+          .then(() => location.reload());
+      });
+    }
+    const startForm = document.getElementById('start-form');
+    if (startForm) {
+      startForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const btn = document.getElementById('start-btn');
+        const val = document.getElementById('start-input').value;
+        fetch(START_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+        }).then(resp => {
+          if (!resp.ok) {
+            return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+          }
+          return resp.json();
+        }).then(d => {
+          if (d) {
+            localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+            if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+          }
+          location.reload();
+        });
+      });
+    }
+    const hoursForm = document.getElementById('phase-hours-form');
+    if (hoursForm) {
+      hoursForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const btn = hoursForm.querySelector('button');
+        const val = document.getElementById('phase-hours-input').value;
+        fetch(PHASE_HOURS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+        }).then(resp => {
+          if (resp.ok) {
+            const url = new URL(location);
+            url.searchParams.set('highlight', btn.dataset.pid);
+            location.href = url;
+          } else {
+            resp.json().then(d => alert(d.error || 'Error'));
+          }
+        });
+      });
+    }
+  }
   const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
   let maxH = 0;
   cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
@@ -97,7 +598,8 @@ document.addEventListener('DOMContentLoaded', () => {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         part: t.dataset.part,
-        worker: t.dataset.worker
+        worker: t.dataset.worker,
+        cid: t.dataset.cid
       };
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify(data));
@@ -119,6 +621,13 @@ document.addEventListener('DOMContentLoaded', () => {
           credentials: 'same-origin',
           body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
         }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: cell.dataset.date})
+        }).then(resp => { if (resp.ok) location.reload(); });
       } else if (dragged) {
         cell.appendChild(dragged);
         dragged = null;
@@ -131,7 +640,16 @@ document.addEventListener('DOMContentLoaded', () => {
     unconfirmedCell.addEventListener('dragover', e => e.preventDefault());
     unconfirmedCell.addEventListener('drop', e => {
       e.preventDefault();
-      if (dragged) {
+      let data;
+      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
+      if (data.cid) {
+        fetch("{{ url_for('update_pedido_date') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({cid: data.cid, date: null})
+        }).then(resp => { if (resp.ok) location.reload(); });
+      } else if (dragged) {
         unconfirmedCell.appendChild(dragged);
         dragged = null;
       }
@@ -153,12 +671,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
       const proj = (t.dataset.project || '').toLowerCase();
       const cli = (t.dataset.client || '').toLowerCase();
-      t.style.display = (!q || proj.includes(q) || cli.includes(q)) ? '' : 'none';
+      const code = (t.dataset.code || '').toLowerCase();
+      t.style.display = (!q || proj.includes(q) || cli.includes(q) || code.includes(q)) ? '' : 'none';
     });
-    document.querySelectorAll('.links-table .project-row').forEach(row => {
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
       const proj = (row.dataset.project || '').toLowerCase();
+      const title = (row.dataset.title || '').toLowerCase();
       const cli = (row.dataset.client || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q));
+      const display = (row.dataset.display || '').toLowerCase();
+      const code = (row.dataset.code || '').toLowerCase();
+      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
       row.style.display = show ? '' : 'none';
       const next = row.nextElementSibling;
       if (next && next.classList.contains('links-row')) {
@@ -166,6 +688,178 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  let currentHighlight = null;
+
+  function parseISODateParts(value) {
+    const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+    return { year, month, day };
+  }
+
+  function diffInDays(later, earlier) {
+    const laterParts = parseISODateParts(later);
+    const earlierParts = parseISODateParts(earlier);
+    if (!laterParts || !earlierParts) return null;
+    const laterUtc = Date.UTC(laterParts.year, laterParts.month, laterParts.day);
+    const earlierUtc = Date.UTC(earlierParts.year, earlierParts.month, earlierParts.day);
+    return Math.round((laterUtc - earlierUtc) / 86400000);
+  }
+
+  function buildTaskMap() {
+    const map = new Map();
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      if (!title) return;
+      if (!map.has(title)) map.set(title, []);
+      map.get(title).push(task);
+    });
+    return map;
+  }
+
+  function updateDueWarnings() {
+    const taskMap = buildTaskMap();
+    const dueLateTitles = new Set();
+    document.querySelectorAll('.columna-1 .project-row').forEach(row => {
+      const montarStart = row.dataset.montar || '';
+      const projectDue = row.dataset.due || '';
+      row.querySelectorAll('.link-title').forEach(link => {
+        const title = link.dataset.title;
+        const tasks = taskMap.get(title) || [];
+        const calendarDates = tasks
+          .map(t => t.dataset.due)
+          .filter(Boolean)
+          .sort();
+        let referenceDate = '';
+        if (calendarDates.length) {
+          referenceDate = calendarDates[0];
+        } else if (projectDue) {
+          referenceDate = projectDue;
+        }
+        let isLate = false;
+        if (montarStart && referenceDate) {
+          const diff = diffInDays(referenceDate, montarStart);
+          if (diff !== null && diff <= 3) {
+            isLate = true;
+            dueLateTitles.add(title);
+          }
+        }
+        link.classList.toggle('due-late', isLate);
+      });
+    });
+    document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
+      const title = task.dataset.title;
+      task.classList.toggle('due-late', dueLateTitles.has(title));
+    });
+  }
+
+  function setHighlight(title) {
+    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const links = document.querySelectorAll('.columna-1 .link-title');
+    tasks.forEach(t => t.classList.remove('highlight'));
+    links.forEach(l => l.classList.remove('highlight'));
+    if (title) {
+      tasks.forEach(t => { if (t.dataset.title === title) t.classList.add('highlight'); });
+      links.forEach(l => { if (l.dataset.title === title) l.classList.add('highlight'); });
+      currentHighlight = title;
+    } else {
+      currentHighlight = null;
+    }
+  }
+
+  function attachHighlightHandlers() {
+    document.querySelector('.pedidos-calendar').addEventListener('click', e => {
+      const t = e.target.closest('.task');
+      if (!t) return;
+      const title = t.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
+    });
+    document.querySelector('.columna-1').addEventListener('click', e => {
+      const el = e.target.closest('.link-title');
+      if (!el) return;
+      const title = el.dataset.title;
+      setHighlight(currentHighlight === title ? null : title);
+    });
+  }
+
+  attachHighlightHandlers();
+  updateDueWarnings();
+
+  const projectList = document.querySelector('.columna-1');
+  document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
+  if (projectList) {
+    projectList.addEventListener('click', e => {
+      const trigger = e.target.closest('.proj-code, .proj-title');
+      if (!trigger) return;
+      const row = trigger.closest('.project-row');
+      if (!row) return;
+      const pid = resolveRowPid(row);
+      if (!pid || !PROJECT_DATA[pid]) return;
+      e.stopPropagation();
+      const rect = trigger.getBoundingClientRect();
+      openPhasePopup({ pid }, rect);
+    });
+  }
+
+  const source = new EventSource("{{ url_for('event_stream') }}", { withCredentials: true });
+  source.onmessage = () => {
+    fetch("{{ url_for('project_links_api') }}")
+      .then(r => r.json())
+      .then(items => {
+        const container = document.querySelector('.columna-1-content');
+        container.querySelectorAll('.project-row').forEach(r => r.remove());
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'project-row';
+          div.dataset.pid = item.pid || '';
+          const projectValue = (item.project || item.title || '').trim();
+          div.dataset.project = projectValue;
+          const fullTitle = (item.title || '').trim();
+          div.dataset.title = fullTitle || projectValue;
+          div.dataset.client = item.client || '';
+          div.dataset.montar = item.montar_start || '';
+          div.dataset.due = item.due || '';
+          const display = (item.display_title || fullTitle || projectValue).trim();
+          const code = (item.custom_card_id || '').trim();
+          div.dataset.display = display;
+          div.dataset.code = code;
+          let html = '<div class="proj-header">';
+          if (code) {
+            html += `<span class="proj-code" data-project="${projectValue}" data-code="${code}">${code}</span>`;
+          }
+          const titleText = (fullTitle || projectValue) || '';
+          html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
+          html += '</div>';
+          item.links.forEach(link => {
+            const linkText = (link ?? '').toString();
+            const linkTrimmed = linkText.trim();
+            const linkClass = linkTrimmed ? 'link-title' : 'link-title is-empty';
+            const safeAttr = linkText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+            const safeText = linkText
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/'/g, '&#39;');
+            html += `<div class="${linkClass}" data-title="${safeAttr}">${safeText}</div>`;
+          });
+          div.innerHTML = html;
+          resolveRowPid(div);
+          container.appendChild(div);
+        });
+        filterInput.dispatchEvent(new Event('input'));
+        if (currentHighlight) setHighlight(currentHighlight);
+        updateDueWarnings();
+      });
+  };
 });
 </script>
 {% endblock %}

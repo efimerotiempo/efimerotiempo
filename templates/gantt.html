@@ -1,0 +1,982 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Vista Gantt</h1>
+<div class="gantt-controls">
+  <button id="expand_all">Desplegar todos</button>
+  <button id="collapse_all">Plegar todos</button>
+  <button id="zoom_in">+</button>
+  <button id="zoom_out">-</button>
+  <button id="sort_start">Ordenar por inicio</button>
+  <button id="sort_due">Ordenar por límite</button>
+  <button id="go_today">HOY</button>
+  <input id="filter_project" type="text" placeholder="Filtrar por proyecto" />
+  <input id="filter_client" type="text" placeholder="Filtrar por cliente" />
+</div>
+<div class="gantt-wrapper">
+  <div id="gantt_summary" class="gantt-summary">
+    <div id="summary_header_row" class="summary-header-row"></div>
+    <div id="gantt_summary_body" class="summary-body"></div>
+    <div id="summary-resizer" class="summary-resizer"></div>
+  </div>
+  <div id="gantt_main" class="gantt-main">
+    <div id="gantt_header" class="gantt-header"></div>
+    <div id="gantt_body" class="gantt-body"></div>
+  </div>
+</div>
+<div id="info-popup" class="info-popup"></div>
+<div id="deadline-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <div id="deadline-text" style="color:orange;font-weight:bold"></div>
+    <button id="deadline-close">Cerrar</button>
+  </div>
+</div>
+<div id="split-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <form id="split-form">
+      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br>
+      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br>
+      <button type="submit">Aceptar</button>
+      <button type="button" id="split-cancel">Cancelar</button>
+    </form>
+  </div>
+</div>
+<div id="obs-modal" class="modal">
+  <div class="modal-content">
+    <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
+    <button id="obs-save" type="button">Guardar</button>
+    <button id="obs-cancel" type="button">Cancelar</button>
+  </div>
+</div>
+<style>
+  .gantt-wrapper { display:flex; }
+  .gantt-summary { width:450px; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-summary::-webkit-scrollbar { display:none; }
+  .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
+  .summary-header-row { position:sticky; top:0; display:flex; background:#fff; border-bottom:1px solid #ddd; z-index:2; }
+  .summary-header-cell { display:flex; align-items:center; font-weight:bold; color:#000; padding:0 8px 0 4px; box-sizing:border-box; border-right:1px solid #eee; position:relative; height:30px; line-height:30px; white-space:nowrap; overflow:hidden; }
+  .summary-body { position:relative; }
+  .summary-row { display:flex; height:30px; border-bottom:1px solid #ddd; color:#000; }
+  .summary-cell { display:flex; align-items:center; padding:0 8px 0 4px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-right:1px solid #f0f0f0; }
+  .summary-cell[data-column='summary'] { font-weight:bold; cursor:pointer; }
+  .summary-row.phase-row .summary-cell[data-column='summary'] { font-weight:normal; cursor:default; padding-left:20px; }
+  .summary-row.phase-row .summary-cell { font-weight:normal; }
+  .summary-cell[data-column='summary'].clickable { cursor:pointer; }
+  .column-resizer { position:absolute; right:0; top:0; bottom:0; width:6px; cursor:col-resize; }
+  .column-resizer::after { content:''; position:absolute; left:2px; top:25%; bottom:25%; width:2px; background:#bbb; }
+  .gantt-row.phase-row { opacity:0.5; }
+  .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
+  .gantt-main::-webkit-scrollbar { display:none; }
+  .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .gantt-body { position:relative; }
+  .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
+  .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
+  .project-bar { cursor:pointer; }
+  .gantt-row .deadline-highlight {
+    position:absolute;
+    top:-2px;
+    height:calc(100% + 4px);
+    border:3px solid #d00;
+    border-radius:4px;
+    pointer-events:none;
+    box-sizing:border-box;
+    font-weight:bold;
+    background:transparent;
+    z-index:1;
+  }
+  .day-cell.today { background-color: rgba(255,0,0,0.3); }
+  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
+  .gantt-controls input { margin-left:8px; padding:4px; }
+</style>
+<script>
+let allProjects = {{ projects|safe }};
+let PROJECT_DATA = {{ project_data|tojson }};
+let START_DATA = {{ start_map|tojson }};
+const PHASES = {{ phases|tojson }};
+const STATIC_URL = "{{ url_for('static', filename='') }}";
+const DELETE_URL = "{{ url_for('delete_phase') }}";
+const START_URL = "{{ url_for('update_phase_start') }}";
+const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
+const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+const DEADLINE_MSG = 'Fecha cliente soprepasada.';
+const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
+const LAST_KEY = 'lastMoved';
+const SCROLL_KEY2 = 'scrollDate';
+const GANTT_DATA_URL = "{{ url_for('gantt_data_api') }}";
+const SUMMARY_COLUMNS = [
+  { id: 'summary', label: 'Resumen', defaultWidth: 260 },
+  { id: 'due', label: 'Fecha límite', defaultWidth: 150 },
+  { id: 'lanzamiento', label: 'LANZAMIENTO', defaultWidth: 150 },
+  { id: 'material', label: 'MATERIAL', defaultWidth: 150 },
+  { id: 'caldereria', label: 'CALDERERÍA', defaultWidth: 150 },
+  { id: 'mecanizado', label: 'MECANIZADO', defaultWidth: 150 },
+  { id: 'tratamiento', label: 'TRATAMIENTO', defaultWidth: 150 },
+  { id: 'pintar', label: 'PINTAR', defaultWidth: 150 },
+  { id: 'phase_start', label: 'Fecha de inicio planificada de la fase', defaultWidth: 210 },
+  { id: 'phase_end', label: 'Fecha fin planificada de la fase', defaultWidth: 210 },
+];
+const COLUMN_WIDTHS_KEY = 'ganttSummaryColumns';
+let columnWidths = {};
+try {
+  columnWidths = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY) || '{}') || {};
+} catch (err) {
+  columnWidths = {};
+}
+let projects = allProjects.slice();
+const summaryContainer = document.getElementById('gantt_summary');
+const summaryHeaderRow = document.getElementById('summary_header_row');
+const summaryBody = document.getElementById('gantt_summary_body');
+const main = document.getElementById('gantt_main');
+const header = document.getElementById('gantt_header');
+const body = document.getElementById('gantt_body');
+const popup = document.getElementById('info-popup');
+const deadlineModal = document.getElementById('deadline-modal');
+const deadlineText = document.getElementById('deadline-text');
+const deadlineClose = document.getElementById('deadline-close');
+const splitModal = document.getElementById('split-modal');
+const splitForm = document.getElementById('split-form');
+const splitPart1 = document.getElementById('split-part1');
+const splitPart2 = document.getElementById('split-part2');
+const splitCancel = document.getElementById('split-cancel');
+const obsModal = document.getElementById('obs-modal');
+const obsText = document.getElementById('obs-text');
+const obsSave = document.getElementById('obs-save');
+const obsCancel = document.getElementById('obs-cancel');
+const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
+let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
+let pxPerDay = 40 * zoom;
+let todayIndex = null;
+let initialScroll = true;
+const BAR_HEIGHT = 30;
+let currentSort = localStorage.getItem('ganttSort') || null;
+const DAY_MS = 24*60*60*1000;
+let timelineMinStart = null;
+let timelinePxPerDay = pxPerDay;
+
+const projectFilterInput = document.getElementById('filter_project');
+const clientFilterInput = document.getElementById('filter_client');
+const FILTER_PROJECT_KEY = 'ganttFilterProject';
+const FILTER_CLIENT_KEY = 'ganttFilterClient';
+
+const savedProjectFilter = localStorage.getItem(FILTER_PROJECT_KEY) || '';
+const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
+projectFilterInput.value = savedProjectFilter;
+clientFilterInput.value = savedClientFilter;
+
+document.addEventListener('click', () => {
+  if (popup) popup.style.display = 'none';
+});
+if (popup) {
+  popup.addEventListener('click', (e) => e.stopPropagation());
+}
+
+function getColumnWidth(columnId) {
+  const config = SUMMARY_COLUMNS.find(c => c.id === columnId);
+  const stored = columnWidths[columnId];
+  const width = Number.isFinite(stored) ? stored : (config ? config.defaultWidth : 150);
+  return Math.max(80, width);
+}
+
+function applyColumnWidth(columnId) {
+  const width = getColumnWidth(columnId);
+  const selector = `[data-column="${columnId}"]`;
+  summaryContainer.querySelectorAll(selector).forEach(cell => {
+    cell.style.width = width + 'px';
+    cell.style.flex = `0 0 ${width}px`;
+  });
+}
+
+function applyAllColumnWidths() {
+  SUMMARY_COLUMNS.forEach(col => applyColumnWidth(col.id));
+}
+
+function setColumnWidth(columnId, width, persist = true) {
+  columnWidths[columnId] = Math.max(80, width);
+  applyColumnWidth(columnId);
+  if (persist) {
+    try {
+      localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(columnWidths));
+    } catch (err) {
+      // ignore storage issues
+    }
+  }
+}
+
+function initColumnResize(event, columnId) {
+  event.preventDefault();
+  event.stopPropagation();
+  const startX = event.clientX;
+  const startWidth = getColumnWidth(columnId);
+  const onMouseMove = ev => {
+    const delta = ev.clientX - startX;
+    setColumnWidth(columnId, startWidth + delta, false);
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    setColumnWidth(columnId, getColumnWidth(columnId), true);
+  };
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+function buildSummaryHeader() {
+  if (!summaryHeaderRow) return;
+  summaryHeaderRow.innerHTML = '';
+  SUMMARY_COLUMNS.forEach(col => {
+    const headerCell = document.createElement('div');
+    headerCell.className = 'summary-header-cell';
+    headerCell.dataset.column = col.id;
+    headerCell.textContent = col.label;
+    const resizer = document.createElement('div');
+    resizer.className = 'column-resizer';
+    resizer.addEventListener('mousedown', ev => initColumnResize(ev, col.id));
+    headerCell.appendChild(resizer);
+    summaryHeaderRow.appendChild(headerCell);
+  });
+  applyAllColumnWidths();
+}
+
+function extractKanbanValue(info, labels) {
+  if (!info) return '';
+  const fields = info.kanban_display_fields || {};
+  const options = Array.isArray(labels) ? labels : [labels];
+  for (const label of options) {
+    const value = fields[label];
+    if (value === null || value === undefined) continue;
+    const text = `${value}`.trim();
+    if (text) {
+      return text;
+    }
+  }
+  return '';
+}
+
+function formatKanbanDateValue(value) {
+  if (value === null || value === undefined) return '';
+  const text = `${value}`.trim();
+  if (!text) return '';
+  const iso = madridDateISO(text);
+  return iso || text;
+}
+
+function summaryValueFor(columnId, row) {
+  const info = PROJECT_DATA[row.project.id] || {};
+  switch (columnId) {
+    case 'summary': {
+      if (row.type === 'project') {
+        const client = row.project.client ? ` - ${row.project.client}` : '';
+        return `${row.project.name}${client}`;
+      }
+      const worker = row.phase.worker ? ` - ${row.phase.worker}` : '';
+      return `${row.phase.name}${worker}`;
+    }
+    case 'due': {
+      if (row.type !== 'project') return '';
+      const kanbanValue = extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']);
+      const base = kanbanValue || row.project.deadline_start || row.project.due_date || extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente']);
+      return formatKanbanDateValue(base);
+    }
+    case 'lanzamiento':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'LANZAMIENTO')) : '';
+    case 'material':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MATERIAL')) : '';
+    case 'caldereria':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['CALDERERÍA', 'CALDERERIA'])) : '';
+    case 'mecanizado':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MECANIZADO')) : '';
+    case 'tratamiento':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'TRATAMIENTO')) : '';
+    case 'pintar':
+      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['PINTAR', 'PINTADO'])) : '';
+    case 'phase_start': {
+      if (row.type === 'phase') {
+        const planned = (START_DATA[row.project.id] && START_DATA[row.project.id][row.phase.name]) || row.phase.start;
+        return formatKanbanDateValue(planned);
+      }
+      return '';
+    }
+    case 'phase_end': {
+      if (row.type === 'phase') {
+        return formatKanbanDateValue(row.phase.end);
+      }
+      return '';
+    }
+    default:
+      return '';
+  }
+}
+
+function makeDraggable(el) {
+  if (!el) return;
+  let startX, startY, startLeft, startTop;
+  const onMouseMove = (ev) => {
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+    el.style.left = startLeft + dx + 'px';
+    el.style.top = startTop + dy + 'px';
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+  el.addEventListener('mousedown', (ev) => {
+    if (ev.target.closest('input, textarea, select, button')) return;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    const rect = el.getBoundingClientRect();
+    startLeft = rect.left + window.scrollX;
+    startTop = rect.top + window.scrollY;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+}
+
+document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
+
+function showDeadline(text = DEADLINE_MSG, after = null) {
+  if (!deadlineModal || !deadlineText || !deadlineClose) return;
+  deadlineText.innerHTML = text.replace(/\n/g, '<br>');
+  deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
+  deadlineModal.style.display = 'block';
+  deadlineClose.onclick = () => {
+    deadlineModal.style.display = 'none';
+    if (after) after();
+  };
+}
+
+function afterMove(data, originalDate) {
+  localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
+  if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
+  if (data.warning) showDeadline(data.warning, () => location.reload());
+  else location.reload();
+}
+
+if (obsCancel) {
+  obsCancel.addEventListener('click', () => { if (obsModal) obsModal.style.display = 'none'; });
+}
+if (obsModal) {
+  obsModal.addEventListener('click', (e) => { if (e.target === obsModal) obsModal.style.display = 'none'; });
+}
+if (obsSave) {
+  obsSave.addEventListener('click', () => {
+    if (!obsModal) return;
+    const pid = obsModal.dataset.pid;
+    const txt = obsText.value;
+    const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ observations: txt })
+    }).then(() => {
+      if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+      obsModal.style.display = 'none';
+    });
+  });
+}
+
+if (splitCancel) {
+  splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
+}
+if (splitForm) {
+  splitForm.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    fetch(SPLIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        pid: splitModal.dataset.pid,
+        phase: splitModal.dataset.phase,
+        date: splitModal.dataset.date,
+        part1: splitPart1.value,
+        part2: splitPart2.value
+      })
+    }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+  });
+}
+
+function buildPhaseSection(info, context) {
+  const phaseLines = [];
+  PHASES.forEach(ph => {
+    if (ph === 'dibujo' || ph === 'pedidos') return;
+    const raw = info.phases ? info.phases[ph] : null;
+    let total = 0;
+    if (Array.isArray(raw)) total = raw.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+    else total = parseInt(raw) || 0;
+    if (total > 0) {
+      const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
+      const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
+      let line = `<div${cls}>${ph}: ${total}h`;
+      if (ph === context.phase) {
+        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+      }
+      line += `</div>`;
+      phaseLines.push(line);
+    }
+  });
+  let section = '';
+  if (phaseLines.length) section += phaseLines.join('');
+  if (context.phase === 'pedidos') {
+    const acopio = info.phases ? info.phases['pedidos'] : null;
+    if (acopio && acopio !== '0') section += `<div>Plazo acopio: ${acopio}</div>`;
+  }
+  return section;
+}
+
+function openPhasePopup(context, anchorRect) {
+  if (!popup) return;
+  const info = PROJECT_DATA[context.pid];
+  if (!info) return;
+  const headerParts = [info.name];
+  if (info.blocked) headerParts[0] += ' <span class="blocked-sign">\u{1F6AB}</span>';
+  headerParts.push(info.client || '');
+  if (context.phase) headerParts.push(context.phase);
+  let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
+  const formatDateValue = (value) => {
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) {
+      const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
+      return formatted.join(', ');
+    }
+    const text = `${value}`.trim();
+    if (!text || text === '0') return '';
+    return formatKanbanDateValue(text);
+  };
+  const dateFieldLines = [];
+  const addDateField = (label, rawValues) => {
+    const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+    for (const raw of values) {
+      const formatted = formatDateValue(raw);
+      if (formatted) {
+        dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
+        return;
+      }
+    }
+  };
+  addDateField('Límite', [
+    extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
+    info.deadline_start,
+    info.due_date,
+    extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
+  ]);
+  addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
+  addDateField('MATERIAL', extractKanbanValue(info, 'MATERIAL'));
+  addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
+  addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
+  addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
+  addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
+  if (dateFieldLines.length) {
+    html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+  }
+  const segmentLines = [];
+  const segments = info.segment_starts || {};
+  ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach((segment) => {
+    const value = formatDateValue(segments[segment]);
+    if (value) {
+      segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+    }
+  });
+  if (segmentLines.length) {
+    html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
+  }
+  const phaseSection = buildPhaseSection(info, context);
+  if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+  const actionLines = [];
+  const actionMain = [];
+  let deleteButton = '';
+  if (context.phase) {
+    const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
+    actionMain.push(`<div class="popup-action-line">Inicio de la fase: <form id="start-form" class="popup-inline-form"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
+    actionMain.push(`<div class="popup-action-line"><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" class="freeze-btn">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+    let splitLine = `<div class="popup-action-line"><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day}">Dividir fase aquí</button>`;
+    if (info.phases && Array.isArray(info.phases[context.phase])) {
+      splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+    }
+    splitLine += `</div>`;
+    actionMain.push(splitLine);
+    deleteButton = `<button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button>`;
+  }
+  actionMain.push(`<div class="popup-action-line"><button id="obs-btn" data-pid="${context.pid}" class="obs-btn">Observaciones</button></div>`);
+  if (actionMain.length || deleteButton) {
+    const left = actionMain.join('');
+    const right = deleteButton ? `<div class="popup-actions-delete">${deleteButton}</div>` : '';
+    actionLines.push(`<div class="popup-actions-main">${left}</div>${right}`);
+    html += `<div class="popup-section popup-actions">${actionLines.join('')}</div>`;
+  }
+  const attachmentItems = [];
+  if (info.image) {
+    const imgUrl = `${STATIC_URL}${info.image}`;
+    attachmentItems.push(`<div class="attachment-item"><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" class="attachment-thumb" alt="Imagen del proyecto"></a></div>`);
+  }
+  if (info.kanban_attachments && info.kanban_attachments.length) {
+    info.kanban_attachments.forEach(att => {
+      const url = att.url;
+      const name = att.name || '';
+      const lower = name.toLowerCase();
+      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) {
+        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" class="attachment-thumb"></a></div>`);
+      } else {
+        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank">${name || url}</a></div>`);
+      }
+    });
+  }
+  if (attachmentItems.length) {
+    html += `<div class="popup-section popup-attachments"><div class="attachment-list">${attachmentItems.join('')}</div></div>`;
+  }
+  popup.innerHTML = html;
+  popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
+  popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
+  popup.style.display = 'block';
+
+  const del = document.getElementById('del-btn');
+  if (del) {
+    del.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('¿Borrar fase?')) {
+        fetch(DELETE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+        }).then(() => location.reload());
+      }
+    });
+  }
+  const obsBtn = document.getElementById('obs-btn');
+  if (obsBtn && obsModal) {
+    obsBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const pid = obsBtn.dataset.pid;
+      obsModal.dataset.pid = pid;
+      obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
+      obsModal.style.display = 'block';
+    });
+  }
+  const splitBtn = document.getElementById('split-btn');
+  if (splitBtn && splitModal) {
+    splitBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      splitModal.dataset.pid = splitBtn.dataset.pid;
+      splitModal.dataset.phase = splitBtn.dataset.phase;
+      splitModal.dataset.date = splitBtn.dataset.date;
+      splitPart1.value = '';
+      splitPart2.value = '';
+      splitModal.style.display = 'block';
+    });
+  }
+  const unsplitBtn = document.getElementById('unsplit-btn');
+  if (unsplitBtn) {
+    unsplitBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      if (confirm('¿Deshacer división de esta fase?')) {
+        fetch(UNSPLIT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pid: unsplitBtn.dataset.pid, phase: unsplitBtn.dataset.phase })
+        }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+      }
+    });
+  }
+  const freeze = document.getElementById('freeze-btn');
+  if (freeze) {
+    freeze.addEventListener('click', ev => {
+      ev.stopPropagation();
+      fetch('/toggle_freeze/' + freeze.dataset.pid + '/' + encodeURIComponent(freeze.dataset.phase), { method: 'POST', credentials: 'same-origin' })
+        .then(() => location.reload());
+    });
+  }
+  const startForm = document.getElementById('start-form');
+  if (startForm) {
+    startForm.addEventListener('submit', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const btn = document.getElementById('start-btn');
+      const val = document.getElementById('start-input').value;
+      fetch(START_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, date: val })
+      }).then(resp => {
+        if (!resp.ok) {
+          return resp.json().then(d => { alert(d.error || 'Error'); return null; });
+        }
+        return resp.json();
+      }).then(d => {
+        if (d) {
+          localStorage.setItem(LAST_KEY, JSON.stringify({pid: btn.dataset.pid, phase: btn.dataset.phase, date: d.date}));
+          if (d.date !== val) localStorage.setItem(SCROLL_KEY2, d.date);
+        }
+        location.reload();
+      });
+    });
+  }
+  const hoursForm = document.getElementById('phase-hours-form');
+  if (hoursForm) {
+    hoursForm.addEventListener('submit', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const btn = hoursForm.querySelector('button');
+      const val = document.getElementById('phase-hours-input').value;
+      fetch(PHASE_HOURS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+      }).then(resp => {
+        if (resp.ok) {
+          const url = new URL(location);
+          url.searchParams.set('highlight', btn.dataset.pid);
+          location.href = url;
+        } else {
+          resp.json().then(d => alert(d.error || 'Error'));
+        }
+      });
+    });
+  }
+}
+
+const summaryResizer = document.getElementById('summary-resizer');
+const SUMMARY_WIDTH_KEY = 'ganttSummaryWidth';
+const savedSummaryWidth = localStorage.getItem(SUMMARY_WIDTH_KEY);
+if(savedSummaryWidth){ summaryContainer.style.width = savedSummaryWidth + 'px'; }
+if(summaryResizer){
+  let startX, startWidth;
+  const onMouseMove = e => {
+    const dx = e.clientX - startX;
+    const newWidth = Math.max(150, startWidth + dx);
+    summaryContainer.style.width = newWidth + 'px';
+  };
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    localStorage.setItem(SUMMARY_WIDTH_KEY, summaryContainer.offsetWidth);
+  };
+  summaryResizer.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    startWidth = summaryContainer.offsetWidth;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+}
+
+function sortProjects(type, store=true){
+  if(!type){
+    currentSort = null;
+    if(store) localStorage.removeItem('ganttSort');
+    render();
+    return;
+  }
+  projects.sort((a,b)=>{
+    const da = type==='start'? new Date(a.start) : new Date(a.due_date || '9999-12-31');
+    const db = type==='start'? new Date(b.start) : new Date(b.due_date || '9999-12-31');
+    return da - db;
+  });
+  currentSort = type;
+  if(store) localStorage.setItem('ganttSort', type);
+  render();
+}
+
+function applyFilters(store=true){
+  const projectRaw = projectFilterInput.value.trim();
+  const clientRaw = clientFilterInput.value.trim();
+  const projectTerm = projectRaw.toLowerCase();
+  const clientTerm = clientRaw.toLowerCase();
+  if(store){
+    if(projectRaw){
+      localStorage.setItem(FILTER_PROJECT_KEY, projectRaw);
+    } else {
+      localStorage.removeItem(FILTER_PROJECT_KEY);
+    }
+    if(clientRaw){
+      localStorage.setItem(FILTER_CLIENT_KEY, clientRaw);
+    } else {
+      localStorage.removeItem(FILTER_CLIENT_KEY);
+    }
+  }
+  projects = allProjects.filter(p=>{
+    const matchesProject = !projectTerm || p.name.toLowerCase().includes(projectTerm);
+    const matchesClient = !clientTerm || (p.client || '').toLowerCase().includes(clientTerm);
+    return matchesProject && matchesClient;
+  });
+  if(currentSort){
+    sortProjects(currentSort, false);
+    return;
+  }
+  render();
+}
+
+function render(){
+  summaryBody.innerHTML = '';
+  body.innerHTML = '';
+  header.innerHTML = '';
+  buildSummaryHeader();
+  if(!projects.length){return;}
+  const dayMs = DAY_MS;
+  const startOfDay = d => {
+    const raw = (d ?? '').toString().trim();
+    if(!raw){
+      return new Date(NaN);
+    }
+    const normalized = raw.replace(' ', 'T');
+    const base = normalized.split('T')[0];
+    return new Date(base + 'T00:00:00');
+  };
+  const allStarts = [];
+  const allEnds = [];
+  projects.forEach(p=>{
+    const ps = startOfDay(p.start);
+    const pe = startOfDay(p.end);
+    allStarts.push(ps.getTime());
+    allEnds.push(pe.getTime());
+    p.phases.forEach(ph=>{
+      const s = startOfDay(ph.start);
+      const e = startOfDay(ph.end);
+      allStarts.push(s.getTime());
+      allEnds.push(e.getTime());
+    });
+  });
+  const minStart = Math.min(...allStarts);
+  const maxEnd = Math.max(...allEnds);
+  const totalDays = Math.round((maxEnd - minStart)/dayMs) + 1;
+  timelineMinStart = minStart;
+  pxPerDay = 40 * zoom;
+  timelinePxPerDay = pxPerDay;
+  const width = totalDays * pxPerDay;
+  header.style.width = width + 'px';
+  body.style.width = width + 'px';
+  body.style.background = `repeating-linear-gradient(to right, #ddd, #ddd 1px, transparent 1px, transparent ${pxPerDay}px)`;
+  header.style.background = body.style.background;
+  const todayStr = madridDateISO();
+  todayIndex = null;
+
+  for(let i=0;i<totalDays;i++){
+    const d = new Date(minStart + i*dayMs);
+    const iso = madridDateISO(d);
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    cell.style.left = (i*pxPerDay) + 'px';
+    cell.style.width = pxPerDay + 'px';
+    cell.textContent = d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit'});
+    if(iso === todayStr){ cell.classList.add('today'); todayIndex = i; }
+    header.appendChild(cell);
+  }
+
+  if(todayIndex !== null){
+    const highlight = document.createElement('div');
+    highlight.className = 'today-column';
+    highlight.style.left = (todayIndex*pxPerDay) + 'px';
+    highlight.style.width = pxPerDay + 'px';
+    body.appendChild(highlight);
+  }
+
+  const rows = [];
+  projects.forEach(p=>{
+    rows.push({type:'project', project:p});
+    if(!collapsed[p.id]){
+      p.phases.forEach(ph=>rows.push({type:'phase', project:p, phase:ph}));
+    }
+  });
+
+  rows.forEach(r=>{
+    const summaryRow = document.createElement('div');
+    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
+    SUMMARY_COLUMNS.forEach(col => {
+      const cell = document.createElement('div');
+      cell.className = 'summary-cell summary-' + col.id;
+      cell.dataset.column = col.id;
+      const value = summaryValueFor(col.id, r) || '';
+      cell.textContent = value;
+      if(col.id === 'summary' && r.type==='project'){
+        cell.classList.add('clickable');
+        cell.addEventListener('click', ()=>toggleProject(r.project.id));
+      }
+      summaryRow.appendChild(cell);
+    });
+    summaryBody.appendChild(summaryRow);
+
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
+    const bar = document.createElement('div');
+    bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
+    const startMs = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
+    const endMs = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
+    bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+    bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
+    bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+    if(r.type==='project'){
+      const clientSuffix = r.project.client ? ` - ${r.project.client}` : '';
+      bar.textContent = `${r.project.name}${clientSuffix}`;
+    } else {
+      bar.textContent = r.phase.name;
+    }
+    if(r.type==='project'){
+      const deadlineSources = [
+        r.project.deadline_start,
+        r.project.due_date,
+        r.project.client_date,
+        r.project.client_due_date
+      ];
+      const seenDeadlines = new Set();
+      deadlineSources.forEach(raw => {
+        const deadlineDate = startOfDay(raw);
+        const deadlineMs = deadlineDate.getTime();
+        if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
+        seenDeadlines.add(deadlineMs);
+        if(deadlineMs <= endMs){
+          const highlightStart = Math.max(deadlineMs, minStart);
+          if(highlightStart <= endMs){
+            const leftPx = ((highlightStart - minStart)/dayMs) * pxPerDay;
+            const widthDays = Math.round((endMs - highlightStart)/dayMs) + 1;
+            if(widthDays > 0){
+              const highlight = document.createElement('div');
+              highlight.className = 'deadline-highlight';
+              highlight.style.left = leftPx + 'px';
+              highlight.style.width = (widthDays * pxPerDay) + 'px';
+              rowDiv.appendChild(highlight);
+            }
+          }
+        }
+      });
+      bar.addEventListener('click', evt => {
+        evt.stopPropagation();
+        const barWidthDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+        let dayOffset = Math.floor(relativePx / pxPerDay);
+        if(dayOffset > barWidthDays) dayOffset = barWidthDays;
+        let clickedMs = startMs + dayOffset * dayMs;
+        const phases = Array.isArray(r.project.phases) ? r.project.phases : [];
+        let chosen = null;
+        let minDist = Infinity;
+        phases.forEach(ph => {
+          const phStart = startOfDay(ph.start).getTime();
+          const phEnd = startOfDay(ph.end).getTime();
+          let dist = 0;
+          if(clickedMs < phStart) dist = phStart - clickedMs;
+          else if(clickedMs > phEnd) dist = clickedMs - phEnd;
+          if(dist < minDist){
+            minDist = dist;
+            chosen = { data: ph, start: phStart, end: phEnd };
+          }
+        });
+        if(chosen){
+          if(clickedMs < chosen.start) clickedMs = chosen.start;
+          if(clickedMs > chosen.end) clickedMs = chosen.end;
+        } else {
+          if(clickedMs < startMs) clickedMs = startMs;
+          if(clickedMs > endMs) clickedMs = endMs;
+        }
+        const isoDay = madridDateISO(clickedMs);
+        openPhasePopup({
+          pid: r.project.id,
+          phase: chosen ? chosen.data.name : '',
+          day: isoDay,
+          worker: chosen && chosen.data.worker ? chosen.data.worker : '',
+          part: ''
+        }, bar.getBoundingClientRect());
+      });
+    } else {
+      bar.addEventListener('click', evt => {
+        evt.stopPropagation();
+        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+        const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+        let dayOffset = Math.floor(relativePx / pxPerDay);
+        if(dayOffset > totalDays) dayOffset = totalDays;
+        let clickedMs = startMs + dayOffset * dayMs;
+        if(clickedMs > endMs) clickedMs = endMs;
+        const isoDay = madridDateISO(clickedMs);
+        openPhasePopup({
+          pid: r.project.id,
+          phase: r.phase.name,
+          day: isoDay,
+          worker: r.phase.worker || '',
+          part: ''
+        }, bar.getBoundingClientRect());
+      });
+    }
+    rowDiv.appendChild(bar);
+    body.appendChild(rowDiv);
+  });
+
+  applyAllColumnWidths();
+
+  const totalHeight = rows.length * BAR_HEIGHT;
+  summaryBody.style.height = totalHeight + 'px';
+  body.style.height = totalHeight + 'px';
+  if(initialScroll){ scrollToToday(); initialScroll=false; }
+}
+
+function scrollToToday(){
+  if(todayIndex === null) return;
+  main.scrollLeft = todayIndex * pxPerDay - main.clientWidth/2 + pxPerDay/2;
+}
+
+function toggleProject(id){
+  collapsed[id] = !collapsed[id];
+  localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed));
+  render();
+}
+
+document.getElementById('expand_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=false); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('collapse_all').onclick = ()=>{projects.forEach(p=>collapsed[p.id]=true); localStorage.setItem('ganttCollapsed', JSON.stringify(collapsed)); render();};
+document.getElementById('zoom_in').onclick = ()=>{zoom*=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('zoom_out').onclick = ()=>{zoom/=1.25; localStorage.setItem('ganttZoom', zoom); render();};
+document.getElementById('sort_start').onclick = ()=>sortProjects('start');
+document.getElementById('sort_due').onclick = ()=>sortProjects('due');
+document.getElementById('go_today').onclick = scrollToToday;
+projectFilterInput.addEventListener('input', ()=>applyFilters());
+clientFilterInput.addEventListener('input', ()=>applyFilters());
+
+let syncing = false;
+function syncScroll(source, target){
+  if(syncing) return;
+  syncing = true;
+  target.scrollTop = source.scrollTop;
+  syncing = false;
+}
+
+main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
+summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
+
+function refreshGanttData(){
+  fetch(GANTT_DATA_URL, { credentials: 'same-origin' })
+    .then(resp => resp.ok ? resp.json() : null)
+    .then(data => {
+      if(!data) return;
+      allProjects = Array.isArray(data.projects) ? data.projects : [];
+      PROJECT_DATA = data.project_map || {};
+      START_DATA = data.start_map || {};
+      applyFilters(false);
+    })
+    .catch(err => console.error('Error actualizando Gantt', err));
+}
+
+try {
+  const source = new EventSource("{{ url_for('event_stream') }}", { withCredentials: true });
+  source.onmessage = evt => {
+    if(!evt || !evt.data){
+      return;
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(evt.data);
+    } catch (err) {
+      payload = null;
+    }
+    if(!payload || !payload.type || payload.type === 'kanban_update'){
+      refreshGanttData();
+    }
+  };
+} catch (err) {
+  console.error('Error iniciando las actualizaciones en tiempo real', err);
+}
+
+applyFilters(false);
+</script>
+{% endblock %}

@@ -3,13 +3,22 @@
 <h2>Recursos</h2>
 <form method="post">
   <table class="resource-table">
-    <tr><th>Recurso</th><th>Visible</th></tr>
-    {% for w in workers %}
-    <tr>
-      <td>{{ w }}</td>
-      <td style="text-align:center;"><input type="checkbox" name="worker" value="{{ w }}" {% if w not in inactive %}checked{% endif %}></td>
-    </tr>
-    {% endfor %}
+    <thead>
+      <tr><th class="resource-order-header">Orden</th><th>Recurso</th><th>Visible</th></tr>
+    </thead>
+    <tbody id="resource-list">
+      {% for w in workers %}
+      <tr data-worker="{{ w }}">
+        <td class="resource-move">
+          <button type="button" class="move-btn" data-move="up" aria-label="Mover {{ w }} hacia arriba">▲</button>
+          <button type="button" class="move-btn" data-move="down" aria-label="Mover {{ w }} hacia abajo">▼</button>
+          <input type="hidden" name="order" value="{{ w }}">
+        </td>
+        <td class="resource-name">{{ w }}</td>
+        <td class="resource-visible"><input type="checkbox" name="worker" value="{{ w }}" {% if w not in inactive %}checked{% endif %}></td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
   <div class="add-worker">
     <input type="text" name="new_worker" placeholder="Nombre del recurso">
@@ -17,4 +26,34 @@
   </div>
   <button type="submit">Guardar</button>
 </form>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('resource-list');
+    if (!list) {
+      return;
+    }
+    list.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-move]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      const row = button.closest('tr[data-worker]');
+      if (!row) {
+        return;
+      }
+      if (button.dataset.move === 'up') {
+        const previous = row.previousElementSibling;
+        if (previous) {
+          list.insertBefore(row, previous);
+        }
+      } else if (button.dataset.move === 'down') {
+        const next = row.nextElementSibling;
+        if (next) {
+          list.insertBefore(row, next.nextElementSibling);
+        }
+      }
+    });
+  });
+</script>
 {% endblock %}
