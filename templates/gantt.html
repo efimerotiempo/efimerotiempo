@@ -12,11 +12,9 @@
   <input id="filter_project" type="text" placeholder="Filtrar por proyecto" />
   <input id="filter_client" type="text" placeholder="Filtrar por cliente" />
 </div>
-<div class="gantt-wrapper">
+  <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
-    <div class="summary-header">Resumen</div>
-    <div id="gantt_summary_body"></div>
-    <div id="summary-resizer" class="summary-resizer"></div>
+    <div id="gantt_summary_columns" class="summary-columns"></div>
   </div>
   <div id="gantt_main" class="gantt-main">
     <div id="gantt_header" class="gantt-header"></div>
@@ -49,21 +47,36 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:250px; overflow-x:hidden; overflow-y:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; }
+  .gantt-summary { display:flex; flex-direction:row; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
-  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:20px; line-height:20px; font-weight:bold; color:#000; }
-  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 4px; box-sizing:border-box; color:#000; white-space:nowrap; }
-  .summary-row.project-row { cursor:pointer; font-weight:bold; }
-  .summary-row.phase-row { padding-left:16px; opacity:0.5; }
-  .gantt-row.phase-row { opacity:0.5; }
+  .summary-columns { display:flex; flex:1; }
+  .summary-group-wrapper { display:flex; flex-direction:row; position:relative; flex:0 0 auto; }
+  .summary-column-group { display:flex; overflow:hidden; background:#fff; flex:0 0 auto; border-right:1px solid #ddd; }
+  .summary-column-group .summary-column { border-right:1px solid #ddd; }
+  .summary-column-group .summary-column:last-child { border-right:0; }
+  .summary-column { position:relative; display:flex; flex-direction:column; border-right:1px solid #ddd; flex:0 0 auto; background:#fff; }
+  .summary-column:last-child { border-right:0; }
+  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:30px; line-height:30px; font-weight:bold; color:#000; z-index:2; padding:0 6px; box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:0; }
+  .summary-body { flex:1; }
+  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 6px; box-sizing:border-box; color:#000; white-space:nowrap; display:flex; align-items:center; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .summary-column.summary-main .summary-row.project-row { cursor:pointer; font-weight:bold; }
+  .summary-column.summary-main .summary-row.phase-row { padding-left:16px; }
+  .summary-column:not(.summary-main) .summary-row { justify-content:center; font-size:12px; }
+  .summary-row.summary-group-title-row { font-weight:bold; justify-content:center; background:#f9f9f9; pointer-events:none; }
+  .summary-column.summary-main .summary-row.summary-group-title-row { background:#fff; font-weight:normal; }
+  .column-resizer { position:absolute; top:0; right:0; bottom:0; width:4px; cursor:col-resize; }
+  .column-resizer:hover, .summary-column.resizing .column-resizer { background:rgba(0,0,0,0.1); }
+  .column-group-resizer { width:6px; flex:0 0 6px; cursor:col-resize; }
+  .column-group-resizer:hover, .column-group-resizer.active { background:rgba(0,0,0,0.1); }
   .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
   .gantt-main::-webkit-scrollbar { display:none; }
-  .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
-  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .gantt-header { position:sticky; top:0; height:30px; line-height:30px; border-bottom:1px solid #ddd; background:#fff; box-sizing:border-box; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:30px; height:30px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .gantt-body { position:relative; }
-  .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
-  .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
+  .gantt-row { height:30px; border-bottom:1px solid #ddd; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
+  .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
   .gantt-row .deadline-highlight {
     position:absolute;
@@ -100,7 +113,12 @@ const LAST_KEY = 'lastMoved';
 const SCROLL_KEY2 = 'scrollDate';
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
-const summaryBody = document.getElementById('gantt_summary_body');
+const summaryColumnsContainer = document.getElementById('gantt_summary_columns');
+const SUMMARY_COL_WIDTH_PREFIX = 'ganttSummaryColWidth-';
+const summaryColumnDefs = [];
+const DATE_GROUP_NAME = 'dates';
+const DATE_GROUP_WIDTH_KEY = 'ganttDateGroupWidth';
+let dateGroupContainerEl = null;
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
 const body = document.getElementById('gantt_body');
@@ -137,6 +155,382 @@ const savedProjectFilter = localStorage.getItem(FILTER_PROJECT_KEY) || '';
 const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
+
+const BASE_SUMMARY_COLUMNS = [
+  { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
+  { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
+  { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
+  { key: 'material', title: 'MATERIAL', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
+  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['CALDERERÍA', 'CALDERERIA']) },
+  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MECANIZADO']) },
+  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['TRATAMIENTO']) },
+  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['PINTAR', 'PINTADO']) },
+  { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
+  { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
+];
+
+initializeSummaryColumns();
+
+function getStoredColumnWidth(key, fallback){
+  const raw = parseFloat(localStorage.getItem(SUMMARY_COL_WIDTH_PREFIX + key));
+  if(!Number.isNaN(raw) && raw > 60) return raw;
+  return fallback;
+}
+
+function setStoredColumnWidth(key, width){
+  localStorage.setItem(SUMMARY_COL_WIDTH_PREFIX + key, String(width));
+}
+
+function getStoredGroupWidth(fallback){
+  const raw = parseFloat(localStorage.getItem(DATE_GROUP_WIDTH_KEY));
+  if(!Number.isNaN(raw) && raw >= 0) return raw;
+  return fallback;
+}
+
+function setStoredGroupWidth(width){
+  localStorage.setItem(DATE_GROUP_WIDTH_KEY, String(Math.max(0, width)));
+}
+
+function setColumnWidth(element, width){
+  if(!element) return;
+  element.style.width = width + 'px';
+  element.style.flex = '0 0 ' + width + 'px';
+}
+
+function findDateCandidate(text){
+  if(!text) return '';
+  const iso = text.match(/\d{4}-\d{2}-\d{2}/);
+  if(iso) return iso[0];
+  const slash = text.match(/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/);
+  if(slash) return slash[0];
+  return '';
+}
+
+function parseDateString(text){
+  if(!text) return null;
+  let trimmed = text.trim();
+  if(!trimmed) return null;
+  const isoMatch = trimmed.match(/\d{4}-\d{2}-\d{2}/);
+  if(isoMatch){
+    trimmed = isoMatch[0];
+    const isoDate = new Date(trimmed + 'T00:00:00');
+    if(!Number.isNaN(isoDate.getTime())) return isoDate;
+  }
+  const slashMatch = trimmed.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if(slashMatch){
+    const day = parseInt(slashMatch[1], 10);
+    const month = parseInt(slashMatch[2], 10) - 1;
+    let year = parseInt(slashMatch[3], 10);
+    if(year < 100) year += 2000;
+    const candidate = new Date(year, month, day);
+    if(candidate.getFullYear() === year && candidate.getMonth() === month && candidate.getDate() === day) return candidate;
+  }
+  const direct = new Date(trimmed);
+  if(!Number.isNaN(direct.getTime())) return direct;
+  return null;
+}
+
+function formatKanbanDate(value){
+  if(value === null || value === undefined) return '';
+  const text = String(value).trim();
+  if(!text) return '';
+  const candidate = findDateCandidate(text) || text;
+  const parsed = parseDateString(candidate);
+  if(parsed) return parsed.toLocaleDateString('es-ES');
+  return text;
+}
+
+function normalizePhaseName(name){
+  return (name || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getProjectInfo(projectId){
+  return PROJECT_DATA[projectId] || {};
+}
+
+function getKanbanFields(projectId){
+  const info = getProjectInfo(projectId);
+  return info.kanban_display_fields || {};
+}
+
+function getProjectFieldValue(info, keys){
+  const fields = info.kanban_display_fields || {};
+  for(const key of keys){
+    if(key in fields){
+      const value = fields[key];
+      if(value !== null && value !== undefined && String(value).trim() !== '') return value;
+    }
+  }
+  return '';
+}
+
+function buildMainSummaryCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'project'){
+    const pieces = [row.project.name, row.project.client].filter(Boolean);
+    cell.textContent = pieces.join(' - ');
+    cell.addEventListener('click', () => toggleProject(row.project.id));
+  } else {
+    cell.textContent = row.phase.name + (row.phase.worker ? ` - ${row.phase.worker}` : '');
+  }
+  return cell;
+}
+
+function getProjectDeadlineFallback(row){
+  if(row.type !== 'project') return '';
+  const info = getProjectInfo(row.project.id);
+  const candidates = [
+    info.due_date,
+    info.client_date,
+    info.client_due_date,
+    info.customer_date,
+    row.project.due_date,
+    row.project.deadline_start
+  ];
+  for(const value of candidates){
+    if(value && String(value).trim()) return value;
+  }
+  return '';
+}
+
+function buildProjectFieldCell(row, keys, fallbackFn){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  let raw = '';
+  if(row.type === 'project'){
+    const info = getProjectInfo(row.project.id);
+    raw = getProjectFieldValue(info, keys);
+    if(!raw && typeof fallbackFn === 'function'){
+      raw = fallbackFn(row) || '';
+    }
+  }
+  const formatted = formatKanbanDate(raw);
+  cell.textContent = row.type === 'project' ? formatted : '';
+  if(formatted && raw && formatted !== raw) cell.title = raw;
+  else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function extractPhaseDate(raw, phaseName){
+  if(!raw) return '';
+  const target = normalizePhaseName(phaseName);
+  if(!target) return '';
+  if(typeof raw === 'object' && !Array.isArray(raw)){
+    for(const [key, value] of Object.entries(raw)){
+      if(normalizePhaseName(key) === target){
+        if(value && typeof value === 'object' && 'date' in value) return value.date;
+        return value;
+      }
+    }
+    return '';
+  }
+  const text = String(raw);
+  if(!text.trim()) return '';
+  const segments = text.split(/[\n;,]+/);
+  for(const segment of segments){
+    const normalizedSegment = normalizePhaseName(segment);
+    if(!normalizedSegment) continue;
+    if(normalizedSegment.includes(target)){
+      const candidate = findDateCandidate(segment);
+      if(candidate) return candidate;
+    }
+  }
+  if(normalizePhaseName(text) === target){
+    const candidate = findDateCandidate(text);
+    if(candidate) return candidate;
+  }
+  return '';
+}
+
+function getPhaseKanbanDate(row, key){
+  if(row.type !== 'phase') return '';
+  const fields = getKanbanFields(row.project.id);
+  return extractPhaseDate(fields[key], row.phase.name);
+}
+
+function getPhasePlannedStart(row){
+  if(row.type !== 'phase') return '';
+  const kanbanValue = getPhaseKanbanDate(row, 'Fecha de inicio planificada de la fase');
+  if(kanbanValue) return kanbanValue;
+  const map = START_DATA[row.project.id] || {};
+  if(row.phase.name in map) return map[row.phase.name];
+  const normalized = normalizePhaseName(row.phase.name);
+  for(const [phaseName, value] of Object.entries(map)){
+    if(normalizePhaseName(phaseName) === normalized) return value;
+  }
+  return row.phase.start || '';
+}
+
+function getPhasePlannedEnd(row){
+  if(row.type !== 'phase') return '';
+  const kanbanValue = getPhaseKanbanDate(row, 'Fecha fin planificada de la fase');
+  if(kanbanValue) return kanbanValue;
+  return row.phase.end || '';
+}
+
+function buildPhaseFieldCell(row, extractor){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  let raw = '';
+  if(row.type === 'phase'){
+    raw = extractor(row) || '';
+  }
+  const formatted = formatKanbanDate(raw);
+  cell.textContent = row.type === 'phase' ? formatted : '';
+  if(formatted && raw && formatted !== raw) cell.title = raw;
+  else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function setupColumnResizer(def, element, resizer){
+  if(!resizer || !element) return;
+  resizer.addEventListener('mousedown', event => {
+    event.preventDefault();
+    let startX = event.clientX;
+    const startWidth = element.getBoundingClientRect().width;
+    let currentWidth = startWidth;
+    element.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    const onMove = ev => {
+      const delta = ev.clientX - startX;
+      currentWidth = Math.max(def.minWidth || 100, startWidth + delta);
+      setColumnWidth(element, currentWidth);
+      def.width = currentWidth;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      element.classList.remove('resizing');
+      document.body.style.cursor = '';
+      def.width = currentWidth;
+      setStoredColumnWidth(def.key, currentWidth);
+      if(def.group === DATE_GROUP_NAME && dateGroupContainerEl && dateGroupContainerEl.contains(element)){
+        const max = dateGroupContainerEl.scrollWidth;
+        let applied = parseFloat(dateGroupContainerEl.style.width);
+        if(Number.isNaN(applied) || applied < 0) applied = dateGroupContainerEl.getBoundingClientRect().width;
+        if(applied > max){
+          const clamped = Math.max(0, max);
+          dateGroupContainerEl.style.width = clamped + 'px';
+          setStoredGroupWidth(clamped);
+        }
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function initializeSummaryColumns(){
+  if(!summaryColumnsContainer) return;
+  summaryColumnsContainer.innerHTML = '';
+  summaryColumnDefs.length = 0;
+  dateGroupContainerEl = null;
+  const groupColumns = [];
+  let groupContainer = null;
+  BASE_SUMMARY_COLUMNS.forEach(def => {
+    const column = document.createElement('div');
+    const extra = Array.isArray(def.classes) && def.classes.length ? ' ' + def.classes.join(' ') : '';
+    column.className = 'summary-column' + extra;
+    const headerEl = document.createElement('div');
+    headerEl.className = 'summary-header';
+    headerEl.textContent = def.title;
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'summary-body';
+    column.appendChild(headerEl);
+    column.appendChild(bodyEl);
+    const resizer = document.createElement('div');
+    resizer.className = 'column-resizer';
+    column.appendChild(resizer);
+    if(def.minWidth) column.style.minWidth = def.minWidth + 'px';
+    const storedWidth = getStoredColumnWidth(def.key, def.defaultWidth);
+    const width = Math.max(def.minWidth || 0, storedWidth);
+    setColumnWidth(column, width);
+    const storedDef = { ...def, element: column, body: bodyEl, resizer, width };
+    setupColumnResizer(storedDef, column, resizer);
+    if(def.group === DATE_GROUP_NAME){
+      if(!groupContainer){
+        groupContainer = document.createElement('div');
+        groupContainer.className = 'summary-column-group';
+      }
+      groupContainer.appendChild(column);
+      groupColumns.push(storedDef);
+    } else {
+      summaryColumnsContainer.appendChild(column);
+    }
+    summaryColumnDefs.push(storedDef);
+  });
+  if(groupContainer){
+    dateGroupContainerEl = groupContainer;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'summary-group-wrapper';
+    wrapper.appendChild(groupContainer);
+    const groupResizer = document.createElement('div');
+    groupResizer.className = 'column-group-resizer';
+    wrapper.appendChild(groupResizer);
+    summaryColumnsContainer.appendChild(wrapper);
+    const contentWidth = groupColumns.reduce((sum, def) => sum + (def.width || 0), 0);
+    const storedWidth = getStoredGroupWidth(contentWidth);
+    const appliedWidth = Math.max(0, Math.min(storedWidth, contentWidth));
+    groupContainer.style.width = appliedWidth + 'px';
+    if(storedWidth !== appliedWidth) setStoredGroupWidth(appliedWidth);
+    setupGroupResizer(groupContainer, groupResizer);
+  }
+}
+
+function setupGroupResizer(container, resizer){
+  if(!container || !resizer) return;
+  resizer.addEventListener('mousedown', event => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const rect = container.getBoundingClientRect();
+    let currentWidth = parseFloat(container.style.width);
+    if(Number.isNaN(currentWidth) || currentWidth < 0) currentWidth = rect.width;
+    const startWidth = currentWidth;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    const onMove = ev => {
+      const delta = ev.clientX - startX;
+      let width = startWidth + delta;
+      const max = container.scrollWidth;
+      if(max > 0) width = Math.min(width, max);
+      if(width < 0) width = 0;
+      container.style.width = width + 'px';
+      currentWidth = width;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      resizer.classList.remove('active');
+      const max = container.scrollWidth;
+      const finalWidth = Math.max(0, Math.min(currentWidth, max || currentWidth));
+      container.style.width = finalWidth + 'px';
+      setStoredGroupWidth(finalWidth);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function insertDateGroupTitleRow(){
+  const hasGroup = summaryColumnDefs.some(def => def.group === DATE_GROUP_NAME);
+  if(!hasGroup) return false;
+  summaryColumnDefs.forEach(def => {
+    if(!def.body) return;
+    const cell = document.createElement('div');
+    cell.className = 'summary-row summary-group-title-row';
+    cell.textContent = def.group === DATE_GROUP_NAME ? def.title : '';
+    def.body.appendChild(cell);
+  });
+  return true;
+}
 
 document.addEventListener('click', () => {
   if (popup) popup.style.display = 'none';
@@ -458,32 +852,6 @@ function openPhasePopup(context, anchorRect) {
   }
 }
 
-const summaryResizer = document.getElementById('summary-resizer');
-const SUMMARY_WIDTH_KEY = 'ganttSummaryWidth';
-const savedSummaryWidth = localStorage.getItem(SUMMARY_WIDTH_KEY);
-if(savedSummaryWidth){ summaryContainer.style.width = savedSummaryWidth + 'px'; }
-if(summaryResizer){
-  let startX, startWidth;
-  const onMouseMove = e => {
-    const dx = e.clientX - startX;
-    const newWidth = Math.max(150, startWidth + dx);
-    summaryContainer.style.width = newWidth + 'px';
-  };
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    localStorage.setItem(SUMMARY_WIDTH_KEY, summaryContainer.offsetWidth);
-  };
-  summaryResizer.addEventListener('mousedown', e => {
-    startX = e.clientX;
-    startWidth = summaryContainer.offsetWidth;
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  });
-}
-
-function formatDate(d){return d.split('T')[0];}
-
 function sortProjects(type, store=true){
   if(!type){
     currentSort = null;
@@ -531,10 +899,25 @@ function applyFilters(store=true){
 }
 
 function render(){
-  summaryBody.innerHTML = '';
+  summaryColumnDefs.forEach(def => {
+    if(def.body) def.body.innerHTML = '';
+  });
   body.innerHTML = '';
   header.innerHTML = '';
-  if(!projects.length){return;}
+  const hasGroupTitleRow = insertDateGroupTitleRow();
+  if(hasGroupTitleRow){
+    const spacerRow = document.createElement('div');
+    spacerRow.className = 'gantt-row summary-group-title-row';
+    body.appendChild(spacerRow);
+  }
+  if(!projects.length){
+    const totalHeight = (hasGroupTitleRow ? 1 : 0) * BAR_HEIGHT;
+    summaryColumnDefs.forEach(def => {
+      if(def.body) def.body.style.height = totalHeight + 'px';
+    });
+    body.style.height = totalHeight + 'px';
+    return;
+  }
   const dayMs = DAY_MS;
   const startOfDay = d => {
     const raw = (d ?? '').toString().trim();
@@ -602,16 +985,11 @@ function render(){
   });
 
   rows.forEach(r=>{
-    const summaryRow = document.createElement('div');
-    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
-    if(r.type==='project'){
-      summaryRow.textContent = `${r.project.name} - ${r.project.client}`;
-      summaryRow.onclick = ()=>toggleProject(r.project.id);
-    } else {
-      summaryRow.textContent = `${r.phase.name}${r.phase.worker ? ' - ' + r.phase.worker : ''}`;
-    }
-    summaryBody.appendChild(summaryRow);
-
+    summaryColumnDefs.forEach(def => {
+      if(!def.body || typeof def.renderCell !== 'function') return;
+      const cell = def.renderCell(r);
+      if(cell) def.body.appendChild(cell);
+    });
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
     const bar = document.createElement('div');
@@ -621,7 +999,12 @@ function render(){
     bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
     bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
     bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
-    bar.textContent = r.type==='project'?`${r.project.name} - ${r.project.client} (${formatDate(r.project.start)} - ${formatDate(r.project.end)})`:r.phase.name;
+    if(r.type==='project'){
+      const label = [r.project.name, r.project.client].filter(Boolean).join(' - ');
+      bar.textContent = label;
+    } else {
+      bar.textContent = r.phase.name;
+    }
     if(r.type==='project'){
       const deadlineSources = [
         r.project.deadline_start,
@@ -710,9 +1093,12 @@ function render(){
     body.appendChild(rowDiv);
   });
 
-  const totalHeight = rows.length * BAR_HEIGHT;
-  summaryBody.style.height = totalHeight + 'px';
-    body.style.height = totalHeight + 'px';
+  const extraRows = hasGroupTitleRow ? 1 : 0;
+  const totalHeight = (rows.length + extraRows) * BAR_HEIGHT;
+  summaryColumnDefs.forEach(def => {
+    if(def.body) def.body.style.height = totalHeight + 'px';
+  });
+  body.style.height = totalHeight + 'px';
   if(initialScroll){ scrollToToday(); initialScroll=false; }
 }
 
