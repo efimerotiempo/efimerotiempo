@@ -694,6 +694,54 @@
 const tasks = document.querySelectorAll('.task');
 const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
+
+const normalizeKanbanLabel = (label) => {
+  return (label || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+};
+
+function extractKanbanValue(info, labels) {
+  if (!info) return '';
+  const fields = info.kanban_display_fields || {};
+  const options = Array.isArray(labels) ? labels : [labels];
+  for (const label of options) {
+    const value = fields[label];
+    if (value === null || value === undefined) continue;
+    const text = `${value}`.trim();
+    if (text) {
+      return text;
+    }
+  }
+  const normalizedMap = {};
+  Object.entries(fields).forEach(([key, value]) => {
+    const normalized = normalizeKanbanLabel(key);
+    if (!(normalized in normalizedMap)) {
+      normalizedMap[normalized] = value;
+    }
+  });
+  for (const label of options) {
+    const normalized = normalizeKanbanLabel(label);
+    if (!(normalized in normalizedMap)) continue;
+    const raw = normalizedMap[normalized];
+    if (raw === null || raw === undefined) continue;
+    const text = `${raw}`.trim();
+    if (text) {
+      return text;
+    }
+  }
+  return '';
+}
+
+function formatKanbanDateValue(value) {
+  if (value === null || value === undefined) return '';
+  const text = `${value}`.trim();
+  if (!text) return '';
+  const iso = madridDateISO(text);
+  if (!iso) return text;
+  const parts = iso.split('-');
+  if (parts.length !== 3) return text;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 let lastDrag = null;
 let dragInfo = null;
   tasks.forEach(t => {
@@ -731,22 +779,67 @@ let dragInfo = null;
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
-      let html = `<div class="popup-section popup-header"><strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong></div>`;
-      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      const metaLines = [];
-      if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
-      if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
-      if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
-      const kanbanFields = info.kanban_display_fields || {};
-      const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
-      if (kanbanEntries.length) {
-        let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
-        kanbanEntries.forEach(([label, value]) => {
-          const displayValue = `${value}`;
-          kanbanHtml += `<div>${label}: ${displayValue}</div>`;
-        });
-        kanbanHtml += '</div>';
-        html += kanbanHtml;
+      if (!info) return;
+      const headerParts = [];
+      if (info.name) {
+        let title = info.name;
+        if (info.blocked) {
+          title += ' <span class="blocked-sign">\u{1F6AB}</span>';
+        }
+        headerParts.push(title);
+      }
+      if (info.client) headerParts.push(info.client);
+      if (t.dataset.phase) headerParts.push(t.dataset.phase);
+      let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
+      const formatDateValue = (value) => {
+        if (value === null || value === undefined) return '';
+        if (Array.isArray(value)) {
+          const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
+          return formatted.join(', ');
+        }
+        const text = `${value}`.trim();
+        if (!text || text === '0') return '';
+        return formatKanbanDateValue(text);
+      };
+      const dateFieldLines = [];
+      const addDateField = (label, rawValues) => {
+        const values = Array.isArray(rawValues) ? rawValues : [rawValues];
+        for (const raw of values) {
+          const formatted = formatDateValue(raw);
+          if (formatted) {
+            dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
+            return;
+          }
+        }
+      };
+      addDateField('Límite', [
+        extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
+        info.deadline_start,
+        info.due_date,
+        extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
+      ]);
+      addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
+      addDateField('MATERIAL', [
+        extractKanbanValue(info, 'MATERIAL'),
+        info.material_confirmed_date
+      ]);
+      addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
+      addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
+      addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
+      addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
+      if (dateFieldLines.length) {
+        html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+      }
+      const segmentLines = [];
+      const segments = info.segment_starts || {};
+      ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach(segment => {
+        const value = formatDateValue(segments[segment]);
+        if (value) {
+          segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+        }
+      });
+      if (segmentLines.length) {
+        html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
       }
       const phaseLines = [];
       PHASES.forEach(ph => {
@@ -773,34 +866,46 @@ let dragInfo = null;
         if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
       }
       if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
-      const actionLines = [];
-      actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
-      actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
-      let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
-      if (Array.isArray(info.phases[t.dataset.phase])) {
-        splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+      const actionMain = [];
+      let deleteButton = '';
+      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
+      if (t.dataset.phase) {
+        actionMain.push(`<div class="popup-action-line">Inicio de la fase: <form id="start-form" class="popup-inline-form"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
+        actionMain.push(`<div class="popup-action-line"><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" class="freeze-btn">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+        let splitLine = `<div class="popup-action-line"><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
+        if (Array.isArray(info.phases[t.dataset.phase])) {
+          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+        }
+        splitLine += `</div>`;
+        actionMain.push(splitLine);
+        deleteButton = `<button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button>`;
       }
-      splitLine += `</div>`;
-      actionLines.push(splitLine);
-      actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
-      actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`);
-      actionLines.push(`<div><button id="obs-btn" data-pid="${t.dataset.pid}">OBSERVACIONES</button></div>`);
+      actionMain.push(`<div class="popup-action-line"><button id="obs-btn" data-pid="${t.dataset.pid}" class="obs-btn">Observaciones</button></div>`);
+      if (actionMain.length || deleteButton) {
+        const left = actionMain.join('');
+        const right = deleteButton ? `<div class="popup-actions-delete">${deleteButton}</div>` : '';
+        html += `<div class="popup-section popup-actions"><div class="popup-actions-main">${left}</div>${right}</div>`;
+      }
+      const attachmentItems = [];
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
-        actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+        attachmentItems.push(`<div class="attachment-item"><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" class="attachment-thumb" alt="Imagen del proyecto"></a></div>`);
       }
       if (info.kanban_attachments && info.kanban_attachments.length) {
         info.kanban_attachments.forEach(att => {
           const url = att.url;
-          const name = (att.name || '').toLowerCase();
-          if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
-            actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+          const name = att.name || '';
+          const lower = name.toLowerCase();
+          if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) {
+            attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" class="attachment-thumb"></a></div>`);
           } else {
-            actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
+            attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank">${name || url}</a></div>`);
           }
         });
       }
-      if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
+      if (attachmentItems.length) {
+        html += `<div class="popup-section popup-attachments"><div class="attachment-list">${attachmentItems.join('')}</div></div>`;
+      }
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
@@ -818,30 +923,6 @@ let dragInfo = null;
               body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
             }).then(() => location.reload());
           }
-        });
-      }
-      const unplan = document.getElementById('unplan-btn');
-      if (unplan) {
-        unplan.addEventListener('click', ev => {
-          ev.stopPropagation();
-          const today = madridDateISO();
-          const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
-          if (unplan.dataset.part) body.part = unplan.dataset.part;
-          fetch(MOVE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(body)
-          })
-            .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
-            .then(({ ok, data }) => {
-              if (!ok) {
-                if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-                else alert(data.error || 'Error');
-                return;
-              }
-              afterMove(data, today);
-            });
         });
       }
       const obsBtn = document.getElementById('obs-btn');

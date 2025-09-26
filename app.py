@@ -95,7 +95,11 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if request.path.startswith("/static") or request.path.startswith("/kanbanize-webhook"):
+    if (
+        request.path.startswith("/static")
+        or request.path.startswith("/kanbanize-webhook")
+        or request.path.startswith("/events")
+    ):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -2157,8 +2161,7 @@ def project_links_api():
     return jsonify(links)
 
 
-@app.route('/gantt')
-def gantt_view():
+def build_gantt_payload():
     projects = get_visible_projects()
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
@@ -2249,12 +2252,30 @@ def gantt_view():
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
         })
+    return gantt_projects, project_map, start_map
+
+
+@app.route('/gantt')
+def gantt_view():
+    gantt_projects, project_map, start_map = build_gantt_payload()
     return render_template(
         'gantt.html',
         projects=json.dumps(gantt_projects),
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+    )
+
+
+@app.route('/gantt/data')
+def gantt_data_api():
+    gantt_projects, project_map, start_map = build_gantt_payload()
+    return jsonify(
+        {
+            'projects': gantt_projects,
+            'project_map': project_map,
+            'start_map': start_map,
+        }
     )
 
 @app.route('/projects')
