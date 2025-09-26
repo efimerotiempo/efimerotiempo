@@ -50,15 +50,15 @@
   .gantt-summary { display:flex; flex-direction:row; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
-  .summary-columns { display:flex; flex:1; }
-  .summary-group-wrapper { display:flex; flex-direction:row; position:relative; flex:0 0 auto; }
-  .summary-column-group { display:flex; overflow:hidden; background:#fff; flex:0 0 auto; border-right:1px solid #ddd; }
+  .summary-columns { display:flex; flex:1; align-items:stretch; }
+  .summary-group-wrapper { display:flex; flex-direction:row; position:relative; flex:0 0 auto; overflow:visible; }
+  .summary-column-group { display:flex; overflow-x:hidden; overflow-y:visible; background:#fff; flex:0 0 auto; border-right:1px solid #ddd; }
   .summary-column-group .summary-column { border-right:1px solid #ddd; }
   .summary-column-group .summary-column:last-child { border-right:0; }
   .summary-column { position:relative; display:flex; flex-direction:column; border-right:1px solid #ddd; flex:0 0 auto; background:#fff; }
   .summary-column:last-child { border-right:0; }
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:30px; line-height:30px; font-weight:bold; color:#000; z-index:2; padding:0 6px; box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:0; }
-  .summary-body { flex:1; }
+  .summary-body { flex:1; display:flex; flex-direction:column; }
   .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 6px; box-sizing:border-box; color:#000; white-space:nowrap; display:flex; align-items:center; overflow:hidden; text-overflow:ellipsis; min-width:0; }
   .summary-column.summary-main .summary-row.project-row { cursor:pointer; font-weight:bold; }
   .summary-column.summary-main .summary-row.phase-row { padding-left:16px; }
@@ -91,7 +91,7 @@
     z-index:1;
   }
   .day-cell.today { background-color: rgba(255,0,0,0.3); }
-  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
+  .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; border-left:2px solid rgba(255,0,0,0.4); border-right:2px solid rgba(255,0,0,0.4); box-sizing:border-box; }
   .gantt-controls input { margin-left:8px; padding:4px; }
 </style>
 <script>
@@ -519,19 +519,6 @@ function setupGroupResizer(container, resizer){
   });
 }
 
-function insertDateGroupTitleRow(){
-  const hasGroup = summaryColumnDefs.some(def => def.group === DATE_GROUP_NAME);
-  if(!hasGroup) return false;
-  summaryColumnDefs.forEach(def => {
-    if(!def.body) return;
-    const cell = document.createElement('div');
-    cell.className = 'summary-row summary-group-title-row';
-    cell.textContent = def.group === DATE_GROUP_NAME ? def.title : '';
-    def.body.appendChild(cell);
-  });
-  return true;
-}
-
 document.addEventListener('click', () => {
   if (popup) popup.style.display = 'none';
 });
@@ -899,20 +886,33 @@ function applyFilters(store=true){
 }
 
 function render(){
+  const columnFragments = new Map();
+  let hasDateGroupRow = false;
   summaryColumnDefs.forEach(def => {
-    if(def.body) def.body.innerHTML = '';
+    if(!def.body) return;
+    def.body.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    if(def.group === DATE_GROUP_NAME){
+      hasDateGroupRow = true;
+      const cell = document.createElement('div');
+      cell.className = 'summary-row summary-group-title-row';
+      cell.textContent = def.title;
+      fragment.appendChild(cell);
+    }
+    columnFragments.set(def, fragment);
   });
   body.innerHTML = '';
   header.innerHTML = '';
-  const hasGroupTitleRow = insertDateGroupTitleRow();
-  if(hasGroupTitleRow){
+  if(hasDateGroupRow){
     const spacerRow = document.createElement('div');
     spacerRow.className = 'gantt-row summary-group-title-row';
     body.appendChild(spacerRow);
   }
   if(!projects.length){
-    const totalHeight = (hasGroupTitleRow ? 1 : 0) * BAR_HEIGHT;
+    const totalHeight = (hasDateGroupRow ? 1 : 0) * BAR_HEIGHT;
     summaryColumnDefs.forEach(def => {
+      const fragment = columnFragments.get(def);
+      if(def.body && fragment) def.body.appendChild(fragment);
       if(def.body) def.body.style.height = totalHeight + 'px';
     });
     body.style.height = totalHeight + 'px';
@@ -988,7 +988,10 @@ function render(){
     summaryColumnDefs.forEach(def => {
       if(!def.body || typeof def.renderCell !== 'function') return;
       const cell = def.renderCell(r);
-      if(cell) def.body.appendChild(cell);
+      if(!cell) return;
+      const fragment = columnFragments.get(def);
+      if(fragment) fragment.appendChild(cell);
+      else def.body.appendChild(cell);
     });
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
@@ -1093,9 +1096,11 @@ function render(){
     body.appendChild(rowDiv);
   });
 
-  const extraRows = hasGroupTitleRow ? 1 : 0;
+  const extraRows = hasDateGroupRow ? 1 : 0;
   const totalHeight = (rows.length + extraRows) * BAR_HEIGHT;
   summaryColumnDefs.forEach(def => {
+    const fragment = columnFragments.get(def);
+    if(def.body && fragment) def.body.appendChild(fragment);
     if(def.body) def.body.style.height = totalHeight + 'px';
   });
   body.style.height = totalHeight + 'px';
