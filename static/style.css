@@ -90,69 +90,6 @@ table.schedule td.weekend-cell {
     margin-top: 4px;
     cursor: pointer;
 }
-.info-popup .popup-field-line {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.info-popup .popup-label {
-    font-weight: 600;
-}
-.info-popup .popup-inline-form {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-.info-popup .popup-inline-form input[type=date] {
-    margin: 0;
-}
-.info-popup .popup-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-}
-.info-popup .popup-actions-main {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.info-popup .popup-action-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-}
-.info-popup .freeze-btn {
-    color: red;
-    font-weight: bold;
-}
-.info-popup .popup-actions-delete {
-    display: flex;
-    align-items: flex-start;
-}
-.info-popup .popup-actions-delete .phase-delete-btn {
-    font-size: 1.5em;
-    padding: 0.4em 0.8em;
-    margin-top: 0;
-}
-.info-popup .popup-attachments .attachment-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.info-popup .attachment-item {
-    max-width: 200px;
-}
-.info-popup .attachment-thumb {
-    max-width: 200px;
-    max-height: 150px;
-    display: block;
-}
-.info-popup .obs-btn {
-    font-weight: bold;
-}
 .slider { margin: 10px 0; }
 .slider input[type=range] {
     width: 100%;
@@ -307,10 +244,6 @@ table.pedidos-calendar td.week-label {
     padding: 4px 0;
     width: 200px;
     word-break: break-word;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
 }
 
 .columna-1 .proj-header {
@@ -330,29 +263,14 @@ table.pedidos-calendar td.week-label {
 }
 
 .columna-1 .link-title {
-    display: inline-flex;
-    align-items: center;
-    align-self: flex-start;
-    flex-wrap: wrap;
-    max-width: 100%;
-    box-sizing: border-box;
+    display: block;
     margin-left: 10px;
-    padding: 4px 10px;
+    margin-top: 4px;
     cursor: pointer;
-    border: 1px solid #c7c7c7;
-    border-radius: 4px;
-    background: #fff;
-    white-space: normal;
-}
-
-.columna-1 .link-title.is-empty {
-    padding-top: 2px;
-    padding-bottom: 2px;
 }
 
 .columna-1 .link-title.due-late {
     color: red;
-    border-color: red;
 }
 
 .pedidos-calendar .task.due-late {
