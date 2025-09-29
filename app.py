@@ -2271,6 +2271,72 @@ def gantt_view():
     )
 
 
+def _safe_iso_date(value):
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _extract_order_title_date(title, reference_day, fallback_year):
+    if not title:
+        return None
+    match = re.search(r"\((\d{2})/(\d{2})\)", title)
+    if not match:
+        return None
+    try:
+        day = int(match.group(1))
+        month = int(match.group(2))
+    except ValueError:
+        return None
+    year = fallback_year
+    if isinstance(reference_day, date):
+        year = reference_day.year
+    try:
+        candidate = date(year, month, day)
+    except ValueError:
+        return None
+    if isinstance(reference_day, date):
+        delta_days = (candidate - reference_day).days
+        if delta_days < -183:
+            try:
+                candidate = date(year + 1, month, day)
+            except ValueError:
+                pass
+        elif delta_days > 183:
+            try:
+                candidate = date(year - 1, month, day)
+            except ValueError:
+                pass
+    return candidate
+
+
+def _subtract_business_days(day, count):
+    if not isinstance(day, date) or count <= 0:
+        return day
+    current = day
+    removed = 0
+    while removed < count:
+        current -= timedelta(days=1)
+        if current.weekday() not in WEEKEND:
+            removed += 1
+    return current
+
+
+def _should_highlight_order(order_day, planned_start, *, window=3):
+    if not isinstance(order_day, date) or not isinstance(planned_start, date):
+        return False
+    if order_day > planned_start:
+        return False
+    threshold = _subtract_business_days(planned_start, window)
+    return threshold <= order_day <= planned_start
+
+
 @app.route('/gantt-pedidos')
 def gantt_orders_view():
     today = local_today()
@@ -2295,15 +2361,38 @@ def gantt_orders_view():
                 order_to_code.setdefault(cid, code)
 
     projects = get_visible_projects()
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+
+    planned_windows = {}
+    for worker, days in schedule_data.items():
+        for tasks in days.values():
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                start_day = _safe_iso_date(task.get('start_time'))
+                end_day = _safe_iso_date(task.get('end_time'))
+                window = planned_windows.setdefault(pid, {'start': None, 'end': None})
+                if start_day and (window['start'] is None or start_day < window['start']):
+                    window['start'] = start_day
+                if end_day and (window['end'] is None or end_day > window['end']):
+                    window['end'] = end_day
+
     project_map = {}
     code_to_project = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_display_fields', {})
+        plan_window = planned_windows.get(p['id']) or {}
+        planned_start_iso = plan_window.get('start').isoformat() if plan_window.get('start') else ''
+        planned_end_iso = plan_window.get('end').isoformat() if plan_window.get('end') else ''
         project_map[p['id']] = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'planned_start': planned_start_iso,
+            'planned_end': planned_end_iso,
         }
         code = _normalize_order_code(p.get('name'))
         if code:
@@ -2354,30 +2443,44 @@ def gantt_orders_view():
                         'due_date': due,
                         'deadline_start': deadline_start,
                         'observations': '',
+                        'planned_start': '',
+                        'planned_end': '',
                     }
+
+            plan_window = planned_windows.get(pid)
+            planned_start_date = plan_window.get('start') if plan_window else None
+            planned_end_date = plan_window.get('end') if plan_window else None
+            planned_start_iso = planned_start_date.isoformat() if planned_start_date else ''
+            planned_end_iso = planned_end_date.isoformat() if planned_end_date else ''
 
             proj_entry = orders_by_pid.setdefault(pid, {
                 'id': pid,
                 'name': name,
                 'client': client,
-                'start': day_iso,
-                'end': day_iso,
+                'start': planned_start_iso or day_iso,
+                'end': planned_end_iso or day_iso,
                 'due_date': due,
                 'color': color or '#6c9ec1',
                 'deadline_start': deadline_start,
+                'planned_start': planned_start_iso,
+                'planned_end': planned_end_iso,
+                'order_dates': [],
                 'phases': [],
             })
 
-            if day_iso < proj_entry['start']:
-                proj_entry['start'] = day_iso
-            if day_iso > proj_entry['end']:
-                proj_entry['end'] = day_iso
+            effective_day = scheduled_day
+            title_date = _extract_order_title_date(entry.get('project'), scheduled_day, today.year)
+            if title_date:
+                effective_day = title_date
+            effective_iso = effective_day.isoformat()
+
+            proj_entry['order_dates'].append(effective_iso)
 
             phase = {
                 'id': f"{pid}-pedido-{cid or len(proj_entry['phases'])}",
                 'name': entry.get('project') or 'Pedido',
-                'start': day_iso,
-                'end': day_iso,
+                'start': effective_iso,
+                'end': effective_iso,
                 'color': entry.get('color') or color,
                 'worker': entry.get('column') or '',
                 'order_column': entry.get('column') or '',
@@ -2386,11 +2489,53 @@ def gantt_orders_view():
                 'order_code': code,
                 'order_cid': cid,
                 'order_prev_date': entry.get('prev_date') or '',
-                'order_date': day_iso,
+                'order_date': effective_iso,
+                'order_highlight': _should_highlight_order(effective_day, planned_start_date) if planned_start_date else False,
             }
             proj_entry['phases'].append(phase)
 
-    gantt_projects = sorted(orders_by_pid.values(), key=lambda item: item['start'])
+            if planned_start_iso:
+                proj_entry['start'] = planned_start_iso
+                proj_entry['planned_start'] = planned_start_iso
+            if planned_end_iso:
+                proj_entry['end'] = planned_end_iso
+                proj_entry['planned_end'] = planned_end_iso
+
+    final_projects = []
+    for pid, proj_entry in orders_by_pid.items():
+        order_dates = sorted(d for d in proj_entry.pop('order_dates', []) if d)
+        plan_window = planned_windows.get(pid)
+        planned_start_date = plan_window.get('start') if plan_window else None
+        planned_end_date = plan_window.get('end') if plan_window else None
+        if planned_start_date:
+            planned_start_iso = planned_start_date.isoformat()
+            proj_entry['planned_start'] = planned_start_iso
+            proj_entry['start'] = planned_start_iso
+        else:
+            if order_dates:
+                proj_entry['start'] = order_dates[0]
+                proj_entry['planned_start'] = order_dates[0]
+            else:
+                proj_entry['planned_start'] = proj_entry.get('planned_start') or proj_entry.get('start', '')
+                proj_entry['start'] = proj_entry['planned_start']
+        if planned_end_date:
+            planned_end_iso = planned_end_date.isoformat()
+            proj_entry['planned_end'] = planned_end_iso
+            proj_entry['end'] = planned_end_iso
+        else:
+            if order_dates:
+                proj_entry['end'] = order_dates[-1]
+                proj_entry['planned_end'] = order_dates[-1]
+            else:
+                proj_entry['planned_end'] = proj_entry.get('planned_end') or proj_entry.get('end', proj_entry['start'])
+                proj_entry['end'] = proj_entry['planned_end']
+        if pid in project_map:
+            project_map[pid]['planned_start'] = proj_entry['planned_start']
+            project_map[pid]['planned_end'] = proj_entry['planned_end']
+        proj_entry['phases'].sort(key=lambda ph: ph.get('start') or '')
+        final_projects.append(proj_entry)
+
+    gantt_projects = sorted(final_projects, key=lambda item: item.get('start') or item.get('planned_start') or '9999-12-31')
 
     return render_template(
         'gantt.html',

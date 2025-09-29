@@ -78,6 +78,9 @@
   .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; }
+  .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
+  .order-phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
+  .order-phase-bar.order-phase-warning { border-color:#d00; border-width:2px; box-shadow:0 0 0 1px rgba(208,0,0,0.35); }
   .gantt-row .deadline-highlight {
     position:absolute;
     top:-2px;
@@ -174,11 +177,9 @@ const PHASE_SUMMARY_COLUMNS = [
 
 const ORDER_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
-  { key: 'order_column', title: 'Columna pedido', defaultWidth: 200, minWidth: 140, renderCell: buildOrderColumnCell },
   { key: 'order_lane', title: 'Lane pedido', defaultWidth: 200, minWidth: 140, renderCell: row => buildOrderMetaCell(row, 'order_lane') },
-  { key: 'order_client', title: 'Cliente pedido', defaultWidth: 220, minWidth: 160, renderCell: row => buildOrderMetaCell(row, 'order_client') },
-  { key: 'order_date', title: 'Fecha pedido', group: DATE_GROUP_NAME, defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_date') },
-  { key: 'order_prev', title: 'Fecha anterior', group: DATE_GROUP_NAME, defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_prev_date') },
+  { key: 'order_date', title: 'Fecha pedido', defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_date') },
+  { key: 'planned_start', title: 'Fecha inicio planificada', defaultWidth: 220, minWidth: 160, classes: ['summary-date'], renderCell: buildOrderProjectStartCell },
 ];
 
 const BASE_SUMMARY_COLUMNS = IS_ORDER_GANTT ? ORDER_SUMMARY_COLUMNS : PHASE_SUMMARY_COLUMNS;
@@ -292,7 +293,11 @@ function buildMainSummaryCell(row){
     cell.textContent = pieces.join(' - ');
     cell.addEventListener('click', () => toggleProject(row.project.id));
   } else {
-    cell.textContent = row.phase.name + (row.phase.worker ? ` - ${row.phase.worker}` : '');
+    if(IS_ORDER_GANTT){
+      cell.textContent = row.phase.name || '';
+    } else {
+      cell.textContent = row.phase.name + (row.phase.worker ? ` - ${row.phase.worker}` : '');
+    }
   }
   return cell;
 }
@@ -403,17 +408,6 @@ function buildPhaseFieldCell(row, extractor){
   return cell;
 }
 
-function buildOrderColumnCell(row){
-  const cell = document.createElement('div');
-  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
-  if(row.type === 'phase'){
-    const text = row.phase.order_column || '';
-    cell.textContent = text;
-    if(text) cell.title = text;
-  }
-  return cell;
-}
-
 function buildOrderMetaCell(row, key){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
@@ -430,6 +424,20 @@ function buildOrderDateCell(row, key){
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
   if(row.type === 'phase'){
     const raw = row.phase && row.phase[key] ? String(row.phase[key]).trim() : '';
+    const formatted = formatKanbanDate(raw);
+    cell.textContent = formatted;
+    if(formatted && raw && formatted !== raw) cell.title = raw;
+    else if(formatted) cell.title = formatted;
+    else if(raw) cell.title = raw;
+  }
+  return cell;
+}
+
+function buildOrderProjectStartCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'project'){
+    const raw = row.project && row.project.planned_start ? String(row.project.planned_start).trim() : '';
     const formatted = formatKanbanDate(raw);
     cell.textContent = formatted;
     if(formatted && raw && formatted !== raw) cell.title = raw;
@@ -570,6 +578,7 @@ function setupGroupResizer(container, resizer){
 }
 
 function insertDateGroupTitleRow(){
+  if(IS_ORDER_GANTT) return false;
   const hasGroup = summaryColumnDefs.some(def => def.group === DATE_GROUP_NAME);
   if(!hasGroup) return false;
   summaryColumnDefs.forEach(def => {
@@ -1064,12 +1073,25 @@ function render(){
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
     const bar = document.createElement('div');
-    bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
+    const barClasses = ['gantt-task', r.type === 'project' ? 'project-bar' : 'phase-bar'];
+    if (IS_ORDER_GANTT) {
+      if (r.type === 'project') {
+        barClasses.push('order-project-bar');
+      } else {
+        barClasses.push('order-phase-bar');
+        if (r.phase && r.phase.order_highlight) {
+          barClasses.push('order-phase-warning');
+        }
+      }
+    }
+    bar.className = barClasses.join(' ');
     const startMs = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
     const endMs = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
     bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
     bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
-    bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+    if(!IS_ORDER_GANTT){
+      bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+    }
     if(r.type==='project'){
       const label = [r.project.name, r.project.client].filter(Boolean).join(' - ');
       bar.textContent = label;
