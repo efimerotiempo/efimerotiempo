@@ -162,6 +162,8 @@ const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
 
+const ORDER_POPUP_HIDDEN_LABELS = new Set(['Columna', 'Lane', 'Código', 'ID Kanban']);
+
 const PHASE_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
   { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
@@ -731,7 +733,10 @@ function openPhasePopup(context, anchorRect) {
   if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
   if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
   const kanbanFields = info.kanban_display_fields || {};
-  const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+  let kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+  if (IS_ORDER_GANTT) {
+    kanbanEntries = kanbanEntries.filter(([label]) => !ORDER_POPUP_HIDDEN_LABELS.has(label));
+  }
   if (kanbanEntries.length) {
     let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
     kanbanEntries.forEach(([label, value]) => {
@@ -747,11 +752,11 @@ function openPhasePopup(context, anchorRect) {
   if (IS_ORDER_GANTT && context.order) {
     const order = context.order;
     const orderLines = [];
-    if (order.column) orderLines.push(`<div>Columna: ${order.column}</div>`);
-    if (order.lane) orderLines.push(`<div>Lane: ${order.lane}</div>`);
+    if (order.column && !ORDER_POPUP_HIDDEN_LABELS.has('Columna')) orderLines.push(`<div>Columna: ${order.column}</div>`);
+    if (order.lane && !ORDER_POPUP_HIDDEN_LABELS.has('Lane')) orderLines.push(`<div>Lane: ${order.lane}</div>`);
     if (order.client) orderLines.push(`<div>Cliente pedido: ${order.client}</div>`);
-    if (order.code) orderLines.push(`<div>Código: ${order.code}</div>`);
-    if (order.cid) orderLines.push(`<div>ID Kanban: ${order.cid}</div>`);
+    if (order.code && !ORDER_POPUP_HIDDEN_LABELS.has('Código')) orderLines.push(`<div>Código: ${order.code}</div>`);
+    if (order.cid && !ORDER_POPUP_HIDDEN_LABELS.has('ID Kanban')) orderLines.push(`<div>ID Kanban: ${order.cid}</div>`);
     if (order.prev_date) {
       const formattedPrev = formatKanbanDate(order.prev_date) || order.prev_date;
       orderLines.push(`<div>Fecha anterior: ${formattedPrev}</div>`);
