@@ -47,7 +47,7 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { display:flex; flex-direction:row; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-summary { display:flex; flex-direction:row; overflow-x:auto; overflow-y:visible; border:1px solid #ddd; border-right:0; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
   .summary-columns { display:flex; flex:1; }
@@ -69,7 +69,7 @@
   .column-resizer:hover, .summary-column.resizing .column-resizer { background:rgba(0,0,0,0.1); }
   .column-group-resizer { width:6px; flex:0 0 6px; cursor:col-resize; }
   .column-group-resizer:hover, .column-group-resizer.active { background:rgba(0,0,0,0.1); }
-  .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
+  .gantt-main { flex:1; overflow-x:auto; overflow-y:visible; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; }
   .gantt-main::-webkit-scrollbar { display:none; }
   .gantt-header { position:sticky; top:0; height:30px; line-height:30px; border-bottom:1px solid #ddd; background:#fff; box-sizing:border-box; }
   .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:30px; height:30px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -111,6 +111,9 @@ const DEADLINE_MSG = 'Fecha cliente soprepasada.';
 const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
 const LAST_KEY = 'lastMoved';
 const SCROLL_KEY2 = 'scrollDate';
+const GANTT_MODE = "{{ gantt_mode|default('phases') }}";
+const ENABLE_PHASE_ACTIONS = {{ 'true' if phase_actions_enabled else 'false' }};
+const IS_ORDER_GANTT = GANTT_MODE === 'orders';
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
 const summaryColumnsContainer = document.getElementById('gantt_summary_columns');
@@ -156,7 +159,7 @@ const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
 
-const BASE_SUMMARY_COLUMNS = [
+const PHASE_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
   { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
   { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
@@ -168,6 +171,17 @@ const BASE_SUMMARY_COLUMNS = [
   { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
   { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
 ];
+
+const ORDER_SUMMARY_COLUMNS = [
+  { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
+  { key: 'order_column', title: 'Columna pedido', defaultWidth: 200, minWidth: 140, renderCell: buildOrderColumnCell },
+  { key: 'order_lane', title: 'Lane pedido', defaultWidth: 200, minWidth: 140, renderCell: row => buildOrderMetaCell(row, 'order_lane') },
+  { key: 'order_client', title: 'Cliente pedido', defaultWidth: 220, minWidth: 160, renderCell: row => buildOrderMetaCell(row, 'order_client') },
+  { key: 'order_date', title: 'Fecha pedido', group: DATE_GROUP_NAME, defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_date') },
+  { key: 'order_prev', title: 'Fecha anterior', group: DATE_GROUP_NAME, defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_prev_date') },
+];
+
+const BASE_SUMMARY_COLUMNS = IS_ORDER_GANTT ? ORDER_SUMMARY_COLUMNS : PHASE_SUMMARY_COLUMNS;
 
 initializeSummaryColumns();
 
@@ -386,6 +400,42 @@ function buildPhaseFieldCell(row, extractor){
   cell.textContent = row.type === 'phase' ? formatted : '';
   if(formatted && raw && formatted !== raw) cell.title = raw;
   else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function buildOrderColumnCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'phase'){
+    const text = row.phase.order_column || '';
+    cell.textContent = text;
+    if(text) cell.title = text;
+  }
+  return cell;
+}
+
+function buildOrderMetaCell(row, key){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'phase'){
+    const value = row.phase && row.phase[key] ? String(row.phase[key]).trim() : '';
+    cell.textContent = value;
+    if(value) cell.title = value;
+  }
+  return cell;
+}
+
+function buildOrderDateCell(row, key){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'phase'){
+    const raw = row.phase && row.phase[key] ? String(row.phase[key]).trim() : '';
+    const formatted = formatKanbanDate(raw);
+    cell.textContent = formatted;
+    if(formatted && raw && formatted !== raw) cell.title = raw;
+    else if(formatted) cell.title = formatted;
+    else if(raw) cell.title = raw;
+  }
   return cell;
 }
 
@@ -681,10 +731,31 @@ function openPhasePopup(context, anchorRect) {
     kanbanHtml += '</div>';
     html += kanbanHtml;
   }
-  const phaseSection = buildPhaseSection(info, context);
-  if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+  if (!IS_ORDER_GANTT) {
+    const phaseSection = buildPhaseSection(info, context);
+    if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+  }
+  if (IS_ORDER_GANTT && context.order) {
+    const order = context.order;
+    const orderLines = [];
+    if (order.column) orderLines.push(`<div>Columna: ${order.column}</div>`);
+    if (order.lane) orderLines.push(`<div>Lane: ${order.lane}</div>`);
+    if (order.client) orderLines.push(`<div>Cliente pedido: ${order.client}</div>`);
+    if (order.code) orderLines.push(`<div>Código: ${order.code}</div>`);
+    if (order.cid) orderLines.push(`<div>ID Kanban: ${order.cid}</div>`);
+    if (order.prev_date) {
+      const formattedPrev = formatKanbanDate(order.prev_date) || order.prev_date;
+      orderLines.push(`<div>Fecha anterior: ${formattedPrev}</div>`);
+    }
+    if (order.date) {
+      const formattedDate = formatKanbanDate(order.date) || order.date;
+      orderLines.push(`<div>Fecha pedido: ${formattedDate}</div>`);
+    }
+    if (orderLines.length) html += `<div class="popup-section">${orderLines.join('')}</div>`;
+  }
   const actionLines = [];
-  if (context.phase) {
+  const allowPhaseActions = ENABLE_PHASE_ACTIONS && !IS_ORDER_GANTT;
+  if (allowPhaseActions && context.phase) {
     const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
     actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
     actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
@@ -697,7 +768,7 @@ function openPhasePopup(context, anchorRect) {
     actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
     actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-part="${context.part || ''}">Sin planificar</button></div>`);
   }
-  actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
+  if (context.pid) actionLines.push(`<div><button id="obs-btn" data-pid="${context.pid}">OBSERVACIONES</button></div>`);
   if (info.image) {
     const imgUrl = `${STATIC_URL}${info.image}`;
     actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
@@ -1062,13 +1133,25 @@ function render(){
           if(clickedMs > endMs) clickedMs = endMs;
         }
         const isoDay = madridDateISO(clickedMs);
-        openPhasePopup({
+        const contextData = {
           pid: r.project.id,
           phase: chosen ? chosen.data.name : '',
           day: isoDay,
           worker: chosen && chosen.data.worker ? chosen.data.worker : '',
           part: ''
-        }, bar.getBoundingClientRect());
+        };
+        if (IS_ORDER_GANTT && chosen && chosen.data) {
+          contextData.order = {
+            column: chosen.data.order_column || '',
+            lane: chosen.data.order_lane || '',
+            client: chosen.data.order_client || '',
+            code: chosen.data.order_code || '',
+            cid: chosen.data.order_cid || '',
+            prev_date: chosen.data.order_prev_date || '',
+            date: chosen.data.order_date || ''
+          };
+        }
+        openPhasePopup(contextData, bar.getBoundingClientRect());
       });
     } else {
       bar.addEventListener('click', evt => {
@@ -1080,13 +1163,25 @@ function render(){
         let clickedMs = startMs + dayOffset * dayMs;
         if(clickedMs > endMs) clickedMs = endMs;
         const isoDay = madridDateISO(clickedMs);
-        openPhasePopup({
+        const contextData = {
           pid: r.project.id,
           phase: r.phase.name,
           day: isoDay,
           worker: r.phase.worker || '',
           part: ''
-        }, bar.getBoundingClientRect());
+        };
+        if (IS_ORDER_GANTT) {
+          contextData.order = {
+            column: r.phase.order_column || '',
+            lane: r.phase.order_lane || '',
+            client: r.phase.order_client || '',
+            code: r.phase.order_code || '',
+            cid: r.phase.order_cid || '',
+            prev_date: r.phase.order_prev_date || '',
+            date: r.phase.order_date || ''
+          };
+        }
+        openPhasePopup(contextData, bar.getBoundingClientRect());
       });
     }
     rowDiv.appendChild(bar);

@@ -2157,6 +2157,46 @@ def project_links_api():
     return jsonify(links)
 
 
+def _normalize_order_code(value):
+    if not value:
+        return ''
+    text = str(value).strip()
+    match = re.search(r'OF\s*(\d+)', text, re.IGNORECASE)
+    if match:
+        return f"OF {match.group(1)}"
+    return text
+
+
+def _pick_deadline_start(project):
+    candidates = [
+        project.get('due_date'),
+        project.get('client_date'),
+        project.get('client_due_date'),
+        project.get('customer_date'),
+    ]
+    for value in candidates:
+        if not value:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            parsed = parse_input_date(text)
+            if parsed:
+                return parsed.isoformat()
+    display_fields = project.get('kanban_display_fields') or {}
+    for label in ('Fecha Cliente', 'Fecha cliente'):
+        raw = display_fields.get(label)
+        if not raw:
+            continue
+        parsed = parse_input_date(str(raw).strip())
+        if parsed:
+            return parsed.isoformat()
+    return ''
+
+
 @app.route('/gantt')
 def gantt_view():
     projects = get_visible_projects()
@@ -2168,35 +2208,6 @@ def gantt_view():
         for day, tasks in days.items():
             for t in tasks:
                 by_pid.setdefault(t['pid'], []).append(t)
-
-    def _pick_deadline_start(project):
-        candidates = [
-            project.get('due_date'),
-            project.get('client_date'),
-            project.get('client_due_date'),
-            project.get('customer_date'),
-        ]
-        for value in candidates:
-            if not value:
-                continue
-            text = str(value).strip()
-            if not text:
-                continue
-            try:
-                return date.fromisoformat(text).isoformat()
-            except ValueError:
-                parsed = parse_input_date(text)
-                if parsed:
-                    return parsed.isoformat()
-        display_fields = project.get('kanban_display_fields') or {}
-        for label in ('Fecha Cliente', 'Fecha cliente'):
-            raw = display_fields.get(label)
-            if not raw:
-                continue
-            parsed = parse_input_date(str(raw).strip())
-            if parsed:
-                return parsed.isoformat()
-        return ''
 
     project_map = {}
     for p in projects:
@@ -2255,6 +2266,140 @@ def gantt_view():
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        gantt_mode='phases',
+        phase_actions_enabled=True,
+    )
+
+
+@app.route('/gantt-pedidos')
+def gantt_orders_view():
+    today = local_today()
+    compras_raw, column_colors = load_compras_raw()
+    pedidos, _, _ = compute_pedidos_entries(compras_raw, column_colors, today)
+    base_links = build_project_links(compras_raw)
+
+    order_to_code = {}
+    for entry in base_links:
+        code = _normalize_order_code(entry.get('custom_card_id'))
+        if not code:
+            code = _normalize_order_code(entry.get('display_title') or entry.get('title'))
+        details = entry.get('link_details') or []
+        for detail in details:
+            if isinstance(detail, dict):
+                cid = str(detail.get('id') or '').strip()
+                if cid and code:
+                    order_to_code.setdefault(cid, code)
+        for cid in entry.get('link_ids') or []:
+            cid = str(cid or '').strip()
+            if cid and code:
+                order_to_code.setdefault(cid, code)
+
+    projects = get_visible_projects()
+    project_map = {}
+    code_to_project = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+        }
+        code = _normalize_order_code(p.get('name'))
+        if code:
+            code_to_project[code] = p
+
+    orders_by_pid = {}
+    pseudo_counter = 0
+
+    for scheduled_day, entries in pedidos.items():
+        if not isinstance(scheduled_day, date):
+            continue
+        day_iso = scheduled_day.isoformat()
+        for entry in entries:
+            cid = str(entry.get('cid') or '').strip()
+            code = _normalize_order_code(entry.get('custom_card_id'))
+            if not code and cid:
+                code = order_to_code.get(cid, '')
+            if not code:
+                code = _normalize_order_code(entry.get('project'))
+
+            project = code_to_project.get(code)
+            entry_color = entry.get('color')
+            if project:
+                pid = project['id']
+                name = project.get('name') or code or entry.get('project') or 'Pedido'
+                client = project.get('client', '')
+                color = project.get('color') or entry_color
+                due = project.get('due_date')
+                deadline_start = _pick_deadline_start(project)
+            else:
+                pseudo_counter += 1
+                pid = f"pedido-{pseudo_counter}"
+                name = code or entry.get('project') or f"Pedido {pseudo_counter}"
+                client = entry.get('client') or ''
+                color = entry_color or '#6c9ec1'
+                due = ''
+                deadline_start = ''
+                if pid not in project_map:
+                    project_map[pid] = {
+                        'id': pid,
+                        'name': name,
+                        'client': client,
+                        'kanban_display_fields': {},
+                        'kanban_attachments': [],
+                        'phase_sequence': [],
+                        'frozen_phases': [],
+                        'color': color,
+                        'due_date': due,
+                        'deadline_start': deadline_start,
+                        'observations': '',
+                    }
+
+            proj_entry = orders_by_pid.setdefault(pid, {
+                'id': pid,
+                'name': name,
+                'client': client,
+                'start': day_iso,
+                'end': day_iso,
+                'due_date': due,
+                'color': color or '#6c9ec1',
+                'deadline_start': deadline_start,
+                'phases': [],
+            })
+
+            if day_iso < proj_entry['start']:
+                proj_entry['start'] = day_iso
+            if day_iso > proj_entry['end']:
+                proj_entry['end'] = day_iso
+
+            phase = {
+                'id': f"{pid}-pedido-{cid or len(proj_entry['phases'])}",
+                'name': entry.get('project') or 'Pedido',
+                'start': day_iso,
+                'end': day_iso,
+                'color': entry.get('color') or color,
+                'worker': entry.get('column') or '',
+                'order_column': entry.get('column') or '',
+                'order_lane': entry.get('lane') or '',
+                'order_client': entry.get('client') or '',
+                'order_code': code,
+                'order_cid': cid,
+                'order_prev_date': entry.get('prev_date') or '',
+                'order_date': day_iso,
+            }
+            proj_entry['phases'].append(phase)
+
+    gantt_projects = sorted(orders_by_pid.values(), key=lambda item: item['start'])
+
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map={},
+        phases=PHASE_ORDER,
+        gantt_mode='orders',
+        phase_actions_enabled=False,
     )
 
 @app.route('/projects')
