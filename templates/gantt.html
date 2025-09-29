@@ -77,10 +77,11 @@
   .gantt-row { height:30px; border-bottom:1px solid #ddd; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
-  .project-bar { cursor:pointer; }
+  .project-bar { cursor:pointer; background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
+  .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
   .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
   .order-phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
-  .order-phase-bar.order-phase-warning { border-color:#d00; border-width:2px; box-shadow:0 0 0 1px rgba(208,0,0,0.35); }
+  .order-phase-bar.order-phase-warning { background:#dbe9ff; border-color:#0b3c6f; border-width:2px; box-shadow:0 0 0 1px rgba(11,60,111,0.25); color:#0b3c6f; }
   .gantt-row .deadline-highlight {
     position:absolute;
     top:-2px;
@@ -179,8 +180,7 @@ const PHASE_SUMMARY_COLUMNS = [
 
 const ORDER_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
-  { key: 'order_lane', title: 'Lane pedido', defaultWidth: 200, minWidth: 140, renderCell: row => buildOrderMetaCell(row, 'order_lane') },
-  { key: 'order_date', title: 'Fecha pedido', defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: row => buildOrderDateCell(row, 'order_date') },
+  { key: 'order_date', title: 'Fecha pedido', defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: buildOrderDateCell },
   { key: 'planned_start', title: 'Fecha inicio planificada', defaultWidth: 220, minWidth: 160, classes: ['summary-date'], renderCell: buildOrderProjectStartCell },
 ];
 
@@ -421,16 +421,18 @@ function buildOrderMetaCell(row, key){
   return cell;
 }
 
-function buildOrderDateCell(row, key){
+function buildOrderDateCell(row){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
   if(row.type === 'phase'){
-    const raw = row.phase && row.phase[key] ? String(row.phase[key]).trim() : '';
-    const formatted = formatKanbanDate(raw);
+    const kanbanRaw = row.phase && row.phase.order_kanban_date ? String(row.phase.order_kanban_date).trim() : '';
+    const primaryRaw = kanbanRaw || (row.phase && row.phase.order_date ? String(row.phase.order_date).trim() : '');
+    const formatted = formatKanbanDate(primaryRaw);
     cell.textContent = formatted;
-    if(formatted && raw && formatted !== raw) cell.title = raw;
+    if(formatted && kanbanRaw && formatted !== kanbanRaw) cell.title = kanbanRaw;
+    else if(formatted && primaryRaw && formatted !== primaryRaw) cell.title = primaryRaw;
     else if(formatted) cell.title = formatted;
-    else if(raw) cell.title = raw;
+    else if(primaryRaw) cell.title = primaryRaw;
   }
   return cell;
 }
@@ -761,7 +763,11 @@ function openPhasePopup(context, anchorRect) {
       const formattedPrev = formatKanbanDate(order.prev_date) || order.prev_date;
       orderLines.push(`<div>Fecha anterior: ${formattedPrev}</div>`);
     }
-    if (order.date) {
+    const kanbanDate = order.kanban_date || '';
+    if (kanbanDate) {
+      const formattedKanban = formatKanbanDate(kanbanDate) || kanbanDate;
+      orderLines.push(`<div>Fecha pedido: ${formattedKanban}</div>`);
+    } else if (order.date) {
       const formattedDate = formatKanbanDate(order.date) || order.date;
       orderLines.push(`<div>Fecha pedido: ${formattedDate}</div>`);
     }
@@ -1095,7 +1101,13 @@ function render(){
     bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
     bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
     if(!IS_ORDER_GANTT){
-      bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
+      if(r.type === 'project'){
+        bar.style.background = '#d9d9d9';
+      } else {
+        bar.style.background = '#fff';
+      }
+      bar.style.border = '1px solid #bdbdbd';
+      bar.style.color = '#000';
     }
     if(r.type==='project'){
       const label = [r.project.name, r.project.client].filter(Boolean).join(' - ');
@@ -1175,7 +1187,8 @@ function render(){
             code: chosen.data.order_code || '',
             cid: chosen.data.order_cid || '',
             prev_date: chosen.data.order_prev_date || '',
-            date: chosen.data.order_date || ''
+            date: chosen.data.order_date || '',
+            kanban_date: chosen.data.order_kanban_date || ''
           };
         }
         openPhasePopup(contextData, bar.getBoundingClientRect());
@@ -1205,7 +1218,8 @@ function render(){
             code: r.phase.order_code || '',
             cid: r.phase.order_cid || '',
             prev_date: r.phase.order_prev_date || '',
-            date: r.phase.order_date || ''
+            date: r.phase.order_date || '',
+            kanban_date: r.phase.order_kanban_date || ''
           };
         }
         openPhasePopup(contextData, bar.getBoundingClientRect());

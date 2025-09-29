@@ -841,6 +841,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'cid': cid,
             'prev_date': prev_date,
             'custom_card_id': custom_id,
+            'kanban_date': stored_date or card.get('deadline') or '',
         }
 
         if d:
@@ -2490,6 +2491,7 @@ def gantt_orders_view():
                 'order_cid': cid,
                 'order_prev_date': entry.get('prev_date') or '',
                 'order_date': effective_iso,
+                'order_kanban_date': entry.get('kanban_date') or '',
                 'order_highlight': _should_highlight_order(effective_day, planned_start_date) if planned_start_date else False,
             }
             proj_entry['phases'].append(phase)
