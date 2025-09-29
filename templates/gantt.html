@@ -47,7 +47,7 @@
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-summary { display:flex; flex-direction:row; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
   .summary-columns { display:flex; flex:1; }
@@ -58,7 +58,7 @@
   .summary-column { position:relative; display:flex; flex-direction:column; border-right:1px solid #ddd; flex:0 0 auto; background:#fff; }
   .summary-column:last-child { border-right:0; }
   .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:30px; line-height:30px; font-weight:bold; color:#000; z-index:2; padding:0 6px; box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:0; }
-  .summary-body { flex:1; position:relative; overflow:hidden; will-change:transform; }
+  .summary-body { flex:1; }
   .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 6px; box-sizing:border-box; color:#000; white-space:nowrap; display:flex; align-items:center; overflow:hidden; text-overflow:ellipsis; min-width:0; }
   .summary-column.summary-main .summary-row.project-row { cursor:pointer; font-weight:bold; }
   .summary-column.summary-main .summary-row.phase-row { padding-left:16px; }
@@ -145,7 +145,6 @@ let currentSort = localStorage.getItem('ganttSort') || null;
 const DAY_MS = 24*60*60*1000;
 let timelineMinStart = null;
 let timelinePxPerDay = pxPerDay;
-let summaryTouchStartY = null;
 
 const projectFilterInput = document.getElementById('filter_project');
 const clientFilterInput = document.getElementById('filter_client');
@@ -900,12 +899,8 @@ function applyFilters(store=true){
 }
 
 function render(){
-  const previousScrollTop = main.scrollTop;
   summaryColumnDefs.forEach(def => {
-    if(def.body){
-      def.body.innerHTML = '';
-      def.body.style.transform = 'translateY(0px)';
-    }
+    if(def.body) def.body.innerHTML = '';
   });
   body.innerHTML = '';
   header.innerHTML = '';
@@ -989,19 +984,11 @@ function render(){
     }
   });
 
-  const columnFragments = new Map();
-  summaryColumnDefs.forEach(def => {
-    if(def.body) columnFragments.set(def.key, document.createDocumentFragment());
-  });
-
   rows.forEach(r=>{
     summaryColumnDefs.forEach(def => {
       if(!def.body || typeof def.renderCell !== 'function') return;
       const cell = def.renderCell(r);
-      if(cell){
-        const fragment = columnFragments.get(def.key);
-        if(fragment) fragment.appendChild(cell);
-      }
+      if(cell) def.body.appendChild(cell);
     });
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
@@ -1106,47 +1093,18 @@ function render(){
     body.appendChild(rowDiv);
   });
 
-  summaryColumnDefs.forEach(def => {
-    if(!def.body) return;
-    const fragment = columnFragments.get(def.key);
-    if(fragment) def.body.appendChild(fragment);
-  });
-
   const extraRows = hasGroupTitleRow ? 1 : 0;
   const totalHeight = (rows.length + extraRows) * BAR_HEIGHT;
   summaryColumnDefs.forEach(def => {
     if(def.body) def.body.style.height = totalHeight + 'px';
   });
   body.style.height = totalHeight + 'px';
-  const maxScroll = Math.max(0, main.scrollHeight - main.clientHeight);
-  const desiredScrollTop = Math.max(0, Math.min(previousScrollTop, maxScroll));
-  if(main.scrollTop !== desiredScrollTop){
-    main.scrollTop = desiredScrollTop;
-  }
-  updateSummaryScroll();
-  if(initialScroll){ scrollToToday(); initialScroll=false; updateSummaryScroll(); }
-}
-
-function clampMainScroll(value){
-  const max = Math.max(0, main.scrollHeight - main.clientHeight);
-  if(value < 0) return 0;
-  if(value > max) return max;
-  return value;
-}
-
-function updateSummaryScroll(){
-  const offset = main.scrollTop;
-  summaryColumnDefs.forEach(def => {
-    if(def.body){
-      def.body.style.transform = `translateY(${-offset}px)`;
-    }
-  });
+  if(initialScroll){ scrollToToday(); initialScroll=false; }
 }
 
 function scrollToToday(){
   if(todayIndex === null) return;
   main.scrollLeft = todayIndex * pxPerDay - main.clientWidth/2 + pxPerDay/2;
-  updateSummaryScroll();
 }
 
 function toggleProject(id){
@@ -1165,41 +1123,16 @@ document.getElementById('go_today').onclick = scrollToToday;
 projectFilterInput.addEventListener('input', ()=>applyFilters());
 clientFilterInput.addEventListener('input', ()=>applyFilters());
 
-main.addEventListener('scroll', updateSummaryScroll);
+let syncing = false;
+function syncScroll(source, target){
+  if(syncing) return;
+  syncing = true;
+  target.scrollTop = source.scrollTop;
+  syncing = false;
+}
 
-summaryContainer.addEventListener('wheel', evt => {
-  if(Math.abs(evt.deltaY) <= Math.abs(evt.deltaX)) return;
-  evt.preventDefault();
-  const next = clampMainScroll(main.scrollTop + evt.deltaY);
-  if(next !== main.scrollTop){
-    main.scrollTop = next;
-    updateSummaryScroll();
-  }
-}, { passive:false });
-
-summaryContainer.addEventListener('touchstart', evt => {
-  if(evt.touches.length !== 1) return;
-  summaryTouchStartY = evt.touches[0].clientY;
-});
-
-summaryContainer.addEventListener('touchmove', evt => {
-  if(evt.touches.length !== 1 || summaryTouchStartY === null) return;
-  const currentY = evt.touches[0].clientY;
-  const delta = summaryTouchStartY - currentY;
-  if(delta !== 0){
-    evt.preventDefault();
-    summaryTouchStartY = currentY;
-    const next = clampMainScroll(main.scrollTop + delta);
-    if(next !== main.scrollTop){
-      main.scrollTop = next;
-      updateSummaryScroll();
-    }
-  }
-}, { passive:false });
-
-summaryContainer.addEventListener('touchend', () => { summaryTouchStartY = null; });
-summaryContainer.addEventListener('touchcancel', () => { summaryTouchStartY = null; });
-
+main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
+summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
 applyFilters(false);
 </script>
 {% endblock %}
