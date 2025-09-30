@@ -228,8 +228,8 @@ table.pedidos-calendar td.week-label {
 .columna-1-content {
     display: grid;
     grid-auto-flow: column;
-    grid-template-rows: repeat(8, auto);
-    grid-auto-columns: 200px;
+    grid-template-rows: repeat(16, auto);
+    grid-auto-columns: 400px;
     gap: 4px 16px;
     overflow-x: auto;
 }
@@ -242,7 +242,7 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .project-row {
     padding: 4px 0;
-    width: 200px;
+    width: 400px;
     word-break: break-word;
 }
 
