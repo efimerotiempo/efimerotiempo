@@ -309,6 +309,19 @@ PEDIDOS_EXTRA_LANE_COLUMNS = {
     'Premecanizado',
 }
 
+PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS = {
+    'Tratamiento',
+    'Tratamiento final',
+    'Planf. TAU',
+    'Planif. Bekola',
+    'Planif. AZ',
+    'Planif. OTROS',
+    'Tau',
+    'Bekola',
+    'AZ',
+    'OTROS',
+}
+
 PROJECT_LINK_LANES = {
     'acero al carbono',
     'inoxidable - aluminio',
@@ -2512,15 +2525,20 @@ def gantt_orders_view():
                 'phases': [],
             })
 
+            order_column = (entry.get('column') or '').strip()
+
             effective_day = scheduled_day
             title_date = _extract_order_title_date(entry.get('project'), scheduled_day, today.year)
             if title_date:
                 effective_day = title_date
+            if (
+                planned_end_date
+                and order_column in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+            ):
+                effective_day = _subtract_business_days(planned_end_date, 5)
             effective_iso = effective_day.isoformat()
 
             proj_entry['order_dates'].append(effective_iso)
-
-            order_column = (entry.get('column') or '').strip()
 
             should_flag_order = False
             if planned_start_date and order_column not in {'Tratamiento', 'Tratamiento final'}:
