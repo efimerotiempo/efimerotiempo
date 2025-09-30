@@ -1214,10 +1214,14 @@ def move_phase_date(
     * ``"push"`` shifts subsequent tasks for the same worker so the phase can
       remain continuous.
 
-    Return tuple ``(day, error)`` where ``day`` is the first day of the phase
-    after rescheduling, or ``None`` if it could not be moved. ``error`` provides
-    a message explaining the failure when applicable.
+    Return tuple ``(day, warning, info)`` where ``day`` is the first day of the
+    phase after rescheduling (``None`` when it could not be moved), ``warning``
+    carries deadline or blocking messages, and ``info`` aggregates metadata
+    about the operation.
     """
+    def _fail(warn, info=None):
+        return None, warn, info
+
     if part in (None, '', 'None'):
         part = None
     else:
@@ -1229,19 +1233,19 @@ def move_phase_date(
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
-        return None, 'Fase no encontrada'
+        return _fail('Fase no encontrada')
     if part is not None:
         tasks = [t for t in tasks if t[4] == part]
         if not tasks:
-            return None, 'Fase no encontrada'
+            return _fail('Fase no encontrada')
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
-        return None, 'Proyecto no encontrado'
+        return _fail('Proyecto no encontrado')
     if phase != 'pedidos' and any(
         t['phase'] == phase and (part is None or t.get('part') == part)
         for t in proj.get('frozen_tasks', [])
     ):
-        return None, 'Fase congelada'
+        return _fail('Fase congelada')
 
     vac_map = _schedule_mod._build_vacation_map()
     if (
@@ -1250,7 +1254,7 @@ def move_phase_date(
         and worker != 'Irene'
         and new_date in vac_map.get(worker, set())
     ):
-        return None, 'Vacaciones en esa fecha'
+        return _fail('Vacaciones en esa fecha')
 
     # Remember the originally requested day.  When ``start_hour`` exceeds the
     # daily limit we normally roll the phase to the next workday, but in push
@@ -1277,7 +1281,7 @@ def move_phase_date(
             phase_hours = proj['phases'].get(phase)
             if isinstance(phase_hours, list):
                 if part is None or part >= len(phase_hours):
-                    return None, 'Fase no encontrada'
+                    return _fail('Fase no encontrada')
                 hours = int(phase_hours[part])
             else:
                 hours = int(phase_hours)
@@ -1294,7 +1298,7 @@ def move_phase_date(
         phase_val = proj['phases'].get(phase)
         if isinstance(phase_val, list):
             if part is None or part >= len(phase_val):
-                return None, 'Fase no encontrada'
+                return _fail('Fase no encontrada')
             hours = int(phase_val[part])
         else:
             hours = int(phase_val)
@@ -1416,12 +1420,14 @@ def move_phase_date(
                 for t in other_proj.get('frozen_tasks', [])
             ):
                 if not unblock and not skip_block:
-                    return None, {
-                        'pid': opid,
-                        'phase': oph,
-                        'part': oprt,
-                        'name': other_proj.get('name', ''),
-                    }
+                    return _fail(
+                        {
+                            'pid': opid,
+                            'phase': oph,
+                            'part': oprt,
+                            'name': other_proj.get('name', ''),
+                        }
+                    )
                 if skip_block:
                     val = other_proj['phases'][oph]
                     if isinstance(val, list):
