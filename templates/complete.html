@@ -199,7 +199,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
@@ -230,7 +230,7 @@
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
                     {% if t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
