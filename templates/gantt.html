@@ -163,7 +163,16 @@ const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
 
-const ORDER_POPUP_HIDDEN_LABELS = new Set(['Columna', 'Lane', 'Código', 'ID Kanban']);
+const ORDER_POPUP_HIDDEN_LABELS = new Set(['Columna', 'Lane', 'Código', 'ID Kanban', 'Fecha pedido', 'Fecha Pedido', 'FECHA PEDIDO']);
+const ORDER_PROJECT_DEADLINE_KEYS = [
+  'Fecha tope',
+  'Fecha Tope',
+  'FECHA TOPE',
+  'Fecha tope cliente',
+  'Fecha Tope Cliente',
+  'Fecha tope proyecto',
+  'Fecha Tope Proyecto'
+];
 
 const PHASE_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
@@ -731,7 +740,24 @@ function openPhasePopup(context, anchorRect) {
   if (context.phase) headerParts.push(context.phase);
   let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
   const metaLines = [];
-  if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+  if (IS_ORDER_GANTT) {
+    if (context.order) {
+      const orderLimitRaw = context.order.kanban_date || context.order.date || '';
+      const orderLimit = formatKanbanDate(orderLimitRaw) || orderLimitRaw;
+      if (orderLimit) metaLines.push(`<div>Límite: ${orderLimit}</div>`);
+    } else {
+      const kanbanLimitRaw = getProjectFieldValue(info, ORDER_PROJECT_DEADLINE_KEYS);
+      let kanbanLimit = formatKanbanDate(kanbanLimitRaw) || kanbanLimitRaw;
+      if (!kanbanLimit) {
+        const fallbackRow = context && context.pid ? { type: 'project', project: { id: context.pid } } : null;
+        const fallback = fallbackRow ? (getProjectDeadlineFallback(fallbackRow) || '') : '';
+        kanbanLimit = formatKanbanDate(fallback) || fallback;
+      }
+      if (kanbanLimit) metaLines.push(`<div>Límite: ${kanbanLimit}</div>`);
+    }
+  } else {
+    if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+  }
   if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
   if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
   const kanbanFields = info.kanban_display_fields || {};
@@ -763,13 +789,10 @@ function openPhasePopup(context, anchorRect) {
       const formattedPrev = formatKanbanDate(order.prev_date) || order.prev_date;
       orderLines.push(`<div>Fecha anterior: ${formattedPrev}</div>`);
     }
-    const kanbanDate = order.kanban_date || '';
-    if (kanbanDate) {
-      const formattedKanban = formatKanbanDate(kanbanDate) || kanbanDate;
-      orderLines.push(`<div>Fecha pedido: ${formattedKanban}</div>`);
-    } else if (order.date) {
-      const formattedDate = formatKanbanDate(order.date) || order.date;
-      orderLines.push(`<div>Fecha pedido: ${formattedDate}</div>`);
+    if (!metaLines.length) {
+      const orderLimitRaw = order.kanban_date || order.date || '';
+      const orderLimit = formatKanbanDate(orderLimitRaw) || orderLimitRaw;
+      if (orderLimit) metaLines.push(`<div>Límite: ${orderLimit}</div>`);
     }
     if (orderLines.length) html += `<div class="popup-section">${orderLines.join('')}</div>`;
   }
