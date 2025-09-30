@@ -2425,19 +2425,17 @@ def gantt_orders_view():
         pid = project.get('id')
         if not pid:
             continue
-        window = planned_windows.setdefault(pid, {'start': None, 'end': None})
-        start_day = _safe_iso_date(project.get('start_date'))
-        end_day = _safe_iso_date(project.get('end_date'))
-        if start_day:
-            window['start'] = start_day
-        if end_day:
-            window['end'] = end_day
+        planned_windows.setdefault(pid, {'start': None, 'end': None})
 
     for worker, days in schedule_data.items():
         for tasks in days.values():
             for task in tasks:
                 pid = task.get('pid')
                 if not pid:
+                    continue
+                if worker:
+                    project_workers.setdefault(pid, set()).add(worker)
+                if worker == UNPLANNED or task.get('worker') == UNPLANNED:
                     continue
                 start_day = _safe_iso_date(task.get('start_time'))
                 end_day = _safe_iso_date(task.get('end_time'))
@@ -2446,8 +2444,20 @@ def gantt_orders_view():
                     window['start'] = start_day
                 if end_day and (window['end'] is None or end_day > window['end']):
                     window['end'] = end_day
-                if worker:
-                    project_workers.setdefault(pid, set()).add(worker)
+
+    for project in scheduled_projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        window = planned_windows.setdefault(pid, {'start': None, 'end': None})
+        if window['start'] is None:
+            start_day = _safe_iso_date(project.get('start_date'))
+            if start_day:
+                window['start'] = start_day
+        if window['end'] is None:
+            end_day = _safe_iso_date(project.get('end_date'))
+            if end_day:
+                window['end'] = end_day
 
     all_unplanned_projects = {
         pid: bool(workers) and all(w == UNPLANNED for w in workers)
