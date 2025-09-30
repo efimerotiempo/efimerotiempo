@@ -2216,12 +2216,23 @@ def gantt_view():
     projects = get_visible_projects()
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
+    project_workers = {}
     for worker, days in sched.items():
-        if worker == UNPLANNED:
-            continue
         for day, tasks in days.items():
             for t in tasks:
-                by_pid.setdefault(t['pid'], []).append(t)
+                pid = t.get('pid')
+                if not pid:
+                    continue
+                if worker:
+                    project_workers.setdefault(pid, set()).add(worker)
+                if worker == UNPLANNED:
+                    continue
+                by_pid.setdefault(pid, []).append(t)
+
+    all_unplanned_projects = {
+        pid: bool(workers) and all(w == UNPLANNED for w in workers)
+        for pid, workers in project_workers.items()
+    }
 
     project_map = {}
     for p in projects:
@@ -2231,6 +2242,7 @@ def gantt_view():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
         }
 
     start_map = phase_start_map(projects)
@@ -2273,6 +2285,7 @@ def gantt_view():
             'color': p.get('color'),
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
+            'all_phases_unplanned': all_unplanned_projects.get(pid, False),
         })
     return render_template(
         'gantt.html',

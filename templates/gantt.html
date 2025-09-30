@@ -78,6 +78,7 @@
   .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
   .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
+  .project-bar.project-unplanned { color:#ff8c00; }
   .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
   .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
   .order-project-bar.order-project-unplanned { color:#ff8c00; }
@@ -1121,6 +1122,11 @@ function render(){
         if (r.phase && r.phase.order_highlight) {
           barClasses.push('order-phase-warning');
         }
+      }
+    } else if (r.type === 'project') {
+      const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
+      if (allPhasesUnplanned) {
+        barClasses.push('project-unplanned');
       }
     }
     bar.className = barClasses.join(' ');
