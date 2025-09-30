@@ -288,6 +288,22 @@ table.pedidos-calendar td.week-label {
     border: 4px solid #000;
 }
 
+.pedidos-wrapper.highlight-active .task.dimmed {
+    opacity: 0.25;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .project-row.dimmed {
+    opacity: 0.3;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .link-title.dimmed {
+    opacity: 0.35;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .project-row.highlight {
+    opacity: 1;
+}
+
 /* keep projects table width */
 .complete-projects table { width: 100%; }
 

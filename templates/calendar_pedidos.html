@@ -748,16 +748,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function applyHighlight(state) {
-    const tasks = document.querySelectorAll('.pedidos-calendar .task');
+    const wrapper = document.querySelector('.pedidos-wrapper');
+    const tasks = document.querySelectorAll('.pedidos-wrapper .task');
     const links = document.querySelectorAll('.columna-1 .link-title');
-    tasks.forEach(t => t.classList.remove('highlight'));
-    links.forEach(l => l.classList.remove('highlight'));
+    const projectRows = document.querySelectorAll('.columna-1 .project-row');
+    tasks.forEach(t => {
+      t.classList.remove('highlight');
+      t.classList.remove('dimmed');
+    });
+    links.forEach(l => {
+      l.classList.remove('highlight');
+      l.classList.remove('dimmed');
+    });
+    projectRows.forEach(row => {
+      row.classList.remove('highlight');
+      row.classList.remove('dimmed');
+    });
+    if (wrapper) {
+      wrapper.classList.toggle('highlight-active', !!state);
+    }
     if (!state) return;
+
+    const highlightedRows = new Set();
+
     tasks.forEach(t => {
       const titleKey = norm(t.dataset.title);
       const laneKey = norm(t.dataset.lane);
       if (state.titleKeys.has(titleKey) && (!state.laneKeys || state.laneKeys.has(laneKey))) {
         t.classList.add('highlight');
+      } else {
+        t.classList.add('dimmed');
       }
     });
     links.forEach(l => {
@@ -765,6 +785,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const laneKey = norm(l.dataset.lane);
       if (state.titleKeys.has(titleKey) && (!state.laneKeys || state.laneKeys.has(laneKey))) {
         l.classList.add('highlight');
+        const row = l.closest('.project-row');
+        if (row) highlightedRows.add(row);
+      } else {
+        l.classList.add('dimmed');
+      }
+    });
+    projectRows.forEach(row => {
+      if (highlightedRows.has(row)) {
+        row.classList.add('highlight');
+      } else {
+        row.classList.add('dimmed');
       }
     });
   }
