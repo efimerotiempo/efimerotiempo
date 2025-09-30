@@ -629,6 +629,7 @@ def build_project_links(compras_raw):
                 'title': title,
                 'column': column,
                 'deadline': deadline.isoformat() if deadline else None,
+                'lane': lane_name,
             }
             if detail['id']:
                 seguimiento_by_id[detail['id']] = detail
@@ -700,6 +701,9 @@ def build_project_links(compras_raw):
                     deadline_value = lane_detail.get('deadline')
                     if deadline_value:
                         serialized['deadline'] = deadline_value
+                    lane_value = lane_detail.get('lane')
+                    if lane_value:
+                        serialized['lane'] = lane_value
                     match_details.append(serialized)
                     if lane_id:
                         seen_ids.add(lane_id)
@@ -721,6 +725,9 @@ def build_project_links(compras_raw):
                         deadline_value = detail.get('deadline')
                         if deadline_value:
                             serialized['deadline'] = deadline_value
+                        lane_value = detail.get('lane')
+                        if lane_value:
+                            serialized['lane'] = lane_value
                     match_details.append(serialized)
                     if child_id:
                         seen_ids.add(child_id)

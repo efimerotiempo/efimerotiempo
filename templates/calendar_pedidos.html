@@ -35,6 +35,7 @@
                  data-code="{{ t.get('custom_card_id') or '' }}"
                  data-client="{{ t.get('client') or '' }}"
                  data-due="{{ d.date.isoformat() }}"
+                 data-lane="{{ t.get('lane') or '' }}"
                  {% if t.get('part') %}data-part="{{ t.get('part') }}"{% endif %}
                  style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
@@ -57,6 +58,7 @@
                    data-title="{{ t.project }}"
                    data-code="{{ t.get('custom_card_id') or '' }}"
                    data-client="{{ t.get('client') or '' }}"
+                   data-lane="{{ t.get('lane') or '' }}"
                    style="border-color: {{ t.get('color', '#999999') }};">
                 <span class="task-main">{{ t.project }}</span>
                 {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
@@ -95,8 +97,12 @@
                         data-project="{{ project_value }}"
                         data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
             </div>
+            {% set details = item.link_details or [] %}
             {% for link in item.links %}
-                <div class="link-title" data-title="{{ link }}">{{ link }}</div>
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                <div class="link-title"
+                     data-title="{{ link }}"
+                     data-lane="{{ detail.lane or '' }}">{{ link }}</div>
             {% endfor %}
         </div>
     {% endfor %}
@@ -628,8 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  let currentHighlight = null;
-
   function parseISODateParts(value) {
     const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
     if (!match) return null;
@@ -696,33 +700,123 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function setHighlight(title) {
+  let currentHighlightState = null;
+  let currentHighlightKey = null;
+
+  function normalizeSelection(selection) {
+    if (!selection) return null;
+    if (typeof selection === 'string') {
+      selection = { titles: [selection] };
+    } else if (Array.isArray(selection)) {
+      selection = { titles: selection };
+    } else {
+      selection = { ...selection };
+    }
+
+    const titles = [];
+    if (selection.title) titles.push(selection.title);
+    if (Array.isArray(selection.titles)) titles.push(...selection.titles);
+    const normTitles = new Set();
+    titles.forEach(value => {
+      const key = norm(value);
+      if (key) normTitles.add(key);
+    });
+    if (!normTitles.size) return null;
+
+    let laneKeys = null;
+    if (selection.lane) {
+      const laneKey = norm(selection.lane);
+      if (laneKey) {
+        laneKeys = new Set([laneKey]);
+      }
+    }
+    if (selection.lanes) {
+      if (!laneKeys) laneKeys = new Set();
+      for (const lane of selection.lanes) {
+        const laneKey = norm(lane);
+        if (laneKey) laneKeys.add(laneKey);
+      }
+      if (!laneKeys.size) laneKeys = null;
+    }
+
+    const key = JSON.stringify({
+      titles: Array.from(normTitles).sort(),
+      lanes: laneKeys ? Array.from(laneKeys).sort() : null,
+    });
+
+    return { titleKeys: normTitles, laneKeys, key };
+  }
+
+  function applyHighlight(state) {
     const tasks = document.querySelectorAll('.pedidos-calendar .task');
     const links = document.querySelectorAll('.columna-1 .link-title');
     tasks.forEach(t => t.classList.remove('highlight'));
     links.forEach(l => l.classList.remove('highlight'));
-    if (title) {
-      tasks.forEach(t => { if (t.dataset.title === title) t.classList.add('highlight'); });
-      links.forEach(l => { if (l.dataset.title === title) l.classList.add('highlight'); });
-      currentHighlight = title;
-    } else {
-      currentHighlight = null;
+    if (!state) return;
+    tasks.forEach(t => {
+      const titleKey = norm(t.dataset.title);
+      const laneKey = norm(t.dataset.lane);
+      if (state.titleKeys.has(titleKey) && (!state.laneKeys || state.laneKeys.has(laneKey))) {
+        t.classList.add('highlight');
+      }
+    });
+    links.forEach(l => {
+      const titleKey = norm(l.dataset.title);
+      const laneKey = norm(l.dataset.lane);
+      if (state.titleKeys.has(titleKey) && (!state.laneKeys || state.laneKeys.has(laneKey))) {
+        l.classList.add('highlight');
+      }
+    });
+  }
+
+  function clearHighlight() {
+    applyHighlight(null);
+    currentHighlightState = null;
+    currentHighlightKey = null;
+  }
+
+  function reapplyHighlight() {
+    if (currentHighlightState) {
+      applyHighlight(currentHighlightState);
     }
   }
 
+  function toggleHighlight(selection) {
+    const state = normalizeSelection(selection);
+    if (!state) {
+      clearHighlight();
+      return;
+    }
+    if (currentHighlightKey && state.key === currentHighlightKey) {
+      clearHighlight();
+      return;
+    }
+    applyHighlight(state);
+    currentHighlightState = state;
+    currentHighlightKey = state.key;
+  }
+
   function attachHighlightHandlers() {
-    document.querySelector('.pedidos-calendar').addEventListener('click', e => {
-      const t = e.target.closest('.task');
-      if (!t) return;
-      const title = t.dataset.title;
-      setHighlight(currentHighlight === title ? null : title);
-    });
-    document.querySelector('.columna-1').addEventListener('click', e => {
-      const el = e.target.closest('.link-title');
-      if (!el) return;
-      const title = el.dataset.title;
-      setHighlight(currentHighlight === title ? null : title);
-    });
+    const calendar = document.querySelector('.pedidos-calendar');
+    if (calendar) {
+      calendar.addEventListener('click', e => {
+        const t = e.target.closest('.task');
+        if (!t) return;
+        const title = t.dataset.title;
+        if (!title) return;
+        toggleHighlight({ titles: [title] });
+      });
+    }
+    const column = document.querySelector('.columna-1');
+    if (column) {
+      column.addEventListener('click', e => {
+        const el = e.target.closest('.link-title');
+        if (!el) return;
+        const title = el.dataset.title;
+        if (!title) return;
+        toggleHighlight({ titles: [title] });
+      });
+    }
   }
 
   attachHighlightHandlers();
@@ -736,6 +830,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
+      if (trigger.classList.contains('proj-title')) {
+        const matchingTitles = Array.from(row.querySelectorAll('.link-title'))
+          .filter(link => norm(link.dataset.lane) === 'seguimiento compras')
+          .map(link => link.dataset.title)
+          .filter(Boolean);
+        if (matchingTitles.length) {
+          toggleHighlight({ titles: matchingTitles, lane: 'Seguimiento compras' });
+        } else {
+          clearHighlight();
+        }
+      }
       const pid = resolveRowPid(row);
       if (!pid || !PROJECT_DATA[pid]) return;
       e.stopPropagation();
@@ -773,15 +878,19 @@ document.addEventListener('DOMContentLoaded', () => {
           const titleText = (fullTitle || projectValue) || '';
           html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
           html += '</div>';
-          item.links.forEach(link => {
-            html += `<div class="link-title" data-title="${link}">${link}</div>`;
+          const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
+          item.links.forEach((link, idx) => {
+            const detail = linkDetails[idx] || {};
+            const lane = detail && detail.lane ? detail.lane : '';
+            const laneAttr = lane.replace(/"/g, '&quot;');
+            html += `<div class="link-title" data-title="${link}" data-lane="${laneAttr}">${link}</div>`;
           });
           div.innerHTML = html;
           resolveRowPid(div);
           container.appendChild(div);
         });
         filterInput.dispatchEvent(new Event('input'));
-        if (currentHighlight) setHighlight(currentHighlight);
+        reapplyHighlight();
         updateDueWarnings();
       });
   };
