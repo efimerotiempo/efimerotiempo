@@ -2329,13 +2329,19 @@ def _subtract_business_days(day, count):
     return current
 
 
-def _should_highlight_order(order_day, planned_start, *, window=3):
+def _should_highlight_order(order_day, planned_start, *, window=3, today=None):
     if not isinstance(order_day, date) or not isinstance(planned_start, date):
         return False
-    if order_day > planned_start:
-        return False
+
+    highlight = False
     threshold = _subtract_business_days(planned_start, window)
-    return threshold <= order_day <= planned_start
+    if threshold <= order_day <= planned_start:
+        highlight = True
+
+    if isinstance(today, date) and planned_start <= order_day <= today:
+        highlight = True
+
+    return highlight
 
 
 @app.route('/gantt-pedidos')
@@ -2492,7 +2498,11 @@ def gantt_orders_view():
                 'order_prev_date': entry.get('prev_date') or '',
                 'order_date': effective_iso,
                 'order_kanban_date': entry.get('kanban_date') or '',
-                'order_highlight': _should_highlight_order(effective_day, planned_start_date) if planned_start_date else False,
+                'order_highlight': _should_highlight_order(
+                    effective_day,
+                    planned_start_date,
+                    today=today,
+                ) if planned_start_date else False,
             }
             proj_entry['phases'].append(phase)
 
