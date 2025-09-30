@@ -99,6 +99,14 @@
   .day-cell.today { background-color: rgba(255,0,0,0.3); }
   .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
   .gantt-controls input { margin-left:8px; padding:4px; }
+  body.orders-gantt-mode .summary-column .summary-row,
+  body.orders-gantt-mode .summary-column .summary-header {
+    border-left:1px solid #d0d0d0;
+  }
+  body.orders-gantt-mode .summary-column:first-child .summary-row,
+  body.orders-gantt-mode .summary-column:first-child .summary-header {
+    border-left:0;
+  }
 </style>
 <script>
 const allProjects = {{ projects|safe }};
@@ -120,6 +128,9 @@ const SCROLL_KEY2 = 'scrollDate';
 const GANTT_MODE = "{{ gantt_mode|default('phases') }}";
 const ENABLE_PHASE_ACTIONS = {{ 'true' if phase_actions_enabled else 'false' }};
 const IS_ORDER_GANTT = GANTT_MODE === 'orders';
+if (IS_ORDER_GANTT) {
+  document.body.classList.add('orders-gantt-mode');
+}
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
 const summaryColumnsContainer = document.getElementById('gantt_summary_columns');
