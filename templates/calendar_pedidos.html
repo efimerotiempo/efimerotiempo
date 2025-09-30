@@ -119,8 +119,9 @@
 <div id="split-modal" class="conflict-modal">
   <div class="conflict-content">
     <form id="split-form">
-      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br>
-      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br>
+      <div id="split-total-hours" class="split-total-hours"></div>
+      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required><span id="split-part1-hint" class="split-hours-hint"></span></label><br>
+      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required><span id="split-part2-hint" class="split-hours-hint"></span></label><br>
       <button type="submit">Aceptar</button>
       <button type="button" id="split-cancel">Cancelar</button>
     </form>
@@ -158,11 +159,123 @@ document.addEventListener('DOMContentLoaded', () => {
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
   const splitPart2 = document.getElementById('split-part2');
+  const splitTotalDisplay = document.getElementById('split-total-hours');
+  const splitPart1Hint = document.getElementById('split-part1-hint');
+  const splitPart2Hint = document.getElementById('split-part2-hint');
   const splitCancel = document.getElementById('split-cancel');
   const obsModal = document.getElementById('obs-modal');
   const obsText = document.getElementById('obs-text');
   const obsSave = document.getElementById('obs-save');
   const obsCancel = document.getElementById('obs-cancel');
+
+  const SPLIT_WORKDAY_HOURS = 8;
+
+  function parseSplitHours(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function toSplitInputValue(value) {
+    if (!Number.isFinite(value)) return '';
+    const rounded = Math.round(value * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  function formatSplitNumber(value) {
+    if (!Number.isFinite(value)) return '';
+    const rounded = Math.round(value * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function formatSplitDuration(value) {
+    if (!Number.isFinite(value)) return '';
+    const total = value < 0 ? 0 : value;
+    const days = Math.floor(total / SPLIT_WORKDAY_HOURS);
+    const remainderRaw = total - (days * SPLIT_WORKDAY_HOURS);
+    const remainder = Math.round(remainderRaw * 100) / 100;
+    const parts = [];
+    if (days > 0) parts.push(`${days} día${days === 1 ? '' : 's'}`);
+    if (remainder > 0 || parts.length === 0) {
+      const hoursText = formatSplitNumber(remainder);
+      const hoursLabel = remainder === 1 ? 'hora' : 'horas';
+      parts.push(`${hoursText} ${hoursLabel}`);
+    }
+    return parts.join(' y ');
+  }
+
+  function formatSplitHint(value) {
+    const duration = formatSplitDuration(value);
+    return duration ? `(${duration})` : '';
+  }
+
+  function updateSplitModalDisplay() {
+    if (!splitModal) return;
+    const total = parseSplitHours(splitModal.dataset.totalHours);
+    if (splitTotalDisplay) {
+      if (total === null) {
+        splitTotalDisplay.textContent = '';
+      } else {
+        const baseNumber = formatSplitNumber(total);
+        const hoursLabel = total === 1 ? 'hora' : 'horas';
+        const duration = formatSplitDuration(total);
+        splitTotalDisplay.textContent = `Total fase: ${baseNumber} ${hoursLabel}${duration ? ` (${duration})` : ''}`;
+      }
+    }
+    if (splitPart1Hint) {
+      const value = splitPart1 ? parseSplitHours(splitPart1.value) : null;
+      splitPart1Hint.textContent = value === null ? '' : formatSplitHint(value);
+    }
+    if (splitPart2Hint) {
+      const value = splitPart2 ? parseSplitHours(splitPart2.value) : null;
+      splitPart2Hint.textContent = value === null ? '' : formatSplitHint(value);
+    }
+  }
+
+  function handleSplitPart1Input() {
+    if (!splitModal) return;
+    const total = parseSplitHours(splitModal.dataset.totalHours);
+    const value = splitPart1 ? parseSplitHours(splitPart1.value) : null;
+    if (splitPart2) {
+      if (total === null || value === null) {
+        splitPart2.value = '';
+      } else {
+        let remainder = total - value;
+        if (remainder < 0) remainder = 0;
+        splitPart2.value = toSplitInputValue(remainder);
+      }
+    }
+    updateSplitModalDisplay();
+  }
+
+  function handleSplitPart2Input() {
+    updateSplitModalDisplay();
+  }
+
+  function prepareSplitModal(button) {
+    if (!splitModal) return;
+    const totalAttr = button ? parseSplitHours(button.dataset.totalHours) : null;
+    const fallbackAttr = button ? parseSplitHours(button.dataset.hours) : null;
+    const total = totalAttr !== null ? totalAttr : fallbackAttr;
+    if (total !== null) {
+      splitModal.dataset.totalHours = total;
+    } else {
+      delete splitModal.dataset.totalHours;
+    }
+    if (splitPart1) {
+      splitPart1.value = '';
+      if (total !== null) splitPart1.setAttribute('max', total);
+      else splitPart1.removeAttribute('max');
+    }
+    if (splitPart2) {
+      splitPart2.value = '';
+      if (total !== null) splitPart2.setAttribute('max', total);
+      else splitPart2.removeAttribute('max');
+    }
+    updateSplitModalDisplay();
+  }
 
   function norm(value) {
     return (value || '').toString().trim().toLowerCase();
@@ -289,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (splitCancel) {
     splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
   }
-  if (splitForm) {
+  if (splitForm && !splitForm.dataset.enhanced) {
     splitForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -306,6 +419,9 @@ document.addEventListener('DOMContentLoaded', () => {
         })
       }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
     });
+    if (splitPart1) splitPart1.addEventListener('input', handleSplitPart1Input);
+    if (splitPart2) splitPart2.addEventListener('input', handleSplitPart2Input);
+    splitForm.dataset.enhanced = 'true';
   }
 
   function buildPhaseSection(info, context) {
@@ -366,7 +482,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
       actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
       actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
-      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}">Dividir fase aquí</button>`;
+      const phaseHoursEntry = info.phases ? info.phases[context.phase] : null;
+      let totalPhaseHours = null;
+      if (Array.isArray(phaseHoursEntry)) {
+        totalPhaseHours = phaseHoursEntry
+          .map(v => Number(v) || 0)
+          .reduce((acc, val) => acc + val, 0);
+      } else if (phaseHoursEntry !== undefined && phaseHoursEntry !== null && `${phaseHoursEntry}`.trim() !== '') {
+        const parsedPhase = Number(phaseHoursEntry);
+        if (Number.isFinite(parsedPhase)) totalPhaseHours = parsedPhase;
+      }
+      const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
+      const partHoursAttr = totalPhaseHours !== null ? ` data-hours="${totalPhaseHours}"` : '';
+      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
       if (info.phases && Array.isArray(info.phases[context.phase])) {
         splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
       }
@@ -452,8 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
         splitModal.dataset.pid = splitBtn.dataset.pid;
         splitModal.dataset.phase = splitBtn.dataset.phase;
         splitModal.dataset.date = splitBtn.dataset.date;
-        splitPart1.value = '';
-        splitPart2.value = '';
+        prepareSplitModal(splitBtn);
         splitModal.style.display = 'block';
       });
     }
