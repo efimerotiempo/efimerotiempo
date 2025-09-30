@@ -2317,6 +2317,27 @@ def _extract_order_title_date(title, reference_day, fallback_year):
     return candidate
 
 
+def _parse_order_deadline(raw_value):
+    if not raw_value:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    parsed = parse_input_date(text)
+    if parsed:
+        return parsed
+    return parse_kanban_date(text)
+
+
+def _resolve_unconfirmed_schedule_day(entry, planned_end, today):
+    explicit = _parse_order_deadline(entry.get('kanban_date'))
+    if explicit:
+        return explicit
+    if isinstance(planned_end, date):
+        return _subtract_business_days(planned_end, 5)
+    return today
+
+
 def _subtract_business_days(day, count):
     if not isinstance(day, date) or count <= 0:
         return day
@@ -2348,7 +2369,7 @@ def _should_highlight_order(order_day, planned_start, *, window=3, today=None):
 def gantt_orders_view():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
-    pedidos, _, _ = compute_pedidos_entries(compras_raw, column_colors, today)
+    pedidos, unconfirmed, _ = compute_pedidos_entries(compras_raw, column_colors, today)
     base_links = build_project_links(compras_raw)
 
     order_to_code = {}
@@ -2404,6 +2425,22 @@ def gantt_orders_view():
         code = _normalize_order_code(p.get('name'))
         if code:
             code_to_project[code] = p
+
+    for entry in unconfirmed:
+        cid = str(entry.get('cid') or '').strip()
+        code = _normalize_order_code(entry.get('custom_card_id'))
+        if not code and cid:
+            code = order_to_code.get(cid, '')
+        if not code:
+            code = _normalize_order_code(entry.get('project'))
+        planned_end = None
+        if code:
+            project = code_to_project.get(code)
+            if project:
+                window = planned_windows.get(project['id']) or {}
+                planned_end = window.get('end')
+        scheduled_day = _resolve_unconfirmed_schedule_day(entry, planned_end, today)
+        pedidos.setdefault(scheduled_day, []).append(entry)
 
     orders_by_pid = {}
     pseudo_counter = 0
