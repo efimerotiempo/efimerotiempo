@@ -2420,6 +2420,19 @@ def gantt_orders_view():
 
     planned_windows = {}
     project_workers = {}
+
+    for project in scheduled_projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        window = planned_windows.setdefault(pid, {'start': None, 'end': None})
+        start_day = _safe_iso_date(project.get('start_date'))
+        end_day = _safe_iso_date(project.get('end_date'))
+        if start_day:
+            window['start'] = start_day
+        if end_day:
+            window['end'] = end_day
+
     for worker, days in schedule_data.items():
         for tasks in days.values():
             for task in tasks:
