@@ -2520,14 +2520,24 @@ def gantt_orders_view():
 
             proj_entry['order_dates'].append(effective_iso)
 
+            order_column = (entry.get('column') or '').strip()
+
+            should_flag_order = False
+            if planned_start_date and order_column not in {'Tratamiento', 'Tratamiento final'}:
+                should_flag_order = _should_highlight_order(
+                    effective_day,
+                    planned_start_date,
+                    today=today,
+                )
+
             phase = {
                 'id': f"{pid}-pedido-{cid or len(proj_entry['phases'])}",
                 'name': entry.get('project') or 'Pedido',
                 'start': effective_iso,
                 'end': effective_iso,
                 'color': entry.get('color') or color,
-                'worker': entry.get('column') or '',
-                'order_column': entry.get('column') or '',
+                'worker': order_column,
+                'order_column': order_column,
                 'order_lane': entry.get('lane') or '',
                 'order_client': entry.get('client') or '',
                 'order_code': code,
@@ -2535,11 +2545,7 @@ def gantt_orders_view():
                 'order_prev_date': entry.get('prev_date') or '',
                 'order_date': effective_iso,
                 'order_kanban_date': entry.get('kanban_date') or '',
-                'order_highlight': _should_highlight_order(
-                    effective_day,
-                    planned_start_date,
-                    today=today,
-                ) if planned_start_date else False,
+                'order_highlight': should_flag_order,
             }
             proj_entry['phases'].append(phase)
 
