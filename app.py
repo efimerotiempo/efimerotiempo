@@ -2406,6 +2406,7 @@ def gantt_orders_view():
     schedule_data, _ = schedule_projects(scheduled_projects)
 
     planned_windows = {}
+    project_workers = {}
     for worker, days in schedule_data.items():
         for tasks in days.values():
             for task in tasks:
@@ -2419,6 +2420,13 @@ def gantt_orders_view():
                     window['start'] = start_day
                 if end_day and (window['end'] is None or end_day > window['end']):
                     window['end'] = end_day
+                if worker:
+                    project_workers.setdefault(pid, set()).add(worker)
+
+    all_unplanned_projects = {
+        pid: bool(workers) and all(w == UNPLANNED for w in workers)
+        for pid, workers in project_workers.items()
+    }
 
     project_map = {}
     code_to_project = {}
@@ -2434,6 +2442,7 @@ def gantt_orders_view():
             'phase_sequence': list((p.get('phases') or {}).keys()),
             'planned_start': planned_start_iso,
             'planned_end': planned_end_iso,
+            'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
         }
         code = _normalize_order_code(p.get('name'))
         if code:
@@ -2523,7 +2532,10 @@ def gantt_orders_view():
                 'planned_end': planned_end_iso,
                 'order_dates': [],
                 'phases': [],
+                'all_phases_unplanned': all_unplanned_projects.get(pid, False),
             })
+
+            proj_entry['all_phases_unplanned'] = all_unplanned_projects.get(pid, False)
 
             order_column = (entry.get('column') or '').strip()
 
@@ -2605,6 +2617,7 @@ def gantt_orders_view():
         if pid in project_map:
             project_map[pid]['planned_start'] = proj_entry['planned_start']
             project_map[pid]['planned_end'] = proj_entry['planned_end']
+            project_map[pid]['all_phases_unplanned'] = all_unplanned_projects.get(pid, False)
         proj_entry['phases'].sort(key=lambda ph: ph.get('start') or '')
         final_projects.append(proj_entry)
 

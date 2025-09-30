@@ -1112,8 +1112,8 @@ function render(){
     if (IS_ORDER_GANTT) {
       if (r.type === 'project') {
         barClasses.push('order-project-bar');
-        const hasPlannedWindow = Boolean(r.project && r.project.planned_start && r.project.planned_end);
-        if (!hasPlannedWindow) {
+        const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
+        if (allPhasesUnplanned) {
           barClasses.push('order-project-unplanned');
         }
       } else {
