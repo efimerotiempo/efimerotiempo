@@ -482,6 +482,16 @@ tr.collapsed td:not(:first-child) { display: none; }
     text-align: center;
     cursor: move;
 }
+.split-total-hours {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.split-hours-hint {
+    margin-left: 8px;
+    font-size: 0.9em;
+    color: #555;
+    white-space: nowrap;
+}
 .order-modal .conflict-content {
     max-width: 500px;
 }
