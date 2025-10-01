@@ -427,31 +427,44 @@ tr.collapsed td:not(:first-child) { display: none; }
     z-index: 10;
 }
 
-.pending-verification-table {
-    border-collapse: collapse;
-    width: 100%;
-    max-width: 720px;
-    margin-top: 1rem;
+.folder-table-section {
+    margin-top: 1.5rem;
 }
 
-.pending-verification-table th,
-.pending-verification-table td {
+.folder-table-section:first-of-type {
+    margin-top: 0.5rem;
+}
+
+.resizable-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 0.75rem;
+}
+
+.resizable-table th,
+.resizable-table td {
     border: 1px solid #ccc;
     padding: 8px 12px;
     text-align: left;
 }
 
-.pending-verification-table tbody tr:nth-child(even) {
+.resizable-table th {
+    background: #f2f2f2;
+}
+
+.resizable-table tbody tr:nth-child(even) {
     background: #f8f8f8;
 }
 
 .pending-verification-table td.pending-date {
-    width: 220px;
     white-space: nowrap;
 }
 
 .pending-verification-table td.pending-project {
-    min-width: 240px;
+    vertical-align: top;
+}
+
+.montaje-plan-table td.pending-project {
     vertical-align: top;
 }
 
@@ -463,6 +476,31 @@ tr.collapsed td:not(:first-child) { display: none; }
     margin-top: 2px;
     color: #555;
     white-space: normal;
+}
+
+.resizable-table--active th {
+    user-select: none;
+}
+
+.column-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    cursor: col-resize;
+    user-select: none;
+    height: 100%;
+    z-index: 1;
+}
+
+.column-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(0, 0, 0, 0.15);
 }
 
 .modal {

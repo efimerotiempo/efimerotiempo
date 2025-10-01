@@ -2329,8 +2329,9 @@ def project_links_api():
     return jsonify(links)
 
 
+@app.route('/orden-carpetas')
 @app.route('/pndt-verificacion')
-def pending_verification_view():
+def orden_carpetas_view():
     projects = get_visible_projects()
     project_lookup = {}
     planned_starts = {}
@@ -2419,8 +2420,10 @@ def pending_verification_view():
         normalize_key('Pendiente Verificación'),
         normalize_key('Pendiente de Verificación'),
     }
-    rows = []
-    seen = set()
+    pending_rows = []
+    pending_seen = set()
+    montaje_keys = {normalize_key('Planificado para montaje')}
+    montaje_rows = {}
 
     for entry in links_table:
         pid_value = entry.get('pid')
@@ -2437,67 +2440,118 @@ def pending_verification_view():
             if not isinstance(detail, dict):
                 continue
             column_name = detail.get('column')
-            if normalize_key(column_name) not in target_column_keys:
-                continue
-            title = (detail.get('title') or '').strip()
-            if not title:
-                fallback = (
-                    entry.get('project')
-                    or entry.get('title')
-                    or entry.get('display_title')
-                    or ''
+            normalized_column = normalize_key(column_name)
+            if normalized_column in target_column_keys:
+                title = (detail.get('title') or '').strip()
+                if not title:
+                    fallback = (
+                        entry.get('project')
+                        or entry.get('title')
+                        or entry.get('display_title')
+                        or ''
+                    )
+                    title = fallback.strip()
+                card_id = str(detail.get('id') or '').strip()
+                dedupe_key = (card_id or normalize_key(title), pid_str)
+                if dedupe_key in pending_seen:
+                    continue
+                pending_seen.add(dedupe_key)
+                planned_date = None
+                if pid_str and not all_unplanned_projects.get(pid_str, False):
+                    planned_date = planned_starts.get(pid_str)
+                display_date = ''
+                if isinstance(planned_date, date):
+                    display_date = planned_date.strftime('%d/%m/%Y')
+                project = project_lookup.get(pid_str)
+                project_title = ''
+                project_description = ''
+                if project:
+                    project_title = (project.get('name') or '').strip()
+                    project_description = (project.get('client') or '').strip()
+                if not project_title:
+                    fallback = (
+                        entry.get('project')
+                        or entry.get('title')
+                        or entry.get('display_title')
+                        or ''
+                    )
+                    project_title = fallback.strip()
+                if not project_description:
+                    project_description = (entry.get('client') or '').strip()
+                pending_rows.append(
+                    {
+                        'title': title,
+                        'project_title': project_title,
+                        'project_description': project_description,
+                        'planned_date': display_date,
+                        'sort_key': planned_date if isinstance(planned_date, date) else None,
+                        'title_key': title.casefold() if title else '',
+                    }
                 )
-                title = fallback.strip()
-            card_id = str(detail.get('id') or '').strip()
-            dedupe_key = (card_id or normalize_key(title), pid_str)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            planned_date = None
-            if pid_str and not all_unplanned_projects.get(pid_str, False):
-                planned_date = planned_starts.get(pid_str)
-            display_date = ''
-            if isinstance(planned_date, date):
-                display_date = planned_date.strftime('%d/%m/%Y')
-            project = project_lookup.get(pid_str)
-            project_title = ''
-            project_description = ''
-            if project:
-                project_title = (project.get('name') or '').strip()
-                project_description = (project.get('client') or '').strip()
-            if not project_title:
-                fallback = (
-                    entry.get('project')
-                    or entry.get('title')
-                    or entry.get('display_title')
-                    or ''
-                )
-                project_title = fallback.strip()
-            if not project_description:
-                project_description = (entry.get('client') or '').strip()
-            rows.append(
-                {
-                    'title': title,
+            if normalized_column in montaje_keys:
+                project = project_lookup.get(pid_str)
+                project_title = ''
+                project_description = ''
+                if project:
+                    project_title = (project.get('name') or '').strip()
+                    project_description = (project.get('client') or '').strip()
+                if not project_title:
+                    fallback = (
+                        entry.get('project')
+                        or entry.get('title')
+                        or entry.get('display_title')
+                        or ''
+                    )
+                    project_title = fallback.strip()
+                if not project_description:
+                    project_description = (entry.get('client') or '').strip()
+                key = pid_str or normalize_key(project_title)
+                if not key:
+                    continue
+                if key in montaje_rows:
+                    continue
+                planned_date = None
+                if pid_str and not all_unplanned_projects.get(pid_str, False):
+                    planned_date = planned_starts.get(pid_str)
+                display_date = ''
+                if isinstance(planned_date, date):
+                    display_date = planned_date.strftime('%d/%m/%Y')
+                montaje_rows[key] = {
                     'project_title': project_title,
                     'project_description': project_description,
                     'planned_date': display_date,
                     'sort_key': planned_date if isinstance(planned_date, date) else None,
-                    'title_key': title.casefold() if title else '',
+                    'title_key': project_title.casefold() if project_title else '',
                 }
-            )
 
-    rows.sort(
+    pending_rows.sort(
         key=lambda item: (
             item['sort_key'] is None,
             item['sort_key'] or date.max,
             item['title_key'],
         )
     )
-    for item in rows:
+    for item in pending_rows:
         item.pop('sort_key', None)
         item.pop('title_key', None)
 
-    return render_template('pndt_verificacion.html', rows=rows)
+    montaje_list = list(montaje_rows.values())
+    montaje_list.sort(
+        key=lambda item: (
+            item['sort_key'] is None,
+            item['sort_key'] or date.max,
+            item['title_key'],
+        )
+    )
+    for item in montaje_list:
+        item.pop('sort_key', None)
+        item.pop('title_key', None)
+
+    return render_template(
+        'orden_carpetas.html',
+        pending_rows=pending_rows,
+        montaje_rows=montaje_list,
+    )
 
 
 def _normalize_order_code(value):

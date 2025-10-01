@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Orden carpetas</h2>
+
+<section class="folder-table-section">
+    <h3>Pndt. Verificación</h3>
+    <table class="resizable-table pending-verification-table" data-resizable>
+        <thead>
+            <tr>
+                <th>Tarjeta</th>
+                <th>Fecha inicio planificada</th>
+                <th>Proyecto</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% if pending_rows %}
+            {% for row in pending_rows %}
+            <tr>
+                <td>{{ row.title }}</td>
+                <td class="pending-date">{{ row.planned_date }}</td>
+                <td class="pending-project">
+                    {% if row.project_title %}
+                    <div class="pending-project-title">{{ row.project_title }}</div>
+                    {% endif %}
+                    {% if row.project_description %}
+                    <div class="pending-project-description">{{ row.project_description }}</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="3">No hay tarjetas en “Pndt. Verificación”.</td>
+            </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</section>
+
+<section class="folder-table-section">
+    <h3>Planificado para montaje</h3>
+    <table class="resizable-table montaje-plan-table" data-resizable>
+        <thead>
+            <tr>
+                <th>Proyecto</th>
+                <th>Fecha inicio planificada</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% if montaje_rows %}
+            {% for row in montaje_rows %}
+            <tr>
+                <td class="pending-project">
+                    {% if row.project_title %}
+                    <div class="pending-project-title">{{ row.project_title }}</div>
+                    {% endif %}
+                    {% if row.project_description %}
+                    <div class="pending-project-description">{{ row.project_description }}</div>
+                    {% endif %}
+                </td>
+                <td class="pending-date">{{ row.planned_date }}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="2">No hay proyectos en “Planificado para montaje”.</td>
+            </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</section>
+
+<script>
+(function() {
+  const MIN_WIDTH = 80;
+
+  function applyWidth(table, index, width) {
+    const selector = `tr > *:nth-child(${index + 1})`;
+    table.querySelectorAll(selector).forEach((cell) => {
+      cell.style.width = width + 'px';
+      cell.style.minWidth = width + 'px';
+    });
+  }
+
+  function enableResizable(table) {
+    const headers = table.querySelectorAll('thead th');
+    if (!headers.length) {
+      return;
+    }
+    table.classList.add('resizable-table--active');
+    headers.forEach((th, index) => {
+      th.style.position = 'relative';
+      const handle = document.createElement('span');
+      handle.className = 'column-resizer';
+      th.appendChild(handle);
+      let startX = 0;
+      let startWidth = 0;
+
+      function onMouseMove(event) {
+        const delta = event.pageX - startX;
+        const nextWidth = Math.max(MIN_WIDTH, startWidth + delta);
+        applyWidth(table, index, nextWidth);
+      }
+
+      function stopResize() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', stopResize);
+      }
+
+      handle.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        startX = event.pageX;
+        startWidth = th.offsetWidth;
+        applyWidth(table, index, startWidth);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', stopResize);
+      });
+    });
+  }
+
+  document.querySelectorAll('table[data-resizable]').forEach(enableResizable);
+})();
+</script>
+{% endblock %}
