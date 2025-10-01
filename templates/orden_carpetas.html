@@ -2,9 +2,10 @@
 {% block content %}
 <h2>Orden carpetas</h2>
 
+<div class="orden-carpetas-wrapper">
 <section class="folder-table-section">
     <h3>Pndt. Verificación</h3>
-    <table class="resizable-table pending-verification-table" data-resizable>
+    <table id="orden-pending-table" class="resizable-table pending-verification-table" data-resizable>
         <thead>
             <tr>
                 <th>Tarjeta</th>
@@ -39,7 +40,7 @@
 
 <section class="folder-table-section">
     <h3>Planificado para montaje</h3>
-    <table class="resizable-table montaje-plan-table" data-resizable>
+    <table id="orden-montaje-table" class="resizable-table montaje-plan-table" data-resizable>
         <thead>
             <tr>
                 <th>Proyecto</th>
@@ -69,10 +70,20 @@
         </tbody>
     </table>
 </section>
+</div>
 
 <script>
 (function() {
   const MIN_WIDTH = 80;
+  const STORAGE_PREFIX = 'orden_carpetas_widths_';
+
+  function getStorage() {
+    try {
+      return window.localStorage;
+    } catch (error) {
+      return null;
+    }
+  }
 
   function applyWidth(table, index, width) {
     const selector = `tr > *:nth-child(${index + 1})`;
@@ -82,12 +93,43 @@
     });
   }
 
+  function saveWidths(table, headers) {
+    const storage = getStorage();
+    if (!storage || !table.id) {
+      return;
+    }
+    const widths = Array.from(headers, (th) => th.offsetWidth);
+    storage.setItem(STORAGE_PREFIX + table.id, JSON.stringify(widths));
+  }
+
+  function loadWidths(table, headers) {
+    const storage = getStorage();
+    if (!storage || !table.id) {
+      return;
+    }
+    const stored = storage.getItem(STORAGE_PREFIX + table.id);
+    if (!stored) {
+      return;
+    }
+    try {
+      const widths = JSON.parse(stored);
+      widths.forEach((width, index) => {
+        if (typeof width === 'number' && !Number.isNaN(width)) {
+          applyWidth(table, index, width);
+        }
+      });
+    } catch (error) {
+      storage.removeItem(STORAGE_PREFIX + table.id);
+    }
+  }
+
   function enableResizable(table) {
     const headers = table.querySelectorAll('thead th');
     if (!headers.length) {
       return;
     }
     table.classList.add('resizable-table--active');
+    loadWidths(table, headers);
     headers.forEach((th, index) => {
       th.style.position = 'relative';
       const handle = document.createElement('span');
@@ -105,6 +147,7 @@
       function stopResize() {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', stopResize);
+        saveWidths(table, headers);
       }
 
       handle.addEventListener('mousedown', (event) => {

@@ -427,17 +427,24 @@ tr.collapsed td:not(:first-child) { display: none; }
     z-index: 10;
 }
 
-.folder-table-section {
-    margin-top: 1.5rem;
+.orden-carpetas-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-start;
 }
 
-.folder-table-section:first-of-type {
-    margin-top: 0.5rem;
+.folder-table-section {
+    margin-top: 0;
+    flex: 0 0 auto;
+}
+
+.orden-carpetas-wrapper .resizable-table {
+    width: auto;
 }
 
 .resizable-table {
     border-collapse: collapse;
-    width: 100%;
     margin-top: 0.75rem;
 }
 
