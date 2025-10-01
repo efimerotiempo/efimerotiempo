@@ -530,6 +530,44 @@ function getPhasePlannedEnd(row){
   return row.phase.end || '';
 }
 
+function normalizeSegmentPart(part){
+  if(part === undefined || part === null || part === '') return null;
+  const num = Number(part);
+  if(Number.isFinite(num)) return num;
+  return part;
+}
+
+function getPhaseSegmentsData(phase){
+  if(!phase) return [];
+  const baseWorker = phase.worker || '';
+  const rawSegments = Array.isArray(phase.segments) ? phase.segments.filter(seg => seg && (seg.start || seg.end)) : [];
+  if(!rawSegments.length){
+    return [{
+      start: phase.start,
+      end: phase.end,
+      worker: baseWorker,
+      part: normalizeSegmentPart(phase.part),
+      highlight: Boolean(phase.order_highlight),
+    }];
+  }
+  return rawSegments.map(seg => ({
+    start: seg.start || phase.start,
+    end: seg.end || seg.start || phase.end,
+    worker: seg.worker || baseWorker,
+    part: normalizeSegmentPart(seg.part),
+    highlight: Boolean(seg.order_highlight !== undefined ? seg.order_highlight : phase.order_highlight),
+  }));
+}
+
+function formatSegmentLabel(name, part){
+  const base = name || '';
+  if(part === null || part === undefined || part === '') return base;
+  if(typeof part === 'number' && Number.isFinite(part)) return `${base} (parte ${part + 1})`;
+  const parsed = Number(part);
+  if(Number.isFinite(parsed)) return `${base} (parte ${parsed + 1})`;
+  return `${base} (${part})`;
+}
+
 function buildPhaseFieldCell(row, extractor){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
@@ -1245,48 +1283,33 @@ function render(){
     });
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
-    const bar = document.createElement('div');
-    const barClasses = ['gantt-task', r.type === 'project' ? 'project-bar' : 'phase-bar'];
-    if (IS_ORDER_GANTT) {
-      if (r.type === 'project') {
+    if(r.type === 'project'){
+      const bar = document.createElement('div');
+      const barClasses = ['gantt-task', 'project-bar'];
+      if (IS_ORDER_GANTT) {
         barClasses.push('order-project-bar');
         const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
         if (allPhasesUnplanned) {
           barClasses.push('order-project-unplanned');
         }
       } else {
-        barClasses.push('order-phase-bar');
-        if (r.phase && r.phase.order_highlight) {
-          barClasses.push('order-phase-warning');
+        const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
+        if (allPhasesUnplanned) {
+          barClasses.push('project-unplanned');
         }
       }
-    } else if (r.type === 'project') {
-      const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
-      if (allPhasesUnplanned) {
-        barClasses.push('project-unplanned');
-      }
-    }
-    bar.className = barClasses.join(' ');
-    const startMs = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
-    const endMs = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
-    bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
-    bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
-    if(!IS_ORDER_GANTT){
-      if(r.type === 'project'){
+      bar.className = barClasses.join(' ');
+      const startMs = startOfDay(r.project.start).getTime();
+      const endMs = startOfDay(r.project.end).getTime();
+      bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+      bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
+      if(!IS_ORDER_GANTT){
         bar.style.background = '#d9d9d9';
-      } else {
-        bar.style.background = '#fff';
+        bar.style.border = '1px solid #bdbdbd';
+        bar.style.color = '#000';
       }
-      bar.style.border = '1px solid #bdbdbd';
-      bar.style.color = '#000';
-    }
-    if(r.type==='project'){
       const label = [r.project.name, r.project.client].filter(Boolean).join(' - ');
       bar.textContent = label;
-    } else {
-      bar.textContent = r.phase.name;
-    }
-    if(r.type==='project'){
       const deadlineSources = [
         r.project.deadline_start,
         r.project.due_date,
@@ -1325,15 +1348,19 @@ function render(){
         let chosen = null;
         let minDist = Infinity;
         phases.forEach(ph => {
-          const phStart = startOfDay(ph.start).getTime();
-          const phEnd = startOfDay(ph.end).getTime();
-          let dist = 0;
-          if(clickedMs < phStart) dist = phStart - clickedMs;
-          else if(clickedMs > phEnd) dist = clickedMs - phEnd;
-          if(dist < minDist){
-            minDist = dist;
-            chosen = { data: ph, start: phStart, end: phEnd };
-          }
+          const segs = getPhaseSegmentsData(ph);
+          segs.forEach(segment => {
+            const segStartMs = startOfDay(segment.start || ph.start).getTime();
+            const segEndMs = startOfDay(segment.end || segment.start || ph.end).getTime();
+            if(Number.isNaN(segStartMs) || Number.isNaN(segEndMs)) return;
+            let dist = 0;
+            if(clickedMs < segStartMs) dist = segStartMs - clickedMs;
+            else if(clickedMs > segEndMs) dist = clickedMs - segEndMs;
+            if(dist < minDist){
+              minDist = dist;
+              chosen = { data: ph, segment, start: segStartMs, end: segEndMs };
+            }
+          });
         });
         if(chosen){
           if(clickedMs < chosen.start) clickedMs = chosen.start;
@@ -1347,8 +1374,8 @@ function render(){
           pid: r.project.id,
           phase: chosen ? chosen.data.name : '',
           day: isoDay,
-          worker: chosen && chosen.data.worker ? chosen.data.worker : '',
-          part: ''
+          worker: chosen && (chosen.segment.worker || chosen.data.worker) ? (chosen.segment.worker || chosen.data.worker) : '',
+          part: chosen && chosen.segment && chosen.segment.part !== null && chosen.segment.part !== undefined ? chosen.segment.part : ''
         };
         if (IS_ORDER_GANTT && chosen && chosen.data) {
           contextData.order = {
@@ -1364,39 +1391,74 @@ function render(){
         }
         openPhasePopup(contextData, bar.getBoundingClientRect());
       });
+      rowDiv.appendChild(bar);
     } else {
-      bar.addEventListener('click', evt => {
-        evt.stopPropagation();
-        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
-        const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
-        let dayOffset = Math.floor(relativePx / pxPerDay);
-        if(dayOffset > totalDays) dayOffset = totalDays;
-        let clickedMs = startMs + dayOffset * dayMs;
-        if(clickedMs > endMs) clickedMs = endMs;
-        const isoDay = madridDateISO(clickedMs);
-        const contextData = {
-          pid: r.project.id,
-          phase: r.phase.name,
-          day: isoDay,
-          worker: r.phase.worker || '',
-          part: ''
-        };
+      const segments = getPhaseSegmentsData(r.phase);
+      segments.forEach(segment => {
+        const bar = document.createElement('div');
+        const barClasses = ['gantt-task', 'phase-bar'];
         if (IS_ORDER_GANTT) {
-          contextData.order = {
-            column: r.phase.order_column || '',
-            lane: r.phase.order_lane || '',
-            client: r.phase.order_client || '',
-            code: r.phase.order_code || '',
-            cid: r.phase.order_cid || '',
-            prev_date: r.phase.order_prev_date || '',
-            date: r.phase.order_date || '',
-            kanban_date: r.phase.order_kanban_date || ''
-          };
+          barClasses.push('order-phase-bar');
+          if (segment.highlight || (r.phase && r.phase.order_highlight)) {
+            barClasses.push('order-phase-warning');
+          }
         }
-        openPhasePopup(contextData, bar.getBoundingClientRect());
+        bar.className = barClasses.join(' ');
+        const segStartValue = segment.start || r.phase.start;
+        const segEndValue = segment.end || segment.start || r.phase.end || segStartValue;
+        const segmentStart = startOfDay(segStartValue);
+        const segmentEnd = startOfDay(segEndValue);
+        const startMs = segmentStart.getTime();
+        const endMs = segmentEnd.getTime();
+        if(Number.isNaN(startMs) || Number.isNaN(endMs)) return;
+        bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+        bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
+        if(!IS_ORDER_GANTT){
+          bar.style.background = '#fff';
+          bar.style.border = '1px solid #bdbdbd';
+          bar.style.color = '#000';
+        }
+        const label = formatSegmentLabel(r.phase.name, segment.part);
+        bar.textContent = label;
+        const titleParts = [];
+        const formattedStart = formatKanbanDate(segment.start || '') || (segment.start || '');
+        const formattedEnd = formatKanbanDate(segment.end || '') || (segment.end || '');
+        if(formattedStart) titleParts.push(`Inicio: ${formattedStart}`);
+        if(formattedEnd) titleParts.push(`Fin: ${formattedEnd}`);
+        if(titleParts.length) bar.title = titleParts.join(' · ');
+        bar.addEventListener('click', evt => {
+          evt.stopPropagation();
+          const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+          const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+          let dayOffset = Math.floor(relativePx / pxPerDay);
+          if(dayOffset > totalDays) dayOffset = totalDays;
+          let clickedMs = startMs + dayOffset * dayMs;
+          if(clickedMs > endMs) clickedMs = endMs;
+          const isoDay = madridDateISO(clickedMs);
+          const contextData = {
+            pid: r.project.id,
+            phase: r.phase.name,
+            day: isoDay,
+            worker: segment.worker || r.phase.worker || '',
+            part: segment.part === null || segment.part === undefined ? '' : segment.part,
+          };
+          if (IS_ORDER_GANTT) {
+            contextData.order = {
+              column: r.phase.order_column || '',
+              lane: r.phase.order_lane || '',
+              client: r.phase.order_client || '',
+              code: r.phase.order_code || '',
+              cid: r.phase.order_cid || '',
+              prev_date: r.phase.order_prev_date || '',
+              date: r.phase.order_date || '',
+              kanban_date: r.phase.order_kanban_date || ''
+            };
+          }
+          openPhasePopup(contextData, bar.getBoundingClientRect());
+        });
+        rowDiv.appendChild(bar);
       });
     }
-    rowDiv.appendChild(bar);
     body.appendChild(rowDiv);
   });
 

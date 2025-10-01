@@ -2408,23 +2408,63 @@ def gantt_view():
         phase_map = {}
         for t in tasks:
             key = t['phase']
+            start_time = t.get('start_time')
+            end_time = t.get('end_time')
             entry = phase_map.get(key)
             if not entry:
                 entry = {
                     'id': f"{pid}-{key}",
                     'name': key,
-                    'start': t['start_time'],
-                    'end': t['end_time'],
+                    'start': start_time,
+                    'end': end_time,
                     'color': t.get('color', p.get('color')),
                     'worker': t.get('worker'),
+                    'segments': [],
+                    '_segment_map': {},
                 }
                 phase_map[key] = entry
             else:
-                if t['start_time'] < entry['start']:
-                    entry['start'] = t['start_time']
-                if t['end_time'] > entry['end']:
-                    entry['end'] = t['end_time']
-        phases = list(phase_map.values())
+                if start_time and (not entry['start'] or start_time < entry['start']):
+                    entry['start'] = start_time
+                if end_time and (not entry['end'] or end_time > entry['end']):
+                    entry['end'] = end_time
+                if not entry.get('worker') and t.get('worker'):
+                    entry['worker'] = t.get('worker')
+
+            seg_key = t.get('part')
+            if seg_key is None:
+                seg_key = '__default__'
+            segment_map = entry['_segment_map']
+            segment = segment_map.get(seg_key)
+            if not segment:
+                segment = {
+                    'start': start_time,
+                    'end': end_time,
+                    'worker': t.get('worker'),
+                    'part': t.get('part'),
+                }
+                segment_map[seg_key] = segment
+                entry['segments'].append(segment)
+            else:
+                if start_time and segment['start'] and start_time < segment['start']:
+                    segment['start'] = start_time
+                if end_time and segment['end'] and end_time > segment['end']:
+                    segment['end'] = end_time
+                if not segment.get('worker') and t.get('worker'):
+                    segment['worker'] = t.get('worker')
+
+        phases = []
+        for entry in phase_map.values():
+            segments = entry.get('segments') or []
+            segments.sort(key=lambda seg: (seg.get('start') or ''))
+            starts = [seg.get('start') for seg in segments if seg.get('start')]
+            ends = [seg.get('end') for seg in segments if seg.get('end')]
+            if starts:
+                entry['start'] = min(starts)
+            if ends:
+                entry['end'] = max(ends)
+            entry.pop('_segment_map', None)
+            phases.append(entry)
         gantt_projects.append({
             'id': pid,
             'name': p['name'],
