@@ -820,6 +820,8 @@ def attach_phase_starts(links_table, projects=None):
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
     ids_by_name = {}
+    montar_by_key = {}
+    ids_by_key = {}
     for proj in projects:
         phase_starts = start_mapping.get(proj['id'], {})
         montar_start = phase_starts.get('montar')
@@ -836,19 +838,70 @@ def attach_phase_starts(links_table, projects=None):
                 montar_by_name[split_name] = montar_start
             ids_by_name.setdefault(split_name, proj['id'])
 
+        keys = {normalize_key(name)}
+        if split_name:
+            keys.add(normalize_key(split_name))
+
+        custom_id = (proj.get('custom_card_id') or '').strip()
+        if custom_id:
+            ids_by_name.setdefault(custom_id, proj['id'])
+            if montar_start and custom_id not in montar_by_name:
+                montar_by_name[custom_id] = montar_start
+            keys.add(normalize_key(custom_id))
+
+        code_match = PROJECT_TITLE_PATTERN.search(name)
+        if not code_match and custom_id:
+            code_match = PROJECT_TITLE_PATTERN.search(custom_id)
+        if code_match:
+            code_key = code_match.group(0)
+            ids_by_name.setdefault(code_key, proj['id'])
+            if montar_start and code_key not in montar_by_name:
+                montar_by_name[code_key] = montar_start
+            keys.add(normalize_key(code_key))
+
+        for key in keys:
+            if not key:
+                continue
+            if montar_start and key not in montar_by_key:
+                montar_by_key[key] = montar_start
+            ids_by_key.setdefault(key, proj['id'])
+
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = (
-            montar_by_name.get((item.get('project') or '').strip())
-            or montar_by_name.get((item.get('title') or '').strip())
-        )
+        montar_start = None
+        pid = None
+
+        candidate_values = []
+        for field in ('project', 'title', 'display_title', 'custom_card_id'):
+            value = (item.get(field) or '').strip()
+            if value:
+                candidate_values.append(value)
+                split_value, _ = split_project_and_client(value)
+                if split_value and split_value != value:
+                    candidate_values.append(split_value)
+        for value in list(candidate_values):
+            code_match = PROJECT_TITLE_PATTERN.search(value)
+            if code_match:
+                candidate_values.append(code_match.group(0))
+
+        for value in candidate_values:
+            if montar_start and pid:
+                break
+            if not montar_start:
+                montar_start = montar_by_name.get(value)
+            if not montar_start:
+                norm_key = normalize_key(value)
+                if norm_key:
+                    montar_start = montar_by_key.get(norm_key)
+            if not pid:
+                pid = ids_by_name.get(value)
+            if not pid:
+                norm_key = normalize_key(value)
+                if norm_key:
+                    pid = ids_by_key.get(norm_key)
         if montar_start:
             entry['montar_start'] = montar_start
-        pid = (
-            ids_by_name.get((item.get('project') or '').strip())
-            or ids_by_name.get((item.get('title') or '').strip())
-        )
         if pid:
             entry['pid'] = pid
         enriched.append(entry)
