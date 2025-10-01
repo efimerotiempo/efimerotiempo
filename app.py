@@ -2405,7 +2405,12 @@ def pending_verification_view():
     compras_raw, _ = load_compras_raw()
     links_table = attach_phase_starts(build_project_links(compras_raw), projects)
 
-    target_column_key = normalize_key('Pndt. Verificación')
+    target_column_keys = {
+        normalize_key('Pndt. Verificación'),
+        normalize_key('Pdte. Verificación'),
+        normalize_key('Pendiente Verificación'),
+        normalize_key('Pendiente de Verificación'),
+    }
     rows = []
     seen = set()
 
@@ -2424,7 +2429,7 @@ def pending_verification_view():
             if not isinstance(detail, dict):
                 continue
             column_name = detail.get('column')
-            if normalize_key(column_name) != target_column_key:
+            if normalize_key(column_name) not in target_column_keys:
                 continue
             title = (detail.get('title') or '').strip()
             if not title:
