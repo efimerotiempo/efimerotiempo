@@ -203,15 +203,6 @@
 <div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
 <div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><div id="split-total-hours" class="split-total-hours"></div><label>Horas primera parte: <input type="number" id="split-part1" min="0" required><span id="split-part1-hint" class="split-hours-hint"></span></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required><span id="split-part2-hint" class="split-hours-hint"></span></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
 <div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
-<div id="order-modal" class="conflict-modal order-modal">
-    <div class="conflict-content order-content">
-        <div id="order-text" class="order-warning-text">ESTE MOVIMIENTO NO SIGUE EL ORDEN DE LAS FASES.</div>
-        <div class="order-buttons">
-            <button id="order-ok" type="button">OK</button>
-            <button id="order-cancel" type="button">Cancelar</button>
-        </div>
-    </div>
-</div>
 <div id="material-modal" class="conflict-modal material-modal">
     <div class="conflict-content material-content">
         <div class="material-title">SIN MATERIAL:</div>
@@ -291,9 +282,6 @@
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
-  const orderModal = document.getElementById('order-modal');
-  const orderOk = document.getElementById('order-ok');
-  const orderCancel = document.getElementById('order-cancel');
   const materialModal = document.getElementById('material-modal');
   const materialList = document.getElementById('material-list');
   const materialClose = document.getElementById('material-close');
@@ -601,7 +589,6 @@
   ensurePedidosLinks();
 
   let pendingBlock = null;
-  let pendingOrder = null;
   function showDeadline(text = DEADLINE_MSG, after = null) {
     deadlineText.innerHTML = text.replace(/\n/g, '<br>');
     deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
@@ -1242,78 +1229,7 @@ let dragInfo = null;
       attemptMove(moveData, 'split', beforeMaterial);
     });
   });
-  function getPhaseSequence(pid) {
-    const info = PROJECT_DATA[pid];
-    if (info && Array.isArray(info.phase_sequence) && info.phase_sequence.length) {
-      return info.phase_sequence;
-    }
-    return PHASES;
-  }
-
-  function getNextPhaseStart(pid, phase) {
-    if (!pid || !phase) return null;
-    const sequence = getPhaseSequence(pid);
-    const orderIndex = sequence.indexOf(phase);
-    if (orderIndex === -1) return null;
-    const phaseStarts = START_DATA[pid];
-    if (!phaseStarts) return null;
-    for (let i = orderIndex + 1; i < sequence.length; i++) {
-      const nextPhase = sequence[i];
-      const nextStart = phaseStarts[nextPhase];
-      if (nextStart && nextStart !== '0') {
-        return nextStart;
-      }
-    }
-    return null;
-  }
-
-  function getPrevPhaseStart(pid, phase) {
-    if (!pid || !phase) return null;
-    const sequence = getPhaseSequence(pid);
-    const orderIndex = sequence.indexOf(phase);
-    if (orderIndex <= 0) return null;
-    const phaseStarts = START_DATA[pid];
-    if (!phaseStarts) return null;
-    for (let i = orderIndex - 1; i >= 0; i--) {
-      const prevPhase = sequence[i];
-      const prevStart = phaseStarts[prevPhase];
-      if (prevStart && prevStart !== '0') {
-        return prevStart;
-      }
-    }
-    return null;
-  }
-
-  function violatesPhaseOrder(moveData) {
-    if (!moveData || !moveData.date) return false;
-    const target = new Date(moveData.date);
-    if (Number.isNaN(target.getTime())) return false;
-
-    const prevStart = getPrevPhaseStart(moveData.pid, moveData.phase);
-    if (prevStart) {
-      const prev = new Date(prevStart);
-      if (!Number.isNaN(prev.getTime()) && target < prev) {
-        return true;
-      }
-    }
-
-    const nextStart = getNextPhaseStart(moveData.pid, moveData.phase);
-    if (nextStart) {
-      const next = new Date(nextStart);
-      if (!Number.isNaN(next.getTime()) && target > next) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   function attemptMove(moveData, mode, beforeMaterial) {
-    if (violatesPhaseOrder(moveData) && orderModal) {
-      pendingOrder = { moveData, mode, beforeMaterial };
-      orderModal.style.display = 'block';
-      return;
-    }
     doMove(moveData, mode, beforeMaterial);
   }
   function doMove(moveData, mode, beforeMaterial) {
@@ -1364,24 +1280,6 @@ let dragInfo = null;
     blockCancel.addEventListener('click', () => {
       blockModal.style.display = 'none';
       pendingBlock = null;
-    });
-  }
-  if (orderOk) {
-    orderOk.addEventListener('click', () => {
-      if (pendingOrder) {
-        const { moveData, mode, beforeMaterial } = pendingOrder;
-        pendingOrder = null;
-        orderModal.style.display = 'none';
-        doMove(moveData, mode, beforeMaterial);
-      } else {
-        orderModal.style.display = 'none';
-      }
-    });
-  }
-  if (orderCancel) {
-    orderCancel.addEventListener('click', () => {
-      pendingOrder = null;
-      orderModal.style.display = 'none';
     });
   }
   const unplanList = document.querySelector('.unplanned-list');
