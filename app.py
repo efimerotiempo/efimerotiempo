@@ -2459,14 +2459,27 @@ def pending_verification_view():
             display_date = ''
             if isinstance(planned_date, date):
                 display_date = planned_date.strftime('%d/%m/%Y')
-            project_name = ''
             project = project_lookup.get(pid_str)
+            project_title = ''
+            project_description = ''
             if project:
-                project_name = project.get('name') or ''
+                project_title = (project.get('name') or '').strip()
+                project_description = (project.get('client') or '').strip()
+            if not project_title:
+                fallback = (
+                    entry.get('project')
+                    or entry.get('title')
+                    or entry.get('display_title')
+                    or ''
+                )
+                project_title = fallback.strip()
+            if not project_description:
+                project_description = (entry.get('client') or '').strip()
             rows.append(
                 {
                     'title': title,
-                    'project_name': project_name,
+                    'project_title': project_title,
+                    'project_description': project_description,
                     'planned_date': display_date,
                     'sort_key': planned_date if isinstance(planned_date, date) else None,
                     'title_key': title.casefold() if title else '',

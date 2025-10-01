@@ -450,6 +450,21 @@ tr.collapsed td:not(:first-child) { display: none; }
     white-space: nowrap;
 }
 
+.pending-verification-table td.pending-project {
+    min-width: 240px;
+    vertical-align: top;
+}
+
+.pending-project-title {
+    font-weight: 600;
+}
+
+.pending-project-description {
+    margin-top: 2px;
+    color: #555;
+    white-space: normal;
+}
+
 .modal {
     display: none;
     position: fixed;

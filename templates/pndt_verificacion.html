@@ -6,6 +6,7 @@
         <tr>
             <th>Tarjeta</th>
             <th>Fecha inicio planificada</th>
+            <th>Proyecto</th>
         </tr>
     </thead>
     <tbody>
@@ -14,11 +15,19 @@
         <tr>
             <td>{{ row.title }}</td>
             <td class="pending-date">{{ row.planned_date }}</td>
+            <td class="pending-project">
+                {% if row.project_title %}
+                <div class="pending-project-title">{{ row.project_title }}</div>
+                {% endif %}
+                {% if row.project_description %}
+                <div class="pending-project-description">{{ row.project_description }}</div>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     {% else %}
         <tr>
-            <td colspan="2">No hay tarjetas en “Pndt. Verificación”.</td>
+            <td colspan="3">No hay tarjetas en “Pndt. Verificación”.</td>
         </tr>
     {% endif %}
     </tbody>
