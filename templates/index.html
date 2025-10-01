@@ -851,6 +851,8 @@ let dragInfo = null;
           metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
         } else if (status === 'pending') {
           metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
+        } else if (status === 'archived') {
+          metaLines.push('<div><strong class="material-status-flag material-status-archived">MATERIAL ARCHIVADO</strong></div>');
         } else {
           metaLines.push('<div><strong class="material-status-flag material-status-complete">MATERIAL COMPLETO</strong></div>');
         }

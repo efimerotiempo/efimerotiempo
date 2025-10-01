@@ -174,6 +174,8 @@ MATERIAL_ALERT_COLUMNS = {
     normalize_key('Material NO CONFORME'),
 }
 
+READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
+
 SSE_CLIENTS = []
 
 
@@ -185,6 +187,7 @@ def compute_material_status_map(projects):
         compras_raw, _ = load_compras_raw()
         raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
         projects_with_children = set()
+        columns_by_pid = {}
         for project in projects or []:
             pid = project.get('id')
             if pid:
@@ -194,18 +197,30 @@ def compute_material_status_map(projects):
             if not pid:
                 continue
             pid_key = str(pid)
-            if entry.get('link_details') or entry.get('links'):
+            details = entry.get('link_details') or []
+            if details or entry.get('links'):
                 projects_with_children.add(pid_key)
+            if details:
+                project_columns = columns_by_pid.setdefault(pid_key, set())
             if status_map.get(pid_key) == 'missing':
                 continue
-            details = entry.get('link_details') or []
             for detail in details:
                 if not isinstance(detail, dict):
                     continue
                 column = detail.get('column')
-                if normalize_key(column) in MATERIAL_ALERT_COLUMNS:
+                column_key = normalize_key(column)
+                if column_key:
+                    project_columns.add(column_key)
+                if column_key in MATERIAL_ALERT_COLUMNS:
                     status_map[pid_key] = 'missing'
                     break
+        for pid_key, columns in columns_by_pid.items():
+            if not columns:
+                continue
+            if status_map.get(pid_key) == 'missing':
+                continue
+            if all(column == READY_TO_ARCHIVE_COLUMN for column in columns):
+                status_map[pid_key] = 'archived'
         for pid_key, current in list(status_map.items()):
             if pid_key not in projects_with_children and current != 'missing':
                 status_map[pid_key] = 'pending'
