@@ -849,6 +849,8 @@ let dragInfo = null;
         const status = (info.material_status || '').toString();
         if (status === 'missing') {
           metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
+        } else if (status === 'pending') {
+          metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
         } else {
           metaLines.push('<div><strong class="material-status-flag material-status-complete">MATERIAL COMPLETO</strong></div>');
         }

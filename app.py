@@ -184,6 +184,7 @@ def compute_material_status_map(projects):
     try:
         compras_raw, _ = load_compras_raw()
         raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+        projects_with_children = set()
         for project in projects or []:
             pid = project.get('id')
             if pid:
@@ -193,6 +194,8 @@ def compute_material_status_map(projects):
             if not pid:
                 continue
             pid_key = str(pid)
+            if entry.get('link_details') or entry.get('links'):
+                projects_with_children.add(pid_key)
             if status_map.get(pid_key) == 'missing':
                 continue
             details = entry.get('link_details') or []
@@ -203,6 +206,9 @@ def compute_material_status_map(projects):
                 if normalize_key(column) in MATERIAL_ALERT_COLUMNS:
                     status_map[pid_key] = 'missing'
                     break
+        for pid_key, current in list(status_map.items()):
+            if pid_key not in projects_with_children and current != 'missing':
+                status_map[pid_key] = 'pending'
     except Exception:  # pragma: no cover - defensive logging
         app.logger.exception('Failed to compute material status from project links')
     return status_map

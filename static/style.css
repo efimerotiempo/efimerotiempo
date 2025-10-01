@@ -84,6 +84,7 @@ table.schedule td.weekend-cell {
 .info-popup .popup-section + .popup-section { margin-top: 8px; }
 .info-popup .material-status-flag { display: inline-block; font-weight: 700; margin-bottom: 4px; }
 .info-popup .material-status-missing { color: #f57c00; }
+.info-popup .material-status-pending { color: #546e7a; }
 .info-popup .material-status-complete { color: #2e7d32; }
 #split-btn { margin-top: 4px; }
 .phase-delete-btn {
