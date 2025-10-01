@@ -155,6 +155,18 @@ def normalize_key(text):
     normalized = normalized.casefold()
     return _NON_ALNUM_RE.sub('', normalized)
 
+
+MATERIAL_ALERT_COLUMNS = {
+    normalize_key('Plegado/Curvado'),
+    normalize_key('Comerciales varios'),
+    normalize_key('Tubo/perfil/llanta/chapa'),
+    normalize_key('Oxicorte'),
+    normalize_key('Laser'),
+    normalize_key('Plegado/Curvado - fabricación'),
+    normalize_key('Material Incompleto'),
+    normalize_key('Material NO CONFORME'),
+}
+
 SSE_CLIENTS = []
 
 
@@ -2030,15 +2042,45 @@ def calendar_view():
             except ValueError:
                 fmt = ''
         worker_note_map[w] = {'text': text, 'edited': fmt}
+    material_status_map = {}
+    try:
+        compras_raw, _ = load_compras_raw()
+        raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+        for p in projects:
+            pid = p.get('id')
+            if pid:
+                material_status_map[str(pid)] = 'complete'
+        for entry in raw_links:
+            pid = entry.get('pid')
+            if not pid:
+                continue
+            pid_key = str(pid)
+            if material_status_map.get(pid_key) == 'missing':
+                continue
+            details = entry.get('link_details') or []
+            for detail in details:
+                if not isinstance(detail, dict):
+                    continue
+                column = detail.get('column')
+                if normalize_key(column) in MATERIAL_ALERT_COLUMNS:
+                    material_status_map[pid_key] = 'missing'
+                    break
+    except Exception:  # pragma: no cover - defensive logging
+        app.logger.exception('Failed to compute material status from project links')
+
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_display_fields', {})
-        project_map[p['id']] = {
+        pid = p.get('id')
+        project_entry = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
+        if pid:
+            project_entry['material_status'] = material_status_map.get(str(pid), 'complete')
+        project_map[p['id']] = project_entry
     start_map = phase_start_map(projects)
 
     return render_template(
