@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Pndt. Verificación</h2>
+<table class="pending-verification-table">
+    <thead>
+        <tr>
+            <th>Tarjeta</th>
+            <th>Fecha inicio planificada</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% if rows %}
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.title }}</td>
+            <td class="pending-date">{{ row.planned_date }}</td>
+        </tr>
+        {% endfor %}
+    {% else %}
+        <tr>
+            <td colspan="2">No hay tarjetas en “Pndt. Verificación”.</td>
+        </tr>
+    {% endif %}
+    </tbody>
+</table>
+{% endblock %}

@@ -2321,6 +2321,159 @@ def project_links_api():
     return jsonify(links)
 
 
+@app.route('/pndt-verificacion')
+def pending_verification_view():
+    projects = get_visible_projects()
+    project_lookup = {}
+    planned_starts = {}
+    project_workers = {}
+
+    for project in projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        pid_str = str(pid)
+        project_lookup[pid_str] = project
+        planned_starts[pid_str] = None
+        project_workers[pid_str] = set()
+
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+
+    for worker, days in schedule_data.items():
+        for tasks in days.values():
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                pid_str = str(pid)
+                project_workers.setdefault(pid_str, set())
+                if worker:
+                    project_workers[pid_str].add(worker)
+                task_worker = task.get('worker')
+                if task_worker and task_worker != worker:
+                    project_workers[pid_str].add(task_worker)
+                if worker == UNPLANNED or task_worker == UNPLANNED:
+                    continue
+                start_day = _safe_iso_date(task.get('start_time'))
+                if not start_day:
+                    continue
+                current = planned_starts.get(pid_str)
+                if current is None or start_day < current:
+                    planned_starts[pid_str] = start_day
+                else:
+                    planned_starts.setdefault(pid_str, start_day)
+    all_unplanned_projects = {}
+    for pid_str, workers in project_workers.items():
+        cleaned = {w for w in workers if w}
+        all_unplanned_projects[pid_str] = bool(cleaned) and all(
+            w == UNPLANNED for w in cleaned
+        )
+
+    project_key_map = {}
+    for project in projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        pid_str = str(pid)
+        name = (project.get('name') or '').strip()
+        if name:
+            norm = normalize_key(name)
+            if norm:
+                project_key_map.setdefault(norm, pid_str)
+            split_name, _ = split_project_and_client(name)
+            if split_name:
+                norm_split = normalize_key(split_name)
+                if norm_split:
+                    project_key_map.setdefault(norm_split, pid_str)
+            code_match = PROJECT_TITLE_PATTERN.search(name)
+            if code_match:
+                code_key = normalize_key(code_match.group(0))
+                if code_key:
+                    project_key_map.setdefault(code_key, pid_str)
+        custom = (project.get('custom_card_id') or '').strip()
+        if custom:
+            norm_custom = normalize_key(custom)
+            if norm_custom:
+                project_key_map.setdefault(norm_custom, pid_str)
+            code_match = PROJECT_TITLE_PATTERN.search(custom)
+            if code_match:
+                code_key = normalize_key(code_match.group(0))
+                if code_key:
+                    project_key_map.setdefault(code_key, pid_str)
+
+    compras_raw, _ = load_compras_raw()
+    links_table = attach_phase_starts(build_project_links(compras_raw), projects)
+
+    target_column_key = normalize_key('Pndt. Verificación')
+    rows = []
+    seen = set()
+
+    for entry in links_table:
+        pid_value = entry.get('pid')
+        pid_str = str(pid_value) if pid_value not in (None, '') else ''
+        if not pid_str:
+            for field in ('project', 'title', 'display_title', 'custom_card_id'):
+                candidate = entry.get(field)
+                norm_candidate = normalize_key(candidate)
+                if norm_candidate and norm_candidate in project_key_map:
+                    pid_str = project_key_map[norm_candidate]
+                    break
+        details = entry.get('link_details') or []
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            column_name = detail.get('column')
+            if normalize_key(column_name) != target_column_key:
+                continue
+            title = (detail.get('title') or '').strip()
+            if not title:
+                fallback = (
+                    entry.get('project')
+                    or entry.get('title')
+                    or entry.get('display_title')
+                    or ''
+                )
+                title = fallback.strip()
+            card_id = str(detail.get('id') or '').strip()
+            dedupe_key = (card_id or normalize_key(title), pid_str)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            planned_date = None
+            if pid_str and not all_unplanned_projects.get(pid_str, False):
+                planned_date = planned_starts.get(pid_str)
+            display_date = ''
+            if isinstance(planned_date, date):
+                display_date = planned_date.strftime('%d/%m/%Y')
+            project_name = ''
+            project = project_lookup.get(pid_str)
+            if project:
+                project_name = project.get('name') or ''
+            rows.append(
+                {
+                    'title': title,
+                    'project_name': project_name,
+                    'planned_date': display_date,
+                    'sort_key': planned_date if isinstance(planned_date, date) else None,
+                    'title_key': title.casefold() if title else '',
+                }
+            )
+
+    rows.sort(
+        key=lambda item: (
+            item['sort_key'] is None,
+            item['sort_key'] or date.max,
+            item['title_key'],
+        )
+    )
+    for item in rows:
+        item.pop('sort_key', None)
+        item.pop('title_key', None)
+
+    return render_template('pndt_verificacion.html', rows=rows)
+
+
 def _normalize_order_code(value):
     if not value:
         return ''

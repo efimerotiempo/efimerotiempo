@@ -427,6 +427,29 @@ tr.collapsed td:not(:first-child) { display: none; }
     z-index: 10;
 }
 
+.pending-verification-table {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 720px;
+    margin-top: 1rem;
+}
+
+.pending-verification-table th,
+.pending-verification-table td {
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.pending-verification-table tbody tr:nth-child(even) {
+    background: #f8f8f8;
+}
+
+.pending-verification-table td.pending-date {
+    width: 220px;
+    white-space: nowrap;
+}
+
 .modal {
     display: none;
     position: fixed;
