@@ -365,6 +365,11 @@ PEDIDOS_HIDDEN_COLUMNS = [
     "Pdte. Verificación",
 ]
 
+PENDING_VERIFICATION_COLUMN_KEYS = {
+    normalize_key('Pdte. Verificación'),
+    normalize_key('Pndt. Verificación'),
+}
+
 PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tau',
     'Bekola',
@@ -590,7 +595,10 @@ def build_project_links(compras_raw):
     seguimiento_titles = {}
     seguimiento_by_id = {}
     candidate_cards = []
-    excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+    excluded_columns = {
+        normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS
+        if normalize_key(col) not in PENDING_VERIFICATION_COLUMN_KEYS
+    }
     target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
     seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
