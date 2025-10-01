@@ -136,7 +136,14 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 
-KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
+KANBAN_POPUP_FIELDS = [
+    'LANZAMIENTO',
+    'MATERIAL',
+    'CALDERERIA',
+    'PINTADO',
+    'MECANIZADO',
+    'TRATAMIENTO',
+]
 
 PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
 _NON_ALNUM_RE = re.compile(r'[^0-9a-z]+')
@@ -1802,8 +1809,9 @@ def _kanban_card_to_project(card):
         fields = dict(fields_raw)
     else:
         fields = {}
+    fields.setdefault('CALDERERIA', fields.get('CALDERERÍA'))
     popup_raw = {field: fields.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         fields.pop(k, None)
 
     project_name = (
@@ -1875,7 +1883,7 @@ def _kanban_card_to_project(card):
         return text or None
 
     display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
@@ -4170,8 +4178,9 @@ def kanbanize_webhook():
         custom = dict(raw_custom)
     else:
         custom = {}
+    custom.setdefault('CALDERERIA', custom.get('CALDERERÍA'))
     popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         custom.pop(k, None)
     card['customFields'] = custom
 
@@ -4185,7 +4194,8 @@ def kanbanize_webhook():
         prev_custom = dict(prev_raw_custom)
     else:
         prev_custom = {}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         prev_custom.pop(k, None)
 
     deadline_str = card.get('deadline')
@@ -4292,7 +4302,7 @@ def kanbanize_webhook():
         return text or None
 
     display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
