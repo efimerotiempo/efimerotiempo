@@ -739,6 +739,8 @@ def build_project_links(compras_raw):
                 'client': client_name,
                 'custom_card_id': custom_id,
                 'due': due,
+                'column': column,
+                'lane': lane_name,
             })
             seen_candidates.add(cid)
 
@@ -822,6 +824,10 @@ def build_project_links(compras_raw):
             'custom_card_id': info['custom_card_id'],
             'links': matches,
         }
+        if info.get('column'):
+            entry['column'] = info['column']
+        if info.get('lane'):
+            entry['lane'] = info['lane']
         if any(match_ids):
             entry['link_ids'] = match_ids
         if match_details:
@@ -2435,6 +2441,44 @@ def orden_carpetas_view():
                 if norm_candidate and norm_candidate in project_key_map:
                     pid_str = project_key_map[norm_candidate]
                     break
+        def ensure_montaje_row():
+            project = project_lookup.get(pid_str)
+            project_title = ''
+            project_description = ''
+            if project:
+                project_title = (project.get('name') or '').strip()
+                project_description = (project.get('client') or '').strip()
+            if not project_title:
+                fallback = (
+                    entry.get('project')
+                    or entry.get('title')
+                    or entry.get('display_title')
+                    or ''
+                )
+                project_title = fallback.strip()
+            if not project_description:
+                project_description = (entry.get('client') or '').strip()
+            key = pid_str or normalize_key(project_title)
+            if not key or key in montaje_rows:
+                return
+            planned_date = None
+            if pid_str and not all_unplanned_projects.get(pid_str, False):
+                planned_date = planned_starts.get(pid_str)
+            display_date = ''
+            if isinstance(planned_date, date):
+                display_date = planned_date.strftime('%d/%m/%Y')
+            montaje_rows[key] = {
+                'project_title': project_title,
+                'project_description': project_description,
+                'planned_date': display_date,
+                'sort_key': planned_date if isinstance(planned_date, date) else None,
+                'title_key': project_title.casefold() if project_title else '',
+            }
+
+        entry_column = normalize_key(entry.get('column'))
+        if entry_column in montaje_keys:
+            ensure_montaje_row()
+
         details = entry.get('link_details') or []
         for detail in details:
             if not isinstance(detail, dict):
@@ -2489,40 +2533,7 @@ def orden_carpetas_view():
                     }
                 )
             if normalized_column in montaje_keys:
-                project = project_lookup.get(pid_str)
-                project_title = ''
-                project_description = ''
-                if project:
-                    project_title = (project.get('name') or '').strip()
-                    project_description = (project.get('client') or '').strip()
-                if not project_title:
-                    fallback = (
-                        entry.get('project')
-                        or entry.get('title')
-                        or entry.get('display_title')
-                        or ''
-                    )
-                    project_title = fallback.strip()
-                if not project_description:
-                    project_description = (entry.get('client') or '').strip()
-                key = pid_str or normalize_key(project_title)
-                if not key:
-                    continue
-                if key in montaje_rows:
-                    continue
-                planned_date = None
-                if pid_str and not all_unplanned_projects.get(pid_str, False):
-                    planned_date = planned_starts.get(pid_str)
-                display_date = ''
-                if isinstance(planned_date, date):
-                    display_date = planned_date.strftime('%d/%m/%Y')
-                montaje_rows[key] = {
-                    'project_title': project_title,
-                    'project_description': project_description,
-                    'planned_date': display_date,
-                    'sort_key': planned_date if isinstance(planned_date, date) else None,
-                    'title_key': project_title.casefold() if project_title else '',
-                }
+                ensure_montaje_row()
 
     pending_rows.sort(
         key=lambda item: (
