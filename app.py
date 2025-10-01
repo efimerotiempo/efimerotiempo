@@ -71,7 +71,6 @@ HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
-DEADLINE_CONFLICT_MESSAGE = 'No se cumple la fecha de entrega'
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -252,13 +251,6 @@ def get_card_custom_id(card):
 def broadcast_event(data):
     for q in list(SSE_CLIENTS):
         q.put(data)
-
-
-def split_deadline_conflicts(conflicts):
-    deadline = [c for c in conflicts if c.get('message') == DEADLINE_CONFLICT_MESSAGE]
-    others = [c for c in conflicts if c.get('message') != DEADLINE_CONFLICT_MESSAGE]
-    return others, deadline
-
 
 @app.route('/events')
 def event_stream():
@@ -2115,8 +2107,11 @@ def calendar_view():
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
-    conflicts = [c for c in conflicts if c['key'] not in dismissed]
-    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
+    conflicts = [
+        c
+        for c in conflicts
+        if c['key'] not in dismissed and c.get('message') != 'No se cumple la fecha de entrega'
+    ]
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
@@ -2192,7 +2187,6 @@ def calendar_view():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         today=today,
         project_filter=project_filter,
@@ -3496,8 +3490,11 @@ def complete():
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
-    conflicts = [c for c in conflicts if c['key'] not in dismissed]
-    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
+    conflicts = [
+        c
+        for c in conflicts
+        if c['key'] not in dismissed and c.get('message') != 'No se cumple la fecha de entrega'
+    ]
 
     sort_option = request.args.get('sort', 'created')
     orig_order = {p['id']: idx for idx, p in enumerate(projects)}
@@ -3591,7 +3588,6 @@ def complete():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
@@ -4262,7 +4258,7 @@ def clear_conflicts():
     """Mark all current conflicts as dismissed and clear extras."""
     projects = get_projects()
     _, conflicts = schedule_projects(projects)
-    conflicts, _ = split_deadline_conflicts(conflicts)
+    conflicts = [c for c in conflicts if c.get('message') != 'No se cumple la fecha de entrega']
     extras = load_extra_conflicts()
     keys = [c['key'] for c in conflicts] + [e['key'] for e in extras]
     dismissed = load_dismissed()

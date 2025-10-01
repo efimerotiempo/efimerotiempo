@@ -110,12 +110,6 @@
 </div>
 </div>
 <div id="info-popup" class="info-popup"></div>
-<div id="deadline-modal" class="conflict-modal">
-  <div class="conflict-content">
-    <div id="deadline-text" style="color:orange;font-weight:bold"></div>
-    <button id="deadline-close">Cerrar</button>
-  </div>
-</div>
 <div id="split-modal" class="conflict-modal">
   <div class="conflict-content">
     <form id="split-form">
@@ -147,14 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
-  const DEADLINE_MSG = 'Fecha cliente soprepasada.';
-  const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
   const popup = document.getElementById('info-popup');
-  const deadlineModal = document.getElementById('deadline-modal');
-  const deadlineText = document.getElementById('deadline-text');
-  const deadlineClose = document.getElementById('deadline-close');
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
   const splitPart1 = document.getElementById('split-part1');
@@ -323,22 +312,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  function showDeadline(text = DEADLINE_MSG, after = null) {
-    if (!deadlineModal || !deadlineText || !deadlineClose) return;
-    deadlineText.innerHTML = text.replace(/\n/g, '<br>');
-    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
-    deadlineModal.style.display = 'block';
-    deadlineClose.onclick = () => {
-      deadlineModal.style.display = 'none';
-      if (after) after();
-    };
-  }
-
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-    if (data.warning) showDeadline(data.warning, () => location.reload());
-    else location.reload();
+    location.reload();
   }
 
   function makeDraggable(el) {
@@ -555,8 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
             if (!ok) {
-              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-              else alert(data.error || 'Error');
+              alert(data.error || 'Error');
               return;
             }
             afterMove(data, today);
