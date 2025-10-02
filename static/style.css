@@ -202,13 +202,13 @@ table.pedidos-calendar td {
     vertical-align: top;
 }
 table.pedidos-calendar td.week-label {
-    width: 80px;
+    width: 40px;
     font-weight: bold;
     background: #eee;
 }
 .pedidos-calendar .unconfirmed-header,
 .pedidos-calendar td.unconfirmed {
-    width: 200px;
+    width: 100px;
     background: #f9f9f9;
 }
 .pedidos-calendar .day-number {
