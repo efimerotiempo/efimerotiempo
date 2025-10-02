@@ -8,11 +8,11 @@
     <thead>
     <tr>
         <th class="week-header">Semana</th>
-        <th>Lun</th>
-        <th>Mar</th>
-        <th>Mié</th>
-        <th>Jue</th>
-        <th>Vie</th>
+        <th class="day-header">Lun</th>
+        <th class="day-header">Mar</th>
+        <th class="day-header">Mié</th>
+        <th class="day-header">Jue</th>
+        <th class="day-header">Vie</th>
         <th rowspan="{{ weeks|length + 1 }}" class="unconfirmed-header">Sin fecha de entrega confirmada</th>
     </tr>
     </thead>
@@ -21,7 +21,7 @@
     <tr>
         <td class="week-label">Semana {{ week.number }}</td>
         {% for d in week.days %}
-        <td data-date="{{ d.date.isoformat() }}" class="{% if d.date == today %}today{% endif %}">
+        <td data-date="{{ d.date.isoformat() }}" class="day-cell{% if d.date == today %} today{% endif %}">
             {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
             <div class="day-number">{{ d.day }}</div>
             {% for t in d.tasks %}

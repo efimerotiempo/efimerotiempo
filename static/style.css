@@ -201,6 +201,10 @@ table.pedidos-calendar td {
     width: 180px;
     vertical-align: top;
 }
+table.pedidos-calendar th.day-header,
+table.pedidos-calendar td.day-cell {
+    width: 120px;
+}
 table.pedidos-calendar th.week-header,
 table.pedidos-calendar td.week-label {
     width: calc(40px / 3);
@@ -232,14 +236,14 @@ table.pedidos-calendar td.week-label {
 }
 
 .pedidos-calendar-container {
-    flex: 2 1 0;
+    flex: 0 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
 }
 
 .pedidos-calendar-container .pedidos-calendar {
-    width: 100%;
+    width: auto;
 }
 
 .columna-1 {
