@@ -2415,6 +2415,92 @@ def calendar_pedidos():
     )
 
 
+@app.route('/cronologico')
+def cronologico_view():
+    projects = get_visible_projects()
+    schedule_map, _ = schedule_projects(copy.deepcopy(projects))
+    today = local_today()
+    week_start = today - timedelta(days=today.weekday())
+    week_days = [week_start + timedelta(days=i) for i in range(5)]
+
+    interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
+    phase_entries = {}
+    for worker, days in schedule_map.items():
+        for day_str, tasks in days.items():
+            try:
+                day_obj = date.fromisoformat(day_str)
+            except ValueError:
+                continue
+            for task in tasks:
+                phase = task.get('phase')
+                if phase not in interesting_phases:
+                    continue
+                key = (task.get('pid'), phase, task.get('part'), worker)
+                entry = phase_entries.setdefault(
+                    key,
+                    {
+                        'project': task.get('project'),
+                        'worker': worker,
+                        'phase': phase,
+                        'days': set(),
+                    },
+                )
+                entry['days'].add(day_obj)
+
+    start_templates = {
+        'montar': '{worker} inicia la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} inicia la fase SOLDAR del proyecto {project}',
+        'pintar': '{worker} inicia la fase PINTAR del proyecto {project}',
+        'mecanizar': 'Llevar {project} a mecanizar.',
+        'tratamiento': 'Llevar {project} a tratamiento.',
+    }
+    finish_templates = {
+        'montar': '{worker} termina la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} termina la fase SOLDAR del proyecto {project}',
+        'mecanizar': 'Recepcionar {project} del mecanizado.',
+        'tratamiento': 'Recepcionar {project} del tratamiento.',
+    }
+
+    events_by_day = {d.isoformat(): [] for d in week_days}
+    for entry in phase_entries.values():
+        days = sorted(entry['days'])
+        if not days:
+            continue
+        start_day = days[0]
+        end_day = days[-1]
+        project_name = entry['project'] or 'Sin nombre'
+        worker_name = entry['worker'] or UNPLANNED
+        phase = entry['phase']
+
+        start_template = start_templates.get(phase)
+        day_key = start_day.isoformat()
+        if start_template and day_key in events_by_day:
+            events_by_day[day_key].append((0, start_template.format(worker=worker_name, project=project_name)))
+
+        finish_template = finish_templates.get(phase)
+        finish_key = end_day.isoformat()
+        if finish_template and finish_key in events_by_day:
+            events_by_day[finish_key].append((1, finish_template.format(worker=worker_name, project=project_name)))
+
+    for day_key, messages in events_by_day.items():
+        messages.sort(key=lambda item: (item[0], item[1]))
+        deduped = []
+        seen = set()
+        for _, message in messages:
+            if message in seen:
+                continue
+            seen.add(message)
+            deduped.append(message)
+        events_by_day[day_key] = deduped
+
+    return render_template(
+        'cronologico.html',
+        week_days=week_days,
+        events_by_day=events_by_day,
+        today=today,
+    )
+
+
 @app.route('/project_links')
 def project_links_api():
     today = local_today()
