@@ -73,6 +73,7 @@
 </table>
 <div class="columna-1">
     <h3>Columna 1</h3>
+    <div class="columna-legend">Fecha límite · Inicio planificado</div>
     <div class="columna-1-content">
     {% for item in project_links %}
         <div class="project-row"
@@ -82,12 +83,13 @@
              data-display="{{ (item.display_title or item.title or item.project)|trim }}"
              data-client="{{ item.client }}"
              data-code="{{ item.custom_card_id or '' }}"
-             data-due="{{ item.due or '' }}"
-             data-montar="{{ item.montar_start or '' }}">
+             data-due="{{ (item.due or '')|trim }}"
+             data-montar="{{ (item.montar_start or '')|trim }}">
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
             {% set due_display = (item.due|format_due_date)|trim %}
+            {% set start_display = (item.montar_start|format_due_date)|trim %}
             <div class="proj-header">
             {% if code_value %}
                 <span class="proj-code"
@@ -97,8 +99,11 @@
                 <strong class="proj-title"
                         data-project="{{ project_value }}"
                         data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
-                {% if due_display %}
-                <span class="proj-due">{{ due_display }}</span>
+                {% if due_display or start_display %}
+                <span class="proj-dates">
+                    {% if due_display %}<span class="proj-due">{{ due_display }}</span>{% endif %}
+                    {% if start_display %}<span class="proj-start">{{ start_display }}</span>{% endif %}
+                </span>
                 {% endif %}
             </div>
             {% set details = item.link_details or [] %}
@@ -784,8 +789,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskMap = buildTaskMap();
     const dueLateTitles = new Set();
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const montarStart = row.dataset.montar || '';
-      const projectDue = row.dataset.due || '';
+      const montarStart = (row.dataset.montar || '').trim();
+      const projectDue = (row.dataset.due || '').trim();
       row.querySelectorAll('.link-title').forEach(link => {
         const title = link.dataset.title;
         const tasks = taskMap.get(title) || [];
@@ -802,7 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isLate = false;
         if (montarStart && referenceDate) {
           const diff = diffInDays(referenceDate, montarStart);
-          if (diff !== null && Math.abs(diff) <= 3) {
+          if (diff !== null && diff >= 0 && diff <= 3) {
             isLate = true;
             dueLateTitles.add(title);
           }
@@ -1012,11 +1017,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const fullTitle = (item.title || '').trim();
           div.dataset.title = fullTitle || projectValue;
           div.dataset.client = item.client || '';
-          div.dataset.montar = item.montar_start || '';
-          div.dataset.due = item.due || '';
+          const montarValue = typeof item.montar_start === 'string' ? item.montar_start.trim() : (item.montar_start || '');
+          const dueValue = typeof item.due === 'string' ? item.due.trim() : (item.due || '');
+          div.dataset.montar = montarValue;
+          div.dataset.due = dueValue;
           const display = (item.display_title || fullTitle || projectValue).trim();
           const code = (item.custom_card_id || '').trim();
-          const dueDisplay = formatDueDisplay(item.due);
+          const dueDisplay = formatDueDisplay(dueValue);
+          const startDisplay = formatDueDisplay(montarValue);
           div.dataset.display = display;
           div.dataset.code = code;
           let html = '<div class="proj-header">';
@@ -1025,8 +1033,15 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           const titleText = (fullTitle || projectValue) || '';
           html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
-          if (dueDisplay) {
-            html += `<span class="proj-due">${dueDisplay}</span>`;
+          if (dueDisplay || startDisplay) {
+            html += '<span class="proj-dates">';
+            if (dueDisplay) {
+              html += `<span class="proj-due">${dueDisplay}</span>`;
+            }
+            if (startDisplay) {
+              html += `<span class="proj-start">${startDisplay}</span>`;
+            }
+            html += '</span>';
           }
           html += '</div>';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
