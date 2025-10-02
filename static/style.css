@@ -267,6 +267,13 @@ table.pedidos-calendar td.week-label {
     cursor: pointer;
 }
 
+.columna-1 .proj-due {
+    margin-left: auto;
+    color: #0a2a6b;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .columna-1 .link-title {
     display: block;
     margin-left: 10px;
