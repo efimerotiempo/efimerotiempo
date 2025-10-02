@@ -234,15 +234,9 @@ table.pedidos-calendar td.week-label {
     display: grid;
     grid-auto-flow: column;
     grid-template-rows: repeat(16, auto);
-    grid-auto-columns: calc(400px * 4 / 3);
+    grid-auto-columns: 400px;
     gap: 4px 16px;
     overflow-x: auto;
-}
-
-.columna-legend {
-    font-weight: 600;
-    color: #0a2a6b;
-    margin-bottom: 6px;
 }
 
 .columna-1 .proj-name {
@@ -253,7 +247,7 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .project-row {
     padding: 4px 0;
-    width: calc(400px * 4 / 3);
+    width: 400px;
     word-break: break-word;
 }
 
@@ -273,21 +267,9 @@ table.pedidos-calendar td.week-label {
     cursor: pointer;
 }
 
-.columna-1 .proj-dates {
-    margin-left: auto;
-    display: inline-flex;
-    gap: 8px;
-    align-items: baseline;
-}
-
 .columna-1 .proj-due {
+    margin-left: auto;
     color: #0a2a6b;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.columna-1 .proj-start {
-    color: #3b0057;
     font-weight: 600;
     white-space: nowrap;
 }
