@@ -199,6 +199,76 @@ MATERIAL_ALERT_COLUMNS = {
     normalize_key('Material NO CONFORME'),
 }
 
+
+def _upload_folder_path():
+    """Return the absolute path to the uploads directory."""
+
+    if os.path.isabs(UPLOAD_FOLDER):
+        return UPLOAD_FOLDER
+    return os.path.join(app.root_path, UPLOAD_FOLDER)
+
+
+def _extract_upload_filename(image_value):
+    """Return the file name for a stored project image, if local."""
+
+    if not image_value:
+        return None
+    value = str(image_value).strip().replace('\\', '/').lstrip('/')
+    if not value:
+        return None
+    if value.startswith('static/'):
+        value = value[len('static/'):]
+    if not value.startswith('uploads/'):
+        return None
+    basename = os.path.basename(value[len('uploads/'):])
+    return basename or None
+
+
+def _remove_upload_file(image_value):
+    """Delete the file associated with *image_value* if it lives in uploads."""
+
+    filename = _extract_upload_filename(image_value)
+    if not filename:
+        return False
+    directory = _upload_folder_path()
+    path = os.path.join(directory, filename)
+    try:
+        os.remove(path)
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        app.logger.warning('No se pudo eliminar la imagen %s', path, exc_info=True)
+        return False
+
+
+def prune_orphan_uploads(projects):
+    """Remove files in the uploads folder that no project references."""
+
+    directory = _upload_folder_path()
+    if not os.path.isdir(directory):
+        return
+    referenced = set()
+    for project in projects or []:
+        filename = _extract_upload_filename(project.get('image'))
+        if filename:
+            referenced.add(filename)
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        app.logger.warning('No se pudo listar la carpeta de imágenes', exc_info=True)
+        return
+    for name in entries:
+        path = os.path.join(directory, name)
+        if not os.path.isfile(path):
+            continue
+        if name in referenced:
+            continue
+        try:
+            os.remove(path)
+        except OSError:
+            app.logger.warning('No se pudo eliminar la imagen huérfana %s', path, exc_info=True)
+
 READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
 
 SSE_CLIENTS = []
@@ -1811,6 +1881,7 @@ def get_projects():
             p['plan_state'] = 'partial'
     if changed:
         save_projects(projects)
+    prune_orphan_uploads(projects)
     return projects
 
 
@@ -3955,7 +4026,11 @@ def update_image(pid):
         fname = f"{uuid.uuid4()}{ext}"
         save_path = os.path.join(UPLOAD_FOLDER, fname)
         file.save(save_path)
+        previous_image = proj.get('image')
         proj['image'] = f"uploads/{fname}"
+        if previous_image and previous_image != proj['image']:
+            _remove_upload_file(previous_image)
+        prune_orphan_uploads(projects)
         save_projects(projects)
     if request.is_json:
         return '', 204
@@ -4216,6 +4291,7 @@ def remove_project_and_preserve_schedule(projects, pid):
     if not removed:
         return None
     projects.remove(removed)
+    _remove_upload_file(removed.get('image'))
     # Drop any persisted conflicts tied to the removed project so stale
     # warnings do not linger in the interface.
     extras = load_extra_conflicts()
@@ -4259,6 +4335,7 @@ def remove_project_and_preserve_schedule(projects, pid):
                     wl.append(None)
                 wl[part] = worker
     save_projects(projects)
+    prune_orphan_uploads(projects)
     return removed
 
 @app.route('/delete_project/<pid>', methods=['POST'])
