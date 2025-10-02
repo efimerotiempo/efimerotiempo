@@ -230,13 +230,62 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
-.columna-1-content {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(16, auto);
-    grid-auto-columns: calc(400px * 4 / 3);
-    gap: 4px 16px;
+.columna-1-table-wrapper {
+    max-width: 100%;
     overflow-x: auto;
+}
+
+.columna-1-table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 1110px;
+    table-layout: fixed;
+}
+
+.columna-1-table col {
+    min-width: 80px;
+}
+
+.columna-1-table th,
+.columna-1-table td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    vertical-align: top;
+    background: #fff;
+}
+
+.columna-1-table th {
+    background: #f3f3f3;
+    font-weight: 700;
+    position: relative;
+}
+
+.columna-1-table th .col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+}
+
+.columna-1-table th .col-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+body.columna-1-resizing {
+    cursor: col-resize;
+}
+
+body.columna-1-resizing * {
+    user-select: none !important;
 }
 
 .columna-1-title {
@@ -249,54 +298,57 @@ table.pedidos-calendar td.week-label {
     display: none;
 }
 
-.columna-1 .proj-name {
-    font-weight: bold;
-    display: block;
-    cursor: pointer;
-}
-
 .columna-1 .project-row {
-    padding: 4px 0;
-    width: calc(400px * 4 / 3);
     word-break: break-word;
 }
 
-.columna-1 .proj-header {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    flex-wrap: wrap;
+.columna-1-table .proj-code-cell {
+    white-space: nowrap;
 }
 
-.columna-1 .proj-code {
+.columna-1-table .proj-code {
     font-weight: 600;
     cursor: pointer;
+    display: inline-block;
 }
 
-.columna-1 .proj-title {
+.columna-1-table .proj-title-cell {
+    word-break: break-word;
+}
+
+.columna-1-table .proj-title {
     font-weight: bold;
     cursor: pointer;
 }
 
-.columna-1 .proj-due {
-    margin-left: auto;
+.columna-1-table .due-cell,
+.columna-1-table .start-cell {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.columna-1-table .proj-due {
     color: #0a2a6b;
     font-weight: 600;
-    white-space: nowrap;
 }
 
-.columna-1 .proj-start {
+.columna-1-table .proj-start {
     color: #4b0082;
     font-weight: 600;
-    white-space: nowrap;
-    margin-left: 12px;
 }
 
-.columna-1 .link-title {
+.columna-1-table .links-cell {
+    word-break: break-word;
+}
+
+.columna-1-table .link-title {
     display: block;
-    margin-left: 10px;
-    margin-top: 4px;
+    margin-bottom: 4px;
     cursor: pointer;
+}
+
+.columna-1-table .link-title:last-child {
+    margin-bottom: 0;
 }
 
 .columna-1 .link-title.due-late {
