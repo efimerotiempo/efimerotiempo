@@ -201,8 +201,9 @@ table.pedidos-calendar td {
     width: 180px;
     vertical-align: top;
 }
+table.pedidos-calendar th.week-header,
 table.pedidos-calendar td.week-label {
-    width: 40px;
+    width: calc(40px / 3);
     font-weight: bold;
     background: #eee;
 }
