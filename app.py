@@ -2033,6 +2033,7 @@ def calendar_view():
     for item in unplanned_raw:
         pid = item['pid']
         phase = item['phase']
+        part = item.get('part')
         proj = groups.setdefault(
             pid,
             {
@@ -2043,13 +2044,15 @@ def calendar_view():
                 'phases': {},
             },
         )
+        phase_key = (phase, part) if part is not None else (phase, None)
         ph = proj['phases'].setdefault(
-            phase,
+            phase_key,
             {
                 'project': item['project'],
                 'client': item['client'],
                 'pid': pid,
                 'phase': phase,
+                'part': part,
                 'color': item.get('color'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
@@ -3417,6 +3420,7 @@ def complete():
     for item in unplanned_raw:
         pid = item['pid']
         phase = item['phase']
+        part = item.get('part')
         proj = groups.setdefault(
             pid,
             {
@@ -3427,13 +3431,15 @@ def complete():
                 'phases': {},
             },
         )
+        phase_key = (phase, part) if part is not None else (phase, None)
         ph = proj['phases'].setdefault(
-            phase,
+            phase_key,
             {
                 'project': item['project'],
                 'client': item['client'],
                 'pid': pid,
                 'phase': phase,
+                'part': part,
                 'color': item.get('color'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
