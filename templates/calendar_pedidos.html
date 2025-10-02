@@ -87,6 +87,7 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
+            {% set due_display = (item.due|format_due_date)|trim %}
             <div class="proj-header">
             {% if code_value %}
                 <span class="proj-code"
@@ -96,6 +97,9 @@
                 <strong class="proj-title"
                         data-project="{{ project_value }}"
                         data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
+                {% if due_display %}
+                <span class="proj-due">{{ due_display }}</span>
+                {% endif %}
             </div>
             {% set details = item.link_details or [] %}
             {% for link in item.links %}
@@ -756,6 +760,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.round((laterUtc - earlierUtc) / 86400000);
   }
 
+  function formatDueDisplay(value) {
+    const parts = parseISODateParts(value);
+    if (!parts) return '';
+    const day = String(parts.day).padStart(2, '0');
+    const month = String(parts.month + 1).padStart(2, '0');
+    const year = String(parts.year);
+    return `${day}/${month}/${year}`;
+  }
+
   function buildTaskMap() {
     const map = new Map();
     document.querySelectorAll('.pedidos-calendar .task').forEach(task => {
@@ -789,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isLate = false;
         if (montarStart && referenceDate) {
           const diff = diffInDays(referenceDate, montarStart);
-          if (diff !== null && diff <= 3) {
+          if (diff !== null && Math.abs(diff) <= 3) {
             isLate = true;
             dueLateTitles.add(title);
           }
@@ -1003,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
           div.dataset.due = item.due || '';
           const display = (item.display_title || fullTitle || projectValue).trim();
           const code = (item.custom_card_id || '').trim();
+          const dueDisplay = formatDueDisplay(item.due);
           div.dataset.display = display;
           div.dataset.code = code;
           let html = '<div class="proj-header">';
@@ -1011,6 +1025,9 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           const titleText = (fullTitle || projectValue) || '';
           html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
+          if (dueDisplay) {
+            html += `<span class="proj-due">${dueDisplay}</span>`;
+          }
           html += '</div>';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
           item.links.forEach((link, idx) => {

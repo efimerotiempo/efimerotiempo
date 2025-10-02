@@ -75,6 +75,32 @@ CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
+
+@app.template_filter('format_due_date')
+def format_due_date(value, include_year=True):
+    """Return a human readable ``dd/mm`` or ``dd/mm/YYYY`` string."""
+
+    if not value:
+        return ''
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return ''
+        try:
+            value = date.fromisoformat(value[:10])
+        except ValueError:
+            parsed = parse_input_date(value)
+            if not parsed:
+                return value
+            value = parsed
+
+    if not isinstance(value, date):
+        return str(value)
+
+    fmt = '%d/%m/%Y' if include_year else '%d/%m'
+    return value.strftime(fmt)
+
 # Basic HTTP authentication setup
 AUTH_USER = os.environ.get("EFIMERO_USER", "admin")
 AUTH_PASS = os.environ.get("EFIMERO_PASS", "secreto")
