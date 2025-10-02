@@ -82,6 +82,11 @@ table.schedule td.weekend-cell {
 .auto-hour { color: red; font-weight: bold; }
 .info-popup { position: absolute; background: #fff; border: 1px solid #000; padding: 4px; display: none; z-index: 1000; cursor: move; }
 .info-popup .popup-section + .popup-section { margin-top: 8px; }
+.info-popup .material-status-flag { display: inline-block; font-weight: 700; margin-bottom: 4px; }
+.info-popup .material-status-missing { color: #f57c00; }
+.info-popup .material-status-pending { color: #546e7a; }
+.info-popup .material-status-complete { color: #2e7d32; }
+.info-popup .material-status-archived { color: #6a1b9a; }
 #split-btn { margin-top: 4px; }
 .phase-delete-btn {
     background: red;
@@ -228,8 +233,8 @@ table.pedidos-calendar td.week-label {
 .columna-1-content {
     display: grid;
     grid-auto-flow: column;
-    grid-template-rows: repeat(8, auto);
-    grid-auto-columns: 200px;
+    grid-template-rows: repeat(16, auto);
+    grid-auto-columns: 400px;
     gap: 4px 16px;
     overflow-x: auto;
 }
@@ -242,7 +247,7 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .project-row {
     padding: 4px 0;
-    width: 200px;
+    width: 400px;
     word-break: break-word;
 }
 
@@ -286,6 +291,22 @@ table.pedidos-calendar td.week-label {
 
 .columna-1 .proj-name.highlight {
     border: 4px solid #000;
+}
+
+.pedidos-wrapper.highlight-active .task.dimmed {
+    opacity: 0.25;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .project-row.dimmed {
+    opacity: 0.3;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .link-title.dimmed {
+    opacity: 0.35;
+}
+
+.pedidos-wrapper.highlight-active .columna-1 .project-row.highlight {
+    opacity: 1;
 }
 
 /* keep projects table width */
@@ -406,6 +427,89 @@ tr.collapsed td:not(:first-child) { display: none; }
     z-index: 10;
 }
 
+.orden-carpetas-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.folder-table-section {
+    margin-top: 0;
+    flex: 0 0 auto;
+}
+
+.orden-carpetas-wrapper .resizable-table {
+    width: auto;
+}
+
+.resizable-table {
+    border-collapse: collapse;
+    margin-top: 0.75rem;
+}
+
+.resizable-table th,
+.resizable-table td {
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.resizable-table th {
+    background: #f2f2f2;
+}
+
+.resizable-table tbody tr:nth-child(even) {
+    background: #f8f8f8;
+}
+
+.pending-verification-table td.pending-date {
+    white-space: nowrap;
+}
+
+.pending-verification-table td.pending-project {
+    vertical-align: top;
+}
+
+.montaje-plan-table td.pending-project {
+    vertical-align: top;
+}
+
+.pending-project-title {
+    font-weight: 600;
+}
+
+.pending-project-description {
+    margin-top: 2px;
+    color: #555;
+    white-space: normal;
+}
+
+.resizable-table--active th {
+    user-select: none;
+}
+
+.column-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    cursor: col-resize;
+    user-select: none;
+    height: 100%;
+    z-index: 1;
+}
+
+.column-resizer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
 .modal {
     display: none;
     position: fixed;
@@ -466,8 +570,15 @@ tr.collapsed td:not(:first-child) { display: none; }
     text-align: center;
     cursor: move;
 }
-.order-modal .conflict-content {
-    max-width: 500px;
+.split-total-hours {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+.split-hours-hint {
+    margin-left: 8px;
+    font-size: 0.9em;
+    color: #555;
+    white-space: nowrap;
 }
 .material-modal .material-content {
     max-width: 480px;
@@ -487,17 +598,6 @@ tr.collapsed td:not(:first-child) { display: none; }
 .material-modal .material-list li {
     font-weight: 600;
     margin-bottom: 6px;
-}
-.order-warning-text {
-    font-size: 2em;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-bottom: 20px;
-}
-.order-modal .order-buttons button {
-    font-size: 1.2em;
-    margin: 0 10px;
-    padding: 6px 18px;
 }
 .projects-table tr.proj-dim { opacity: 0.4; }
 .projects-table tr.proj-highlight {
