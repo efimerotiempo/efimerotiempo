@@ -531,8 +531,8 @@
       const rect = el.getBoundingClientRect();
       startX = e.clientX;
       startY = e.clientY;
-      startLeft = rect.left;
-      startTop = rect.top;
+      startLeft = rect.left + window.scrollX;
+      startTop = rect.top + window.scrollY;
       el.style.position = 'absolute';
       el.style.margin = '0';
       el.style.left = startLeft + 'px';
