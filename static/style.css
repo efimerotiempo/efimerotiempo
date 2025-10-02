@@ -203,7 +203,7 @@ table.pedidos-calendar td {
 }
 table.pedidos-calendar th.day-header,
 table.pedidos-calendar td.day-cell {
-    width: 60px;
+    width: 180px;
 }
 table.pedidos-calendar th.week-header,
 table.pedidos-calendar td.week-label {
