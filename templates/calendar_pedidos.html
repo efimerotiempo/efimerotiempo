@@ -72,6 +72,7 @@
     </tbody>
 </table>
 <div class="columna-1">
+    <div class="columna-1-title" id="columna-1-info-title" data-default-title="{{ project_info_title or '' }}">{{ project_info_title or '' }}</div>
     <h3>Columna 1</h3>
     <div class="columna-1-content">
     {% for item in project_links %}
@@ -88,6 +89,7 @@
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
             {% set due_display = (item.due|format_due_date)|trim %}
+            {% set start_display = (item.montar_start|format_due_date)|trim %}
             <div class="proj-header">
             {% if code_value %}
                 <span class="proj-code"
@@ -99,6 +101,9 @@
                         data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
                 {% if due_display %}
                 <span class="proj-due">{{ due_display }}</span>
+                {% endif %}
+                {% if start_display %}
+                <span class="proj-start">Inicio: {{ start_display }}</span>
                 {% endif %}
             </div>
             {% set details = item.link_details or [] %}
@@ -1003,6 +1008,18 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(items => {
         const container = document.querySelector('.columna-1-content');
         container.querySelectorAll('.project-row').forEach(r => r.remove());
+        const infoTitleEl = document.getElementById('columna-1-info-title');
+        if (infoTitleEl) {
+          const infoNames = Array.from(new Set(items.map(item => (item.board || '').trim()).filter(Boolean)));
+          if (infoNames.length) {
+            const newTitle = infoNames.join(' / ');
+            infoTitleEl.textContent = newTitle;
+            infoTitleEl.dataset.defaultTitle = newTitle;
+          } else {
+            infoTitleEl.textContent = infoTitleEl.dataset.defaultTitle || '';
+          }
+        }
+
         items.forEach(item => {
           const div = document.createElement('div');
           div.className = 'project-row';
@@ -1017,6 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const display = (item.display_title || fullTitle || projectValue).trim();
           const code = (item.custom_card_id || '').trim();
           const dueDisplay = formatDueDisplay(item.due);
+          const startDisplay = formatDueDisplay(item.montar_start);
           div.dataset.display = display;
           div.dataset.code = code;
           let html = '<div class="proj-header">';
@@ -1027,6 +1045,9 @@ document.addEventListener('DOMContentLoaded', () => {
           html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
           if (dueDisplay) {
             html += `<span class="proj-due">${dueDisplay}</span>`;
+          }
+          if (startDisplay) {
+            html += `<span class="proj-start">Inicio: ${startDisplay}</span>`;
           }
           html += '</div>';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];

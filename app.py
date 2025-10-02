@@ -780,6 +780,7 @@ def build_project_links(compras_raw):
                             norms.add(norm_child)
 
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        board_name = (card.get('boardName') or card.get('boardname') or '').strip()
         lane_key = normalize_key(lane_name)
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         column_key = normalize_key(column)
@@ -829,6 +830,7 @@ def build_project_links(compras_raw):
                 'due': due,
                 'column': column,
                 'lane': lane_name,
+                'board': board_name,
             })
             seen_candidates.add(cid)
 
@@ -916,6 +918,8 @@ def build_project_links(compras_raw):
             entry['column'] = info['column']
         if info.get('lane'):
             entry['lane'] = info['lane']
+        if info.get('board'):
+            entry['board'] = info['board']
         if any(match_ids):
             entry['link_ids'] = match_ids
         if match_details:
@@ -2328,6 +2332,13 @@ def calendar_pedidos():
         raw_links, calendar_titles, calendar_ids
     )
 
+    info_names = sorted({
+        name.strip()
+        for name in (item.get('board') for item in links_table)
+        if name and name.strip()
+    })
+    info_title = ' / '.join(info_names)
+
 
     # --- ARMAR CALENDARIO SEMANAL ---
     start = today - timedelta(weeks=3)
@@ -2400,6 +2411,7 @@ def calendar_pedidos():
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        project_info_title=info_title,
     )
 
 
