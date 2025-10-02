@@ -11570,5 +11570,2213 @@
     "phase": "soldar 2º",
     "reason": "26/09/2025: 1h tras 5.0h ocupadas por OF 7463 - recepcionar material (5h)",
     "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:23:16.099242",
+    "project": "7521",
+    "client": "sgsgsg",
+    "phase": "recepcionar material",
+    "reason": "26/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:36:35.592520",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "29/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n30/09/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:37:06.504229",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MS",
+    "phase": "montar",
+    "reason": "29/09/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:37:26.898148",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "29/09/2025: 3.0h tras 5.0h ocupadas por OF 7390 - montar (5h); jornada completa, se continuó al día siguiente\n30/09/2025: 2.0h al inicio de la jornada; quedaban 6.0h libres y se continuó al día siguiente\n15/10/2025: 3h tras 5h ocupadas por OF 7452 - soldar (5h); jornada completa, se continuó al día siguiente\n24/10/2025: 2.0h tras 4.0h ocupadas por OF 7466 - soldar (4.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:42:30.524104",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T09:42:37.945491",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "23/10/2025: 7.0h tras 1.0h ocupadas por OF 7415 - soldar (1.0h); jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:08:25.655870",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "03/10/2025: 4h tras 2.0h ocupadas por OF 7461 - recepcionar material (2.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:17:41.863491",
+    "project": "OF 7393",
+    "client": "EUSKO - Bastidores (1+1) MS",
+    "phase": "soldar 2º",
+    "reason": "29/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:18:01.654130",
+    "project": "OF 7488",
+    "client": "TAU - Soldar piezas s/plano (4+2) S",
+    "phase": "recepcionar material",
+    "reason": "29/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:19:09.765000",
+    "project": "OF 7488",
+    "client": "TAU - Soldar piezas s/plano (4+2) S",
+    "phase": "soldar",
+    "reason": "29/09/2025: 1.0h tras 4.0h ocupadas por OF 7393 - soldar 2º (1h); quedaban 3.0h libres y se continuó al día siguiente\n06/10/2025: 1.0h tras 2.0h ocupadas por OF 7463 - soldar (2.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:19:19.772515",
+    "project": "OF 7488",
+    "client": "TAU - Soldar piezas s/plano (4+2) S",
+    "phase": "soldar",
+    "reason": "29/09/2025: 1.0h tras 4.0h ocupadas por OF 7393 - soldar 2º (1h); quedaban 3.0h libres y se continuó al día siguiente\n06/10/2025: 1.0h tras 2.0h ocupadas por OF 7463 - soldar (2.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:19:49.628109",
+    "project": "OF 7393",
+    "client": "EUSKO - Bastidores (1+1) MS",
+    "phase": "soldar 2º",
+    "reason": "26/09/2025: 1h tras 5.0h ocupadas por OF 7463 - recepcionar material (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:19:54.626535",
+    "project": "OF 7488",
+    "client": "TAU - Soldar piezas s/plano (4+2) S",
+    "phase": "soldar",
+    "reason": "29/09/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:19:57.179843",
+    "project": "OF 7393",
+    "client": "EUSKO - Bastidores (1+1) MS",
+    "phase": "soldar 2º",
+    "reason": "29/09/2025: 1h tras 5.0h ocupadas por OF 7488 - soldar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T10:22:29.267690",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 5.0h al inicio de la jornada; quedaban 3.0h libres y se continuó al día siguiente\n06/10/2025: 3.0h tras 2.0h ocupadas por OF 7463 - soldar (2.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:02:54.854128",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar",
+    "reason": "29/09/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:06:21.573721",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:06:37.126726",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:06:52.895350",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "08/10/2025: 5.0h tras 3.0h ocupadas por OF 7472 - soldar (1h), OF 7483 - soldar (2h); jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:06:57.343616",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:09:54.070096",
+    "project": "OF 7489",
+    "client": "URAIN - Plegar chapa (x2)",
+    "phase": "recepcionar material",
+    "reason": "29/09/2025: 1h tras 6.0h ocupadas por OF 7488 - soldar (2h), OF 7393 - soldar 2º (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-29T11:10:45.373099",
+    "project": "OF 7447",
+    "client": "SERKIDE - Soporte luneta (x2) MSMecP",
+    "phase": "pintar",
+    "reason": "22/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:50:35.162117",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "30/09/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:50:41.104558",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:50:44.758338",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:50:49.578026",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:50:52.987819",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:51:53.330192",
+    "project": "OF 7450",
+    "client": "EUSKO - Bases apoyo (x2) MS",
+    "phase": "montar",
+    "reason": "02/10/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:51:57.184072",
+    "project": "OF 7450",
+    "client": "EUSKO - Bases apoyo (x2) MS",
+    "phase": "soldar",
+    "reason": "02/10/2025: 1.0h tras 7.0h ocupadas por OF 7450 - montar (7h); jornada completa, se continuó al día siguiente\n03/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n06/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:52:53.972132",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "29/09/2025: 3.0h tras 5.0h ocupadas por OF 7390 - montar (5h); jornada completa, se continuó al día siguiente\n30/09/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T08:53:57.532220",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "soldar",
+    "reason": "01/10/2025: 3.0h tras 5.0h ocupadas por OF 7356 - soldar (5.0h); jornada completa, se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n06/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T09:03:27.020583",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "soldar",
+    "reason": "07/10/2025: 5h tras 2.0h ocupadas por OF 7463 - montar 2º (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:02:20.407225",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:02:25.037174",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h tras 8h ocupadas por OF 7356 - montar (8h); quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h tras 2h ocupadas por OF 7356 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:04:28.796105",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h tras 4h ocupadas por OF 7463 - montar (4h); quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:04:33.915718",
+    "project": "OF 7488",
+    "client": "TAU - Soldar piezas s/plano (4+2) S",
+    "phase": "soldar",
+    "reason": "30/09/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:04:39.992691",
+    "project": "OF 7424",
+    "client": "VOITH - Postes disimilares 660kg y 680kg (1+1) MST \"soldar\"",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:04:51.699283",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "soldar",
+    "reason": "30/09/2025: 6.0h tras 2.0h ocupadas por OF 7488 - soldar (2h); jornada completa, se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n02/10/2025: 6.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:05:05.151623",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "pintar",
+    "reason": "02/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:06:00.219838",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:06:03.334493",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 3h tras 3h ocupadas por OF 7352 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:06:10.518174",
+    "project": "OF 7424",
+    "client": "VOITH - Postes disimilares 660kg y 680kg (1+1) MST \"soldar\"",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:06:21.627211",
+    "project": "OF 7424",
+    "client": "VOITH - Postes disimilares 660kg y 680kg (1+1) MST \"soldar\"",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/10/2025: 1h tras 3.0h ocupadas por OF 7457 - soldar (3.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:06:26.285423",
+    "project": "OF 7424",
+    "client": "VOITH - Postes disimilares 660kg y 680kg (1+1) MST \"soldar\"",
+    "phase": "soldar",
+    "reason": "01/10/2025: 1.0h tras 7.0h ocupadas por OF 7424 - montar (7h); jornada completa, se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 3h tras 5h ocupadas por OF 7452 - soldar (5h); jornada completa, se continuó al día siguiente\n16/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:08:07.148721",
+    "project": "Trabajos externos",
+    "client": "ADITEK",
+    "phase": "montar",
+    "reason": "30/09/2025: 4.0h tras 4.0h ocupadas por OF 7463 - montar (4h); jornada completa, se continuó al día siguiente\n01/10/2025: 8.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:11:24.770121",
+    "project": "OF 7383",
+    "client": "MAKEGI - Bases y carros (7 pzas) MS+Mec",
+    "phase": "mecanizar",
+    "reason": "01/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:11:36.025990",
+    "project": "OF 7383",
+    "client": "MAKEGI - Bases y carros (7 pzas) MS+Mec",
+    "phase": "mecanizar",
+    "reason": "29/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:21:10.141484",
+    "project": "OF 7484",
+    "client": "AVS - Pintar baldas (40+10+20+3)",
+    "phase": "pintar",
+    "reason": "29/09/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:23:42.717220",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar 2º",
+    "reason": "08/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:24:09.567528",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "07/10/2025: 6.0h tras 2.0h ocupadas por OF 7415 - pintar (2.0h); jornada completa, se continuó al día siguiente\n08/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:24:13.997520",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "soldar",
+    "reason": "08/10/2025: 5.0h tras 3.0h ocupadas por OF 7458 - montar (3.0h); jornada completa, se continuó al día siguiente\n09/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:24:19.069158",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "pintar",
+    "reason": "09/10/2025: 5.0h tras 3.0h ocupadas por OF 7458 - soldar (3.0h); jornada completa, se continuó al día siguiente\n10/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:25:00.109706",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "09/10/2025: 5.0h tras 3.0h ocupadas por OF 7458 - soldar (3.0h); jornada completa, se continuó al día siguiente\n10/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:25:02.871643",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:25:06.652453",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "soldar",
+    "reason": "07/10/2025: 7.0h tras 1.0h ocupadas por OF 7458 - montar (1h); jornada completa, se continuó al día siguiente\n08/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:25:10.182089",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "pintar",
+    "reason": "08/10/2025: 7.0h tras 1.0h ocupadas por OF 7458 - soldar (1.0h); jornada completa, se continuó al día siguiente\n09/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:02.508605",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "soldar",
+    "reason": "30/09/2025: 5h tras 34h ocupadas por OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - montar (8h), OF 7356 - soldar (8h), OF 7448 - recepcionar material (1h), OF 7448 - montar (4h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:37.772794",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:41.090452",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "montar 2º",
+    "reason": "06/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:42.850516",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "06/10/2025: 6.0h tras 2.0h ocupadas por OF 7463 - montar 2º (2h); jornada completa, se continuó al día siguiente\n07/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:52.090676",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "10/10/2025: 6.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n13/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:27:56.050819",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "09/10/2025: 4.0h tras 4.0h ocupadas por OF 7458 - pintar (4.0h); jornada completa, se continuó al día siguiente\n10/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:28:28.588081",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:28:37.202405",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:35:52.005884",
+    "project": "OF 7457",
+    "client": "VOITH - Soportes longitudinales (1+1) MSTMecP",
+    "phase": "soldar",
+    "reason": "03/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:38:43.712607",
+    "project": "OF 7457",
+    "client": "VOITH - Soportes longitudinales (1+1) MSTMecP",
+    "phase": "montar",
+    "reason": "06/10/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:38:54.132862",
+    "project": "OF 7457",
+    "client": "VOITH - Soportes longitudinales (1+1) MSTMecP",
+    "phase": "soldar",
+    "reason": "07/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:45:18.422834",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "montar 2º",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:05.157530",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:16.901215",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "pintar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:20.997322",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "pintar",
+    "reason": "15/10/2025: 2.0h tras 6.0h ocupadas por OF 7420 - pintar (6h); jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 1h tras 7h ocupadas por OF 7451 - montar (3h), OF 7451 - soldar (2h), OF 7451 - pintar (2h); jornada completa, se continuó al día siguiente\n21/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:44.126876",
+    "project": "OF 7451",
+    "client": "GURUTZPE - Estructura amarre telescopica (x2) MSP",
+    "phase": "pintar",
+    "reason": "21/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:52.789365",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "pintar",
+    "reason": "17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 3h tras 5h ocupadas por OF 7451 - montar (3h), OF 7451 - soldar (2h); jornada completa, se continuó al día siguiente\n21/10/2025: 2.0h al inicio de la jornada; quedaban 6.0h libres y se continuó al día siguiente\n21/10/2025: 4.0h tras 4.0h ocupadas por OF 7243 - pintar (2.0h), OF 7451 - pintar (2h); jornada completa, se continuó al día siguiente\n24/10/2025: 3h tras 4h ocupadas por OF 7452 - pintar (4h); quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:46:57.405073",
+    "project": "OF 7451",
+    "client": "GURUTZPE - Estructura amarre telescopica (x2) MSP",
+    "phase": "montar",
+    "reason": "21/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:47:00.118562",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "pintar",
+    "reason": "20/10/2025: 2.0h al inicio de la jornada; quedaban 6.0h libres y se continuó al día siguiente\n20/10/2025: 4.0h tras 4.0h ocupadas por OF 7243 - pintar (2.0h), OF 7451 - soldar (2h); jornada completa, se continuó al día siguiente\n21/10/2025: 3h tras 5h ocupadas por OF 7451 - montar (3h), OF 7451 - pintar (2h); jornada completa, se continuó al día siguiente\n24/10/2025: 3h tras 4h ocupadas por OF 7452 - pintar (4h); quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:47:02.713253",
+    "project": "OF 7451",
+    "client": "GURUTZPE - Estructura amarre telescopica (x2) MSP",
+    "phase": "soldar",
+    "reason": "21/10/2025: 2h tras 3.0h ocupadas por OF 7451 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:47:05.701955",
+    "project": "OF 7243",
+    "client": "GEPRO SYSTEMS - Conjunto bastidor (x2) MSP",
+    "phase": "pintar",
+    "reason": "15/10/2025: 2.0h tras 6.0h ocupadas por OF 7420 - pintar (6h); jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:47:09.649029",
+    "project": "OF 7451",
+    "client": "GURUTZPE - Estructura amarre telescopica (x2) MSP",
+    "phase": "montar",
+    "reason": "20/10/2025: 3h tras 3.0h ocupadas por OF 7243 - pintar (3.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:47:15.876450",
+    "project": "OF 7451",
+    "client": "GURUTZPE - Estructura amarre telescopica (x2) MSP",
+    "phase": "soldar",
+    "reason": "20/10/2025: 2h tras 6.0h ocupadas por OF 7243 - pintar (3.0h), OF 7451 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:51:56.285393",
+    "project": "OF 7445",
+    "client": "AULASA - Peldaños y suplementos para escaleras (2+2+4)",
+    "phase": "recepcionar material",
+    "reason": "02/10/2025: 2h tras 6.0h ocupadas por OF 7463 - soldar (6.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:52:14.026109",
+    "project": "OF 7445",
+    "client": "AULASA - Peldaños y suplementos para escaleras (2+2+4)",
+    "phase": "montar",
+    "reason": "03/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:52:39.787809",
+    "project": "OF 7445",
+    "client": "AULASA - Peldaños y suplementos para escaleras (2+2+4)",
+    "phase": "pintar",
+    "reason": "03/10/2025: 1h tras 4.0h ocupadas por OF 7445 - montar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:52:46.889117",
+    "project": "OF 7445",
+    "client": "AULASA - Peldaños y suplementos para escaleras (2+2+4)",
+    "phase": "pintar",
+    "reason": "03/10/2025: 1h tras 4.0h ocupadas por OF 7463 - pintar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:53:44.878604",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:54:00.872680",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 1h tras 22h ocupadas por OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - montar (8h), OF 7356 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:54:42.807970",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "recepcionar material",
+    "reason": "23/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:54:54.447282",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "montar",
+    "reason": "06/10/2025: 4h tras 2.0h ocupadas por OF 7463 - montar 2º (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:55:01.331701",
+    "project": "OF 7458",
+    "client": "ETXE-TAR - Soportes acero (22 pzas) MSP",
+    "phase": "montar",
+    "reason": "06/10/2025: 2.0h tras 6.0h ocupadas por OF 7463 - montar 2º (2h), OF 7448 - montar (4h); jornada completa, se continuó al día siguiente\n07/10/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:55:07.903096",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "13/10/2025: 7.0h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:55:12.237243",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:56:13.891624",
+    "project": "OF 7452",
+    "client": "GURUTZPE - Base + consola (2+2) MSMecP",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 2h tras 5h ocupadas por OF 7449 - montar (5h); quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:56:22.326875",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "montar",
+    "reason": "08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T10:56:44.261025",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "montar",
+    "reason": "25/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n26/09/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n29/09/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:03:00.888726",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "tratamiento",
+    "reason": "20/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n24/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:03:21.864076",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "tratamiento",
+    "reason": "21/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n24/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:15:35.583941",
+    "project": "OF 7477",
+    "client": "GURUTZPE - Soportes protectores (2+2) MSP",
+    "phase": "montar",
+    "reason": "21/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:15:39.462784",
+    "project": "OF 7477",
+    "client": "GURUTZPE - Soportes protectores (2+2) MSP",
+    "phase": "soldar",
+    "reason": "21/11/2025: 1h tras 1.0h ocupadas por OF 7477 - montar (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:15:42.598047",
+    "project": "OF 7477",
+    "client": "GURUTZPE - Soportes protectores (2+2) MSP",
+    "phase": "pintar",
+    "reason": "21/11/2025: 1h tras 2.0h ocupadas por OF 7477 - montar (1h), OF 7477 - soldar (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:18:40.932374",
+    "project": "OF 7472",
+    "client": "ALBERDI - Soldar s/plano (1+6) S",
+    "phase": "soldar",
+    "reason": "30/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:18:44.553832",
+    "project": "OF 7483",
+    "client": "ALBERDI - Soldar s/plano (x24) S",
+    "phase": "soldar",
+    "reason": "30/09/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:19:09.354460",
+    "project": "OF 7474",
+    "client": "AVS - Soportes acero (4+2+4+2) MS",
+    "phase": "montar",
+    "reason": "08/10/2025: 3.0h tras 5.0h ocupadas por OF 7392 - montar 2º (2.0h); jornada completa, se continuó al día siguiente\n09/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:19:12.252009",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "09/10/2025: 3.0h tras 5.0h ocupadas por OF 7474 - montar (5.0h); jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:19:16.170019",
+    "project": "OF 7474",
+    "client": "AVS - Soportes acero (4+2+4+2) MS",
+    "phase": "montar",
+    "reason": "08/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:20:31.787104",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:20:54.741615",
+    "project": "OF 7474",
+    "client": "AVS - Soportes acero (4+2+4+2) MS",
+    "phase": "soldar",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:21:41.428568",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:27:29.981835",
+    "project": "OF 7485",
+    "client": "VIRLAB - Estructuras (1+1) MS",
+    "phase": "montar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 2.0h al inicio de la jornada; quedaban 6.0h libres y se continuó al día siguiente\n16/10/2025: 1.0h tras 5.0h ocupadas por OF 7485 - montar (2.0h), OF 7430 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:27:34.199138",
+    "project": "OF 7485",
+    "client": "VIRLAB - Estructuras (1+1) MS",
+    "phase": "montar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 2.0h al inicio de la jornada; quedaban 6.0h libres y se continuó al día siguiente\n16/10/2025: 1.0h tras 5.0h ocupadas por OF 7485 - montar (2.0h), OF 7430 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:29:08.372436",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "30/09/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:30:42.289470",
+    "project": "OF 7415",
+    "client": "VOITH - Vigas, tirantes y placas (7 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "17/09/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:31:17.660324",
+    "project": "OF 7485",
+    "client": "VIRLAB - Estructuras (1+1) MS",
+    "phase": "soldar",
+    "reason": "20/10/2025: 1.0h tras 7.0h ocupadas por OF 7390 - soldar (7.0h); jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:37:03.040283",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:37:05.242838",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "25/09/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:37:18.103031",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "25/09/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:39:17.676135",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 7.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n22/10/2025: 5.0h tras 3.0h ocupadas por OF 7485 - soldar (3.0h); jornada completa, se continuó al día siguiente\n23/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:40:39.750944",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar",
+    "reason": "25/09/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:40:53.013002",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar 2º",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/11/2025: 5.0h tras 3.0h ocupadas por OF 7449 - soldar (3.0h); jornada completa, se continuó al día siguiente\n04/11/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:41:26.146224",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "soldar 2º",
+    "reason": "30/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:42:00.700875",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "tratamiento",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:43:08.538423",
+    "project": "OF 7490",
+    "client": "EPEZABAL,S.L.L - Modificar deposito",
+    "phase": "montar",
+    "reason": "03/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:45:48.548993",
+    "project": "OF 7472",
+    "client": "ALBERDI - Soldar s/plano (1+6) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 1h tras 2.0h ocupadas por OF 7490 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:47:12.194580",
+    "project": "OF 7483",
+    "client": "ALBERDI - Soldar s/plano (x24) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 2.0h tras 5.0h ocupadas por OF 7463 - pintar (4h), OF 7445 - pintar (1h); quedaban 1.0h libres y se continuó al día siguiente\n06/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:47:17.750019",
+    "project": "OF 7483",
+    "client": "ALBERDI - Soldar s/plano (x24) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 3h tras 3.0h ocupadas por OF 7490 - montar (2h), OF 7472 - soldar (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:55:42.767587",
+    "project": "OF 7452",
+    "client": "GURUTZPE - Base + consola (2+2) MSMecP",
+    "phase": "soldar",
+    "reason": "06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:56:46.722289",
+    "project": "OF 7424",
+    "client": "VOITH - Postes disimilares 660kg y 680kg (1+1) MST \"soldar\"",
+    "phase": "soldar 2º",
+    "reason": "09/10/2025: 1.0h tras 7.0h ocupadas por OF 7424 - montar 2º (7h); jornada completa, se continuó al día siguiente\n10/10/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:58:18.621515",
+    "project": "Trabajos externos",
+    "client": "FORJAS",
+    "phase": "montar 2º",
+    "reason": "06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:59:09.760803",
+    "project": "OF 7466",
+    "client": "FUNDACION TEKNI - Camara expansion AISI 304 (x1) MS",
+    "phase": "montar",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:59:13.669247",
+    "project": "OF 7466",
+    "client": "FUNDACION TEKNI - Camara expansion AISI 304 (x1) MS",
+    "phase": "soldar",
+    "reason": "17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T11:59:20.639340",
+    "project": "OF 7436",
+    "client": "KIMU BAT - Tobogán + postes bombero (1+3) MS",
+    "phase": "montar",
+    "reason": "22/10/2025: 4.0h tras 4.0h ocupadas por OF 7466 - soldar (4h); jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:02:52.643219",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:02:56.478162",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:03:09.505432",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 7.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n22/10/2025: 5.0h tras 3.0h ocupadas por OF 7485 - soldar (3.0h); jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:05:47.168291",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 7.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n22/10/2025: 5.0h tras 3.0h ocupadas por OF 7485 - soldar (3.0h); jornada completa, se continuó al día siguiente\n23/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:06:48.058816",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:07:04.487810",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n10/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:09:33.367881",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "25/09/2025: 5.0h tras 3.0h ocupadas por OF 7430 - soldar (3h); jornada completa, se continuó al día siguiente\n26/09/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n29/09/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 7.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n22/10/2025: 5.0h tras 3.0h ocupadas por OF 7485 - soldar (3.0h); jornada completa, se continuó al día siguiente\n23/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:10:06.653078",
+    "project": "OF 7390",
+    "client": "SORALUCE - Pórticos (x2) MST",
+    "phase": "soldar",
+    "reason": "08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:11:46.927682",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "03/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:11:54.672923",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "02/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:11:57.902947",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "02/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:12:01.033871",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:12:06.264728",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "03/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:12:53.167068",
+    "project": "7535",
+    "client": "GGGGG",
+    "phase": "recepcionar material",
+    "reason": "02/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:18:30.961678",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "montar",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:18:55.211321",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 7.0h al inicio de la jornada; quedaban 1.0h libres y se continuó al día siguiente\n22/10/2025: 5.0h tras 3.0h ocupadas por OF 7485 - soldar (3.0h); jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 3.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:19:16.738235",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "soldar",
+    "reason": "16/10/2025: 4.0h tras 4.0h ocupadas por OF 7452 - soldar (4h); jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:19:41.114318",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "tratamiento",
+    "reason": "30/09/2025: 1h tras 42h ocupadas por OF 7449 - soldar (8h), OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - montar (8h), OF 7356 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:19:58.458249",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 1h tras 42h ocupadas por OF 7449 - soldar (8h), OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - montar (8h), OF 7356 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:20:13.594139",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "tratamiento",
+    "reason": "24/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:21:12.402404",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar",
+    "reason": "17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:21:30.122119",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar",
+    "reason": "21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:22:32.111287",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "tratamiento",
+    "reason": "30/09/2025: 1h tras 42h ocupadas por OF 7449 - soldar (8h), OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - montar (8h), OF 7356 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:22:50.815663",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "tratamiento",
+    "reason": "22/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:23:17.687870",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar 2º",
+    "reason": "24/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:23:26.734966",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar 2º",
+    "reason": "24/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:08.133801",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "21/10/2025: 6.0h tras 2.0h ocupadas por OF 7464 - montar (2h); jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:22.510149",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:33.574613",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:42.120172",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar 2º",
+    "reason": "24/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:46.520056",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar 2º",
+    "reason": "24/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:24:59.108540",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 5h tras 2h ocupadas por OF 7464 - soldar 2º (2h); quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:25:36.943048",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:25:55.676082",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:26:18.032785",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "montar",
+    "reason": "10/10/2025: 3h tras 2.0h ocupadas por OF 7356 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:26:49.971726",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n21/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:26:54.100494",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:27:06.784238",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 3h tras 16h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:27:19.221653",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "16/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:31:41.039512",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "recepcionar material",
+    "reason": "18/12/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:23.580461",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 8h tras 16h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n01/10/2025: 2h tras 16h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:24.318757",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "recepcionar material",
+    "reason": "16/12/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:28.519997",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 8h tras 24h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h), OF 7356 - montar (8h); quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h tras 18h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h), OF 7356 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:31.295865",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 3h tras 16h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:34.832674",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 3h tras 19h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h), OF 7352 - montar (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:32:44.391192",
+    "project": "OF 7473",
+    "client": "BOST - Caja engranaje + Tapa engranaje (2+2) MST",
+    "phase": "montar",
+    "reason": "09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:33:04.743858",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "13/10/2025: 3.0h tras 5.0h ocupadas por OF 7473 - montar (5h); jornada completa, se continuó al día siguiente\n14/10/2025: 7.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:33:05.961728",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "recepcionar material",
+    "reason": "17/12/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:33:27.111657",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "recepcionar material",
+    "reason": "30/09/2025: 1h tras 42h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h), OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7356 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:34:06.306513",
+    "project": "OF 7457",
+    "client": "VOITH - Soportes longitudinales (1+1) MSTMecP",
+    "phase": "pintar",
+    "reason": "06/11/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:34:39.480455",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:34:50.520075",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "montar",
+    "reason": "25/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:37:47.555312",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:37:53.093347",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:38:21.582583",
+    "project": "OF 7492",
+    "client": "LAUNA, S.L. - Prueba",
+    "phase": "recepcionar material",
+    "reason": "26/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:38:57.796648",
+    "project": "OF 7492",
+    "client": "LAUNA, S.L. - Prueba",
+    "phase": "recepcionar material",
+    "reason": "27/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:39:14.142332",
+    "project": "OF 7492",
+    "client": "LAUNA, S.L. - Prueba",
+    "phase": "recepcionar material",
+    "reason": "21/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:40:05.284838",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "montar",
+    "reason": "25/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:56:40.316872",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T12:57:06.032608",
+    "project": "OF 7420",
+    "client": "VOITH - Vigas longitudinales (4 pzas) MSMecP",
+    "phase": "pintar",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T14:06:14.804845",
+    "project": "7537",
+    "client": "HHHHHH",
+    "phase": "montar",
+    "reason": "26/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T14:20:40.125200",
+    "project": "OF 7492",
+    "client": "GEKKO SOLUTIONS - Prueba",
+    "phase": "recepcionar material",
+    "reason": "25/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T15:52:47.732298",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "soldar",
+    "reason": "03/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T15:52:58.132437",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "soldar",
+    "reason": "30/09/2025: 2h tras 34h ocupadas por OF 7392 - montar (8h), OF 7449 - soldar (8h), OF 7352 - montar (3h), OF 7352 - soldar (3h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:06:53.619842",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "soldar",
+    "reason": "28/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:15:22.912982",
+    "project": "OF 7452",
+    "client": "GURUTZPE - Base + consola (2+2) MSMecP",
+    "phase": "soldar",
+    "reason": "02/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n03/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:15:51.888177",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "soldar",
+    "reason": "14/10/2025: 3.0h tras 5.0h ocupadas por OF 7452 - soldar (5h); jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 6.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:15:56.002479",
+    "project": "OF 7478",
+    "client": "SORALUCE - Bases (2+2) MST",
+    "phase": "soldar",
+    "reason": "16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:16:09.797354",
+    "project": "OF 7473",
+    "client": "BOST - Caja engranaje + Tapa engranaje (2+2) MST",
+    "phase": "soldar",
+    "reason": "14/10/2025: 3.0h tras 5.0h ocupadas por OF 7452 - soldar (5h); jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:21:07.560037",
+    "project": "OF 7473",
+    "client": "BOST - Caja engranaje + Tapa engranaje (2+2) MST",
+    "phase": "tratamiento",
+    "reason": "21/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:21:21.131256",
+    "project": "OF 7473",
+    "client": "BOST - Caja engranaje + Tapa engranaje (2+2) MST",
+    "phase": "tratamiento",
+    "reason": "21/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:32:26.658168",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "montar",
+    "reason": "20/10/2025: 2.0h tras 6.0h ocupadas por OF 7449 - montar (6h); jornada completa, se continuó al día siguiente\n21/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:33:01.180575",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar",
+    "reason": "30/09/2025: 6h tras 8h ocupadas por OF 7392 - montar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:42:35.611679",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "soldar",
+    "reason": "30/09/2025: 3h tras 23h ocupadas por OF 7449 - soldar (8h), OF 7352 - soldar (3h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:45:20.373620",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:45:47.411481",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "30/09/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n01/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:45:54.706684",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "soldar 2º",
+    "reason": "29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-09-30T16:59:35.164023",
+    "project": "OF 7436",
+    "client": "KIMU BAT - Tobogán + postes bombero (1+3) MS",
+    "phase": "montar",
+    "reason": "30/09/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T10:44:27.857387",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "04/11/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T10:45:37.082515",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "01/10/2025: 1h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T10:58:49.714161",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "tratamiento",
+    "reason": "07/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n10/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T10:59:25.758981",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "tratamiento",
+    "reason": "08/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n10/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:16.286307",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "03/11/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:19.893202",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "01/10/2025: 2h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:24.598298",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "pintar",
+    "reason": "03/11/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:26.384330",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "pintar",
+    "reason": "01/10/2025: 2h tras 10h ocupadas por OF 7449 - soldar (8h), OF 7481 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:34.131500",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "montar",
+    "reason": "03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n13/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:54:36.805820",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "montar",
+    "reason": "01/10/2025: 8h tras 14h ocupadas por OF 7449 - soldar (8h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7493 - recepcionar material (1h), OF 7494 - recepcionar material (1h); quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h tras 6h ocupadas por OF 7449 - soldar (6h); quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n10/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:01.949913",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "soldar",
+    "reason": "04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n13/11/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:03.872324",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "soldar",
+    "reason": "01/10/2025: 8h tras 22h ocupadas por OF 7449 - soldar (8h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7493 - recepcionar material (1h), OF 7494 - recepcionar material (1h), OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n02/10/2025: 8h tras 14h ocupadas por OF 7449 - soldar (6h), OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h tras 8h ocupadas por OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n06/10/2025: 8h tras 8h ocupadas por OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n07/10/2025: 8h tras 8h ocupadas por OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h tras 8h ocupadas por OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h tras 8h ocupadas por OF 7494 - montar (8h); quedaban infh libres y se continuó al día siguiente\n10/10/2025: 4h tras 8h ocupadas por OF 7494 - montar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:19.334529",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "04/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:23.934832",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 3h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:32.361426",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "04/11/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:55:38.387165",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "01/10/2025: 4h tras 11h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:12.360442",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "04/11/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:28.421087",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "03/11/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:32.173883",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "montar",
+    "reason": "01/10/2025: 4h tras 11h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:38.326804",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "soldar",
+    "reason": "04/11/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:40.783755",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "soldar",
+    "reason": "01/10/2025: 5h tras 15h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:44.112259",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "soldar",
+    "reason": "01/10/2025: 5h tras 15h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:56:58.091905",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "04/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T11:57:01.193577",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 3h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:05:58.097612",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "recepcionar material",
+    "reason": "06/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:06:00.092660",
+    "project": "OF 7494",
+    "client": "EUSKO - Bastidores y bases estandar (15+6) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 25h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7493 - recepcionar material (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:06:03.146081",
+    "project": "OF 7495",
+    "client": "EUSKO - Util cuna (x1) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:06:56.455350",
+    "project": "OF 7495",
+    "client": "EUSKO - Util cuna (x1) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 42h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7493 - recepcionar material (1h), OF 7494 - recepcionar material (1h), OF 7494 - montar (8h), OF 7494 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:00.059364",
+    "project": "OF 7495",
+    "client": "EUSKO - Util cuna (x1) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:02.645207",
+    "project": "OF 7495",
+    "client": "EUSKO - Util cuna (x1) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 42h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7493 - recepcionar material (1h), OF 7494 - recepcionar material (1h), OF 7494 - montar (8h), OF 7494 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:08.722531",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "04/11/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:11.604777",
+    "project": "OF 7461",
+    "client": "URAK Soluciones - Reducciones inox (2+2)",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 3h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:15.659372",
+    "project": "OF 7469",
+    "client": "CODEAM - Embellecedores inox (10+9) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:22.097940",
+    "project": "OF 7469",
+    "client": "CODEAM - Embellecedores inox (10+9) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 20h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:30.107149",
+    "project": "OF 7487",
+    "client": "CODEAM - Embellecedores inox con conectores (10+9)",
+    "phase": "montar",
+    "reason": "04/11/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:07:33.031489",
+    "project": "OF 7487",
+    "client": "CODEAM - Embellecedores inox con conectores (10+9)",
+    "phase": "montar",
+    "reason": "01/10/2025: 6h tras 25h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7469 - recepcionar material (1h), OF 7481 - montar (2h), OF 7481 - pintar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:27:16.081910",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "04/11/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:27:28.282526",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "01/10/2025: 2h tras 21h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7469 - recepcionar material (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:28:41.276590",
+    "project": "OF 7493",
+    "client": "EUSKO - Bastidores y estructura (1+1+1) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:29:00.562488",
+    "project": "OF 7493",
+    "client": "EUSKO - Bastidores y estructura (1+1+1) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:29:03.202390",
+    "project": "OF 7493",
+    "client": "EUSKO - Bastidores y estructura (1+1+1) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 31h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7469 - recepcionar material (1h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7487 - montar (6h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:30:04.900834",
+    "project": "OF 7493",
+    "client": "EUSKO - Bastidores y estructura (1+1+1) MS",
+    "phase": "recepcionar material",
+    "reason": "05/11/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-01T16:30:07.080350",
+    "project": "OF 7493",
+    "client": "EUSKO - Bastidores y estructura (1+1+1) MS",
+    "phase": "recepcionar material",
+    "reason": "01/10/2025: 1h tras 31h ocupadas por OF 7449 - soldar (8h), OF 7461 - recepcionar material (3h), OF 7461 - montar (4h), OF 7461 - soldar (5h), OF 7469 - recepcionar material (1h), OF 7481 - montar (2h), OF 7481 - pintar (2h), OF 7487 - montar (6h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:30:26.298821",
+    "project": "OF 7473",
+    "client": "BOST - Caja engranaje + Tapa engranaje (2+2) MST",
+    "phase": "montar",
+    "reason": "10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:31:12.528919",
+    "project": "OF 7490",
+    "client": "EPEZABAL,S.L.L - Modificar deposito",
+    "phase": "montar",
+    "reason": "03/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:31:15.224663",
+    "project": "OF 7472",
+    "client": "ALBERDI - Soldar s/plano (1+6) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 1h tras 2.0h ocupadas por OF 7490 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:31:17.943745",
+    "project": "OF 7483",
+    "client": "ALBERDI - Soldar s/plano (x24) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 3h tras 3.0h ocupadas por OF 7490 - montar (2h), OF 7472 - soldar (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:31:28.853433",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "montar",
+    "reason": "06/10/2025: 4h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:33:04.838359",
+    "project": "OF 7463",
+    "client": "AULASA - Puerta corredera 4300mm (1+1)",
+    "phase": "montar 2º",
+    "reason": "03/10/2025: 2h tras 4.0h ocupadas por OF 7445 - montar (4h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:35:25.702016",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar 2º",
+    "reason": "08/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:35:43.322623",
+    "project": "OF 7474",
+    "client": "AVS - Soportes acero (4+2+4+2) MS",
+    "phase": "montar",
+    "reason": "08/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:36:46.459205",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "montar",
+    "reason": "13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:37:36.603337",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar",
+    "reason": "19/09/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:38:20.318568",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar",
+    "reason": "22/09/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:38:50.116718",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar 2º",
+    "reason": "13/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:38:57.580148",
+    "project": "OF 7430",
+    "client": "VOITH - Guia de cuchillas (x5) MSTMecT",
+    "phase": "montar 2º",
+    "reason": "14/10/2025: 2h tras 2.0h ocupadas por OF 7356 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:39:32.953436",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "02/10/2025: 3h tras 6h ocupadas por OF 7449 - soldar (6h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:39:56.185270",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "montar",
+    "reason": "14/10/2025: 3h tras 4.0h ocupadas por OF 7356 - montar (2h), OF 7430 - montar 2º (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:40:14.498648",
+    "project": "OF 7356",
+    "client": "EUSKO - Soporte soramax (x8) MS",
+    "phase": "soldar",
+    "reason": "14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:40:20.201981",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "02/10/2025: 3h tras 6h ocupadas por OF 7449 - soldar (6h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:40:28.664259",
+    "project": "OF 7352",
+    "client": "EUSKO - Arrastre consola (x4) MS",
+    "phase": "soldar",
+    "reason": "16/10/2025: 3h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:52:36.632143",
+    "project": "OF 7466",
+    "client": "FUNDACION TEKNI - Camara expansion AISI 304 (x1) MS",
+    "phase": "montar",
+    "reason": "10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n13/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n15/10/2025: 1h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:52:40.362122",
+    "project": "OF 7466",
+    "client": "FUNDACION TEKNI - Camara expansion AISI 304 (x1) MS",
+    "phase": "soldar",
+    "reason": "15/10/2025: 7.0h tras 1.0h ocupadas por OF 7466 - montar (1h); jornada completa, se continuó al día siguiente\n16/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 5.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:52:48.737224",
+    "project": "OF 7436",
+    "client": "KIMU BAT - Tobogán + postes bombero (1+3) MS",
+    "phase": "montar",
+    "reason": "20/10/2025: 3.0h tras 5.0h ocupadas por OF 7466 - soldar (5.0h); jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:53:35.662780",
+    "project": "OF 7450",
+    "client": "EUSKO - Bases apoyo (x2) MS",
+    "phase": "soldar",
+    "reason": "06/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:53:40.011032",
+    "project": "OF 7450",
+    "client": "EUSKO - Bases apoyo (x2) MS",
+    "phase": "montar",
+    "reason": "03/10/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T07:54:23.919970",
+    "project": "NC BASE (Ir a Eusko)",
+    "client": "ONA",
+    "phase": "montar",
+    "reason": "02/10/2025: 4h tras 4.0h ocupadas por Trabajos externos - montar (4.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T08:09:49.607592",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 6h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-02T08:09:53.050443",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "soldar",
+    "reason": "02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n06/10/2025: 6h al inicio de la jornada",
+    "affected": []
   }
 ]
