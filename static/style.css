@@ -226,19 +226,37 @@ table.pedidos-calendar td.week-label {
 
 .pedidos-wrapper {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 20px;
 }
 
+.pedidos-calendar-container {
+    flex: 2 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.pedidos-calendar-container .pedidos-calendar {
+    width: 100%;
+}
+
+.columna-1 {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .columna-1-table-wrapper {
+    flex: 1 1 auto;
     max-width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
 }
 
 .columna-1-table {
     border-collapse: collapse;
     width: 100%;
-    min-width: 1110px;
     table-layout: fixed;
 }
 

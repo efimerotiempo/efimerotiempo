@@ -3,6 +3,7 @@
 <h2>Calendario pedidos</h2>
 <input type="text" id="filter-input" placeholder="Filtrar por título o cliente">
 <div class="pedidos-wrapper">
+<div class="pedidos-calendar-container">
 <table class="pedidos-calendar">
     <thead>
     <tr>
@@ -70,7 +71,8 @@
     </tr>
     {% endfor %}
     </tbody>
-</table>
+    </table>
+</div>
 <div class="columna-1">
     <div class="columna-1-title" id="columna-1-info-title" data-default-title="{{ project_info_title or '' }}">{{ project_info_title or '' }}</div>
     <h3>Columna 1</h3>
@@ -861,7 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return event.clientX;
   }
 
-  function applyStoredColumnWidths(cols, headers) {
+  function applyStoredColumnWidths(cols, headers, table) {
     let stored = null;
     try {
       stored = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY));
@@ -869,15 +871,47 @@ document.addEventListener('DOMContentLoaded', () => {
       stored = null;
     }
 
-    cols.forEach((col, index) => {
+    const widths = cols.map((col, index) => {
       const storedWidth = stored && Array.isArray(stored) ? Number(stored[index]) : NaN;
       if (Number.isFinite(storedWidth) && storedWidth > 0) {
-        col.style.width = `${storedWidth}px`;
-        return;
+        return storedWidth;
       }
       const defaultWidth = Number(col.dataset.defaultWidth);
       if (Number.isFinite(defaultWidth) && defaultWidth > 0) {
-        col.style.width = `${defaultWidth}px`;
+        return defaultWidth;
+      }
+      const header = headers[index];
+      if (header) {
+        const headerWidth = header.getBoundingClientRect().width;
+        if (Number.isFinite(headerWidth) && headerWidth > 0) {
+          return headerWidth;
+        }
+      }
+      return null;
+    });
+
+    const wrapper = table ? table.parentElement : null;
+    const available = wrapper ? wrapper.getBoundingClientRect().width : (table ? table.getBoundingClientRect().width : 0);
+    if (available > 0) {
+      const total = widths.reduce((sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0), 0);
+      if (total > 0 && total > available) {
+        const minAllowed = 80 * cols.length;
+        const target = Math.max(minAllowed, available);
+        const scale = target / total;
+        widths.forEach((value, index) => {
+          if (Number.isFinite(value) && value > 0) {
+            widths[index] = Math.max(80, Math.floor(value * scale));
+          }
+        });
+      }
+    }
+
+    cols.forEach((col, index) => {
+      const width = widths[index];
+      if (Number.isFinite(width) && width > 0) {
+        col.style.width = `${width}px`;
+      } else {
+        col.style.removeProperty('width');
       }
     });
   }
@@ -940,7 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
     columnResizeCols = Array.from(colgroup.children);
     columnResizeHeaders = Array.from(table.querySelectorAll('thead th'));
 
-    applyStoredColumnWidths(columnResizeCols, columnResizeHeaders);
+    applyStoredColumnWidths(columnResizeCols, columnResizeHeaders, table);
 
     columnResizeHeaders.forEach((th, index) => {
       if (th.querySelector('.col-resize-handle')) return;
