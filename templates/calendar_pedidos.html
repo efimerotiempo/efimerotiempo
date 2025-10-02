@@ -789,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let isLate = false;
         if (montarStart && referenceDate) {
           const diff = diffInDays(referenceDate, montarStart);
-          if (diff !== null && diff <= 3) {
+          if (diff !== null && Math.abs(diff) <= 3) {
             isLate = true;
             dueLateTitles.add(title);
           }
