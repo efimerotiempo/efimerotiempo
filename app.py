@@ -2426,6 +2426,8 @@ def cronologico_view():
     interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
     phase_entries = {}
     for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
         for day_str, tasks in days.items():
             try:
                 day_obj = date.fromisoformat(day_str)
@@ -2470,6 +2472,8 @@ def cronologico_view():
         end_day = days[-1]
         project_name = entry['project'] or 'Sin nombre'
         worker_name = entry['worker'] or UNPLANNED
+        if worker_name == UNPLANNED:
+            continue
         phase = entry['phase']
 
         start_template = start_templates.get(phase)
