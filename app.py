@@ -445,6 +445,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
+    'Planificado para montaje',
 }
 
 PEDIDOS_HIDDEN_COLUMNS = [
@@ -491,6 +492,14 @@ PROJECT_LINK_LANES = {
     'inoxidable - aluminio',
     'seguimiento compras',
 }
+
+PEDIDOS_ALLOWED_KEYS = {normalize_key(col) for col in PEDIDOS_ALLOWED_COLUMNS}
+PEDIDOS_UNCONFIRMED_KEYS = {normalize_key(col) for col in PEDIDOS_UNCONFIRMED_COLUMNS}
+PEDIDOS_HIDDEN_KEYS = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+PEDIDOS_OFFSET_TO_PLAN_END_KEYS = {
+    normalize_key(col) for col in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+}
+PEDIDOS_SEGUIMIENTO_LANE_KEY = normalize_key('Seguimiento compras')
 
 MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Ready to Archive'),
@@ -932,8 +941,6 @@ def build_project_links(compras_raw):
                         seen_ids.add(child_id)
                 if norm_child:
                     seen_norms.add(norm_child)
-        if not matches:
-            continue
         entry = {
             'project': info['project'],
             'title': info['title'],
@@ -948,10 +955,14 @@ def build_project_links(compras_raw):
             entry['lane'] = info['lane']
         if info.get('board'):
             entry['board'] = info['board']
-        if any(match_ids):
+        if matches and any(match_ids):
             entry['link_ids'] = match_ids
+        elif not matches:
+            entry['link_ids'] = []
         if match_details:
             entry['link_details'] = match_details
+        elif not matches:
+            entry['link_details'] = []
         if info['due']:
             entry['due'] = info['due'].isoformat()
         else:
@@ -1075,17 +1086,18 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        lane_key = lane_name.lower()
+        column_key = normalize_key(column)
+        lane_key = normalize_key(lane_name)
 
         column_allowed = (
-            column in PEDIDOS_ALLOWED_COLUMNS
-            or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            column_key in PEDIDOS_ALLOWED_KEYS
+            or column_key in PEDIDOS_UNCONFIRMED_KEYS
         )
 
-        if not column_allowed or lane_key != 'seguimiento compras':
+        if not column_allowed or lane_key != PEDIDOS_SEGUIMIENTO_LANE_KEY:
             continue
 
-        if column in PEDIDOS_HIDDEN_COLUMNS:
+        if column_key in PEDIDOS_HIDDEN_KEYS:
             continue
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -1096,7 +1108,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
                 d = date(today.year, month, day)
             except Exception:
                 d = parse_kanban_date(card.get('deadline'))
-        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
+        elif column_key in PEDIDOS_UNCONFIRMED_KEYS:
             d = None
         else:
             m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -3237,9 +3249,10 @@ def gantt_orders_view():
             title_date = _extract_order_title_date(entry.get('project'), scheduled_day, today.year)
             if title_date:
                 effective_day = title_date
+            order_column_key = normalize_key(order_column)
             if (
                 planned_end_date
-                and order_column in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+                and order_column_key in PEDIDOS_OFFSET_TO_PLAN_END_KEYS
             ):
                 effective_day = _subtract_business_days(planned_end_date, 5)
             effective_iso = effective_day.isoformat()
