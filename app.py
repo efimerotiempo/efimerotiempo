@@ -692,6 +692,32 @@ def build_project_links(compras_raw):
     seen_candidates = set()
 
     card_index = {}
+    def _attach_child_card_metadata(serialized, card_id):
+        """Populate ``serialized`` with lane/column info from cached Kanban cards."""
+
+        if not isinstance(serialized, dict):
+            return serialized
+
+        key = str(card_id).strip() if card_id not in (None, '') else ''
+        if not key:
+            return serialized
+
+        card = card_index.get(key)
+        if not isinstance(card, dict):
+            return serialized
+
+        if not serialized.get('column'):
+            column = (card.get('columnname') or card.get('columnName') or '').strip()
+            if column:
+                serialized['column'] = column
+
+        if not serialized.get('lane'):
+            lane = (card.get('lanename') or card.get('laneName') or '').strip()
+            if lane:
+                serialized['lane'] = lane
+
+        return serialized
+
     for data in compras_raw.values():
         card = data['card']
         if not isinstance(card, dict):
@@ -878,6 +904,7 @@ def build_project_links(compras_raw):
                     match_details.append(serialized)
                     if lane_id:
                         seen_ids.add(lane_id)
+                    _attach_child_card_metadata(serialized, lane_id or child_id)
                     appended = True
                 if norm_child:
                     seen_norms.add(norm_child)
@@ -899,6 +926,7 @@ def build_project_links(compras_raw):
                         lane_value = detail.get('lane')
                         if lane_value:
                             serialized['lane'] = lane_value
+                    _attach_child_card_metadata(serialized, child_id or detail and detail.get('id'))
                     match_details.append(serialized)
                     if child_id:
                         seen_ids.add(child_id)
