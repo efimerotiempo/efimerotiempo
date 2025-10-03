@@ -82,6 +82,9 @@ table.schedule td.weekend-cell {
 .auto-hour { color: red; font-weight: bold; }
 .info-popup { position: absolute; background: #fff; border: 1px solid #000; padding: 4px; display: none; z-index: 1000; cursor: move; }
 .info-popup .popup-section + .popup-section { margin-top: 8px; }
+.info-popup .popup-observations label { display: block; font-weight: 600; margin-bottom: 4px; }
+.info-popup .popup-observations textarea { width: 100%; min-height: 100px; resize: vertical; }
+.info-popup .popup-observations-actions { margin-top: 4px; text-align: right; }
 .info-popup .material-status-flag { display: inline-block; font-weight: 700; margin-bottom: 4px; }
 .info-popup .material-status-missing { color: #f57c00; }
 .info-popup .material-status-pending { color: #546e7a; }
@@ -201,14 +204,19 @@ table.pedidos-calendar td {
     width: 180px;
     vertical-align: top;
 }
+table.pedidos-calendar th.day-header,
+table.pedidos-calendar td.day-cell {
+    width: 180px;
+}
+table.pedidos-calendar th.week-header,
 table.pedidos-calendar td.week-label {
-    width: 80px;
+    width: calc(40px / 3);
     font-weight: bold;
     background: #eee;
 }
 .pedidos-calendar .unconfirmed-header,
 .pedidos-calendar td.unconfirmed {
-    width: 200px;
+    width: 100px;
     background: #f9f9f9;
 }
 .pedidos-calendar .day-number {
@@ -226,59 +234,147 @@ table.pedidos-calendar td.week-label {
 
 .pedidos-wrapper {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 20px;
 }
 
-.columna-1-content {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(16, auto);
-    grid-auto-columns: 400px;
-    gap: 4px 16px;
-    overflow-x: auto;
+.pedidos-calendar-container {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 
-.columna-1 .proj-name {
-    font-weight: bold;
-    display: block;
-    cursor: pointer;
+.pedidos-calendar-container .pedidos-calendar {
+    width: auto;
+}
+
+.columna-1 {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.columna-1-table-wrapper {
+    flex: 1 1 auto;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.columna-1-table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.columna-1-table col {
+    min-width: 80px;
+}
+
+.columna-1-table th,
+.columna-1-table td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    vertical-align: top;
+    background: #fff;
+}
+
+.columna-1-table th {
+    background: #f3f3f3;
+    font-weight: 700;
+    position: relative;
+}
+
+.columna-1-table th .col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+}
+
+.columna-1-table th .col-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+body.columna-1-resizing {
+    cursor: col-resize;
+}
+
+body.columna-1-resizing * {
+    user-select: none !important;
+}
+
+.columna-1-title {
+    font-weight: 700;
+    font-size: 1.1em;
+    margin-bottom: 4px;
+}
+
+.columna-1-title:empty {
+    display: none;
 }
 
 .columna-1 .project-row {
-    padding: 4px 0;
-    width: 400px;
     word-break: break-word;
 }
 
-.columna-1 .proj-header {
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
+.columna-1-table .proj-code-cell {
+    white-space: nowrap;
 }
 
-.columna-1 .proj-code {
+.columna-1-table .proj-code {
     font-weight: 600;
     cursor: pointer;
+    display: inline-block;
 }
 
-.columna-1 .proj-title {
+.columna-1-table .proj-title-cell {
+    word-break: break-word;
+}
+
+.columna-1-table .proj-title {
     font-weight: bold;
     cursor: pointer;
 }
 
-.columna-1 .proj-due {
-    margin-left: auto;
-    color: #0a2a6b;
-    font-weight: 600;
+.columna-1-table .due-cell,
+.columna-1-table .start-cell {
+    text-align: right;
     white-space: nowrap;
 }
 
-.columna-1 .link-title {
+.columna-1-table .proj-due {
+    color: #0a2a6b;
+    font-weight: 600;
+}
+
+.columna-1-table .proj-start {
+    color: #4b0082;
+    font-weight: 600;
+}
+
+.columna-1-table .links-cell {
+    word-break: break-word;
+}
+
+.columna-1-table .link-title {
     display: block;
-    margin-left: 10px;
-    margin-top: 4px;
+    margin-bottom: 4px;
     cursor: pointer;
+}
+
+.columna-1-table .link-title:last-child {
+    margin-bottom: 0;
 }
 
 .columna-1 .link-title.due-late {
@@ -668,4 +764,41 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 .resource-visible {
     text-align: center;
+}
+
+.cronologico-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.cronologico-header,
+.cronologico-cell {
+    border: 1px solid #d0d0d0;
+    padding: 0.75rem;
+    vertical-align: top;
+}
+
+.cronologico-header {
+    background: #f5f5f5;
+    font-weight: 600;
+    text-align: center;
+}
+
+.cronologico-today {
+    background: #ede7f6;
+}
+
+.cronologico-events {
+    list-style: disc;
+    margin: 0;
+    padding-left: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.cronologico-empty {
+    color: #777;
+    font-style: italic;
 }
