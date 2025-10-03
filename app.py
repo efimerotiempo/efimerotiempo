@@ -676,69 +676,6 @@ def split_project_and_client(title):
     return project, client
 
 
-def _normalize_link_relations(links_info):
-    """Return ``(parents, children)`` extracted from assorted link payloads."""
-
-    parents = []
-    children = []
-
-    if isinstance(links_info, dict):
-        parent_entries = links_info.get('parent')
-        if isinstance(parent_entries, list):
-            parents.extend(parent_entries)
-        parent_entries = links_info.get('parents')
-        if isinstance(parent_entries, list):
-            parents.extend(parent_entries)
-
-        child_entries = links_info.get('child')
-        if isinstance(child_entries, list):
-            children.extend(child_entries)
-        child_entries = links_info.get('children')
-        if isinstance(child_entries, list):
-            children.extend(child_entries)
-        return parents, children
-
-    if isinstance(links_info, list):
-        for raw in links_info:
-            if not isinstance(raw, dict):
-                continue
-            link_type = (raw.get('type') or raw.get('linkType') or raw.get('linktype') or '').strip().lower()
-            direction = (raw.get('direction') or raw.get('relation') or '').strip().lower()
-            category = link_type or direction
-            if not category:
-                continue
-            if 'sticker' in category or 'tag' in category:
-                continue
-
-            entry = dict(raw)
-            card_id = (
-                entry.get('targettaskid')
-                or entry.get('targetCardId')
-                or entry.get('targetcardid')
-                or entry.get('taskid')
-                or entry.get('cardId')
-                or entry.get('id')
-            )
-            if card_id:
-                entry.setdefault('taskid', card_id)
-
-            title = (
-                entry.get('title')
-                or entry.get('cardTitle')
-                or entry.get('targetcardtitle')
-                or ''
-            )
-            if title:
-                entry['title'] = title
-
-            if 'child' in category:
-                children.append(entry)
-            elif 'parent' in category:
-                parents.append(entry)
-
-    return parents, children
-
-
 def build_project_links(compras_raw):
     children_by_parent = {}
     children_norms_by_parent = {}
@@ -773,7 +710,22 @@ def build_project_links(compras_raw):
         cid = str(cid_value) if cid_value else None
         links_info = card.get('links') or {}
 
-        parents, children = _normalize_link_relations(links_info)
+        parents = []
+        children = []
+        if isinstance(links_info, dict):
+            parent_entries = links_info.get('parent')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+            parent_entries = links_info.get('parents')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+
+            child_entries = links_info.get('child')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
+            child_entries = links_info.get('children')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
 
         normalized_child_title = normalize_key(title)
         if parents and normalized_child_title:
