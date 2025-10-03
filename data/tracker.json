@@ -13778,5 +13778,197 @@
     "phase": "soldar",
     "reason": "02/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n03/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n06/10/2025: 6h al inicio de la jornada",
     "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T07:47:05.309315",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "montar",
+    "reason": "03/10/2025: 4.0h tras 3.0h ocupadas por OF 7452 - montar (3h); quedaban 1.0h libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T07:47:11.679687",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "montar",
+    "reason": "03/10/2025: 4.0h tras 3.0h ocupadas por OF 7452 - montar (3h); quedaban 1.0h libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 1.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:09:06.361993",
+    "project": "OF 7490",
+    "client": "EPEZABAL,S.L.L - Modificar deposito",
+    "phase": "montar",
+    "reason": "03/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:09:08.093817",
+    "project": "OF 7472",
+    "client": "ALBERDI - Soldar s/plano (1+6) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 1h tras 2.0h ocupadas por OF 7490 - montar (2h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:09:09.944919",
+    "project": "OF 7483",
+    "client": "ALBERDI - Soldar s/plano (x24) S",
+    "phase": "soldar",
+    "reason": "03/10/2025: 3h tras 3.0h ocupadas por OF 7490 - montar (2h), OF 7472 - soldar (1h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:09:15.694091",
+    "project": "OF 7448",
+    "client": "SEGUROLA - Soportes (7+14) MS",
+    "phase": "montar",
+    "reason": "06/10/2025: 3.0h tras 5.0h ocupadas por OF 7457 - montar (5h); jornada completa, se continuó al día siguiente\n07/10/2025: 1.0h tras 6h ocupadas por OF 7457 - soldar (6h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:11:04.697692",
+    "project": "NC PASABAN",
+    "client": "PASABAN",
+    "phase": "montar",
+    "reason": "02/10/2025: 2.0h tras 6.0h ocupadas por OF 7452 - montar (6h); jornada completa, se continuó al día siguiente\n03/10/2025: 3.0h al inicio de la jornada; quedaban 5.0h libres y se continuó al día siguiente\n16/10/2025: 1.0h tras 1.0h ocupadas por OF 7449 - montar (1.0h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:11:11.825726",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "montar",
+    "reason": "06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 5h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:11:14.169501",
+    "project": "OF 7449",
+    "client": "ONA - Cuerpos X e Y (6+2) MST",
+    "phase": "montar",
+    "reason": "03/10/2025: 3.0h tras 4.0h ocupadas por NC PASABAN - montar (4.0h); quedaban 1.0h libres y se continuó al día siguiente\n06/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n08/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n09/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n10/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n15/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n16/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:14:16.227572",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar",
+    "reason": "17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:14:33.989332",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar",
+    "reason": "16/10/2025: 6.0h tras 2.0h ocupadas por OF 7449 - montar (2.0h); jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:14:41.229529",
+    "project": "OF 7392",
+    "client": "EUSKO - Bastidores stock (x15) MS",
+    "phase": "montar 2º",
+    "reason": "22/10/2025: 2.0h tras 6.0h ocupadas por OF 7478 - montar (6h); jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 2.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:14:52.701473",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar 2º",
+    "reason": "24/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:15:06.284228",
+    "project": "OF 7498",
+    "client": "ONA - Armazón IRIS 7 (x3) MST",
+    "phase": "soldar",
+    "reason": "16/10/2025: 2.0h tras 3.0h ocupadas por OF 7485 - montar (2.0h); quedaban 3.0h libres y se continuó al día siguiente\n16/10/2025: 2.0h tras 6.0h ocupadas por OF 7485 - montar (2.0h), OF 7498 - soldar (2.0h), OF 7485 - montar (1.0h); jornada completa, se continuó al día siguiente\n17/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n13/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n17/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n18/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n19/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n20/11/2025: 4.0h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:15:13.083291",
+    "project": "OF 7498",
+    "client": "ONA - Armazón IRIS 7 (x3) MST",
+    "phase": "soldar",
+    "reason": "20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n13/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n17/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n18/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n19/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n20/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/11/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:16:47.676551",
+    "project": "OF 7498",
+    "client": "ONA - Armazón IRIS 7 (x3) MST",
+    "phase": "soldar",
+    "reason": "03/10/2025: 8h tras 24h ocupadas por OF 7449 - soldar (8h), OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n06/10/2025: 8h tras 22h ocupadas por OF 7449 - soldar (6h), OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n07/10/2025: 8h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n09/10/2025: 8h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n10/10/2025: 8h tras 20h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (4h), OF 7497 - montar (8h); quedaban infh libres y se continuó al día siguiente\n13/10/2025: 8h tras 8h ocupadas por OF 7497 - montar (8h); quedaban infh libres y se continuó al día siguiente\n14/10/2025: 8h tras 8h ocupadas por OF 7497 - montar (8h); quedaban infh libres y se continuó al día siguiente\n15/10/2025: 8h tras 8h ocupadas por OF 7497 - montar (8h); quedaban infh libres y se continuó al día siguiente\n16/10/2025: 8h tras 12h ocupadas por OF 7497 - montar (4h), OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n17/10/2025: 8h tras 16h ocupadas por OF 7497 - soldar (8h), OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n20/10/2025: 8h tras 16h ocupadas por OF 7497 - soldar (8h), OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n21/10/2025: 8h tras 16h ocupadas por OF 7497 - soldar (8h), OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n22/10/2025: 8h tras 14h ocupadas por OF 7497 - soldar (6h), OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n23/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n24/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n27/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n28/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n29/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n30/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n31/10/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n03/11/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n04/11/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n05/11/2025: 8h tras 8h ocupadas por OF 7498 - montar (8h); quedaban infh libres y se continuó al día siguiente\n06/11/2025: 3h tras 8h ocupadas por OF 7498 - montar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:16:52.956915",
+    "project": "OF 7497",
+    "client": "ONA - Carro (x3) MST",
+    "phase": "montar",
+    "reason": "03/10/2025: 8h tras 24h ocupadas por OF 7449 - soldar (8h), OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n06/10/2025: 8h tras 22h ocupadas por OF 7449 - soldar (6h), OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n07/10/2025: 8h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n08/10/2025: 8h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h); quedaban infh libres y se continuó al día siguiente\n09/10/2025: 4h tras 16h ocupadas por OF 7494 - montar (8h), OF 7494 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:16:58.292527",
+    "project": "OF 7498",
+    "client": "ONA - Armazón IRIS 7 (x3) MST",
+    "phase": "montar",
+    "reason": "20/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n23/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n24/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:18:04.467701",
+    "project": "OF 7498",
+    "client": "ONA - Armazón IRIS 7 (x3) MST",
+    "phase": "soldar",
+    "reason": "27/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n29/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n30/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n31/10/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n03/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n04/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n05/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n06/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n07/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n10/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n11/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n12/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n13/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n14/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n17/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n18/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n19/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n20/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n21/11/2025: 7h al inicio de la jornada; quedaban 1h libres y se continuó al día siguiente\n24/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n25/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n26/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n27/11/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n28/11/2025: 7h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:25:39.837016",
+    "project": "OF 7481",
+    "client": "GURUTZPE - Soporte apoyo (x1) MSMecP",
+    "phase": "montar",
+    "reason": "03/10/2025: 2h tras 8h ocupadas por OF 7449 - soldar (8h)",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:33:39.982216",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar",
+    "reason": "21/10/2025: 8h al inicio de la jornada; jornada completa, se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:33:51.249260",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "tratamiento",
+    "reason": "21/10/2025: 8h al inicio de la jornada; quedaban infh libres y se continuó al día siguiente\n22/10/2025: 8h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:34:03.622110",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "montar 2º",
+    "reason": "23/10/2025: 2h al inicio de la jornada",
+    "affected": []
+  },
+  {
+    "timestamp": "2025-10-03T08:34:06.623467",
+    "project": "OF 7464",
+    "client": "PASABAN -  Tirantes, carters, soportes... (10 pzas) MSH",
+    "phase": "soldar 2º",
+    "reason": "23/10/2025: 2h al inicio de la jornada",
+    "affected": []
   }
 ]
