@@ -199,6 +199,76 @@ MATERIAL_ALERT_COLUMNS = {
     normalize_key('Material NO CONFORME'),
 }
 
+
+def _upload_folder_path():
+    """Return the absolute path to the uploads directory."""
+
+    if os.path.isabs(UPLOAD_FOLDER):
+        return UPLOAD_FOLDER
+    return os.path.join(app.root_path, UPLOAD_FOLDER)
+
+
+def _extract_upload_filename(image_value):
+    """Return the file name for a stored project image, if local."""
+
+    if not image_value:
+        return None
+    value = str(image_value).strip().replace('\\', '/').lstrip('/')
+    if not value:
+        return None
+    if value.startswith('static/'):
+        value = value[len('static/'):]
+    if not value.startswith('uploads/'):
+        return None
+    basename = os.path.basename(value[len('uploads/'):])
+    return basename or None
+
+
+def _remove_upload_file(image_value):
+    """Delete the file associated with *image_value* if it lives in uploads."""
+
+    filename = _extract_upload_filename(image_value)
+    if not filename:
+        return False
+    directory = _upload_folder_path()
+    path = os.path.join(directory, filename)
+    try:
+        os.remove(path)
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        app.logger.warning('No se pudo eliminar la imagen %s', path, exc_info=True)
+        return False
+
+
+def prune_orphan_uploads(projects):
+    """Remove files in the uploads folder that no project references."""
+
+    directory = _upload_folder_path()
+    if not os.path.isdir(directory):
+        return
+    referenced = set()
+    for project in projects or []:
+        filename = _extract_upload_filename(project.get('image'))
+        if filename:
+            referenced.add(filename)
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        app.logger.warning('No se pudo listar la carpeta de imágenes', exc_info=True)
+        return
+    for name in entries:
+        path = os.path.join(directory, name)
+        if not os.path.isfile(path):
+            continue
+        if name in referenced:
+            continue
+        try:
+            os.remove(path)
+        except OSError:
+            app.logger.warning('No se pudo eliminar la imagen huérfana %s', path, exc_info=True)
+
 READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
 
 SSE_CLIENTS = []
@@ -710,6 +780,7 @@ def build_project_links(compras_raw):
                             norms.add(norm_child)
 
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        board_name = (card.get('boardName') or card.get('boardname') or '').strip()
         lane_key = normalize_key(lane_name)
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         column_key = normalize_key(column)
@@ -759,6 +830,7 @@ def build_project_links(compras_raw):
                 'due': due,
                 'column': column,
                 'lane': lane_name,
+                'board': board_name,
             })
             seen_candidates.add(cid)
 
@@ -846,6 +918,8 @@ def build_project_links(compras_raw):
             entry['column'] = info['column']
         if info.get('lane'):
             entry['lane'] = info['lane']
+        if info.get('board'):
+            entry['board'] = info['board']
         if any(match_ids):
             entry['link_ids'] = match_ids
         if match_details:
@@ -1811,6 +1885,7 @@ def get_projects():
             p['plan_state'] = 'partial'
     if changed:
         save_projects(projects)
+    prune_orphan_uploads(projects)
     return projects
 
 
@@ -2257,6 +2332,13 @@ def calendar_pedidos():
         raw_links, calendar_titles, calendar_ids
     )
 
+    info_names = sorted({
+        name.strip()
+        for name in (item.get('board') for item in links_table)
+        if name and name.strip()
+    })
+    info_title = ' / '.join(info_names)
+
 
     # --- ARMAR CALENDARIO SEMANAL ---
     start = today - timedelta(weeks=3)
@@ -2329,6 +2411,97 @@ def calendar_pedidos():
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        project_info_title=info_title,
+    )
+
+
+@app.route('/cronologico')
+def cronologico_view():
+    projects = get_visible_projects()
+    schedule_map, _ = schedule_projects(copy.deepcopy(projects))
+    today = local_today()
+    week_start = today - timedelta(days=today.weekday())
+    week_days = [week_start + timedelta(days=i) for i in range(5)]
+
+    interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
+    phase_entries = {}
+    for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
+        for day_str, tasks in days.items():
+            try:
+                day_obj = date.fromisoformat(day_str)
+            except ValueError:
+                continue
+            for task in tasks:
+                phase = task.get('phase')
+                if phase not in interesting_phases:
+                    continue
+                key = (task.get('pid'), phase, task.get('part'), worker)
+                entry = phase_entries.setdefault(
+                    key,
+                    {
+                        'project': task.get('project'),
+                        'worker': worker,
+                        'phase': phase,
+                        'days': set(),
+                    },
+                )
+                entry['days'].add(day_obj)
+
+    start_templates = {
+        'montar': '{worker} inicia la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} inicia la fase SOLDAR del proyecto {project}',
+        'pintar': '{worker} inicia la fase PINTAR del proyecto {project}',
+        'mecanizar': 'Llevar {project} a mecanizar.',
+        'tratamiento': 'Llevar {project} a tratamiento.',
+    }
+    finish_templates = {
+        'montar': '{worker} termina la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} termina la fase SOLDAR del proyecto {project}',
+        'mecanizar': 'Recepcionar {project} del mecanizado.',
+        'tratamiento': 'Recepcionar {project} del tratamiento.',
+    }
+
+    events_by_day = {d.isoformat(): [] for d in week_days}
+    for entry in phase_entries.values():
+        days = sorted(entry['days'])
+        if not days:
+            continue
+        start_day = days[0]
+        end_day = days[-1]
+        project_name = entry['project'] or 'Sin nombre'
+        worker_name = entry['worker'] or UNPLANNED
+        if worker_name == UNPLANNED:
+            continue
+        phase = entry['phase']
+
+        start_template = start_templates.get(phase)
+        day_key = start_day.isoformat()
+        if start_template and day_key in events_by_day:
+            events_by_day[day_key].append((0, start_template.format(worker=worker_name, project=project_name)))
+
+        finish_template = finish_templates.get(phase)
+        finish_key = end_day.isoformat()
+        if finish_template and finish_key in events_by_day:
+            events_by_day[finish_key].append((1, finish_template.format(worker=worker_name, project=project_name)))
+
+    for day_key, messages in events_by_day.items():
+        messages.sort(key=lambda item: (item[0], item[1]))
+        deduped = []
+        seen = set()
+        for _, message in messages:
+            if message in seen:
+                continue
+            seen.add(message)
+            deduped.append(message)
+        events_by_day[day_key] = deduped
+
+    return render_template(
+        'cronologico.html',
+        week_days=week_days,
+        events_by_day=events_by_day,
+        today=today,
     )
 
 
@@ -3955,7 +4128,11 @@ def update_image(pid):
         fname = f"{uuid.uuid4()}{ext}"
         save_path = os.path.join(UPLOAD_FOLDER, fname)
         file.save(save_path)
+        previous_image = proj.get('image')
         proj['image'] = f"uploads/{fname}"
+        if previous_image and previous_image != proj['image']:
+            _remove_upload_file(previous_image)
+        prune_orphan_uploads(projects)
         save_projects(projects)
     if request.is_json:
         return '', 204
@@ -4216,6 +4393,7 @@ def remove_project_and_preserve_schedule(projects, pid):
     if not removed:
         return None
     projects.remove(removed)
+    _remove_upload_file(removed.get('image'))
     # Drop any persisted conflicts tied to the removed project so stale
     # warnings do not linger in the interface.
     extras = load_extra_conflicts()
@@ -4259,6 +4437,7 @@ def remove_project_and_preserve_schedule(projects, pid):
                     wl.append(None)
                 wl[part] = worker
     save_projects(projects)
+    prune_orphan_uploads(projects)
     return removed
 
 @app.route('/delete_project/<pid>', methods=['POST'])
