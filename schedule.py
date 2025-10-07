@@ -734,9 +734,14 @@ def assign_phase(
         tasks = schedule.get(day_str, [])
         tasks.sort(key=lambda t: t.get('start', 0))
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-        if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento') and phase not in ('mecanizar', 'tratamiento'):
-            day_limit = hours_map.get(day_str, HOURS_PER_DAY)
-            limit = min(limit, day_limit)
+        if (
+            limit != float('inf')
+            and worker not in ('Irene', 'Mecanizar', 'Tratamiento')
+            and phase not in ('mecanizar', 'tratamiento')
+        ):
+            day_limit = hours_map.get(day_str)
+            if day_limit is not None:
+                limit = min(limit, day_limit)
 
         if phase in ('tratamiento', 'mecanizar'):
             start = 0

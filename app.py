@@ -47,8 +47,8 @@ load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
-load_worker_hours = _schedule_mod.load_worker_hours
-save_worker_hours = _schedule_mod.save_worker_hours
+_load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
+_save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
@@ -162,6 +162,75 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+
+if _load_worker_hours_func and _save_worker_hours_func:
+    load_worker_hours = _load_worker_hours_func
+    save_worker_hours = _save_worker_hours_func
+else:
+    _WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+    _WORKER_DEFAULT_LIMITS = {worker: limit for worker, limit in HOURS_LIMITS.items()}
+
+    def _sanitize_worker_hours_payload(data):
+        """Return a mapping of workers to hour overrides (1..12)."""
+
+        if not isinstance(data, dict):
+            return {}
+        cleaned = {}
+        for worker, value in data.items():
+            if worker not in WORKERS:
+                continue
+            try:
+                hours = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hours <= 12:
+                cleaned[worker] = hours
+        return cleaned
+
+    def _sync_worker_defaults():
+        for worker in WORKERS:
+            if worker not in _WORKER_DEFAULT_LIMITS:
+                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+                if isinstance(limit, (int, float)):
+                    _WORKER_DEFAULT_LIMITS[worker] = limit
+                else:
+                    _WORKER_DEFAULT_LIMITS[worker] = HOURS_PER_DAY
+        for worker in list(_WORKER_DEFAULT_LIMITS):
+            if worker not in WORKERS:
+                _WORKER_DEFAULT_LIMITS.pop(worker, None)
+
+    def _apply_worker_hour_overrides(overrides):
+        _sync_worker_defaults()
+        for worker, default in _WORKER_DEFAULT_LIMITS.items():
+            HOURS_LIMITS[worker] = default
+        for worker, hours in overrides.items():
+            if worker in HOURS_LIMITS:
+                HOURS_LIMITS[worker] = hours
+
+    def load_worker_hours():
+        overrides = {}
+        if os.path.exists(_WORKER_HOURS_FILE):
+            try:
+                with open(_WORKER_HOURS_FILE, 'r') as fh:
+                    raw = json.load(fh)
+            except (json.JSONDecodeError, OSError):
+                raw = {}
+            overrides = _sanitize_worker_hours_payload(raw)
+        _apply_worker_hour_overrides(overrides)
+        return overrides
+
+    def save_worker_hours(data):
+        overrides = _sanitize_worker_hours_payload(data or {})
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(_WORKER_HOURS_FILE, 'w') as fh:
+            json.dump(overrides, fh)
+        _apply_worker_hour_overrides(overrides)
+
+    # Ensure in-memory limits reflect any persisted overrides.
+    try:
+        load_worker_hours()
+    except Exception:
+        pass
 
 KANBAN_POPUP_FIELDS = [
     'LANZAMIENTO',
