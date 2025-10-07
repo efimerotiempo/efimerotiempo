@@ -527,7 +527,6 @@ PEDIDOS_HIDDEN_COLUMNS = [
 
 PENDING_VERIFICATION_COLUMN_KEYS = {
     normalize_key('Pdte. Verificación'),
-    normalize_key('Pndt. Verificación'),
 }
 
 PEDIDOS_UNCONFIRMED_COLUMNS = {
@@ -578,7 +577,6 @@ MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Material Recepcionado'),
     normalize_key('Material recepcionado'),
     normalize_key('Pdte. Verificación'),
-    normalize_key('Pndt. Verificación'),
 }
 
 
@@ -2728,7 +2726,6 @@ def orden_carpetas_view():
     links_table = attach_phase_starts(build_project_links(compras_raw), projects)
 
     target_column_keys = {
-        normalize_key('Pndt. Verificación'),
         normalize_key('Pdte. Verificación'),
         normalize_key('Pendiente Verificación'),
         normalize_key('Pendiente de Verificación'),
