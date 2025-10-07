@@ -74,6 +74,92 @@ next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
 
+AUTO_RECEIVING_PHASE = 'recepcionar material'
+AUTO_RECEIVING_DEPENDENCIES = (
+    'montar',
+    'soldar',
+    'montar 2º',
+    'soldar 2º',
+    'mecanizar',
+    'tratamiento',
+    'pintar',
+)
+
+
+def _phase_total_hours(value):
+    """Return the numeric hours stored for a phase entry."""
+
+    if isinstance(value, list):
+        total = 0
+        for item in value:
+            total += _phase_total_hours(item)
+        return total
+    if value in (None, ''):
+        return 0
+    try:
+        return int(value)
+    except Exception:
+        try:
+            return int(float(value))
+        except Exception:
+            return 0
+
+
+def _remove_phase_references(project, phase):
+    """Remove a phase and related bookkeeping from a project."""
+
+    changed = False
+    phases = project.get('phases')
+    if phases and phase in phases:
+        phases.pop(phase, None)
+        changed = True
+        if not phases:
+            project.pop('phases', None)
+    assigned = project.get('assigned')
+    if assigned and phase in assigned:
+        assigned.pop(phase, None)
+        changed = True
+        if not assigned:
+            project.pop('assigned', None)
+    seg_starts = project.get('segment_starts')
+    if seg_starts and phase in seg_starts:
+        seg_starts.pop(phase, None)
+        changed = True
+        if not seg_starts:
+            project.pop('segment_starts', None)
+    seg_workers = project.get('segment_workers')
+    if seg_workers and phase in seg_workers:
+        seg_workers.pop(phase, None)
+        changed = True
+        if not seg_workers:
+            project.pop('segment_workers', None)
+    auto = project.get('auto_hours')
+    if auto and phase in auto:
+        auto.pop(phase, None)
+        changed = True
+        if not auto:
+            project.pop('auto_hours', None)
+    frozen = project.get('frozen_tasks')
+    if frozen:
+        new_frozen = [t for t in frozen if t.get('phase') != phase]
+        if len(new_frozen) != len(frozen):
+            project['frozen_tasks'] = new_frozen
+            changed = True
+    return changed
+
+
+def _cleanup_auto_receiving_placeholder(project):
+    """Drop the automatic receiving phase if other phases gained hours."""
+
+    auto = project.get('auto_hours') or {}
+    if not auto.get(AUTO_RECEIVING_PHASE):
+        return False
+    phases = project.get('phases') or {}
+    for phase in AUTO_RECEIVING_DEPENDENCIES:
+        if _phase_total_hours(phases.get(phase)) > 0:
+            return _remove_phase_references(project, AUTO_RECEIVING_PHASE)
+    return False
+
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
@@ -2128,6 +2214,15 @@ def _kanban_card_to_project(card):
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
     mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
+
+    def _bool_flag(value):
+        if isinstance(value, str):
+            return value.strip().lower() not in ('', '0', 'false', 'no')
+        return bool(value)
+
+    mecan_flag = _bool_flag(popup_raw.get('MECANIZADO'))
+    trat_flag = _bool_flag(popup_raw.get('TRATAMIENTO'))
+
     phases = {}
     auto_hours = {}
     if (
@@ -2137,10 +2232,14 @@ def _kanban_card_to_project(card):
         and sold <= 0
         and pint <= 0
         and mont2 <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
     else:
+        if prep > 0:
+            phases['recepcionar material'] = prep
         if mont:
             phases['montar'] = mont
         if sold2:
@@ -2151,13 +2250,12 @@ def _kanban_card_to_project(card):
             phases['montar 2º'] = mont2
         if sold:
             phases['soldar'] = sold
-        if prep:
-            phases['recepcionar material'] = prep
-
-    def _bool_flag(value):
-        if isinstance(value, str):
-            return value.strip().lower() not in ('', '0', 'false', 'no')
-        return bool(value)
+        if mecan_flag:
+            phases['mecanizar'] = 1
+            auto_hours['mecanizar'] = True
+        if trat_flag:
+            phases['tratamiento'] = 1
+            auto_hours['tratamiento'] = True
 
     def _clean_display_value(value):
         if value is None:
@@ -2177,9 +2275,9 @@ def _kanban_card_to_project(card):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
-    if _bool_flag(popup_raw.get('MECANIZADO')):
+    if mecan_flag:
         display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-    if _bool_flag(popup_raw.get('TRATAMIENTO')):
+    if trat_flag:
         display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
 
     project = {
@@ -4106,25 +4204,18 @@ def update_phase_hours():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
+    proj.setdefault('auto_hours', {})
     if hours <= 0:
-        if phase in proj['phases']:
-            proj['phases'].pop(phase, None)
-            if proj.get('assigned'):
-                proj['assigned'].pop(phase, None)
-            if proj.get('segment_starts'):
-                proj['segment_starts'].pop(phase, None)
-                if not proj['segment_starts']:
-                    proj.pop('segment_starts')
-            if proj.get('segment_workers'):
-                proj['segment_workers'].pop(phase, None)
-                if not proj['segment_workers']:
-                    proj.pop('segment_workers')
-            if not proj.get('phases'):
-                remove_project_and_preserve_schedule(projects, pid)
-                if request.is_json:
-                    return '', 204
-                return redirect(next_url)
-            proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+        removed = _remove_phase_references(proj, phase)
+        if not proj.get('phases'):
+            remove_project_and_preserve_schedule(projects, pid)
+            if request.is_json:
+                return '', 204
+            return redirect(next_url)
+        if removed:
+            proj['frozen_tasks'] = [
+                t for t in proj.get('frozen_tasks', []) if t['phase'] != phase
+            ]
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
@@ -4147,6 +4238,13 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if phase == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                proj['frozen_tasks'] = [
+                    t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
+                ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
@@ -4183,24 +4281,14 @@ def update_project_row():
     if 'color' in data:
         proj['color'] = data['color']
 
+    proj.setdefault('auto_hours', {})
     for ph, val in (data.get('phases') or {}).items():
         try:
             hours = int(val)
         except Exception:
             continue
         if hours <= 0:
-            if ph in proj.get('phases', {}):
-                proj['phases'].pop(ph, None)
-                if proj.get('assigned'):
-                    proj['assigned'].pop(ph, None)
-                if proj.get('segment_starts'):
-                    proj['segment_starts'].pop(ph, None)
-                    if not proj['segment_starts']:
-                        proj.pop('segment_starts')
-                if proj.get('segment_workers'):
-                    proj['segment_workers'].pop(ph, None)
-                    if not proj['segment_workers']:
-                        proj.pop('segment_workers')
+            if _remove_phase_references(proj, ph):
                 modified.add(ph)
             continue
         proj.setdefault('phases', {})
@@ -4225,6 +4313,11 @@ def update_project_row():
                 proj['segment_workers'].pop(ph, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if ph == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                modified.add(AUTO_RECEIVING_PHASE)
         modified.add(ph)
 
     if data.get('phase_starts'):
@@ -4323,10 +4416,8 @@ def delete_phase():
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            if phase in p.get('phases', {}):
-                p['phases'].pop(phase, None)
-                if p.get('assigned'):
-                    p['assigned'].pop(phase, None)
+            if phase in (p.get('phases') or {}):
+                _remove_phase_references(p, phase)
                 if not p.get('phases'):
                     remove_project_and_preserve_schedule(projects, pid)
                 else:
@@ -5058,13 +5149,15 @@ def kanbanize_webhook():
         and sold_hours <= 0
         and pint_hours <= 0
         and mont2_hours <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         prep_hours = 1
         auto_prep = True
     fases = []
-    if auto_prep or prep_hours > 0:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep})
-    else:
+    if auto_prep:
+        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': True})
+    elif prep_hours > 0:
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
@@ -5226,6 +5319,9 @@ def kanbanize_webhook():
                     changed = True
                 if existing_auto.pop(ph, None) is not None:
                     changed = True
+
+        if _cleanup_auto_receiving_placeholder(existing):
+            changed = True
 
         if changed:
             save_projects(projects)
