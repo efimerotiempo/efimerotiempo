@@ -16,6 +16,7 @@ DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
+WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -121,6 +122,62 @@ HOURS_LIMITS['Tratamiento'] = float('inf')
 HOURS_LIMITS[UNPLANNED] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
+DEFAULT_HOURS_LIMITS = {worker: limit for worker, limit in HOURS_LIMITS.items()}
+
+
+def _sanitize_worker_hours(data):
+    """Return a mapping of worker -> hours limited to 1..12."""
+
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for worker, value in data.items():
+        if worker not in WORKERS:
+            continue
+        try:
+            hours = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= hours <= 12:
+            cleaned[worker] = hours
+    return cleaned
+
+
+def _apply_worker_hours(overrides):
+    """Update ``HOURS_LIMITS`` with the provided overrides."""
+
+    for worker, default in DEFAULT_HOURS_LIMITS.items():
+        HOURS_LIMITS[worker] = default
+    for worker, hours in overrides.items():
+        if worker in HOURS_LIMITS:
+            HOURS_LIMITS[worker] = hours
+
+
+def load_worker_hours():
+    """Return the persisted worker hour overrides."""
+
+    if os.path.exists(WORKER_HOURS_FILE):
+        with open(WORKER_HOURS_FILE, 'r') as f:
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        return _sanitize_worker_hours(raw)
+    return {}
+
+
+def save_worker_hours(data):
+    """Persist worker hour overrides and refresh the limits map."""
+
+    overrides = _sanitize_worker_hours(data or {})
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_HOURS_FILE, 'w') as f:
+        json.dump(overrides, f)
+    _apply_worker_hours(overrides)
+
+
+_apply_worker_hours(load_worker_hours())
+
 
 def add_worker(name):
     """Add a new worker that behaves like Eneko."""
@@ -141,6 +198,8 @@ def add_worker(name):
     WORKERS.clear()
     WORKERS.update(new_workers)
     HOURS_LIMITS[name] = HOURS_PER_DAY
+    DEFAULT_HOURS_LIMITS[name] = HOURS_PER_DAY
+    _apply_worker_hours(load_worker_hours())
 
 
 def set_worker_order(order):

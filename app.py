@@ -47,6 +47,8 @@ load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
+load_worker_hours = _schedule_mod.load_worker_hours
+save_worker_hours = _schedule_mod.save_worker_hours
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
@@ -3625,6 +3627,7 @@ def remove_vacation():
 def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     inactive = set(load_inactive_workers())
+    worker_overrides = load_worker_hours()
     if request.method == 'POST':
         if 'add_worker' in request.form:
             new_worker = request.form.get('new_worker', '').strip()
@@ -3637,9 +3640,51 @@ def resources():
         order = request.form.getlist('order')
         if order:
             set_worker_order(order)
+        hours_modified = False
+        for key, changed in request.form.items():
+            if not key.startswith('hours_changed__'):
+                continue
+            if changed != '1':
+                continue
+            idx = key.split('__', 1)[-1]
+            worker = request.form.get(f'hours_worker__{idx}')
+            if not worker:
+                continue
+            value = request.form.get(f'hours__{idx}', '').strip()
+            if value == 'inf' or not value:
+                if worker in worker_overrides:
+                    worker_overrides.pop(worker, None)
+                    hours_modified = True
+                continue
+            try:
+                hours_val = int(value)
+            except ValueError:
+                continue
+            if 1 <= hours_val <= 12:
+                if worker_overrides.get(worker) != hours_val:
+                    worker_overrides[worker] = hours_val
+                    hours_modified = True
+        if hours_modified:
+            save_worker_hours(worker_overrides)
         get_projects()
         return redirect(url_for('resources'))
-    return render_template('resources.html', workers=workers, inactive=inactive)
+    worker_limits = {}
+    for w in workers:
+        limit = HOURS_LIMITS.get(w)
+        if isinstance(limit, (int, float)) and limit == float('inf'):
+            worker_limits[w] = 'inf'
+        elif isinstance(limit, (int, float)):
+            worker_limits[w] = int(limit)
+        else:
+            worker_limits[w] = HOURS_PER_DAY
+    hour_options = list(range(1, 13))
+    return render_template(
+        'resources.html',
+        workers=workers,
+        inactive=inactive,
+        worker_limits=worker_limits,
+        hour_options=hour_options,
+    )
 
 
 @app.route('/complete')
