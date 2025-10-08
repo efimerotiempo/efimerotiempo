@@ -136,9 +136,19 @@
             <td class="links-cell">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set column_value = detail.column|default('', true) %}
+                {% set lane_value = detail.lane|default('', true) %}
+                {% set tooltip = column_value %}
+                {% if not tooltip and lane_value %}
+                  {% set tooltip = lane_value %}
+                {% elif tooltip and lane_value and lane_value != column_value %}
+                  {% set tooltip = tooltip ~ ' · ' ~ lane_value %}
+                {% endif %}
               <div class="link-title"
                    data-title="{{ link }}"
-                   data-lane="{{ detail.lane or '' }}">{{ link }}</div>
+                   data-lane="{{ lane_value }}"
+                   data-column="{{ column_value }}"
+                   {% if tooltip %}title="{{ tooltip }}"{% endif %}>{{ link }}</div>
             {% endfor %}
             </td>
           </tr>
@@ -1281,7 +1291,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const linkDiv = document.createElement('div');
             linkDiv.className = 'link-title';
             linkDiv.dataset.title = link;
-            linkDiv.dataset.lane = detail && detail.lane ? detail.lane : '';
+            const laneValue = detail && detail.lane ? detail.lane : '';
+            const columnValue = detail && detail.column ? detail.column : '';
+            let tooltip = columnValue;
+            if (!tooltip && laneValue) {
+              tooltip = laneValue;
+            } else if (tooltip && laneValue && laneValue !== columnValue) {
+              tooltip = `${tooltip} · ${laneValue}`;
+            }
+            linkDiv.dataset.lane = laneValue;
+            linkDiv.dataset.column = columnValue;
+            if (tooltip) linkDiv.title = tooltip;
             linkDiv.textContent = link;
             linksCell.appendChild(linkDiv);
           });

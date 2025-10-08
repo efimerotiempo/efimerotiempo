@@ -1299,7 +1299,9 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
     return pedidos, unconfirmed, calendar_titles
 
 
-def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
+def filter_project_links_by_titles(
+    links_table, valid_titles, valid_ids=None, kanban_cards=None
+):
     if not links_table:
         return []
 
@@ -1310,6 +1312,8 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         return []
 
     filtered = []
+    covered_norms = set()
+    covered_ids = set()
     for item in links_table:
         link_titles = list(item.get('links') or [])
         link_ids = list(item.get('link_ids') or [])
@@ -1346,8 +1350,10 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
                 kept_details.append(detail_copy)
                 if norm_link:
                     seen_norms.add(norm_link)
+                    covered_norms.add(norm_link)
                 if cid_str:
                     seen_ids.add(cid_str)
+                    covered_ids.add(cid_str)
         if not matches:
             continue
         entry = dict(item)
@@ -1361,6 +1367,117 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         else:
             entry.pop('link_details', None)
         filtered.append(entry)
+    if kanban_cards:
+        card_by_id = {}
+        cards_by_norm = {}
+        for cid, payload in kanban_cards.items():
+            if not isinstance(payload, dict):
+                continue
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                continue
+            card_id = card.get('taskid') or card.get('cardId') or card.get('id') or cid
+            card_id = str(card_id).strip() if card_id not in (None, '') else ''
+            if card_id:
+                card_by_id[card_id] = payload
+            title = (card.get('title') or '').strip()
+            if title:
+                norm = normalize_key(title)
+                if norm:
+                    cards_by_norm.setdefault(norm, []).append(payload)
+
+        seen_payloads = set()
+
+        def _payload_identity(payload):
+            return id(payload)
+
+        def _build_fallback_entry(payload):
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                return None
+            title = (card.get('title') or '').strip()
+            if not title:
+                return None
+            project_name, client_name = split_project_and_client(title)
+            custom_id = get_card_custom_id(card)
+            column = (card.get('columnname') or card.get('columnName') or '').strip()
+            lane = (card.get('lanename') or card.get('laneName') or '').strip()
+            board = (card.get('boardName') or card.get('boardname') or '').strip()
+            due = parse_kanban_date(card.get('deadline'))
+            cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
+            cid_str = str(cid_value).strip() if cid_value not in (None, '') else ''
+            detail = {'title': title}
+            if cid_str:
+                detail['id'] = cid_str
+            if column:
+                detail['column'] = column
+            if lane:
+                detail['lane'] = lane
+            if due:
+                detail['deadline'] = due.isoformat()
+            entry = {
+                'project': project_name or title,
+                'title': title,
+                'display_title': title,
+                'client': client_name,
+                'custom_card_id': custom_id,
+                'links': [title],
+                'link_details': [detail],
+                'due': due.isoformat() if due else None,
+            }
+            if column:
+                entry['column'] = column
+            if lane:
+                entry['lane'] = lane
+            if board:
+                entry['board'] = board
+            if cid_str:
+                entry['link_ids'] = [cid_str]
+            stored_date = payload.get('stored_date')
+            if stored_date:
+                entry['stored_date'] = stored_date
+            prev_date = payload.get('prev_date')
+            if prev_date:
+                entry['prev_date'] = prev_date
+            return entry
+
+        missing_ids = [
+            cid for cid in valid_ids if cid and cid not in covered_ids
+        ] if valid_ids else []
+        for cid in missing_ids:
+            payload = card_by_id.get(cid)
+            if not payload:
+                continue
+            ident = _payload_identity(payload)
+            if ident in seen_payloads:
+                continue
+            entry = _build_fallback_entry(payload)
+            if entry:
+                filtered.append(entry)
+                seen_payloads.add(ident)
+                if entry.get('link_ids'):
+                    covered_ids.update(entry['link_ids'])
+                if entry.get('links'):
+                    norm = normalize_key(entry['links'][0])
+                    if norm:
+                        covered_norms.add(norm)
+
+        missing_norms = [
+            norm for norm in valid_norms if norm and norm not in covered_norms
+        ]
+        for norm in missing_norms:
+            for payload in cards_by_norm.get(norm, []):
+                ident = _payload_identity(payload)
+                if ident in seen_payloads:
+                    continue
+                entry = _build_fallback_entry(payload)
+                if not entry:
+                    continue
+                filtered.append(entry)
+                seen_payloads.add(ident)
+                if entry.get('link_ids'):
+                    covered_ids.update(entry['link_ids'])
+
     return filtered
 
 
@@ -2536,7 +2653,7 @@ def calendar_pedidos():
         if cid:
             calendar_ids.add(str(cid))
     links_table = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+        raw_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
 
     info_names = sorted({
@@ -2733,7 +2850,7 @@ def project_links_api():
         if cid:
             calendar_ids.add(str(cid))
     links = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+        raw_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
     return jsonify(links)
 
