@@ -99,7 +99,6 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
-            {% set description_value = (item.description or '')|trim %}
             {% set plan_value = item.plan_start or item.montar_start %}
             {% set due_display = (item.due|format_due_date)|trim %}
             {% set start_display = (plan_value|format_due_date)|trim %}
@@ -112,8 +111,7 @@
               data-client="{{ item.client }}"
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
-              data-plan="{{ plan_value or '' }}"
-              data-description="{{ description_value|replace('\n', ' ') }}">
+              data-plan="{{ plan_value or '' }}">
             <td class="proj-code-cell">
             {% if code_value %}
               <span class="proj-code"
@@ -122,12 +120,14 @@
             {% endif %}
             </td>
             <td class="proj-title-cell">
+              {% if code_value %}
+              <span class="proj-title-code"
+                    data-project="{{ project_value }}"
+                    data-code="{{ code_value }}">{{ code_value }}</span>
+              {% endif %}
               <strong class="proj-title"
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
-              {% if description_value %}
-              <div class="proj-description">{{ description_value }}</div>
-              {% endif %}
             </td>
             <td class="due-cell">
             {% if due_display %}
@@ -800,8 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cli = (row.dataset.client || '').toLowerCase();
       const display = (row.dataset.display || '').toLowerCase();
       const code = (row.dataset.code || '').toLowerCase();
-      const desc = (row.dataset.description || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q) || desc.includes(q));
+      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
       row.style.display = show ? '' : 'none';
     });
   });
@@ -1186,11 +1185,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
   if (projectList) {
     projectList.addEventListener('click', e => {
-      const trigger = e.target.closest('.proj-code, .proj-title, .proj-description');
+      const trigger = e.target.closest('.proj-code, .proj-title, .proj-title-code');
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
-      if (trigger.classList.contains('proj-title') || trigger.classList.contains('proj-description')) {
+      if (trigger.classList.contains('proj-title') || trigger.classList.contains('proj-title-code')) {
         const matchingTitles = Array.from(row.querySelectorAll('.link-title'))
           .filter(link => norm(link.dataset.lane) === 'seguimiento compras')
           .map(link => link.dataset.title)
@@ -1243,9 +1242,6 @@ document.addEventListener('DOMContentLoaded', () => {
           const planValue = planValueRaw ? String(planValueRaw).trim() : '';
           row.dataset.plan = planValue;
           row.dataset.due = item.due || '';
-          const descriptionRaw = item.description || '';
-          const descriptionText = descriptionRaw ? String(descriptionRaw).trim() : '';
-          row.dataset.description = descriptionText.replace(/\s+/g, ' ');
           const display = (item.display_title || resolvedTitle || '').trim();
           const code = (item.custom_card_id || '').trim();
           const dueDisplay = formatDueDisplay(item.due);
@@ -1267,18 +1263,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const titleCell = document.createElement('td');
           titleCell.className = 'proj-title-cell';
+          if (code) {
+            const inlineCode = document.createElement('span');
+            inlineCode.className = 'proj-title-code';
+            inlineCode.dataset.project = projectValue;
+            inlineCode.dataset.code = code;
+            inlineCode.textContent = code;
+            titleCell.appendChild(inlineCode);
+          }
           const titleStrong = document.createElement('strong');
           titleStrong.className = 'proj-title';
           titleStrong.dataset.project = projectValue;
           titleStrong.dataset.code = code;
           titleStrong.textContent = resolvedTitle;
           titleCell.appendChild(titleStrong);
-          if (descriptionText) {
-            const descDiv = document.createElement('div');
-            descDiv.className = 'proj-description';
-            descDiv.textContent = descriptionText;
-            titleCell.appendChild(descDiv);
-          }
           row.appendChild(titleCell);
 
           const dueCell = document.createElement('td');
