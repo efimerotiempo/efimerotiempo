@@ -347,6 +347,13 @@ body.columna-1-resizing * {
     cursor: pointer;
 }
 
+.columna-1-table .proj-description {
+    margin-top: 4px;
+    font-size: 0.85em;
+    color: #555555;
+    white-space: pre-line;
+}
+
 .columna-1-table .due-cell,
 .columna-1-table .start-cell {
     text-align: right;
