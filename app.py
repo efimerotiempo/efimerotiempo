@@ -9,6 +9,7 @@ import re
 import unicodedata
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 import urllib.parse
 import sys
 import importlib.util
@@ -953,6 +954,13 @@ def build_project_links(compras_raw):
                 lst.append((cid, title))
                 norms.add(normalized_child_title)
 
+        card_board_id = (
+            card.get('boardid')
+            or card.get('boardId')
+            or card.get('board_id')
+            or data.get('board_id')
+        )
+
         if children and cid:
             for ch in children:
                 if isinstance(ch, dict):
@@ -965,7 +973,7 @@ def build_project_links(compras_raw):
                             if canonical:
                                 child_title = canonical
                     if child_id and not child_title:
-                        fetched = _fetch_kanban_card(child_id)
+                        fetched = _fetch_kanban_card(child_id, board_id=card_board_id)
                         if fetched:
                             child_title = (fetched.get('title') or '').strip()
                     norm_child = normalize_key(child_title)
@@ -2316,20 +2324,56 @@ def _kanban_card_to_project(card):
     return project
 
 
-def _fetch_kanban_card(card_id, with_links=False):
-    """Retrieve card details from Kanbanize via the REST API."""
-    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
-    if with_links:
-        url += "?withLinks=1"
-    req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
-    try:
-        with urlopen(req, timeout=10) as resp:
-            if resp.status == 200:
-                data = json.load(resp)
-                if isinstance(data, dict):
-                    return data.get('data') or data
-    except Exception as e:
-        print('Kanbanize API error:', e)
+def _fetch_kanban_card(card_id, with_links=False, board_id=None):
+    """Retrieve card details from Kanbanize via the REST API.
+
+    The Kanbanize API expects a numeric board identifier.  Older deployments
+    relied on a single ``KANBANIZE_BOARD_TOKEN`` environment variable, but the
+    webhook payload already includes the concrete ``boardid`` of the card.  When
+    available we try that identifier first and fall back to the configured
+    tokens, which keeps the integration working even if the board was cloned or
+    renamed and now lives under a different id.
+    """
+
+    def iter_board_ids():
+        seen = set()
+        if board_id is not None:
+            candidate = str(board_id).strip()
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+        token = KANBANIZE_BOARD_TOKEN
+        if token:
+            for part in str(token).split(','):
+                candidate = part.strip()
+                if candidate and candidate not in seen:
+                    seen.add(candidate)
+                    yield candidate
+
+    last_error = None
+    for board in iter_board_ids():
+        url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{board}/cards/{card_id}"
+        if with_links:
+            url += "?withLinks=1"
+        req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
+        try:
+            with urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    data = json.load(resp)
+                    if isinstance(data, dict):
+                        return data.get('data') or data
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code == 404:
+                # Try the next board id (if any).
+                continue
+            break
+        except Exception as exc:  # pragma: no cover - network failure
+            last_error = exc
+            break
+
+    if last_error:
+        print('Kanbanize API error:', last_error)
     return None
 
 
@@ -4887,7 +4931,10 @@ def kanbanize_webhook():
 
     cid = pick(card, 'taskid', 'cardId', 'id')
     if cid:
-        fetched = _fetch_kanban_card(cid, with_links=True)
+        board_identifier = pick(card, 'boardid', 'boardId', 'board', 'board_id')
+        if not board_identifier:
+            board_identifier = pick(data, 'boardid', 'boardId', 'board', 'board_id')
+        fetched = _fetch_kanban_card(cid, with_links=True, board_id=board_identifier)
         if isinstance(fetched, dict):
             card = fetched
 
