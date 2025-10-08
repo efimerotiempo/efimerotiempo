@@ -243,7 +243,22 @@ MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_data_dir():
+    """Return the absolute path to the planner data directory."""
+
+    override = os.environ.get('EFIMERO_DATA_DIR')
+    if override:
+        if not os.path.isabs(override):
+            return os.path.normpath(os.path.join(_BASE_DIR, override))
+        return override
+    return os.path.join(_BASE_DIR, 'data')
+
+
+DATA_DIR = _resolve_data_dir()
 KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')

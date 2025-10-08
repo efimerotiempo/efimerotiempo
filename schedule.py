@@ -5,7 +5,21 @@ import copy
 
 from localtime import local_today
 
-DATA_DIR = os.environ.get('EFIMERO_DATA_DIR', 'data')
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_data_dir():
+    """Return the absolute path to the planner data directory."""
+
+    override = os.environ.get('EFIMERO_DATA_DIR')
+    if override:
+        if not os.path.isabs(override):
+            return os.path.normpath(os.path.join(_BASE_DIR, override))
+        return override
+    return os.path.join(_BASE_DIR, 'data')
+
+
+DATA_DIR = _resolve_data_dir()
 PROJECTS_FILE = os.path.join(DATA_DIR, 'projects.json')
 DISMISSED_FILE = os.path.join(DATA_DIR, 'dismissed_conflicts.json')
 EXTRA_CONFLICTS_FILE = os.path.join(DATA_DIR, 'conflicts.json')
