@@ -47,6 +47,8 @@ load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
+_load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
+_save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
@@ -71,6 +73,92 @@ HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
+
+AUTO_RECEIVING_PHASE = 'recepcionar material'
+AUTO_RECEIVING_DEPENDENCIES = (
+    'montar',
+    'soldar',
+    'montar 2º',
+    'soldar 2º',
+    'mecanizar',
+    'tratamiento',
+    'pintar',
+)
+
+
+def _phase_total_hours(value):
+    """Return the numeric hours stored for a phase entry."""
+
+    if isinstance(value, list):
+        total = 0
+        for item in value:
+            total += _phase_total_hours(item)
+        return total
+    if value in (None, ''):
+        return 0
+    try:
+        return int(value)
+    except Exception:
+        try:
+            return int(float(value))
+        except Exception:
+            return 0
+
+
+def _remove_phase_references(project, phase):
+    """Remove a phase and related bookkeeping from a project."""
+
+    changed = False
+    phases = project.get('phases')
+    if phases and phase in phases:
+        phases.pop(phase, None)
+        changed = True
+        if not phases:
+            project.pop('phases', None)
+    assigned = project.get('assigned')
+    if assigned and phase in assigned:
+        assigned.pop(phase, None)
+        changed = True
+        if not assigned:
+            project.pop('assigned', None)
+    seg_starts = project.get('segment_starts')
+    if seg_starts and phase in seg_starts:
+        seg_starts.pop(phase, None)
+        changed = True
+        if not seg_starts:
+            project.pop('segment_starts', None)
+    seg_workers = project.get('segment_workers')
+    if seg_workers and phase in seg_workers:
+        seg_workers.pop(phase, None)
+        changed = True
+        if not seg_workers:
+            project.pop('segment_workers', None)
+    auto = project.get('auto_hours')
+    if auto and phase in auto:
+        auto.pop(phase, None)
+        changed = True
+        if not auto:
+            project.pop('auto_hours', None)
+    frozen = project.get('frozen_tasks')
+    if frozen:
+        new_frozen = [t for t in frozen if t.get('phase') != phase]
+        if len(new_frozen) != len(frozen):
+            project['frozen_tasks'] = new_frozen
+            changed = True
+    return changed
+
+
+def _cleanup_auto_receiving_placeholder(project):
+    """Drop the automatic receiving phase if other phases gained hours."""
+
+    auto = project.get('auto_hours') or {}
+    if not auto.get(AUTO_RECEIVING_PHASE):
+        return False
+    phases = project.get('phases') or {}
+    for phase in AUTO_RECEIVING_DEPENDENCIES:
+        if _phase_total_hours(phases.get(phase)) > 0:
+            return _remove_phase_references(project, AUTO_RECEIVING_PHASE)
+    return False
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -160,6 +248,75 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+
+if _load_worker_hours_func and _save_worker_hours_func:
+    load_worker_hours = _load_worker_hours_func
+    save_worker_hours = _save_worker_hours_func
+else:
+    _WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+    _WORKER_DEFAULT_LIMITS = {worker: limit for worker, limit in HOURS_LIMITS.items()}
+
+    def _sanitize_worker_hours_payload(data):
+        """Return a mapping of workers to hour overrides (1..12)."""
+
+        if not isinstance(data, dict):
+            return {}
+        cleaned = {}
+        for worker, value in data.items():
+            if worker not in WORKERS:
+                continue
+            try:
+                hours = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hours <= 12:
+                cleaned[worker] = hours
+        return cleaned
+
+    def _sync_worker_defaults():
+        for worker in WORKERS:
+            if worker not in _WORKER_DEFAULT_LIMITS:
+                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+                if isinstance(limit, (int, float)):
+                    _WORKER_DEFAULT_LIMITS[worker] = limit
+                else:
+                    _WORKER_DEFAULT_LIMITS[worker] = HOURS_PER_DAY
+        for worker in list(_WORKER_DEFAULT_LIMITS):
+            if worker not in WORKERS:
+                _WORKER_DEFAULT_LIMITS.pop(worker, None)
+
+    def _apply_worker_hour_overrides(overrides):
+        _sync_worker_defaults()
+        for worker, default in _WORKER_DEFAULT_LIMITS.items():
+            HOURS_LIMITS[worker] = default
+        for worker, hours in overrides.items():
+            if worker in HOURS_LIMITS:
+                HOURS_LIMITS[worker] = hours
+
+    def load_worker_hours():
+        overrides = {}
+        if os.path.exists(_WORKER_HOURS_FILE):
+            try:
+                with open(_WORKER_HOURS_FILE, 'r') as fh:
+                    raw = json.load(fh)
+            except (json.JSONDecodeError, OSError):
+                raw = {}
+            overrides = _sanitize_worker_hours_payload(raw)
+        _apply_worker_hour_overrides(overrides)
+        return overrides
+
+    def save_worker_hours(data):
+        overrides = _sanitize_worker_hours_payload(data or {})
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(_WORKER_HOURS_FILE, 'w') as fh:
+            json.dump(overrides, fh)
+        _apply_worker_hour_overrides(overrides)
+
+    # Ensure in-memory limits reflect any persisted overrides.
+    try:
+        load_worker_hours()
+    except Exception:
+        pass
 
 KANBAN_POPUP_FIELDS = [
     'LANZAMIENTO',
@@ -445,6 +602,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
+    'Planificado para montaje',
 }
 
 PEDIDOS_HIDDEN_COLUMNS = [
@@ -455,7 +613,6 @@ PEDIDOS_HIDDEN_COLUMNS = [
 
 PENDING_VERIFICATION_COLUMN_KEYS = {
     normalize_key('Pdte. Verificación'),
-    normalize_key('Pndt. Verificación'),
 }
 
 PEDIDOS_UNCONFIRMED_COLUMNS = {
@@ -492,13 +649,20 @@ PROJECT_LINK_LANES = {
     'seguimiento compras',
 }
 
+PEDIDOS_ALLOWED_KEYS = {normalize_key(col) for col in PEDIDOS_ALLOWED_COLUMNS}
+PEDIDOS_UNCONFIRMED_KEYS = {normalize_key(col) for col in PEDIDOS_UNCONFIRMED_COLUMNS}
+PEDIDOS_HIDDEN_KEYS = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+PEDIDOS_OFFSET_TO_PLAN_END_KEYS = {
+    normalize_key(col) for col in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+}
+PEDIDOS_SEGUIMIENTO_LANE_KEY = normalize_key('Seguimiento compras')
+
 MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Ready to Archive'),
     normalize_key('Ready to archieve'),
     normalize_key('Material Recepcionado'),
     normalize_key('Material recepcionado'),
     normalize_key('Pdte. Verificación'),
-    normalize_key('Pndt. Verificación'),
 }
 
 
@@ -687,7 +851,7 @@ def build_project_links(compras_raw):
         normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS
         if normalize_key(col) not in PENDING_VERIFICATION_COLUMN_KEYS
     }
-    target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
+    target_lanes = {normalize_key(lane) for lane in PROJECT_LINK_LANES}
     seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
 
@@ -932,8 +1096,6 @@ def build_project_links(compras_raw):
                         seen_ids.add(child_id)
                 if norm_child:
                     seen_norms.add(norm_child)
-        if not matches:
-            continue
         entry = {
             'project': info['project'],
             'title': info['title'],
@@ -948,10 +1110,14 @@ def build_project_links(compras_raw):
             entry['lane'] = info['lane']
         if info.get('board'):
             entry['board'] = info['board']
-        if any(match_ids):
+        if matches and any(match_ids):
             entry['link_ids'] = match_ids
+        elif not matches:
+            entry['link_ids'] = []
         if match_details:
             entry['link_details'] = match_details
+        elif not matches:
+            entry['link_details'] = []
         if info['due']:
             entry['due'] = info['due'].isoformat()
         else:
@@ -1075,17 +1241,18 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        lane_key = lane_name.lower()
+        column_key = normalize_key(column)
+        lane_key = normalize_key(lane_name)
 
         column_allowed = (
-            column in PEDIDOS_ALLOWED_COLUMNS
-            or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            column_key in PEDIDOS_ALLOWED_KEYS
+            or column_key in PEDIDOS_UNCONFIRMED_KEYS
         )
 
-        if not column_allowed or lane_key != 'seguimiento compras':
+        if not column_allowed or lane_key != PEDIDOS_SEGUIMIENTO_LANE_KEY:
             continue
 
-        if column in PEDIDOS_HIDDEN_COLUMNS:
+        if column_key in PEDIDOS_HIDDEN_KEYS:
             continue
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -1096,7 +1263,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
                 d = date(today.year, month, day)
             except Exception:
                 d = parse_kanban_date(card.get('deadline'))
-        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
+        elif column_key in PEDIDOS_UNCONFIRMED_KEYS:
             d = None
         else:
             m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -2047,6 +2214,15 @@ def _kanban_card_to_project(card):
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
     mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
+
+    def _bool_flag(value):
+        if isinstance(value, str):
+            return value.strip().lower() not in ('', '0', 'false', 'no')
+        return bool(value)
+
+    mecan_flag = _bool_flag(popup_raw.get('MECANIZADO'))
+    trat_flag = _bool_flag(popup_raw.get('TRATAMIENTO'))
+
     phases = {}
     auto_hours = {}
     if (
@@ -2056,10 +2232,14 @@ def _kanban_card_to_project(card):
         and sold <= 0
         and pint <= 0
         and mont2 <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         phases['recepcionar material'] = 1
         auto_hours['recepcionar material'] = True
     else:
+        if prep > 0:
+            phases['recepcionar material'] = prep
         if mont:
             phases['montar'] = mont
         if sold2:
@@ -2070,13 +2250,12 @@ def _kanban_card_to_project(card):
             phases['montar 2º'] = mont2
         if sold:
             phases['soldar'] = sold
-        if prep:
-            phases['recepcionar material'] = prep
-
-    def _bool_flag(value):
-        if isinstance(value, str):
-            return value.strip().lower() not in ('', '0', 'false', 'no')
-        return bool(value)
+        if mecan_flag:
+            phases['mecanizar'] = 1
+            auto_hours['mecanizar'] = True
+        if trat_flag:
+            phases['tratamiento'] = 1
+            auto_hours['tratamiento'] = True
 
     def _clean_display_value(value):
         if value is None:
@@ -2096,9 +2275,9 @@ def _kanban_card_to_project(card):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
-    if _bool_flag(popup_raw.get('MECANIZADO')):
+    if mecan_flag:
         display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-    if _bool_flag(popup_raw.get('TRATAMIENTO')):
+    if trat_flag:
         display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
 
     project = {
@@ -2645,7 +2824,6 @@ def orden_carpetas_view():
     links_table = attach_phase_starts(build_project_links(compras_raw), projects)
 
     target_column_keys = {
-        normalize_key('Pndt. Verificación'),
         normalize_key('Pdte. Verificación'),
         normalize_key('Pendiente Verificación'),
         normalize_key('Pendiente de Verificación'),
@@ -3237,9 +3415,10 @@ def gantt_orders_view():
             title_date = _extract_order_title_date(entry.get('project'), scheduled_day, today.year)
             if title_date:
                 effective_day = title_date
+            order_column_key = normalize_key(order_column)
             if (
                 planned_end_date
-                and order_column in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+                and order_column_key in PEDIDOS_OFFSET_TO_PLAN_END_KEYS
             ):
                 effective_day = _subtract_business_days(planned_end_date, 5)
             effective_iso = effective_day.isoformat()
@@ -3612,6 +3791,7 @@ def remove_vacation():
 def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
     inactive = set(load_inactive_workers())
+    worker_overrides = load_worker_hours()
     if request.method == 'POST':
         if 'add_worker' in request.form:
             new_worker = request.form.get('new_worker', '').strip()
@@ -3624,9 +3804,51 @@ def resources():
         order = request.form.getlist('order')
         if order:
             set_worker_order(order)
+        hours_modified = False
+        for key, changed in request.form.items():
+            if not key.startswith('hours_changed__'):
+                continue
+            if changed != '1':
+                continue
+            idx = key.split('__', 1)[-1]
+            worker = request.form.get(f'hours_worker__{idx}')
+            if not worker:
+                continue
+            value = request.form.get(f'hours__{idx}', '').strip()
+            if value == 'inf' or not value:
+                if worker in worker_overrides:
+                    worker_overrides.pop(worker, None)
+                    hours_modified = True
+                continue
+            try:
+                hours_val = int(value)
+            except ValueError:
+                continue
+            if 1 <= hours_val <= 12:
+                if worker_overrides.get(worker) != hours_val:
+                    worker_overrides[worker] = hours_val
+                    hours_modified = True
+        if hours_modified:
+            save_worker_hours(worker_overrides)
         get_projects()
         return redirect(url_for('resources'))
-    return render_template('resources.html', workers=workers, inactive=inactive)
+    worker_limits = {}
+    for w in workers:
+        limit = HOURS_LIMITS.get(w)
+        if isinstance(limit, (int, float)) and limit == float('inf'):
+            worker_limits[w] = 'inf'
+        elif isinstance(limit, (int, float)):
+            worker_limits[w] = int(limit)
+        else:
+            worker_limits[w] = HOURS_PER_DAY
+    hour_options = list(range(1, 13))
+    return render_template(
+        'resources.html',
+        workers=workers,
+        inactive=inactive,
+        worker_limits=worker_limits,
+        hour_options=hour_options,
+    )
 
 
 @app.route('/complete')
@@ -3982,25 +4204,18 @@ def update_phase_hours():
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
+    proj.setdefault('auto_hours', {})
     if hours <= 0:
-        if phase in proj['phases']:
-            proj['phases'].pop(phase, None)
-            if proj.get('assigned'):
-                proj['assigned'].pop(phase, None)
-            if proj.get('segment_starts'):
-                proj['segment_starts'].pop(phase, None)
-                if not proj['segment_starts']:
-                    proj.pop('segment_starts')
-            if proj.get('segment_workers'):
-                proj['segment_workers'].pop(phase, None)
-                if not proj['segment_workers']:
-                    proj.pop('segment_workers')
-            if not proj.get('phases'):
-                remove_project_and_preserve_schedule(projects, pid)
-                if request.is_json:
-                    return '', 204
-                return redirect(next_url)
-            proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+        removed = _remove_phase_references(proj, phase)
+        if not proj.get('phases'):
+            remove_project_and_preserve_schedule(projects, pid)
+            if request.is_json:
+                return '', 204
+            return redirect(next_url)
+        if removed:
+            proj['frozen_tasks'] = [
+                t for t in proj.get('frozen_tasks', []) if t['phase'] != phase
+            ]
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
@@ -4023,6 +4238,13 @@ def update_phase_hours():
                 proj['segment_workers'].pop(phase, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if phase == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                proj['frozen_tasks'] = [
+                    t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
+                ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
@@ -4059,24 +4281,14 @@ def update_project_row():
     if 'color' in data:
         proj['color'] = data['color']
 
+    proj.setdefault('auto_hours', {})
     for ph, val in (data.get('phases') or {}).items():
         try:
             hours = int(val)
         except Exception:
             continue
         if hours <= 0:
-            if ph in proj.get('phases', {}):
-                proj['phases'].pop(ph, None)
-                if proj.get('assigned'):
-                    proj['assigned'].pop(ph, None)
-                if proj.get('segment_starts'):
-                    proj['segment_starts'].pop(ph, None)
-                    if not proj['segment_starts']:
-                        proj.pop('segment_starts')
-                if proj.get('segment_workers'):
-                    proj['segment_workers'].pop(ph, None)
-                    if not proj['segment_workers']:
-                        proj.pop('segment_workers')
+            if _remove_phase_references(proj, ph):
                 modified.add(ph)
             continue
         proj.setdefault('phases', {})
@@ -4101,6 +4313,11 @@ def update_project_row():
                 proj['segment_workers'].pop(ph, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if ph == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                modified.add(AUTO_RECEIVING_PHASE)
         modified.add(ph)
 
     if data.get('phase_starts'):
@@ -4199,10 +4416,8 @@ def delete_phase():
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            if phase in p.get('phases', {}):
-                p['phases'].pop(phase, None)
-                if p.get('assigned'):
-                    p['assigned'].pop(phase, None)
+            if phase in (p.get('phases') or {}):
+                _remove_phase_references(p, phase)
                 if not p.get('phases'):
                     remove_project_and_preserve_schedule(projects, pid)
                 else:
@@ -4934,13 +5149,15 @@ def kanbanize_webhook():
         and sold_hours <= 0
         and pint_hours <= 0
         and mont2_hours <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         prep_hours = 1
         auto_prep = True
     fases = []
-    if auto_prep or prep_hours > 0:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep})
-    else:
+    if auto_prep:
+        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': True})
+    elif prep_hours > 0:
         fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
@@ -5102,6 +5319,9 @@ def kanbanize_webhook():
                     changed = True
                 if existing_auto.pop(ph, None) is not None:
                     changed = True
+
+        if _cleanup_auto_receiving_placeholder(existing):
+            changed = True
 
         if changed:
             save_projects(projects)

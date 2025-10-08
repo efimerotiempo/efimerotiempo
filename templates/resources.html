@@ -4,10 +4,16 @@
 <form method="post">
   <table class="resource-table">
     <thead>
-      <tr><th class="resource-order-header">Orden</th><th>Recurso</th><th>Visible</th></tr>
+      <tr>
+        <th class="resource-order-header">Orden</th>
+        <th>Recurso</th>
+        <th>Visible</th>
+        <th>Jornada</th>
+      </tr>
     </thead>
     <tbody id="resource-list">
       {% for w in workers %}
+      {% set limit = worker_limits.get(w, 'inf') %}
       <tr data-worker="{{ w }}">
         <td class="resource-move">
           <button type="button" class="move-btn" data-move="up" aria-label="Mover {{ w }} hacia arriba">▲</button>
@@ -16,6 +22,16 @@
         </td>
         <td class="resource-name">{{ w }}</td>
         <td class="resource-visible"><input type="checkbox" name="worker" value="{{ w }}" {% if w not in inactive %}checked{% endif %}></td>
+        <td class="resource-hours">
+          <select name="hours__{{ loop.index0 }}" data-original="{{ 'inf' if limit == 'inf' else limit }}">
+            <option value="inf" {% if limit == 'inf' %}selected{% endif %}>Sin límite</option>
+            {% for option in hour_options %}
+            <option value="{{ option }}" {% if limit != 'inf' and limit == option %}selected{% endif %}>{{ option }} h</option>
+            {% endfor %}
+          </select>
+          <input type="hidden" name="hours_worker__{{ loop.index0 }}" value="{{ w }}">
+          <input type="hidden" name="hours_changed__{{ loop.index0 }}" value="0">
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -53,6 +69,28 @@
           list.insertBefore(row, next.nextElementSibling);
         }
       }
+    });
+    list.addEventListener('change', (event) => {
+      const select = event.target.closest('select[name^="hours__"]');
+      if (!select) {
+        return;
+      }
+      const match = select.name.match(/^hours__(\d+)$/);
+      if (!match) {
+        return;
+      }
+      const index = match[1];
+      const row = select.closest('tr[data-worker]');
+      if (!row) {
+        return;
+      }
+      const changed = row.querySelector(`input[name="hours_changed__${index}"]`);
+      if (!changed) {
+        return;
+      }
+      const current = select.value || 'inf';
+      const original = select.dataset.original || 'inf';
+      changed.value = current === original ? '0' : '1';
     });
   });
 </script>
