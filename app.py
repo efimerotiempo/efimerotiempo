@@ -851,7 +851,7 @@ def build_project_links(compras_raw):
         normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS
         if normalize_key(col) not in PENDING_VERIFICATION_COLUMN_KEYS
     }
-    target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
+    target_lanes = {normalize_key(lane) for lane in PROJECT_LINK_LANES}
     seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
 
