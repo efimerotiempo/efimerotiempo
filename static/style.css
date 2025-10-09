@@ -328,14 +328,11 @@ body.columna-1-resizing * {
     word-break: break-word;
 }
 
-.columna-1-table .proj-code-cell {
-    white-space: nowrap;
-}
-
 .columna-1-table .proj-code {
     font-weight: 600;
     cursor: pointer;
     display: inline-block;
+    margin-right: 0.45rem;
 }
 
 .columna-1-table .proj-title-cell {
@@ -345,12 +342,6 @@ body.columna-1-resizing * {
 .columna-1-table .proj-title {
     font-weight: bold;
     cursor: pointer;
-}
-
-.columna-1-table .proj-description {
-    margin-top: 0.35rem;
-    color: #4a4a4a;
-    white-space: pre-wrap;
 }
 
 .columna-1-table .due-cell,

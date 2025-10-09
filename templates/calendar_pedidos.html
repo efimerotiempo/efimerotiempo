@@ -79,15 +79,13 @@
     <div class="columna-1-table-wrapper">
       <table class="columna-1-table">
         <colgroup>
-          <col data-col-key="code" data-default-width="120">
-          <col data-col-key="project" data-default-width="320">
+          <col data-col-key="project" data-default-width="420">
           <col data-col-key="due" data-default-width="140">
           <col data-col-key="start" data-default-width="170">
           <col data-col-key="links" data-default-width="360">
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Código</th>
             <th scope="col">Proyecto</th>
             <th scope="col">Entrega</th>
             <th scope="col">Inicio planificado</th>
@@ -103,7 +101,6 @@
             {% set due_display = (item.due|format_due_date)|trim %}
             {% set start_display = (plan_value|format_due_date)|trim %}
             {% set details = item.link_details or [] %}
-            {% set description_value = (item.description or '')|trim %}
           <tr class="project-row"
               data-pid="{{ item.pid or '' }}"
               data-project="{{ project_value }}"
@@ -112,24 +109,16 @@
               data-client="{{ item.client }}"
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
-              data-plan="{{ plan_value or '' }}"
-              data-description="{{ description_value|replace('\r\n', ' ')|replace('\n', ' ')|replace('\r', ' ')|e }}">
-            <td class="proj-code-cell">
-            {% if code_value %}
+              data-plan="{{ plan_value or '' }}">
+            <td class="proj-title-cell">
+              {% if code_value %}
               <span class="proj-code"
                     data-project="{{ project_value }}"
                     data-code="{{ code_value }}">{{ code_value }}</span>
-            {% endif %}
-            </td>
-            <td class="proj-title-cell">
+              {% endif %}
               <strong class="proj-title"
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
-              {% if description_value %}
-              <div class="proj-description"
-                   data-project="{{ project_value }}"
-                   data-code="{{ code_value }}">{{ description_value|e|replace('\r\n', '\n')|replace('\r', '\n')|replace('\n', '<br>')|safe }}</div>
-              {% endif %}
             </td>
             <td class="due-cell">
             {% if due_display %}
@@ -802,8 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cli = (row.dataset.client || '').toLowerCase();
       const display = (row.dataset.display || '').toLowerCase();
       const code = (row.dataset.code || '').toLowerCase();
-      const description = (row.dataset.description || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q) || description.includes(q));
+      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
       row.style.display = show ? '' : 'none';
     });
   });
@@ -1188,11 +1176,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
   if (projectList) {
     projectList.addEventListener('click', e => {
-      const trigger = e.target.closest('.proj-code, .proj-title, .proj-description');
+      const trigger = e.target.closest('.proj-code, .proj-title');
       if (!trigger) return;
       const row = trigger.closest('.project-row');
       if (!row) return;
-      if (trigger.classList.contains('proj-title') || trigger.classList.contains('proj-description')) {
+      if (trigger.classList.contains('proj-title')) {
         const matchingTitles = Array.from(row.querySelectorAll('.link-title'))
           .filter(link => norm(link.dataset.lane) === 'seguimiento compras')
           .map(link => link.dataset.title)
@@ -1247,41 +1235,27 @@ document.addEventListener('DOMContentLoaded', () => {
           row.dataset.due = item.due || '';
           const display = (item.display_title || resolvedTitle || '').trim();
           const code = (item.custom_card_id || '').trim();
-          const description = (item.description || '').trim();
           const dueDisplay = formatDueDisplay(item.due);
           const startDisplay = formatDueDisplay(planValue);
           row.dataset.display = display;
           row.dataset.code = code;
-          row.dataset.description = description;
 
-          const codeCell = document.createElement('td');
-          codeCell.className = 'proj-code-cell';
+          const titleCell = document.createElement('td');
+          titleCell.className = 'proj-title-cell';
           if (code) {
             const codeSpan = document.createElement('span');
             codeSpan.className = 'proj-code';
             codeSpan.dataset.project = projectValue;
             codeSpan.dataset.code = code;
             codeSpan.textContent = code;
-            codeCell.appendChild(codeSpan);
+            titleCell.appendChild(codeSpan);
           }
-          row.appendChild(codeCell);
-
-          const titleCell = document.createElement('td');
-          titleCell.className = 'proj-title-cell';
           const titleStrong = document.createElement('strong');
           titleStrong.className = 'proj-title';
           titleStrong.dataset.project = projectValue;
           titleStrong.dataset.code = code;
           titleStrong.textContent = resolvedTitle;
           titleCell.appendChild(titleStrong);
-          if (description) {
-            const descDiv = document.createElement('div');
-            descDiv.className = 'proj-description';
-            descDiv.dataset.project = projectValue;
-            descDiv.dataset.code = code;
-            descDiv.textContent = description;
-            titleCell.appendChild(descDiv);
-          }
           row.appendChild(titleCell);
 
           const dueCell = document.createElement('td');
