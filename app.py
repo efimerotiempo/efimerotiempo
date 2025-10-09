@@ -649,6 +649,11 @@ PROJECT_LINK_LANES = {
     'seguimiento compras',
 }
 
+COLUMN1_ALLOWED_LANE_KEYS = {
+    normalize_key('Acero al Carbono'),
+    normalize_key('Inoxidable - Aluminio'),
+}
+
 PEDIDOS_ALLOWED_KEYS = {normalize_key(col) for col in PEDIDOS_ALLOWED_COLUMNS}
 PEDIDOS_UNCONFIRMED_KEYS = {normalize_key(col) for col in PEDIDOS_UNCONFIRMED_COLUMNS}
 PEDIDOS_HIDDEN_KEYS = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
@@ -895,6 +900,7 @@ def build_project_links(compras_raw):
         if not isinstance(card, dict):
             continue
         title = (card.get('title') or '').strip()
+        description = (card.get('description') or '').strip()
         custom_id = get_card_custom_id(card)
         cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid_value) if cid_value else None
@@ -1021,6 +1027,7 @@ def build_project_links(compras_raw):
                 'column': column,
                 'lane': lane_name,
                 'board': board_name,
+                'description': description,
             })
             seen_candidates.add(cid)
 
@@ -1103,6 +1110,7 @@ def build_project_links(compras_raw):
             'client': info['client'],
             'custom_card_id': info['custom_card_id'],
             'links': matches,
+            'description': info.get('description', ''),
         }
         if info.get('column'):
             entry['column'] = info['column']
@@ -1127,30 +1135,71 @@ def build_project_links(compras_raw):
 
 
 def attach_phase_starts(links_table, projects=None):
-    """Attach the scheduled start date of the ``montar`` phase to each link."""
+    """Attach scheduled start information to each Columna 1 entry."""
 
     if projects is None:
         projects = load_projects()
     projects = filter_visible_projects(projects)
     start_mapping = phase_start_map(projects)
     montar_by_name = {}
+    plan_by_name = {}
     ids_by_name = {}
     montar_by_key = {}
+    plan_by_key = {}
     ids_by_key = {}
+
+    def _coerce_date(value):
+        if isinstance(value, date):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            parsed = _safe_iso_date(value)
+            if parsed:
+                return parsed
+        return None
+
+    def _serialize_date(value):
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, str):
+            parsed = _safe_iso_date(value)
+            if parsed:
+                return parsed.isoformat()
+            value = value.strip()
+            return value or None
+        return None
+
     for proj in projects:
-        phase_starts = start_mapping.get(proj['id'], {})
-        montar_start = phase_starts.get('montar')
-        name = (proj['name'] or '').strip()
+        phase_starts = start_mapping.get(proj['id'], {}) or {}
+        montar_serialized = _serialize_date(phase_starts.get('montar'))
+        first_phase_date = None
+        if isinstance(phase_starts, dict):
+            for raw_start in phase_starts.values():
+                candidate = _coerce_date(raw_start)
+                if not candidate:
+                    continue
+                if first_phase_date is None or candidate < first_phase_date:
+                    first_phase_date = candidate
+        plan_serialized = first_phase_date.isoformat() if first_phase_date else None
+
+        name = (proj.get('name') or '').strip()
         if not name:
             continue
-        if montar_start:
-            montar_by_name[name] = montar_start
+        if montar_serialized:
+            montar_by_name[name] = montar_serialized
+        if plan_serialized:
+            plan_by_name[name] = plan_serialized
         ids_by_name[name] = proj['id']
 
         split_name, _ = split_project_and_client(name)
         if split_name and split_name != name:
-            if montar_start and split_name not in montar_by_name:
-                montar_by_name[split_name] = montar_start
+            if montar_serialized and split_name not in montar_by_name:
+                montar_by_name[split_name] = montar_serialized
+            if plan_serialized and split_name not in plan_by_name:
+                plan_by_name[split_name] = plan_serialized
             ids_by_name.setdefault(split_name, proj['id'])
 
         keys = {normalize_key(name)}
@@ -1160,8 +1209,10 @@ def attach_phase_starts(links_table, projects=None):
         custom_id = (proj.get('custom_card_id') or '').strip()
         if custom_id:
             ids_by_name.setdefault(custom_id, proj['id'])
-            if montar_start and custom_id not in montar_by_name:
-                montar_by_name[custom_id] = montar_start
+            if montar_serialized and custom_id not in montar_by_name:
+                montar_by_name[custom_id] = montar_serialized
+            if plan_serialized and custom_id not in plan_by_name:
+                plan_by_name[custom_id] = plan_serialized
             keys.add(normalize_key(custom_id))
 
         code_match = PROJECT_TITLE_PATTERN.search(name)
@@ -1170,26 +1221,31 @@ def attach_phase_starts(links_table, projects=None):
         if code_match:
             code_key = code_match.group(0)
             ids_by_name.setdefault(code_key, proj['id'])
-            if montar_start and code_key not in montar_by_name:
-                montar_by_name[code_key] = montar_start
+            if montar_serialized and code_key not in montar_by_name:
+                montar_by_name[code_key] = montar_serialized
+            if plan_serialized and code_key not in plan_by_name:
+                plan_by_name[code_key] = plan_serialized
             keys.add(normalize_key(code_key))
 
         for key in keys:
             if not key:
                 continue
-            if montar_start and key not in montar_by_key:
-                montar_by_key[key] = montar_start
+            if montar_serialized and key not in montar_by_key:
+                montar_by_key[key] = montar_serialized
+            if plan_serialized and key not in plan_by_key:
+                plan_by_key[key] = plan_serialized
             ids_by_key.setdefault(key, proj['id'])
 
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = None
-        pid = None
+        montar_start = entry.get('montar_start')
+        plan_start = entry.get('plan_start')
+        pid = entry.get('pid')
 
         candidate_values = []
         for field in ('project', 'title', 'display_title', 'custom_card_id'):
-            value = (item.get(field) or '').strip()
+            value = (entry.get(field) or '').strip()
             if value:
                 candidate_values.append(value)
                 split_value, _ = split_project_and_client(value)
@@ -1201,22 +1257,27 @@ def attach_phase_starts(links_table, projects=None):
                 candidate_values.append(code_match.group(0))
 
         for value in candidate_values:
-            if montar_start and pid:
+            if montar_start and plan_start and pid:
                 break
             if not montar_start:
                 montar_start = montar_by_name.get(value)
-            if not montar_start:
-                norm_key = normalize_key(value)
-                if norm_key:
+            if not plan_start:
+                plan_start = plan_by_name.get(value)
+            norm_key = normalize_key(value)
+            if norm_key:
+                if not montar_start:
                     montar_start = montar_by_key.get(norm_key)
-            if not pid:
-                pid = ids_by_name.get(value)
-            if not pid:
-                norm_key = normalize_key(value)
-                if norm_key:
+                if not plan_start:
+                    plan_start = plan_by_key.get(norm_key)
+                if not pid:
                     pid = ids_by_key.get(norm_key)
+            if not pid:
+                pid = ids_by_name.get(value) or pid
+
         if montar_start:
             entry['montar_start'] = montar_start
+        if plan_start:
+            entry['plan_start'] = plan_start
         if pid:
             entry['pid'] = pid
         enriched.append(entry)
@@ -1299,17 +1360,47 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
     return pedidos, unconfirmed, calendar_titles
 
 
-def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
+def filter_project_links_by_titles(
+    links_table, valid_titles, valid_ids=None, kanban_cards=None
+):
     if not links_table:
         return []
 
-    valid_norms = {normalize_key(title) for title in (valid_titles or []) if title}
-    valid_ids = {str(cid) for cid in (valid_ids or []) if cid}
+    valid_norm_map = {}
+    for raw_title in valid_titles or []:
+        if not raw_title:
+            continue
+        norm = normalize_key(raw_title)
+        if not norm:
+            continue
+        valid_norm_map.setdefault(norm, []).append(raw_title)
 
-    if not valid_norms and not valid_ids:
+    valid_norms = set(valid_norm_map.keys())
+
+    if not valid_norms:
         return []
 
+    card_by_id = {}
+    cards_by_norm = {}
+    if kanban_cards:
+        for cid, payload in kanban_cards.items():
+            if not isinstance(payload, dict):
+                continue
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                continue
+            card_id = card.get('taskid') or card.get('cardId') or card.get('id') or cid
+            card_id = str(card_id).strip() if card_id not in (None, '') else ''
+            title = (card.get('title') or '').strip()
+            if card_id:
+                card_by_id[card_id] = payload
+            if title:
+                norm = normalize_key(title)
+                if norm:
+                    cards_by_norm.setdefault(norm, []).append(payload)
+
     filtered = []
+    covered_norms = set()
     for item in links_table:
         link_titles = list(item.get('links') or [])
         link_ids = list(item.get('link_ids') or [])
@@ -1321,33 +1412,78 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         kept_ids = []
         kept_details = []
         seen_norms = set()
-        seen_ids = set()
         for idx, (title, cid) in enumerate(zip(link_titles, link_ids)):
-            text = title or ''
+            text = (title or '').strip()
             cid_str = str(cid).strip() if cid not in (None, '') else ''
-            norm_link = normalize_key(text)
-            allow = False
-            if cid_str and cid_str in valid_ids and cid_str not in seen_ids:
-                allow = True
-            elif norm_link and norm_link in valid_norms and norm_link not in seen_norms:
-                allow = True
-            if allow:
-                matches.append(text)
+
+            detail = link_details[idx] if idx < len(link_details) else None
+            detail_copy = {}
+            detail_title = ''
+            if isinstance(detail, dict):
+                detail_copy = {k: v for k, v in detail.items() if v not in (None, '')}
+                detail_title = (detail.get('title') or '').strip()
+
+            payload = card_by_id.get(cid_str) if cid_str else None
+            card_title = ''
+            if payload:
+                card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+                if card:
+                    card_title = (card.get('title') or '').strip()
+
+            candidate_titles = []
+            if text:
+                candidate_titles.append(text)
+            if detail_title and detail_title not in candidate_titles:
+                candidate_titles.append(detail_title)
+            if card_title and card_title not in candidate_titles:
+                candidate_titles.append(card_title)
+
+            matched_norm = None
+            display_title = ''
+            for candidate in candidate_titles:
+                norm_candidate = normalize_key(candidate)
+                if not norm_candidate or norm_candidate in seen_norms:
+                    continue
+                if norm_candidate in valid_norms:
+                    matched_norm = norm_candidate
+                    titles = valid_norm_map.get(matched_norm)
+                    display_title = titles[0] if titles else candidate
+                    break
+
+            if not matched_norm:
+                continue
+
+            if not display_title:
+                display_title = text or detail_title or card_title
+
+            matches.append(display_title)
+
+            if cid_str:
                 kept_ids.append(cid_str)
-                detail = link_details[idx] if idx < len(link_details) else None
-                if isinstance(detail, dict):
-                    detail_copy = {k: v for k, v in detail.items() if v not in (None, '')}
-                else:
-                    detail_copy = {}
-                if 'title' not in detail_copy or not detail_copy['title']:
-                    detail_copy['title'] = text
-                if cid_str and ('id' not in detail_copy or not detail_copy['id']):
-                    detail_copy['id'] = cid_str
-                kept_details.append(detail_copy)
-                if norm_link:
-                    seen_norms.add(norm_link)
-                if cid_str:
-                    seen_ids.add(cid_str)
+
+            if not detail_copy:
+                detail_copy = {}
+            if 'title' not in detail_copy or not detail_copy['title']:
+                detail_copy['title'] = display_title
+            if cid_str and ('id' not in detail_copy or not detail_copy['id']):
+                detail_copy['id'] = cid_str
+
+            if payload and isinstance(payload.get('card'), dict):
+                card = payload['card']
+                column = (card.get('columnname') or card.get('columnName') or '').strip()
+                lane = (card.get('lanename') or card.get('laneName') or '').strip()
+                deadline = parse_kanban_date(card.get('deadline'))
+                if column and not detail_copy.get('column'):
+                    detail_copy['column'] = column
+                if lane and not detail_copy.get('lane'):
+                    detail_copy['lane'] = lane
+                if deadline and not detail_copy.get('deadline'):
+                    detail_copy['deadline'] = deadline.isoformat()
+
+            kept_details.append(detail_copy)
+            seen_norms.add(matched_norm)
+            covered_norms.add(matched_norm)
+
         if not matches:
             continue
         entry = dict(item)
@@ -1361,6 +1497,87 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         else:
             entry.pop('link_details', None)
         filtered.append(entry)
+
+    if kanban_cards:
+        seen_payloads = set()
+
+        def _payload_identity(payload):
+            return id(payload)
+
+        def _build_fallback_entry(payload):
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                return None
+            title = (card.get('title') or '').strip()
+            if not title:
+                return None
+            norm_title = normalize_key(title)
+            if norm_title not in valid_norms:
+                return None
+            project_name, client_name = split_project_and_client(title)
+            custom_id = get_card_custom_id(card)
+            column = (card.get('columnname') or card.get('columnName') or '').strip()
+            lane = (card.get('lanename') or card.get('laneName') or '').strip()
+            board = (card.get('boardName') or card.get('boardname') or '').strip()
+            description = (card.get('description') or '').strip()
+            due = parse_kanban_date(card.get('deadline'))
+            cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
+            cid_str = str(cid_value).strip() if cid_value not in (None, '') else ''
+            detail = {'title': title}
+            if cid_str:
+                detail['id'] = cid_str
+            if column:
+                detail['column'] = column
+            if lane:
+                detail['lane'] = lane
+            if due:
+                detail['deadline'] = due.isoformat()
+            entry = {
+                'project': project_name or title,
+                'title': title,
+                'display_title': title,
+                'client': client_name,
+                'custom_card_id': custom_id,
+                'links': [title],
+                'link_details': [detail],
+                'due': due.isoformat() if due else None,
+                'description': description,
+            }
+            if column:
+                entry['column'] = column
+            if lane:
+                entry['lane'] = lane
+            if board:
+                entry['board'] = board
+            if cid_str:
+                entry['link_ids'] = [cid_str]
+            stored_date = payload.get('stored_date')
+            if stored_date:
+                entry['stored_date'] = stored_date
+            prev_date = payload.get('prev_date')
+            if prev_date:
+                entry['prev_date'] = prev_date
+            return entry
+
+        missing_norms = [
+            norm for norm in valid_norms if norm and norm not in covered_norms
+        ]
+        for norm in missing_norms:
+            for payload in cards_by_norm.get(norm, []):
+                ident = _payload_identity(payload)
+                if ident in seen_payloads:
+                    continue
+                entry = _build_fallback_entry(payload)
+                if not entry:
+                    continue
+                filtered.append(entry)
+                seen_payloads.add(ident)
+                if entry.get('links'):
+                    for link in entry['links']:
+                        norm_link = normalize_key(link)
+                        if norm_link:
+                            covered_norms.add(norm_link)
+
     return filtered
 
 
@@ -2521,7 +2738,7 @@ def calendar_pedidos():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
-    raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+    base_links = build_project_links(compras_raw)
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
@@ -2535,9 +2752,15 @@ def calendar_pedidos():
         cid = item.get('cid')
         if cid:
             calendar_ids.add(str(cid))
-    links_table = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+    filtered_links = filter_project_links_by_titles(
+        base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
+    enriched_links = attach_phase_starts(filtered_links, projects)
+    links_table = [
+        item
+        for item in enriched_links
+        if normalize_key(item.get('lane')) in COLUMN1_ALLOWED_LANE_KEYS
+    ]
 
     info_names = sorted({
         name.strip()
@@ -2716,9 +2939,8 @@ def cronologico_view():
 def project_links_api():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
-    raw_links = attach_phase_starts(
-        build_project_links(compras_raw), get_visible_projects()
-    )
+    projects = get_visible_projects()
+    base_links = build_project_links(compras_raw)
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
@@ -2732,10 +2954,16 @@ def project_links_api():
         cid = item.get('cid')
         if cid:
             calendar_ids.add(str(cid))
-    links = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+    filtered_links = filter_project_links_by_titles(
+        base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
-    return jsonify(links)
+    enriched_links = attach_phase_starts(filtered_links, projects)
+    lane_filtered = [
+        item
+        for item in enriched_links
+        if normalize_key(item.get('lane')) in COLUMN1_ALLOWED_LANE_KEYS
+    ]
+    return jsonify(lane_filtered)
 
 
 @app.route('/orden-carpetas')
