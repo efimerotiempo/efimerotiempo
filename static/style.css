@@ -342,18 +342,16 @@ body.columna-1-resizing * {
     word-break: break-word;
 }
 
-.columna-1-table .proj-title-code {
-    display: inline-block;
-    margin-right: 0.5rem;
-    padding: 0.1rem 0.4rem;
-    background-color: #eef2f7;
-    border-radius: 4px;
-    font-weight: 600;
+.columna-1-table .proj-title {
+    font-weight: bold;
     cursor: pointer;
 }
 
-.columna-1-table .proj-title {
-    font-weight: bold;
+.columna-1-table .proj-description {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    color: #4b4b4b;
+    white-space: pre-line;
     cursor: pointer;
 }
 
