@@ -72,6 +72,9 @@
   .order-project-bar.order-project-unplanned { color:#ff8c00; }
   .order-phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
   .order-phase-bar.order-phase-warning { background:#dbe9ff; border-color:#0b3c6f; border-width:2px; box-shadow:0 0 0 1px rgba(11,60,111,0.25); color:#0b3c6f; }
+  body:not(.orders-gantt-mode) .phase-bar { background:transparent; border:2px solid #0b3c6f; color:#0b3c6f; z-index:2; }
+  body:not(.orders-gantt-mode) .phase-date-span { background:#cfe5ff; border:none; z-index:1; }
+  .phase-date-span { position:absolute; top:0; height:100%; pointer-events:none; }
   .gantt-row .deadline-highlight {
     position:absolute;
     top:-2px;
@@ -288,15 +291,41 @@ function prepareSplitModal(button) {
   updateSplitModalDisplay();
 }
 
+const PHASE_FIELD_COLUMNS = [
+  { columnKey: 'caldereria', label: 'CALDERERÍA', fieldKeys: ['CALDERERÍA', 'CALDERERIA'], phaseNames: ['CALDERERIA - montar'] },
+  { columnKey: 'mecanizado', label: 'MECANIZADO', fieldKeys: ['MECANIZADO'], phaseNames: ['MECANIZADO - mecanizar'] },
+  { columnKey: 'tratamiento', label: 'TRATAMIENTO', fieldKeys: ['TRATAMIENTO'], phaseNames: ['TRATAMIENTO - tratamiento'] },
+  { columnKey: 'pintar', label: 'PINTAR', fieldKeys: ['PINTAR', 'PINTADO'], phaseNames: ['PINTAR - pintar'] },
+];
+
+const PHASE_COLUMN_MAP = {};
+const PHASE_DATE_LOOKUP = {};
+
+PHASE_FIELD_COLUMNS.forEach((entry, index, array) => {
+  const normalizedTargets = (entry.phaseNames || []).map(name => normalizePhaseName(name)).filter(Boolean);
+  entry.normalizedTargets = normalizedTargets;
+  entry.primaryNormalized = normalizedTargets.length ? normalizedTargets[0] : null;
+  entry.nextPrimary = null;
+});
+
+PHASE_FIELD_COLUMNS.forEach((entry, index, array) => {
+  const nextEntry = array[index + 1];
+  entry.nextPrimary = nextEntry && nextEntry.primaryNormalized ? nextEntry.primaryNormalized : null;
+  PHASE_COLUMN_MAP[entry.columnKey] = entry;
+  entry.normalizedTargets.forEach(name => {
+    if(name) PHASE_DATE_LOOKUP[name] = entry;
+  });
+});
+
 const PHASE_SUMMARY_COLUMNS = [
   { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
   { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
   { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
   { key: 'material', title: 'MATERIAL', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
-  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['CALDERERÍA', 'CALDERERIA']) },
-  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MECANIZADO']) },
-  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['TRATAMIENTO']) },
-  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['PINTAR', 'PINTADO']) },
+  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, PHASE_COLUMN_MAP.caldereria.fieldKeys, undefined, { phaseTargets: PHASE_COLUMN_MAP.caldereria.normalizedTargets, showProjectRow: false }) },
+  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, PHASE_COLUMN_MAP.mecanizado.fieldKeys, undefined, { phaseTargets: PHASE_COLUMN_MAP.mecanizado.normalizedTargets, showProjectRow: false }) },
+  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, PHASE_COLUMN_MAP.tratamiento.fieldKeys, undefined, { phaseTargets: PHASE_COLUMN_MAP.tratamiento.normalizedTargets, showProjectRow: false }) },
+  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, PHASE_COLUMN_MAP.pintar.fieldKeys, undefined, { phaseTargets: PHASE_COLUMN_MAP.pintar.normalizedTargets, showProjectRow: false }) },
   { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
   { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
 ];
@@ -410,6 +439,44 @@ function getProjectFieldValue(info, keys){
   return '';
 }
 
+function extractDateFromRaw(value){
+  if(value === null || value === undefined) return null;
+  if(value instanceof Date){
+    return value;
+  }
+  if(Array.isArray(value)){
+    for(const item of value){
+      const parsed = extractDateFromRaw(item);
+      if(parsed) return parsed;
+    }
+    return null;
+  }
+  if(typeof value === 'object'){
+    if('date' in value) return extractDateFromRaw(value.date);
+    if('start' in value) return extractDateFromRaw(value.start);
+    if('end' in value) return extractDateFromRaw(value.end);
+    for(const nested of Object.values(value)){
+      const parsed = extractDateFromRaw(nested);
+      if(parsed) return parsed;
+    }
+    return null;
+  }
+  const text = String(value);
+  if(!text.trim()) return null;
+  const candidate = findDateCandidate(text) || text;
+  const parsed = parseDateString(candidate);
+  if(parsed) return parsed;
+  return null;
+}
+
+function getProjectFieldDateValue(projectId, keys){
+  if(!projectId) return null;
+  const info = getProjectInfo(projectId);
+  const raw = getProjectFieldValue(info, keys);
+  if(raw === '' || raw === null || raw === undefined) return null;
+  return extractDateFromRaw(raw);
+}
+
 function buildMainSummaryCell(row){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
@@ -444,21 +511,42 @@ function getProjectDeadlineFallback(row){
   return '';
 }
 
-function buildProjectFieldCell(row, keys, fallbackFn){
+function buildProjectFieldCell(row, keys, fallbackFn, options){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  const opts = options || {};
+  const phaseTargets = Array.isArray(opts.phaseTargets) ? opts.phaseTargets : null;
+  const showProjectRow = opts.showProjectRow !== false;
+  const info = row.project ? getProjectInfo(row.project.id) : {};
+  const projectRow = row.type === 'project' ? row : { type: 'project', project: row.project };
   let raw = '';
-  if(row.type === 'project'){
-    const info = getProjectInfo(row.project.id);
+  if(projectRow && projectRow.project){
     raw = getProjectFieldValue(info, keys);
-    if(!raw && typeof fallbackFn === 'function'){
-      raw = fallbackFn(row) || '';
+    if((raw === '' || raw === null || raw === undefined) && typeof fallbackFn === 'function'){
+      raw = fallbackFn(projectRow) || '';
     }
   }
-  const formatted = formatKanbanDate(raw);
-  cell.textContent = row.type === 'project' ? formatted : '';
-  if(formatted && raw && formatted !== raw) cell.title = raw;
-  else if(formatted) cell.title = formatted;
+  const dateValue = extractDateFromRaw(raw);
+  const formatted = dateValue ? dateValue.toLocaleDateString('es-ES') : formatKanbanDate(raw);
+  let displayText = '';
+  if(row.type === 'project'){
+    if(showProjectRow) displayText = formatted;
+  } else if(row.type === 'phase' && phaseTargets){
+    const normalized = normalizePhaseName(row.phase.name);
+    if(phaseTargets.includes(normalized)){
+      displayText = formatted;
+    }
+  }
+  cell.textContent = displayText;
+  if(displayText){
+    if(dateValue){
+      cell.title = formatted;
+    } else if(formatted && raw && formatted !== raw) {
+      cell.title = String(raw);
+    } else if(formatted) {
+      cell.title = formatted;
+    }
+  }
   return cell;
 }
 
@@ -517,6 +605,48 @@ function getPhasePlannedEnd(row){
   const kanbanValue = getPhaseKanbanDate(row, 'Fecha fin planificada de la fase');
   if(kanbanValue) return kanbanValue;
   return row.phase.end || '';
+}
+
+function buildPhaseDateSpanElement(row, minStart, dayMs, pxPerDay){
+  if(row.type !== 'phase') return null;
+  if(IS_ORDER_GANTT) return null;
+  const normalized = normalizePhaseName(row.phase.name);
+  if(!normalized) return null;
+  const config = PHASE_DATE_LOOKUP[normalized];
+  if(!config) return null;
+  const startDate = getProjectFieldDateValue(row.project.id, config.fieldKeys);
+  if(!startDate) return null;
+  let endDate = null;
+  if(config.nextPrimary){
+    const nextConfig = PHASE_DATE_LOOKUP[config.nextPrimary];
+    if(nextConfig){
+      endDate = getProjectFieldDateValue(row.project.id, nextConfig.fieldKeys);
+    }
+  }
+  if(!endDate) endDate = startDate;
+  let startMs = startDate.getTime();
+  let endMs = endDate.getTime();
+  if(Number.isNaN(startMs)) return null;
+  if(Number.isNaN(endMs) || endMs < startMs) endMs = startMs;
+  const adjustedStart = Math.max(startMs, minStart);
+  const adjustedEnd = Math.max(adjustedStart, endMs);
+  const leftPx = ((adjustedStart - minStart)/dayMs) * pxPerDay;
+  const widthDays = Math.max(1, Math.round((adjustedEnd - adjustedStart)/dayMs) + 1);
+  const span = document.createElement('div');
+  span.className = 'gantt-task phase-date-span';
+  span.style.left = leftPx + 'px';
+  span.style.width = (widthDays * pxPerDay) + 'px';
+  const parts = [];
+  try {
+    parts.push(`${config.label}: ${startDate.toLocaleDateString('es-ES')}`);
+    if(endMs > startMs){
+      parts.push(`Hasta: ${endDate.toLocaleDateString('es-ES')}`);
+    }
+  } catch (err) {
+    // ignore formatting issues
+  }
+  if(parts.length) span.title = parts.join(' · ');
+  return span;
 }
 
 function normalizeSegmentPart(part){
@@ -1389,6 +1519,10 @@ function render(){
       rowDiv.appendChild(bar);
     } else {
       const segments = getPhaseSegmentsData(r.phase);
+      if(!IS_ORDER_GANTT){
+        const dateSpan = buildPhaseDateSpanElement(r, minStart, dayMs, pxPerDay);
+        if(dateSpan) rowDiv.appendChild(dateSpan);
+      }
       segments.forEach(segment => {
         const bar = document.createElement('div');
         const barClasses = ['gantt-task', 'phase-bar'];
@@ -1408,11 +1542,6 @@ function render(){
         if(Number.isNaN(startMs) || Number.isNaN(endMs)) return;
         bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
         bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
-        if(!IS_ORDER_GANTT){
-          bar.style.background = '#fff';
-          bar.style.border = '1px solid #bdbdbd';
-          bar.style.color = '#000';
-        }
         const label = formatSegmentLabel(r.phase.name, segment.part);
         bar.textContent = label;
         const titleParts = [];
