@@ -69,7 +69,7 @@
   .project-bar.project-unplanned { color:#ff8c00; }
   .phase-bar { background:transparent; border:2px solid #0b3c6f; color:#0b3c6f; box-sizing:border-box; z-index:2; }
   .phase-bar { pointer-events:auto; }
-  .phase-milestone-bar { position:absolute; top:0; height:100%; background:#dbe9ff; border:none; border-radius:2px; pointer-events:none; z-index:1; }
+  .phase-milestone-bar { position:absolute; top:0; height:100%; background:#dbe9ff; border:none; border-radius:2px; pointer-events:none; z-index:1; display:flex; align-items:center; justify-content:center; font-style:italic; color:#0b3c6f; font-weight:500; }
   body.orders-gantt-mode .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; z-index:auto; }
   .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
   .order-project-bar.order-project-unplanned { color:#ff8c00; }
@@ -195,10 +195,10 @@ const ORDER_PROJECT_DEADLINE_KEYS = [
 ];
 
 const PHASE_MILESTONES = [
-  { id: 'caldereria', tokens: ['caldereria', 'montar'], fieldKeys: ['CALDERERÍA', 'CALDERERIA'] },
-  { id: 'mecanizado', tokens: ['mecanizado', 'mecanizar'], fieldKeys: ['MECANIZADO'] },
-  { id: 'tratamiento', tokens: ['tratamiento'], fieldKeys: ['TRATAMIENTO'] },
-  { id: 'pintar', tokens: ['pintar'], fieldKeys: ['PINTAR', 'PINTADO'] },
+  { id: 'caldereria', label: 'CALDERERIA', tokens: ['caldereria', 'montar'], fieldKeys: ['CALDERERÍA', 'CALDERERIA'] },
+  { id: 'mecanizado', label: 'MECANIZADO', tokens: ['mecanizado', 'mecanizar'], fieldKeys: ['MECANIZADO'] },
+  { id: 'tratamiento', label: 'TRATAMIENTO', tokens: ['tratamiento'], fieldKeys: ['TRATAMIENTO'] },
+  { id: 'pintar', label: 'PINTAR', tokens: ['pintar'], fieldKeys: ['PINTAR', 'PINTADO'] },
 ];
 
 const PHASE_MILESTONES_BY_ID = {};
@@ -531,6 +531,9 @@ function buildPhaseMilestoneBar(row, minStartMs, maxEndMs, dayMs, pxPerDay){
   if(!Number.isFinite(widthDays) || widthDays < 1) widthDays = 1;
   const bar = document.createElement('div');
   bar.className = 'gantt-task phase-milestone-bar';
+  if(match.config && match.config.label){
+    bar.textContent = match.config.label;
+  }
   const leftPx = Math.max(0, ((effectiveStart - minStartMs)/dayMs) * pxPerDay);
   bar.style.left = leftPx + 'px';
   bar.style.width = (widthDays * pxPerDay) + 'px';
