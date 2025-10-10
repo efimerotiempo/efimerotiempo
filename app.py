@@ -4792,15 +4792,45 @@ def unsplit_phase():
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     proj['phases'][phase] = total
-    segs = proj.get('segment_starts', {}).get(phase)
-    if segs:
-        proj['segment_starts'][phase] = [segs[0]]
-        if not segs[0]:
-            proj['segment_starts'].pop(phase)
-    segw = proj.get('segment_workers', {}).get(phase)
-    if segw is not None:
-        proj['segment_workers'].pop(phase, None)
-        if not proj['segment_workers']:
+    seg_map = proj.get('segment_starts')
+    hour_map = proj.get('segment_start_hours')
+    starts = (seg_map or {}).get(phase) or []
+    hours_list = (hour_map or {}).get(phase) or []
+    chosen_idx = None
+    for idx, start in enumerate(starts):
+        if start:
+            chosen_idx = idx
+            break
+    if chosen_idx is None and starts:
+        first = starts[0]
+        if first:
+            chosen_idx = 0
+    chosen_start = None
+    chosen_hour = None
+    if chosen_idx is not None:
+        chosen_start = starts[chosen_idx]
+        if chosen_start:
+            if hours_list and chosen_idx < len(hours_list):
+                chosen_hour = hours_list[chosen_idx]
+    if seg_map is not None:
+        if chosen_start:
+            seg_map[phase] = [chosen_start]
+        else:
+            seg_map.pop(phase, None)
+        if not seg_map:
+            proj.pop('segment_starts', None)
+    if hour_map is not None:
+        if chosen_start:
+            hour_value = chosen_hour if chosen_hour is not None else 0
+            hour_map[phase] = [hour_value]
+        else:
+            hour_map.pop(phase, None)
+        if not hour_map:
+            proj.pop('segment_start_hours', None)
+    seg_workers = proj.get('segment_workers')
+    if seg_workers and phase in seg_workers:
+        seg_workers.pop(phase, None)
+        if not seg_workers:
             proj.pop('segment_workers')
     save_projects(projects)
     return '', 204
