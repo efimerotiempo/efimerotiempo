@@ -4451,6 +4451,7 @@ def update_phase_hours():
     pid = data.get('pid')
     phase = data.get('phase')
     hours_val = data.get('hours')
+    part_val = data.get('part')
     next_url = data.get('next') or request.args.get('next') or url_for('project_list')
     if not pid or not phase or hours_val is None:
         return jsonify({'error': 'Datos incompletos'}), 400
@@ -4458,6 +4459,14 @@ def update_phase_hours():
         hours = int(hours_val)
     except Exception:
         return jsonify({'error': 'Horas inválidas'}), 400
+    part_index = None
+    if part_val not in (None, '', 'null'):
+        try:
+            part_index = int(part_val)
+        except Exception:
+            return jsonify({'error': 'Parte inválida'}), 400
+        if part_index < 0:
+            return jsonify({'error': 'Parte inválida'}), 400
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
@@ -4482,21 +4491,53 @@ def update_phase_hours():
             sum(map(int, prev_val)) if isinstance(prev_val, list)
             else int(prev_val or 0)
         )
-        proj['phases'][phase] = hours
         assigned = proj.setdefault('assigned', {})
-        if prev_total <= 0:
-            assigned[phase] = UNPLANNED
+        if part_index is not None and isinstance(prev_val, list):
+            if part_index >= len(prev_val):
+                return jsonify({'error': 'Parte inválida'}), 400
+            diff = hours - prev_total
+            new_parts = [int(v) for v in prev_val]
+            new_value = new_parts[part_index] + diff
+            if new_value <= 0:
+                return jsonify({'error': 'La parte resultante debe ser mayor que cero'}), 400
+            new_parts[part_index] = new_value
+            proj['phases'][phase] = new_parts
+            if assigned.get(phase) in (None, ''):
+                assigned[phase] = UNPLANNED
+            seg_map = proj.get('segment_starts', {})
+            if seg_map and phase in seg_map:
+                seg_list = seg_map[phase]
+                if seg_list is not None and len(seg_list) < len(new_parts):
+                    seg_list.extend([None] * (len(new_parts) - len(seg_list)))
+            hour_map = proj.get('segment_start_hours', {})
+            if hour_map and phase in hour_map:
+                hour_list = hour_map[phase]
+                if hour_list is not None and len(hour_list) < len(new_parts):
+                    hour_list.extend([0] * (len(new_parts) - len(hour_list)))
+            worker_map = proj.get('segment_workers', {})
+            if worker_map and phase in worker_map:
+                worker_list = worker_map[phase]
+                if worker_list is not None and len(worker_list) < len(new_parts):
+                    worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(new_parts) - len(worker_list)))
         else:
-            assigned.setdefault(phase, UNPLANNED)
-        if was_list:
-            if proj.get('segment_starts'):
-                proj['segment_starts'].pop(phase, None)
-                if not proj['segment_starts']:
-                    proj.pop('segment_starts')
-            if proj.get('segment_workers'):
-                proj['segment_workers'].pop(phase, None)
-                if not proj['segment_workers']:
-                    proj.pop('segment_workers')
+            proj['phases'][phase] = hours
+            if prev_total <= 0:
+                assigned[phase] = UNPLANNED
+            else:
+                assigned.setdefault(phase, UNPLANNED)
+            if was_list:
+                if proj.get('segment_starts'):
+                    proj['segment_starts'].pop(phase, None)
+                    if not proj['segment_starts']:
+                        proj.pop('segment_starts')
+                if proj.get('segment_start_hours'):
+                    proj['segment_start_hours'].pop(phase, None)
+                    if not proj['segment_start_hours']:
+                        proj.pop('segment_start_hours')
+                if proj.get('segment_workers'):
+                    proj['segment_workers'].pop(phase, None)
+                    if not proj['segment_workers']:
+                        proj.pop('segment_workers')
         if phase == AUTO_RECEIVING_PHASE:
             proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
         else:

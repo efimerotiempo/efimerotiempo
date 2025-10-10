@@ -436,7 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
         let line = `<div${cls}>${ph}: ${total}h`;
         if (ph === context.phase) {
-          line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+          const partAttr = context.part !== undefined && context.part !== '' ? ` data-part="${context.part}"` : '';
+          line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
         }
         line += `</div>`;
         phaseLines.push(line);
@@ -678,11 +679,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ev.stopPropagation();
         const btn = hoursForm.querySelector('button');
         const val = document.getElementById('phase-hours-input').value;
+        const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+        if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
+          payload.part = btn.dataset.part;
+        }
         fetch(PHASE_HOURS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+          body: JSON.stringify(payload)
         }).then(resp => {
           if (resp.ok) {
             const url = new URL(location);
