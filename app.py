@@ -1139,15 +1139,6 @@ def attach_phase_starts(links_table, projects=None):
 
     if projects is None:
         projects = load_projects()
-    projects = filter_visible_projects(projects)
-    start_mapping = phase_start_map(projects)
-    montar_by_name = {}
-    plan_by_name = {}
-    ids_by_name = {}
-    montar_by_key = {}
-    plan_by_key = {}
-    ids_by_key = {}
-
     def _coerce_date(value):
         if isinstance(value, date):
             return value
@@ -1172,18 +1163,58 @@ def attach_phase_starts(links_table, projects=None):
             return value or None
         return None
 
-    for proj in projects:
-        phase_starts = start_mapping.get(proj['id'], {}) or {}
-        montar_serialized = _serialize_date(phase_starts.get('montar'))
-        first_phase_date = None
-        if isinstance(phase_starts, dict):
-            for raw_start in phase_starts.values():
-                candidate = _coerce_date(raw_start)
-                if not candidate:
+    projects = filter_visible_projects(projects)
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+    planned_phase_starts = {}
+    earliest_planned = {}
+
+    for worker, days in schedule_data.items():
+        if worker == UNPLANNED:
+            continue
+        for day_key, tasks in days.items():
+            day_fallback = _safe_iso_date(day_key)
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
                     continue
-                if first_phase_date is None or candidate < first_phase_date:
-                    first_phase_date = candidate
-        plan_serialized = first_phase_date.isoformat() if first_phase_date else None
+                start_value = task.get('start_time')
+                if isinstance(start_value, datetime):
+                    start_day = start_value.date()
+                else:
+                    start_day = None
+                    if start_value:
+                        start_day = _safe_iso_date(start_value)
+                    if not start_day:
+                        start_day = _coerce_date(task.get('start_date'))
+                if not start_day:
+                    start_day = day_fallback
+                if not start_day:
+                    continue
+                phase = task.get('phase')
+                if phase:
+                    phase_map = planned_phase_starts.setdefault(pid, {})
+                    current = phase_map.get(phase)
+                    if current is None or start_day < current:
+                        phase_map[phase] = start_day
+                current_earliest = earliest_planned.get(pid)
+                if current_earliest is None or start_day < current_earliest:
+                    earliest_planned[pid] = start_day
+
+    montar_by_name = {}
+    plan_by_name = {}
+    ids_by_name = {}
+    montar_by_key = {}
+    plan_by_key = {}
+    ids_by_key = {}
+
+    for proj in projects:
+        phase_starts = planned_phase_starts.get(proj['id'], {}) or {}
+        montar_serialized = _serialize_date(phase_starts.get('montar'))
+        first_phase_date = earliest_planned.get(proj['id'])
+        plan_serialized = (
+            first_phase_date.isoformat() if isinstance(first_phase_date, date) else None
+        )
 
         name = (proj.get('name') or '').strip()
         if not name:
