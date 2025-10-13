@@ -195,10 +195,34 @@ const ORDER_PROJECT_DEADLINE_KEYS = [
 ];
 
 const PHASE_MILESTONES = [
-  { id: 'caldereria', label: 'CALDERERIA', tokens: ['caldereria', 'montar'], fieldKeys: ['CALDERERÍA', 'CALDERERIA'] },
-  { id: 'mecanizado', label: 'MECANIZADO', tokens: ['mecanizado', 'mecanizar'], fieldKeys: ['MECANIZADO'] },
-  { id: 'tratamiento', label: 'TRATAMIENTO', tokens: ['tratamiento'], fieldKeys: ['TRATAMIENTO'] },
-  { id: 'pintar', label: 'PINTAR', tokens: ['pintar'], fieldKeys: ['PINTAR', 'PINTADO'] },
+  {
+    id: 'caldereria',
+    label: 'CALDERERIA',
+    tokens: ['caldereria'],
+    phaseTokens: ['montar'],
+    fieldKeys: ['CALDERERÍA', 'CALDERERIA']
+  },
+  {
+    id: 'mecanizado',
+    label: 'MECANIZADO',
+    tokens: ['mecanizado'],
+    phaseTokens: ['mecanizado', 'mecanizar'],
+    fieldKeys: ['MECANIZADO']
+  },
+  {
+    id: 'tratamiento',
+    label: 'TRATAMIENTO',
+    tokens: ['tratamiento'],
+    phaseTokens: ['tratamiento'],
+    fieldKeys: ['TRATAMIENTO']
+  },
+  {
+    id: 'pintar',
+    label: 'PINTAR',
+    tokens: ['pintar'],
+    phaseTokens: ['pintar', 'pintado'],
+    fieldKeys: ['PINTAR', 'PINTADO']
+  },
 ];
 
 const PHASE_MILESTONES_BY_ID = {};
@@ -448,7 +472,13 @@ function matchesPhaseMilestone(config, phaseName){
   if(!config || !phaseName) return false;
   const normalized = normalizePhaseName(phaseName);
   if(!normalized) return false;
-  return config.tokens.every(token => normalized.includes(token));
+  if(Array.isArray(config.phaseTokens) && config.phaseTokens.length){
+    return config.phaseTokens.some(token => normalized.includes(token));
+  }
+  if(Array.isArray(config.tokens) && config.tokens.length){
+    return config.tokens.every(token => normalized.includes(token));
+  }
+  return false;
 }
 
 function resolveMilestoneData(projectId, config){
