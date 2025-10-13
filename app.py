@@ -746,6 +746,58 @@ def parse_kanban_date(value):
         return parse_input_date(value)
 
 
+def _coerce_custom_field_map(raw):
+    """Return a dict mapping custom-field names to values."""
+
+    if isinstance(raw, dict):
+        return raw
+
+    if isinstance(raw, list):
+        fields = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get('name')
+            if not name:
+                continue
+            value = entry.get('value')
+            if isinstance(value, dict) and 'value' in value:
+                value = value['value']
+            fields[name] = value
+        return fields
+
+    return {}
+
+
+def _resolve_order_custom_field(card):
+    """Extract the "Fecha pedido" value (parsed date and raw text) from *card*."""
+
+    if not isinstance(card, dict):
+        return None, None
+
+    raw_fields = card.get('customFields') or card.get('customfields')
+    fields = _coerce_custom_field_map(raw_fields)
+    if not fields:
+        return None, None
+
+    for key, value in fields.items():
+        if not isinstance(key, str):
+            continue
+        if key.strip().lower() != 'fecha pedido':
+            continue
+        if isinstance(value, dict) and 'value' in value:
+            value = value['value']
+        if value in (None, ''):
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        parsed = parse_kanban_date(text)
+        return parsed, text
+
+    return None, None
+
+
 def _sort_cell_tasks(schedule):
     """Sort tasks in each day so started phases appear before unstarted ones."""
     for days in schedule.values():
@@ -901,6 +953,13 @@ def build_project_links(compras_raw):
             if lane:
                 serialized['lane'] = lane
 
+        if 'order_date' not in serialized or 'order_date_raw' not in serialized:
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw and not serialized.get('order_date_raw'):
+                serialized['order_date_raw'] = order_raw
+            if order_date_obj and not serialized.get('order_date'):
+                serialized['order_date'] = order_date_obj.isoformat()
+
         return serialized
 
     for data in compras_raw.values():
@@ -1011,6 +1070,11 @@ def build_project_links(compras_raw):
                 'deadline': deadline.isoformat() if deadline else None,
                 'lane': lane_name,
             }
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw:
+                detail['order_date_raw'] = order_raw
+            if order_date_obj:
+                detail['order_date'] = order_date_obj.isoformat()
             if detail['id']:
                 seguimiento_by_id[detail['id']] = detail
             titles = seguimiento_titles.setdefault(normalized_child_title, [])
@@ -1079,6 +1143,12 @@ def build_project_links(compras_raw):
                     serialized = {'title': lane_title}
                     if lane_id:
                         serialized['id'] = lane_id
+                    order_value = lane_detail.get('order_date')
+                    if order_value:
+                        serialized['order_date'] = order_value
+                    order_raw_value = lane_detail.get('order_date_raw')
+                    if order_raw_value:
+                        serialized['order_date_raw'] = order_raw_value
                     column_name = lane_detail.get('column')
                     if column_name:
                         serialized['column'] = column_name
@@ -1104,6 +1174,12 @@ def build_project_links(compras_raw):
                         serialized['id'] = child_id
                     detail = seguimiento_by_id.get(child_id) if child_id else None
                     if detail:
+                        order_value = detail.get('order_date')
+                        if order_value:
+                            serialized['order_date'] = order_value
+                        order_raw_value = detail.get('order_date_raw')
+                        if order_raw_value:
+                            serialized['order_date_raw'] = order_raw_value
                         column_name = detail.get('column')
                         if column_name:
                             serialized['column'] = column_name
@@ -1407,6 +1483,51 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
     return pedidos, unconfirmed, calendar_titles
 
 
+def annotate_order_details(entries, *, today=None):
+    """Add formatted order dates and elapsed days to link details."""
+
+    if today is None:
+        today = local_today()
+
+    if not entries:
+        return entries
+
+    for entry in entries:
+        details = entry.get('link_details')
+        if not isinstance(details, list):
+            continue
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            order_date_obj = None
+            order_iso = detail.get('order_date')
+            if isinstance(order_iso, str) and order_iso.strip():
+                text = order_iso.strip()
+                try:
+                    order_date_obj = date.fromisoformat(text[:10])
+                except ValueError:
+                    parsed = parse_kanban_date(text)
+                    if isinstance(parsed, date):
+                        order_date_obj = parsed
+                else:
+                    detail['order_date'] = order_date_obj.isoformat()
+            if order_date_obj is None:
+                raw_value = detail.get('order_date_raw')
+                if isinstance(raw_value, str) and raw_value.strip():
+                    parsed = parse_kanban_date(raw_value.strip())
+                    if isinstance(parsed, date):
+                        order_date_obj = parsed
+                        detail['order_date'] = parsed.isoformat()
+            if order_date_obj is not None:
+                elapsed = business_days_since(order_date_obj, today=today)
+                if elapsed is not None:
+                    detail['order_days'] = elapsed
+            elif 'order_days' in detail:
+                detail.pop('order_days', None)
+
+    return entries
+
+
 def filter_project_links_by_titles(
     links_table, valid_titles, valid_ids=None, kanban_cards=None
 ):
@@ -1526,6 +1647,11 @@ def filter_project_links_by_titles(
                     detail_copy['lane'] = lane
                 if deadline and not detail_copy.get('deadline'):
                     detail_copy['deadline'] = deadline.isoformat()
+                order_date_obj, order_raw = _resolve_order_custom_field(card)
+                if order_raw and not detail_copy.get('order_date_raw'):
+                    detail_copy['order_date_raw'] = order_raw
+                if order_date_obj and not detail_copy.get('order_date'):
+                    detail_copy['order_date'] = order_date_obj.isoformat()
 
             kept_details.append(detail_copy)
             seen_norms.add(matched_norm)
@@ -1579,6 +1705,11 @@ def filter_project_links_by_titles(
                 detail['lane'] = lane
             if due:
                 detail['deadline'] = due.isoformat()
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw:
+                detail['order_date_raw'] = order_raw
+            if order_date_obj:
+                detail['order_date'] = order_date_obj.isoformat()
             entry = {
                 'project': project_name or title,
                 'title': title,
@@ -2807,6 +2938,7 @@ def calendar_pedidos():
         base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
     enriched_links = attach_phase_starts(filtered_links, projects)
+    annotate_order_details(enriched_links, today=today)
     links_table = [
         item
         for item in enriched_links
@@ -3013,6 +3145,7 @@ def project_links_api():
         base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
     enriched_links = attach_phase_starts(filtered_links, projects)
+    annotate_order_details(enriched_links, today=today)
     lane_filtered = [
         item
         for item in enriched_links
@@ -3493,6 +3626,52 @@ def _subtract_business_days(day, count):
         if current.weekday() not in WEEKEND:
             removed += 1
     return current
+
+
+def business_days_elapsed(start, end):
+    """Return the number of business days between *start* and *end*.
+
+    The result excludes weekends and does not count the starting day.
+    A positive value means ``end`` is after ``start``; negative values
+    indicate the opposite direction.
+    """
+
+    if not isinstance(start, date) or not isinstance(end, date):
+        return None
+
+    if start == end:
+        return 0
+
+    if end >= start:
+        begin = start
+        finish = end
+        sign = 1
+    else:
+        begin = end
+        finish = start
+        sign = -1
+
+    delta_days = (finish - begin).days
+    full_weeks, remainder = divmod(delta_days, 7)
+    business = full_weeks * 5
+    for offset in range(1, remainder + 1):
+        candidate = begin + timedelta(days=offset)
+        if candidate.weekday() not in WEEKEND:
+            business += 1
+
+    return business * sign
+
+
+def business_days_since(start, *, today=None):
+    """Return business days elapsed from *start* to *today* (>= 0)."""
+
+    if today is None:
+        today = local_today()
+
+    diff = business_days_elapsed(start, today)
+    if diff is None:
+        return None
+    return diff if diff >= 0 else 0
 
 
 def _should_highlight_order(order_day, planned_start, *, window=3, today=None):

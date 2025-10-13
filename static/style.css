@@ -364,9 +364,31 @@ body.columna-1-resizing * {
 }
 
 .columna-1-table .due-cell,
-.columna-1-table .start-cell {
+.columna-1-table .start-cell,
+.columna-1-table .order-date-cell,
+.columna-1-table .order-count-cell {
     text-align: right;
     white-space: nowrap;
+}
+
+.columna-1-table .order-date-cell,
+.columna-1-table .order-count-cell {
+    text-align: center;
+}
+
+.columna-1-table .order-date-entry,
+.columna-1-table .order-count-entry {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.columna-1-table .order-date-entry:last-child,
+.columna-1-table .order-count-entry:last-child {
+    margin-bottom: 0;
+}
+
+.columna-1-table .order-count-entry {
+    font-weight: 600;
 }
 
 .columna-1-table .proj-due {

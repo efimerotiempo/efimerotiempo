@@ -82,6 +82,8 @@
           <col data-col-key="project" data-default-width="380">
           <col data-col-key="due" data-default-width="140">
           <col data-col-key="start" data-default-width="170">
+          <col data-col-key="order-date" data-default-width="160">
+          <col data-col-key="order-count" data-default-width="120">
           <col data-col-key="links" data-default-width="360">
         </colgroup>
         <thead>
@@ -89,6 +91,8 @@
             <th scope="col">Proyecto</th>
             <th scope="col">Entrega (Fecha tope)</th>
             <th scope="col">Inicio planificado</th>
+            <th scope="col">Fecha pedido</th>
+            <th scope="col">Conteo</th>
             <th scope="col">Fases</th>
           </tr>
         </thead>
@@ -129,6 +133,37 @@
             {% if start_display %}
               <span class="proj-start">{{ start_display }}</span>
             {% endif %}
+            </td>
+            <td class="order-date-cell">
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_value = detail.order_date %}
+                {% set order_raw = detail.order_date_raw %}
+              <div class="order-date-entry"
+                   {% if order_value %}data-order="{{ order_value }}"{% endif %}>
+                {% if order_value %}
+                  {{ order_value|format_due_date }}
+                {% elif order_raw %}
+                  {{ order_raw }}
+                {% else %}
+                  &nbsp;
+                {% endif %}
+              </div>
+            {% endfor %}
+            </td>
+            <td class="order-count-cell">
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_days = detail.order_days %}
+              <div class="order-count-entry"
+                   {% if order_days is not none %}data-days="{{ order_days }}"{% endif %}>
+                {% if order_days is not none %}
+                  {{ order_days }}
+                {% else %}
+                  &nbsp;
+                {% endif %}
+              </div>
+            {% endfor %}
             </td>
             <td class="links-cell">
             {% for link in item.links %}
@@ -1283,11 +1318,45 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           row.appendChild(startCell);
 
+          const orderCell = document.createElement('td');
+          orderCell.className = 'order-date-cell';
+
+          const countCell = document.createElement('td');
+          countCell.className = 'order-count-cell';
+
           const linksCell = document.createElement('td');
           linksCell.className = 'links-cell';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
-          item.links.forEach((link, idx) => {
+          const links = Array.isArray(item.links) ? item.links : [];
+          links.forEach((link, idx) => {
             const detail = linkDetails[idx] || {};
+            const orderDiv = document.createElement('div');
+            orderDiv.className = 'order-date-entry';
+            const orderValue = detail && detail.order_date ? String(detail.order_date).trim() : '';
+            const orderRaw = detail && detail.order_date_raw ? String(detail.order_date_raw).trim() : '';
+            if (orderValue) {
+              orderDiv.dataset.order = orderValue;
+              orderDiv.textContent = formatDueDisplay(orderValue);
+              if (!orderDiv.textContent) orderDiv.textContent = orderValue;
+            } else if (orderRaw) {
+              orderDiv.textContent = orderRaw;
+            } else {
+              orderDiv.appendChild(document.createTextNode('\u00a0'));
+            }
+            orderCell.appendChild(orderDiv);
+
+            const countDiv = document.createElement('div');
+            countDiv.className = 'order-count-entry';
+            const daysValue = detail && detail.order_days;
+            const daysNumber = typeof daysValue === 'number' ? daysValue : Number(daysValue);
+            if (Number.isFinite(daysNumber)) {
+              countDiv.dataset.days = `${daysNumber}`;
+              countDiv.textContent = `${daysNumber}`;
+            } else {
+              countDiv.appendChild(document.createTextNode('\u00a0'));
+            }
+            countCell.appendChild(countDiv);
+
             const linkDiv = document.createElement('div');
             linkDiv.className = 'link-title';
             linkDiv.dataset.title = link;
@@ -1305,6 +1374,8 @@ document.addEventListener('DOMContentLoaded', () => {
             linkDiv.textContent = link;
             linksCell.appendChild(linkDiv);
           });
+          row.appendChild(orderCell);
+          row.appendChild(countCell);
           row.appendChild(linksCell);
 
           resolveRowPid(row);
