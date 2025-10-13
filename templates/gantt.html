@@ -200,6 +200,7 @@ const PHASE_MILESTONES = [
     label: 'CALDERERIA',
     tokens: ['caldereria'],
     phaseTokens: ['montar'],
+    excludePhaseTokens: ['montar 2'],
     fieldKeys: ['CALDERERÍA', 'CALDERERIA']
   },
   {
@@ -228,6 +229,15 @@ const PHASE_MILESTONES = [
 const PHASE_MILESTONES_BY_ID = {};
 PHASE_MILESTONES.forEach((cfg, index) => {
   cfg.index = index;
+  cfg.normalizedTokens = Array.isArray(cfg.tokens)
+    ? cfg.tokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedPhaseTokens = Array.isArray(cfg.phaseTokens)
+    ? cfg.phaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedExcludePhaseTokens = Array.isArray(cfg.excludePhaseTokens)
+    ? cfg.excludePhaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
   PHASE_MILESTONES_BY_ID[cfg.id] = cfg;
 });
 
@@ -472,11 +482,16 @@ function matchesPhaseMilestone(config, phaseName){
   if(!config || !phaseName) return false;
   const normalized = normalizePhaseName(phaseName);
   if(!normalized) return false;
-  if(Array.isArray(config.phaseTokens) && config.phaseTokens.length){
-    return config.phaseTokens.some(token => normalized.includes(token));
+  if(Array.isArray(config.normalizedExcludePhaseTokens) && config.normalizedExcludePhaseTokens.length){
+    if(config.normalizedExcludePhaseTokens.some(token => token && normalized.includes(token))){
+      return false;
+    }
   }
-  if(Array.isArray(config.tokens) && config.tokens.length){
-    return config.tokens.every(token => normalized.includes(token));
+  if(Array.isArray(config.normalizedPhaseTokens) && config.normalizedPhaseTokens.length){
+    return config.normalizedPhaseTokens.some(token => token && normalized.includes(token));
+  }
+  if(Array.isArray(config.normalizedTokens) && config.normalizedTokens.length){
+    return config.normalizedTokens.every(token => token && normalized.includes(token));
   }
   return false;
 }
@@ -630,16 +645,9 @@ function buildMilestoneFieldCell(row, milestoneId){
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
   const config = PHASE_MILESTONES_BY_ID[milestoneId];
   if(!config) return cell;
+  if(row.type !== 'phase') return cell;
   const data = resolveMilestoneData(row.project.id, config);
-  if(row.type === 'project'){
-    if(data && data.formatted){
-      cell.textContent = data.formatted;
-      if(data.raw && data.formatted !== data.raw) cell.title = data.raw;
-      else cell.title = data.formatted;
-    }
-    return cell;
-  }
-  if(row.type === 'phase' && data && matchesPhaseMilestone(config, row.phase.name)){
+  if(data && matchesPhaseMilestone(config, row.phase.name)){
     const display = data.formatted || data.raw;
     if(display){
       cell.textContent = display;
