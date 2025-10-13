@@ -714,7 +714,17 @@ let dragInfo = null;
       if (info) {
         const status = (info.material_status || '').toString();
         if (status === 'missing') {
-          metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
+          const missingTitles = Array.isArray(info.material_missing_titles)
+            ? info.material_missing_titles.filter(title => title && `${title}`.trim() !== '')
+            : [];
+          if (missingTitles.length) {
+            const items = missingTitles
+              .map(title => `<li>${escapeHtml(title)}</li>`)
+              .join('');
+            metaLines.push(`<div class="material-status-missing-block"><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong><ul class="material-status-missing-list">${items}</ul></div>`);
+          } else {
+            metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
+          }
         } else if (status === 'pending') {
           metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
         } else if (status === 'archived') {

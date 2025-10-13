@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
 from itertools import zip_longest
+from collections import defaultdict
 import uuid
 import os
 import copy
@@ -431,10 +432,16 @@ READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
 SSE_CLIENTS = []
 
 
-def compute_material_status_map(projects):
-    """Return a mapping pid->material availability status for planning views."""
+def compute_material_status_map(projects, *, include_missing_titles=False):
+    """Return a mapping pid->material availability status for planning views.
+
+    When ``include_missing_titles`` is ``True`` the function also returns a
+    second dictionary mapping each project id to the list of missing material
+    card titles detected in alert columns.
+    """
 
     status_map = {}
+    missing_titles_map = defaultdict(list) if include_missing_titles else None
     try:
         compras_raw, _ = load_compras_raw()
         raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
@@ -465,7 +472,11 @@ def compute_material_status_map(projects):
                     project_columns.add(column_key)
                 if column_key in MATERIAL_ALERT_COLUMNS:
                     status_map[pid_key] = 'missing'
-                    break
+                    if missing_titles_map is not None:
+                        title = (detail.get('title') or '').strip()
+                        if title and title not in missing_titles_map[pid_key]:
+                            missing_titles_map[pid_key].append(title)
+                    continue
         for pid_key, columns in columns_by_pid.items():
             if not columns:
                 continue
@@ -478,6 +489,11 @@ def compute_material_status_map(projects):
                 status_map[pid_key] = 'pending'
     except Exception:  # pragma: no cover - defensive logging
         app.logger.exception('Failed to compute material status from project links')
+    if missing_titles_map is not None:
+        for pid_key, status in status_map.items():
+            if status == 'missing':
+                missing_titles_map.setdefault(pid_key, [])
+        return status_map, {k: list(v) for k, v in missing_titles_map.items()}
     return status_map
 
 
@@ -2723,7 +2739,9 @@ def calendar_view():
             except ValueError:
                 fmt = ''
         worker_note_map[w] = {'text': text, 'edited': fmt}
-    material_status_map = compute_material_status_map(projects)
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
 
     project_map = {}
     for p in projects:
@@ -2736,7 +2754,9 @@ def calendar_view():
             'phase_sequence': list((p.get('phases') or {}).keys()),
         }
         if pid:
-            project_entry['material_status'] = material_status_map.get(str(pid), 'complete')
+            pid_key = str(pid)
+            project_entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            project_entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
         project_map[p['id']] = project_entry
     start_map = phase_start_map(projects)
 
@@ -2846,7 +2866,9 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
-    material_status_map = compute_material_status_map(projects)
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
 
     project_map = {}
     for p in projects:
@@ -2859,7 +2881,9 @@ def calendar_pedidos():
         }
         pid = p.get('id')
         if pid:
-            entry['material_status'] = material_status_map.get(str(pid), 'complete')
+            pid_key = str(pid)
+            entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 
@@ -4279,7 +4303,9 @@ def complete():
             except ValueError:
                 fmt = ''
         worker_note_map[w] = {'text': text, 'edited': fmt}
-    material_status_map = compute_material_status_map(projects)
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
 
     project_map = {}
     for p in projects:
@@ -4292,7 +4318,9 @@ def complete():
         }
         pid = p.get('id')
         if pid:
-            entry['material_status'] = material_status_map.get(str(pid), 'complete')
+            pid_key = str(pid)
+            entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 

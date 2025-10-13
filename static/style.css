@@ -90,6 +90,16 @@ table.schedule td.weekend-cell {
 .info-popup .material-status-pending { color: #546e7a; }
 .info-popup .material-status-complete { color: #2e7d32; }
 .info-popup .material-status-archived { color: #6a1b9a; }
+.info-popup .material-status-missing-block { color: #f57c00; }
+.info-popup .material-status-missing-list {
+  margin: 4px 0 0 1.25em;
+  padding: 0;
+  list-style: disc;
+}
+.info-popup .material-status-missing-list li {
+  margin: 0;
+  color: inherit;
+}
 #split-btn { margin-top: 4px; }
 .phase-delete-btn {
     background: red;
