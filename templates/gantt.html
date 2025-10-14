@@ -67,7 +67,10 @@
   .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
   .project-bar { cursor:pointer; background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
   .project-bar.project-unplanned { color:#ff8c00; }
-  .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
+  .phase-bar { background:transparent; border:2px solid #0b3c6f; color:#0b3c6f; box-sizing:border-box; z-index:2; }
+  .phase-bar { pointer-events:auto; }
+  .phase-milestone-bar { position:absolute; top:0; height:100%; background:#dbe9ff; border:none; border-radius:2px; pointer-events:none; z-index:1; display:flex; align-items:center; justify-content:center; font-style:italic; color:#0b3c6f; font-weight:500; }
+  body.orders-gantt-mode .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; z-index:auto; }
   .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
   .order-project-bar.order-project-unplanned { color:#ff8c00; }
   .order-phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
@@ -147,6 +150,16 @@ let currentSort = localStorage.getItem('ganttSort') || null;
 const DAY_MS = 24*60*60*1000;
 const SPLIT_WORKDAY_HOURS = 8;
 
+function toStartOfDay(value){
+  const raw = (value ?? '').toString().trim();
+  if(!raw){
+    return new Date(NaN);
+  }
+  const normalized = raw.replace(' ', 'T');
+  const base = normalized.split('T')[0];
+  return new Date(base + 'T00:00:00');
+}
+
 function escapeHtml(value) {
   if (value === undefined || value === null) return '';
   return value
@@ -180,6 +193,55 @@ const ORDER_PROJECT_DEADLINE_KEYS = [
   'Fecha tope proyecto',
   'Fecha Tope Proyecto'
 ];
+
+const PHASE_MILESTONES = [
+  {
+    id: 'caldereria',
+    label: 'CALDERERIA',
+    tokens: ['caldereria'],
+    phaseTokens: ['montar'],
+    excludePhaseTokens: ['montar 2'],
+    fieldKeys: ['CALDERERÍA', 'CALDERERIA']
+  },
+  {
+    id: 'mecanizado',
+    label: 'MECANIZADO',
+    tokens: ['mecanizado'],
+    phaseTokens: ['mecanizado', 'mecanizar'],
+    fieldKeys: ['MECANIZADO']
+  },
+  {
+    id: 'tratamiento',
+    label: 'TRATAMIENTO',
+    tokens: ['tratamiento'],
+    phaseTokens: ['tratamiento'],
+    fieldKeys: ['TRATAMIENTO']
+  },
+  {
+    id: 'pintar',
+    label: 'PINTAR',
+    tokens: ['pintar'],
+    phaseTokens: ['pintar', 'pintado'],
+    fieldKeys: ['PINTAR', 'PINTADO']
+  },
+];
+
+const PHASE_MILESTONES_BY_ID = {};
+PHASE_MILESTONES.forEach((cfg, index) => {
+  cfg.index = index;
+  cfg.normalizedTokens = Array.isArray(cfg.tokens)
+    ? cfg.tokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedPhaseTokens = Array.isArray(cfg.phaseTokens)
+    ? cfg.phaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedExcludePhaseTokens = Array.isArray(cfg.excludePhaseTokens)
+    ? cfg.excludePhaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  PHASE_MILESTONES_BY_ID[cfg.id] = cfg;
+});
+
+const PROJECT_MILESTONE_CACHE = {};
 
 function parseSplitHours(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -293,10 +355,10 @@ const PHASE_SUMMARY_COLUMNS = [
   { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
   { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
   { key: 'material', title: 'MATERIAL', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
-  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['CALDERERÍA', 'CALDERERIA']) },
-  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MECANIZADO']) },
-  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['TRATAMIENTO']) },
-  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['PINTAR', 'PINTADO']) },
+  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'caldereria') },
+  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'mecanizado') },
+  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'tratamiento') },
+  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'pintar') },
   { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
   { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
 ];
@@ -410,6 +472,122 @@ function getProjectFieldValue(info, keys){
   return '';
 }
 
+function getProjectMilestoneCache(projectId){
+  if(!projectId) return null;
+  if(!PROJECT_MILESTONE_CACHE[projectId]) PROJECT_MILESTONE_CACHE[projectId] = {};
+  return PROJECT_MILESTONE_CACHE[projectId];
+}
+
+function matchesPhaseMilestone(config, phaseName){
+  if(!config || !phaseName) return false;
+  const normalized = normalizePhaseName(phaseName);
+  if(!normalized) return false;
+  if(Array.isArray(config.normalizedExcludePhaseTokens) && config.normalizedExcludePhaseTokens.length){
+    if(config.normalizedExcludePhaseTokens.some(token => token && normalized.includes(token))){
+      return false;
+    }
+  }
+  if(Array.isArray(config.normalizedPhaseTokens) && config.normalizedPhaseTokens.length){
+    return config.normalizedPhaseTokens.some(token => token && normalized.includes(token));
+  }
+  if(Array.isArray(config.normalizedTokens) && config.normalizedTokens.length){
+    return config.normalizedTokens.every(token => token && normalized.includes(token));
+  }
+  return false;
+}
+
+function resolveMilestoneData(projectId, config){
+  if(!config || !projectId) return null;
+  const cache = getProjectMilestoneCache(projectId);
+  if(cache && Object.prototype.hasOwnProperty.call(cache, config.id)) return cache[config.id];
+  const info = getProjectInfo(projectId);
+  if(!info){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  const rawValue = getProjectFieldValue(info, config.fieldKeys);
+  if(rawValue === null || rawValue === undefined){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  let primary = rawValue;
+  if(typeof primary === 'object'){
+    if(primary && typeof primary.date !== 'undefined') primary = primary.date;
+    else primary = '';
+  }
+  const text = primary === undefined || primary === null ? '' : String(primary).trim();
+  if(!text){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  const formatted = formatKanbanDate(text) || text;
+  let iso = '';
+  const candidate = findDateCandidate(text) || text;
+  const parsed = parseDateString(candidate);
+  if(parsed) iso = madridDateISO(parsed);
+  const result = { raw: text, formatted, iso };
+  if(cache) cache[config.id] = result;
+  return result;
+}
+
+function getNextMilestoneIso(projectId, currentConfig){
+  if(!currentConfig) return '';
+  for(let i=currentConfig.index + 1; i<PHASE_MILESTONES.length; i+=1){
+    const candidateConfig = PHASE_MILESTONES[i];
+    const data = resolveMilestoneData(projectId, candidateConfig);
+    if(data && data.iso) return data.iso;
+  }
+  return '';
+}
+
+function findPhaseMilestoneMatch(projectId, phaseName){
+  if(!phaseName) return null;
+  for(const config of PHASE_MILESTONES){
+    if(matchesPhaseMilestone(config, phaseName)){
+      const data = resolveMilestoneData(projectId, config);
+      if(data) return { config, data };
+      return { config, data: null };
+    }
+  }
+  return null;
+}
+
+function buildPhaseMilestoneBar(row, minStartMs, maxEndMs, dayMs, pxPerDay){
+  if(IS_ORDER_GANTT || !row || row.type !== 'phase') return null;
+  const match = findPhaseMilestoneMatch(row.project.id, row.phase.name);
+  if(!match || !match.data || !match.data.iso) return null;
+  const startDate = toStartOfDay(match.data.iso);
+  const startMs = startDate.getTime();
+  if(Number.isNaN(startMs)) return null;
+  let endMs = startMs;
+  const nextIso = getNextMilestoneIso(row.project.id, match.config);
+  if(nextIso){
+    const nextDate = toStartOfDay(nextIso);
+    const nextMs = nextDate.getTime();
+    if(!Number.isNaN(nextMs)) endMs = nextMs;
+  }
+  if(endMs < startMs) endMs = startMs;
+  const effectiveStart = Math.max(startMs, minStartMs);
+  const timelineMax = Number.isFinite(maxEndMs) ? maxEndMs : endMs;
+  let effectiveEnd = Math.max(endMs, startMs);
+  if(Number.isFinite(timelineMax)) effectiveEnd = Math.min(effectiveEnd, timelineMax);
+  if(effectiveEnd < effectiveStart) effectiveEnd = effectiveStart;
+  let widthDays = Math.round((effectiveEnd - effectiveStart)/dayMs) + 1;
+  if(!Number.isFinite(widthDays) || widthDays < 1) widthDays = 1;
+  const bar = document.createElement('div');
+  bar.className = 'gantt-task phase-milestone-bar';
+  if(match.config && match.config.label){
+    bar.textContent = match.config.label;
+  }
+  const leftPx = Math.max(0, ((effectiveStart - minStartMs)/dayMs) * pxPerDay);
+  bar.style.left = leftPx + 'px';
+  bar.style.width = (widthDays * pxPerDay) + 'px';
+  bar.style.zIndex = '1';
+  const title = match.data.formatted || match.data.raw;
+  if(title) bar.title = title;
+  return bar;
+}
+
 function buildMainSummaryCell(row){
   const cell = document.createElement('div');
   cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
@@ -459,6 +637,24 @@ function buildProjectFieldCell(row, keys, fallbackFn){
   cell.textContent = row.type === 'project' ? formatted : '';
   if(formatted && raw && formatted !== raw) cell.title = raw;
   else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function buildMilestoneFieldCell(row, milestoneId){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  const config = PHASE_MILESTONES_BY_ID[milestoneId];
+  if(!config) return cell;
+  if(row.type !== 'phase') return cell;
+  const data = resolveMilestoneData(row.project.id, config);
+  if(data && matchesPhaseMilestone(config, row.phase.name)){
+    const display = data.formatted || data.raw;
+    if(display){
+      cell.textContent = display;
+      if(data.raw && display !== data.raw) cell.title = data.raw;
+      else cell.title = display;
+    }
+  }
   return cell;
 }
 
@@ -834,7 +1030,8 @@ function buildPhaseSection(info, context) {
       const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
       let line = `<div${cls}>${ph}: ${total}h`;
       if (ph === context.phase) {
-        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+        const partAttr = context.part !== undefined && context.part !== '' ? ` data-part="${context.part}"` : '';
+        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
       }
       line += `</div>`;
       phaseLines.push(line);
@@ -1120,11 +1317,15 @@ function openPhasePopup(context, anchorRect) {
       ev.stopPropagation();
       const btn = hoursForm.querySelector('button');
       const val = document.getElementById('phase-hours-input').value;
+      const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+      if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
+        payload.part = btn.dataset.part;
+      }
       fetch(PHASE_HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+        body: JSON.stringify(payload)
       }).then(resp => {
         if (resp.ok) {
           const url = new URL(location);
@@ -1205,25 +1406,16 @@ function render(){
     return;
   }
   const dayMs = DAY_MS;
-  const startOfDay = d => {
-    const raw = (d ?? '').toString().trim();
-    if(!raw){
-      return new Date(NaN);
-    }
-    const normalized = raw.replace(' ', 'T');
-    const base = normalized.split('T')[0];
-    return new Date(base + 'T00:00:00');
-  };
   const allStarts = [];
   const allEnds = [];
   projects.forEach(p=>{
-    const ps = startOfDay(p.start);
-    const pe = startOfDay(p.end);
+    const ps = toStartOfDay(p.start);
+    const pe = toStartOfDay(p.end);
     allStarts.push(ps.getTime());
     allEnds.push(pe.getTime());
     p.phases.forEach(ph=>{
-      const s = startOfDay(ph.start);
-      const e = startOfDay(ph.end);
+      const s = toStartOfDay(ph.start);
+      const e = toStartOfDay(ph.end);
       allStarts.push(s.getTime());
       allEnds.push(e.getTime());
     });
@@ -1294,8 +1486,8 @@ function render(){
         }
       }
       bar.className = barClasses.join(' ');
-      const startMs = startOfDay(r.project.start).getTime();
-      const endMs = startOfDay(r.project.end).getTime();
+      const startMs = toStartOfDay(r.project.start).getTime();
+      const endMs = toStartOfDay(r.project.end).getTime();
       bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
       bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
       if(!IS_ORDER_GANTT){
@@ -1313,7 +1505,7 @@ function render(){
       ];
       const seenDeadlines = new Set();
       deadlineSources.forEach(raw => {
-        const deadlineDate = startOfDay(raw);
+        const deadlineDate = toStartOfDay(raw);
         const deadlineMs = deadlineDate.getTime();
         if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
         seenDeadlines.add(deadlineMs);
@@ -1345,8 +1537,8 @@ function render(){
         phases.forEach(ph => {
           const segs = getPhaseSegmentsData(ph);
           segs.forEach(segment => {
-            const segStartMs = startOfDay(segment.start || ph.start).getTime();
-            const segEndMs = startOfDay(segment.end || segment.start || ph.end).getTime();
+            const segStartMs = toStartOfDay(segment.start || ph.start).getTime();
+            const segEndMs = toStartOfDay(segment.end || segment.start || ph.end).getTime();
             if(Number.isNaN(segStartMs) || Number.isNaN(segEndMs)) return;
             let dist = 0;
             if(clickedMs < segStartMs) dist = segStartMs - clickedMs;
@@ -1388,6 +1580,8 @@ function render(){
       });
       rowDiv.appendChild(bar);
     } else {
+      const milestoneBar = buildPhaseMilestoneBar(r, minStart, maxEnd, dayMs, pxPerDay);
+      if(milestoneBar) rowDiv.appendChild(milestoneBar);
       const segments = getPhaseSegmentsData(r.phase);
       segments.forEach(segment => {
         const bar = document.createElement('div');
@@ -1401,17 +1595,18 @@ function render(){
         bar.className = barClasses.join(' ');
         const segStartValue = segment.start || r.phase.start;
         const segEndValue = segment.end || segment.start || r.phase.end || segStartValue;
-        const segmentStart = startOfDay(segStartValue);
-        const segmentEnd = startOfDay(segEndValue);
+        const segmentStart = toStartOfDay(segStartValue);
+        const segmentEnd = toStartOfDay(segEndValue);
         const startMs = segmentStart.getTime();
         const endMs = segmentEnd.getTime();
         if(Number.isNaN(startMs) || Number.isNaN(endMs)) return;
         bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
         bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
         if(!IS_ORDER_GANTT){
-          bar.style.background = '#fff';
-          bar.style.border = '1px solid #bdbdbd';
-          bar.style.color = '#000';
+          bar.style.background = 'transparent';
+          bar.style.border = '2px solid #0b3c6f';
+          bar.style.color = '#0b3c6f';
+          bar.style.zIndex = '2';
         }
         const label = formatSegmentLabel(r.phase.name, segment.part);
         bar.textContent = label;
