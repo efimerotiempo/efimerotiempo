@@ -158,10 +158,12 @@ table.schedule td.weekend-cell {
     display: flex;
     gap: 8px;
     margin: 8px 0;
+    align-self: flex-start;
+    width: fit-content;
 }
 .unplanned-sort-btn {
-    flex: 1 1 0;
-    padding: 6px 10px;
+    flex: 0 0 auto;
+    padding: 2px 0;
     border: 1px solid #1e88e5;
     background: #f4f8ff;
     color: #1e4f7a;
@@ -170,6 +172,8 @@ table.schedule td.weekend-cell {
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+    line-height: 1.6;
 }
 .unplanned-sort-btn:hover {
     background: #e3f1ff;
