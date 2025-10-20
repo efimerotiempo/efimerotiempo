@@ -141,6 +141,8 @@ table.schedule td.weekend-cell {
 .complete-calendar { flex: none; }
 .complete-projects { flex: none; overflow-x: auto; }
 .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+.controls .order-toggle { padding: 4px 8px; border: 1px solid #777; background: #f4f4f4; cursor: pointer; }
+.controls .order-toggle.active { background: #444; color: #fff; border-color: #444; }
 
 .calendar-flex { display: flex; align-items: flex-start; position: relative; width: 100%; }
 .schedule-wrapper { flex: 1; overflow-x: auto; }
