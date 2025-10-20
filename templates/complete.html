@@ -727,6 +727,8 @@ let dragInfo = null;
           }
         } else if (status === 'pending') {
           metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
+        } else if (status === 'verify') {
+          metaLines.push('<div><strong class="material-status-flag material-status-verify">Solo falta verificar material</strong></div>');
         } else if (status === 'archived') {
           metaLines.push('<div><strong class="material-status-flag material-status-archived">MATERIAL ARCHIVADO</strong></div>');
         } else {

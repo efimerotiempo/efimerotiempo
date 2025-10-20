@@ -428,6 +428,7 @@ def prune_orphan_uploads(projects):
             app.logger.warning('No se pudo eliminar la imagen huérfana %s', path, exc_info=True)
 
 READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
+PENDING_VERIFICATION_COLUMN = normalize_key('Pdte. Verificación')
 
 SSE_CLIENTS = []
 
@@ -481,6 +482,9 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
             if not columns:
                 continue
             if status_map.get(pid_key) == 'missing':
+                continue
+            if PENDING_VERIFICATION_COLUMN in columns:
+                status_map[pid_key] = 'verify'
                 continue
             if all(column == READY_TO_ARCHIVE_COLUMN for column in columns):
                 status_map[pid_key] = 'archived'
