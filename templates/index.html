@@ -135,13 +135,23 @@
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
+            <div class="unplanned-sort-controls" id="unplanned-sort-controls">
+                <button type="button" class="unplanned-sort-btn" id="unplanned-sort-due" data-mode="due">Fecha tope</button>
+                <button type="button" class="unplanned-sort-btn" id="unplanned-sort-status" data-mode="status">Estado material</button>
+            </div>
             <div class="unplanned-list" data-worker="Sin planificar">
             {% for section in unplanned_groups %}
             <div class="unplanned-status-group" data-status="{{ section.status }}">
                 <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
                 {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}"
+                 data-pid="{{ g.pid }}"
+                 data-due="{{ g.due_date or '' }}"
+                 data-status="{{ g.material_status or '' }}"
+                 data-project-name="{{ g.project|e }}"
+                 data-client-name="{{ g.client|e }}"
+                 data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
@@ -1313,6 +1323,135 @@ let dragInfo = null;
   const unplanPanel = document.getElementById('unplanned-panel');
   const unplanResizer = document.getElementById('unplanned-resizer');
   const UNPLAN_WIDTH_KEY = 'unplannedWidth';
+  const UNPLANNED_SORT_KEY = 'unplannedSortMode';
+  const SORT_MODE_DUE = 'due';
+  const SORT_MODE_STATUS = 'status';
+
+  function bindFolderToggleEvents(root) {
+    const scope = root || document;
+    scope.querySelectorAll('.folder-toggle').forEach(btn => {
+      if (btn.dataset.toggleBound === '1') return;
+      btn.dataset.toggleBound = '1';
+      btn.addEventListener('click', () => {
+        const content = btn.parentElement.nextElementSibling;
+        const hidden = content.style.display === 'none';
+        content.style.display = hidden ? 'block' : 'none';
+        btn.innerHTML = hidden ? '&#8722;' : '&#43;';
+      });
+    });
+  }
+
+  function setupUnplannedSorting() {
+    if (!unplanList) return;
+    const controls = document.getElementById('unplanned-sort-controls');
+    const dueBtn = document.getElementById('unplanned-sort-due');
+    const statusBtn = document.getElementById('unplanned-sort-status');
+    if (!controls || !dueBtn || !statusBtn) {
+      bindFolderToggleEvents(unplanList);
+      return;
+    }
+
+    const statusGroups = [];
+    const folderEntries = [];
+    const groups = Array.from(unplanList.querySelectorAll('.unplanned-status-group'));
+    groups.forEach(group => {
+      const status = group.dataset.status || '';
+      const header = group.querySelector('.unplanned-status-header');
+      const headerHTML = header ? header.innerHTML : '';
+      const groupEntry = { status, headerHTML, folders: [] };
+      Array.from(group.querySelectorAll('.unplanned-folder')).forEach(folder => {
+        groupEntry.folders.push(folder);
+        folderEntries.push({
+          node: folder,
+          status,
+          dueIso: folder.dataset.due || '',
+          dueDate: parseISODate(folder.dataset.due || ''),
+          projectName: folder.dataset.projectName || '',
+          clientName: folder.dataset.clientName || '',
+        });
+      });
+      statusGroups.push(groupEntry);
+    });
+
+    let currentMode = null;
+
+    function updateButtons(mode) {
+      [dueBtn, statusBtn].forEach(btn => {
+        if (!btn) return;
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+    }
+
+    function renderStatus() {
+      const fragment = document.createDocumentFragment();
+      statusGroups.forEach(group => {
+        if (!group.folders.length) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'unplanned-status-group';
+        wrapper.dataset.status = group.status;
+        if (group.headerHTML) {
+          const headerDiv = document.createElement('div');
+          headerDiv.className = 'unplanned-status-header';
+          headerDiv.innerHTML = group.headerHTML;
+          wrapper.appendChild(headerDiv);
+        }
+        group.folders.forEach(folder => {
+          wrapper.appendChild(folder);
+        });
+        fragment.appendChild(wrapper);
+      });
+      unplanList.innerHTML = '';
+      unplanList.classList.remove('unplanned-due-mode');
+      unplanList.appendChild(fragment);
+      bindFolderToggleEvents(unplanList);
+    }
+
+    function renderDue() {
+      const fragment = document.createDocumentFragment();
+      const sorted = folderEntries.slice().sort((a, b) => {
+        const timeA = a.dueDate ? a.dueDate.getTime() : Infinity;
+        const timeB = b.dueDate ? b.dueDate.getTime() : Infinity;
+        if (timeA !== timeB) return timeA - timeB;
+        const projCmp = a.projectName.localeCompare(b.projectName, 'es', { sensitivity: 'accent', numeric: true });
+        if (projCmp !== 0) return projCmp;
+        return a.clientName.localeCompare(b.clientName, 'es', { sensitivity: 'accent', numeric: true });
+      });
+      sorted.forEach(entry => {
+        fragment.appendChild(entry.node);
+      });
+      unplanList.innerHTML = '';
+      unplanList.classList.add('unplanned-due-mode');
+      unplanList.appendChild(fragment);
+      bindFolderToggleEvents(unplanList);
+    }
+
+    function setMode(mode, options) {
+      const normalized = mode === SORT_MODE_DUE ? SORT_MODE_DUE : SORT_MODE_STATUS;
+      const force = options && options.force;
+      if (!force && normalized === currentMode) {
+        updateButtons(currentMode);
+        return;
+      }
+      currentMode = normalized;
+      if (currentMode === SORT_MODE_DUE) {
+        renderDue();
+      } else {
+        renderStatus();
+      }
+      updateButtons(currentMode);
+      if (!options || !options.silent) {
+        localStorage.setItem(UNPLANNED_SORT_KEY, currentMode);
+      }
+    }
+
+    const savedMode = localStorage.getItem(UNPLANNED_SORT_KEY);
+    setMode(savedMode === SORT_MODE_DUE ? SORT_MODE_DUE : SORT_MODE_STATUS, { silent: true, force: true });
+
+    dueBtn.addEventListener('click', () => setMode(SORT_MODE_DUE));
+    statusBtn.addEventListener('click', () => setMode(SORT_MODE_STATUS));
+  }
+
+  setupUnplannedSorting();
 
   function syncUnplannedHeight() {
     const wrap = document.querySelector('.schedule-wrapper');
@@ -1367,14 +1506,7 @@ let dragInfo = null;
       }).then(() => location.reload());
     });
   });
-  document.querySelectorAll('.folder-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const content = btn.parentElement.nextElementSibling;
-      const hidden = content.style.display === 'none';
-      content.style.display = hidden ? 'block' : 'none';
-      btn.innerHTML = hidden ? '&#8722;' : '&#43;';
-    });
-  });
+  bindFolderToggleEvents(document);
 const CONFLICTS = {{ conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
