@@ -87,11 +87,11 @@ AUTO_RECEIVING_DEPENDENCIES = (
 )
 
 
-MATERIAL_STATUS_ORDER = ['missing', 'pending', 'verify', 'archived', 'complete']
+MATERIAL_STATUS_ORDER = ['archived', 'complete', 'verify', 'missing', 'pending']
 MATERIAL_STATUS_LABELS = {
     'missing': 'FALTA MATERIAL',
     'pending': 'MATERIAL POR PEDIR',
-    'verify': 'Solo falta verificar material',
+    'verify': 'SOLO FALTA VERIFICAR MATERIAL',
     'archived': 'MATERIAL ARCHIVADO',
     'complete': 'MATERIAL COMPLETO',
 }
