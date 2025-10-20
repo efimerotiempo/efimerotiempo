@@ -79,18 +79,20 @@
     <div class="columna-1-table-wrapper">
       <table class="columna-1-table">
         <colgroup>
-          <col data-col-key="code" data-default-width="120">
-          <col data-col-key="project" data-default-width="320">
+          <col data-col-key="project" data-default-width="380">
           <col data-col-key="due" data-default-width="140">
           <col data-col-key="start" data-default-width="170">
+          <col data-col-key="order-date" data-default-width="160">
+          <col data-col-key="order-count" data-default-width="120">
           <col data-col-key="links" data-default-width="360">
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Código</th>
             <th scope="col">Proyecto</th>
-            <th scope="col">Entrega</th>
+            <th scope="col">Entrega (Fecha tope)</th>
             <th scope="col">Inicio planificado</th>
+            <th scope="col">Fecha pedido</th>
+            <th scope="col">Conteo</th>
             <th scope="col">Fases</th>
           </tr>
         </thead>
@@ -99,8 +101,9 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
+            {% set plan_value = item.plan_start or item.montar_start %}
             {% set due_display = (item.due|format_due_date)|trim %}
-            {% set start_display = (item.montar_start|format_due_date)|trim %}
+            {% set start_display = (plan_value|format_due_date)|trim %}
             {% set details = item.link_details or [] %}
           <tr class="project-row"
               data-pid="{{ item.pid or '' }}"
@@ -110,15 +113,13 @@
               data-client="{{ item.client }}"
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
-              data-montar="{{ item.montar_start or '' }}">
-            <td class="proj-code-cell">
-            {% if code_value %}
-              <span class="proj-code"
+              data-plan="{{ plan_value or '' }}">
+            <td class="proj-title-cell">
+              {% if code_value %}
+              <span class="proj-code proj-code-badge"
                     data-project="{{ project_value }}"
                     data-code="{{ code_value }}">{{ code_value }}</span>
-            {% endif %}
-            </td>
-            <td class="proj-title-cell">
+              {% endif %}
               <strong class="proj-title"
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
@@ -133,12 +134,53 @@
               <span class="proj-start">{{ start_display }}</span>
             {% endif %}
             </td>
+            <td class="order-date-cell">
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_value = detail.order_date %}
+                {% set order_raw = detail.order_date_raw %}
+              <div class="order-date-entry"
+                   {% if order_value %}data-order="{{ order_value }}"{% endif %}>
+                {% if order_value %}
+                  {{ order_value|format_due_date }}
+                {% elif order_raw %}
+                  {{ order_raw }}
+                {% else %}
+                  &nbsp;
+                {% endif %}
+              </div>
+            {% endfor %}
+            </td>
+            <td class="order-count-cell">
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_days = detail.order_days %}
+              <div class="order-count-entry"
+                   {% if order_days is not none %}data-days="{{ order_days }}"{% endif %}>
+                {% if order_days is not none %}
+                  {{ order_days }}
+                {% else %}
+                  &nbsp;
+                {% endif %}
+              </div>
+            {% endfor %}
+            </td>
             <td class="links-cell">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set column_value = detail.column|default('', true) %}
+                {% set lane_value = detail.lane|default('', true) %}
+                {% set tooltip = column_value %}
+                {% if not tooltip and lane_value %}
+                  {% set tooltip = lane_value %}
+                {% elif tooltip and lane_value and lane_value != column_value %}
+                  {% set tooltip = tooltip ~ ' · ' ~ lane_value %}
+                {% endif %}
               <div class="link-title"
                    data-title="{{ link }}"
-                   data-lane="{{ detail.lane or '' }}">{{ link }}</div>
+                   data-lane="{{ lane_value }}"
+                   data-column="{{ column_value }}"
+                   {% if tooltip %}title="{{ tooltip }}"{% endif %}>{{ link }}</div>
             {% endfor %}
             </td>
           </tr>
@@ -429,7 +471,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
         let line = `<div${cls}>${ph}: ${total}h`;
         if (ph === context.phase) {
-          line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+          const partAttr = context.part !== undefined && context.part !== '' ? ` data-part="${context.part}"` : '';
+          line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
         }
         line += `</div>`;
         phaseLines.push(line);
@@ -671,11 +714,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ev.stopPropagation();
         const btn = hoursForm.querySelector('button');
         const val = document.getElementById('phase-hours-input').value;
+        const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+        if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
+          payload.part = btn.dataset.part;
+        }
         fetch(PHASE_HOURS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+          body: JSON.stringify(payload)
         }).then(resp => {
           if (resp.ok) {
             const url = new URL(location);
@@ -832,7 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskMap = buildTaskMap();
     const dueLateTitles = new Set();
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const montarStart = row.dataset.montar || '';
+      const planStart = row.dataset.plan || '';
       const projectDue = row.dataset.due || '';
       row.querySelectorAll('.link-title').forEach(link => {
         const title = link.dataset.title;
@@ -848,8 +895,8 @@ document.addEventListener('DOMContentLoaded', () => {
           referenceDate = projectDue;
         }
         let isLate = false;
-        if (montarStart && referenceDate) {
-          const diff = diffInDays(referenceDate, montarStart);
+        if (planStart && referenceDate) {
+          const diff = diffInDays(referenceDate, planStart);
           if (diff !== null && Math.abs(diff) <= 3) {
             isLate = true;
             dueLateTitles.add(title);
@@ -1222,29 +1269,27 @@ document.addEventListener('DOMContentLoaded', () => {
           const resolvedTitle = fullTitle || projectValue;
           row.dataset.title = resolvedTitle;
           row.dataset.client = item.client || '';
-          row.dataset.montar = item.montar_start || '';
+          const planValueRaw = item.plan_start || item.montar_start || '';
+          const planValue = planValueRaw ? String(planValueRaw).trim() : '';
+          row.dataset.plan = planValue;
           row.dataset.due = item.due || '';
           const display = (item.display_title || resolvedTitle || '').trim();
           const code = (item.custom_card_id || '').trim();
           const dueDisplay = formatDueDisplay(item.due);
-          const startDisplay = formatDueDisplay(item.montar_start);
+          const startDisplay = formatDueDisplay(planValue);
           row.dataset.display = display;
           row.dataset.code = code;
 
-          const codeCell = document.createElement('td');
-          codeCell.className = 'proj-code-cell';
+          const titleCell = document.createElement('td');
+          titleCell.className = 'proj-title-cell';
           if (code) {
             const codeSpan = document.createElement('span');
-            codeSpan.className = 'proj-code';
+            codeSpan.className = 'proj-code proj-code-badge';
             codeSpan.dataset.project = projectValue;
             codeSpan.dataset.code = code;
             codeSpan.textContent = code;
-            codeCell.appendChild(codeSpan);
+            titleCell.appendChild(codeSpan);
           }
-          row.appendChild(codeCell);
-
-          const titleCell = document.createElement('td');
-          titleCell.className = 'proj-title-cell';
           const titleStrong = document.createElement('strong');
           titleStrong.className = 'proj-title';
           titleStrong.dataset.project = projectValue;
@@ -1273,18 +1318,64 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           row.appendChild(startCell);
 
+          const orderCell = document.createElement('td');
+          orderCell.className = 'order-date-cell';
+
+          const countCell = document.createElement('td');
+          countCell.className = 'order-count-cell';
+
           const linksCell = document.createElement('td');
           linksCell.className = 'links-cell';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
-          item.links.forEach((link, idx) => {
+          const links = Array.isArray(item.links) ? item.links : [];
+          links.forEach((link, idx) => {
             const detail = linkDetails[idx] || {};
+            const orderDiv = document.createElement('div');
+            orderDiv.className = 'order-date-entry';
+            const orderValue = detail && detail.order_date ? String(detail.order_date).trim() : '';
+            const orderRaw = detail && detail.order_date_raw ? String(detail.order_date_raw).trim() : '';
+            if (orderValue) {
+              orderDiv.dataset.order = orderValue;
+              orderDiv.textContent = formatDueDisplay(orderValue);
+              if (!orderDiv.textContent) orderDiv.textContent = orderValue;
+            } else if (orderRaw) {
+              orderDiv.textContent = orderRaw;
+            } else {
+              orderDiv.appendChild(document.createTextNode('\u00a0'));
+            }
+            orderCell.appendChild(orderDiv);
+
+            const countDiv = document.createElement('div');
+            countDiv.className = 'order-count-entry';
+            const daysValue = detail && detail.order_days;
+            const daysNumber = typeof daysValue === 'number' ? daysValue : Number(daysValue);
+            if (Number.isFinite(daysNumber)) {
+              countDiv.dataset.days = `${daysNumber}`;
+              countDiv.textContent = `${daysNumber}`;
+            } else {
+              countDiv.appendChild(document.createTextNode('\u00a0'));
+            }
+            countCell.appendChild(countDiv);
+
             const linkDiv = document.createElement('div');
             linkDiv.className = 'link-title';
             linkDiv.dataset.title = link;
-            linkDiv.dataset.lane = detail && detail.lane ? detail.lane : '';
+            const laneValue = detail && detail.lane ? detail.lane : '';
+            const columnValue = detail && detail.column ? detail.column : '';
+            let tooltip = columnValue;
+            if (!tooltip && laneValue) {
+              tooltip = laneValue;
+            } else if (tooltip && laneValue && laneValue !== columnValue) {
+              tooltip = `${tooltip} · ${laneValue}`;
+            }
+            linkDiv.dataset.lane = laneValue;
+            linkDiv.dataset.column = columnValue;
+            if (tooltip) linkDiv.title = tooltip;
             linkDiv.textContent = link;
             linksCell.appendChild(linkDiv);
           });
+          row.appendChild(orderCell);
+          row.appendChild(countCell);
           row.appendChild(linksCell);
 
           resolveRowPid(row);

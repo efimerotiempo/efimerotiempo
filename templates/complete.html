@@ -192,7 +192,10 @@
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
-            {% for g in unplanned_with %}
+            {% for section in unplanned_groups %}
+            <div class="unplanned-status-group" data-status="{{ section.status }}">
+                <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
+                {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
@@ -219,36 +222,7 @@
                 {% endfor %}
                 </div>
             </div>
-            {% endfor %}
-            {% if unplanned_with and unplanned_without %}
-            <hr class="unplanned-divider" />
-            {% endif %}
-            {% for g in unplanned_without %}
-            {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
-                <div class="folder-content" style="display:none;">
-                {% for t in g.tasks %}
-                {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
-                    <span class="task-main">
-                    {% if t.due_status == 'after' %}
-                        <span class="due-after">&#10060;</span>
-                    {% elif t.due_status == 'before' %}
-                        <span class="due-before">&#10060;</span>
-                    {% elif t.due_status == 'met' %}
-                        <span class="due-ok">&#10004;</span>
-                    {% endif %}
-                    {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
-                    {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
-                    </span>
-                    {% if t.hours %}
-                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
-                    {% endif %}
-                </div>
                 {% endfor %}
-                </div>
             </div>
             {% endfor %}
             </div>
@@ -714,9 +688,21 @@ let dragInfo = null;
       if (info) {
         const status = (info.material_status || '').toString();
         if (status === 'missing') {
-          metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
+          const missingTitles = Array.isArray(info.material_missing_titles)
+            ? info.material_missing_titles.filter(title => title && `${title}`.trim() !== '')
+            : [];
+          if (missingTitles.length) {
+            const items = missingTitles
+              .map(title => `<li>${escapeHtml(title)}</li>`)
+              .join('');
+            metaLines.push(`<div class="material-status-missing-block"><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong><ul class="material-status-missing-list">${items}</ul></div>`);
+          } else {
+            metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
+          }
         } else if (status === 'pending') {
           metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
+        } else if (status === 'verify') {
+          metaLines.push('<div><strong class="material-status-flag material-status-verify">SOLO FALTA VERIFICAR MATERIAL</strong></div>');
         } else if (status === 'archived') {
           metaLines.push('<div><strong class="material-status-flag material-status-archived">MATERIAL ARCHIVADO</strong></div>');
         } else {
@@ -749,7 +735,8 @@ let dragInfo = null;
             const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
             let line = `<div${cls}>${ph}: ${total}h`;
             if (ph === t.dataset.phase) {
-              line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+              const partAttr = t.dataset.part !== undefined ? ` data-part="${t.dataset.part}"` : '';
+              line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
             }
             line += `</div>`;
             phaseLines.push(line);
@@ -982,11 +969,15 @@ let dragInfo = null;
           ev.stopPropagation();
           const btn = hoursForm.querySelector('button');
           const val = document.getElementById('phase-hours-input').value;
+          const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+          if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
+            payload.part = btn.dataset.part;
+          }
           fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+            body: JSON.stringify(payload)
           }).then(resp => { if (resp.ok) { location.reload(); } else { resp.json().then(d => alert(d.error || 'Error')); } });
         });
       }
