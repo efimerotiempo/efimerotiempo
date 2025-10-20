@@ -192,7 +192,10 @@
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
             <div class="unplanned-list" data-worker="Sin planificar">
-            {% for g in unplanned_with %}
+            {% for section in unplanned_groups %}
+            <div class="unplanned-status-group" data-status="{{ section.status }}">
+                <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
+                {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
@@ -219,36 +222,7 @@
                 {% endfor %}
                 </div>
             </div>
-            {% endfor %}
-            {% if unplanned_with and unplanned_without %}
-            <hr class="unplanned-divider" />
-            {% endif %}
-            {% for g in unplanned_without %}
-            {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
-                <div class="folder-content" style="display:none;">
-                {% for t in g.tasks %}
-                {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
-                    <span class="task-main">
-                    {% if t.due_status == 'after' %}
-                        <span class="due-after">&#10060;</span>
-                    {% elif t.due_status == 'before' %}
-                        <span class="due-before">&#10060;</span>
-                    {% elif t.due_status == 'met' %}
-                        <span class="due-ok">&#10004;</span>
-                    {% endif %}
-                    {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
-                    {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
-                    </span>
-                    {% if t.hours %}
-                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
-                    {% endif %}
-                </div>
                 {% endfor %}
-                </div>
             </div>
             {% endfor %}
             </div>

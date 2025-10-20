@@ -87,6 +87,16 @@ AUTO_RECEIVING_DEPENDENCIES = (
 )
 
 
+MATERIAL_STATUS_ORDER = ['missing', 'pending', 'verify', 'archived', 'complete']
+MATERIAL_STATUS_LABELS = {
+    'missing': 'FALTA MATERIAL',
+    'pending': 'MATERIAL POR PEDIR',
+    'verify': 'Solo falta verificar material',
+    'archived': 'MATERIAL ARCHIVADO',
+    'complete': 'MATERIAL COMPLETO',
+}
+
+
 def _phase_total_hours(value):
     """Return the numeric hours stored for a phase entry."""
 
@@ -499,6 +509,52 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
                 missing_titles_map.setdefault(pid_key, [])
         return status_map, {k: list(v) for k, v in missing_titles_map.items()}
     return status_map
+
+
+def material_status_label(status):
+    text = MATERIAL_STATUS_LABELS.get(status)
+    if text:
+        return text
+    if not status:
+        return 'Sin estado'
+    cleaned = str(status).replace('_', ' ').strip()
+    return cleaned.title() or 'Sin estado'
+
+
+def group_unplanned_by_status(unplanned_list, status_map):
+    buckets = defaultdict(list)
+    for entry in unplanned_list:
+        pid = entry.get('pid')
+        status = 'complete'
+        if pid:
+            status = status_map.get(str(pid), 'complete')
+        entry['material_status'] = status
+        buckets[status].append(entry)
+    groups = []
+    for status in MATERIAL_STATUS_ORDER:
+        items = buckets.pop(status, [])
+        if items:
+            groups.append(
+                {
+                    'status': status,
+                    'label': material_status_label(status),
+                    'css_class': f"material-status-{status}",
+                    'projects': items,
+                }
+            )
+    for status in sorted(buckets.keys()):
+        items = buckets[status]
+        if not items:
+            continue
+        groups.append(
+            {
+                'status': status,
+                'label': material_status_label(status),
+                'css_class': f"material-status-{status}",
+                'projects': items,
+            }
+        )
+    return groups
 
 
 def get_card_custom_id(card):
@@ -2857,8 +2913,6 @@ def calendar_view():
     hours_map = load_daily_hours()
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     note_map = {}
     for n in notes:
@@ -2877,6 +2931,7 @@ def calendar_view():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+    unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
 
     project_map = {}
     for p in projects:
@@ -2913,8 +2968,7 @@ def calendar_view():
         hours=hours_map,
         split_points=points,
         palette=COLORS,
-        unplanned_with=unplanned_with,
-        unplanned_without=unplanned_without,
+        unplanned_groups=unplanned_groups,
         worker_notes=worker_note_map,
     )
 
@@ -4462,8 +4516,6 @@ def complete():
     filtered_projects = expand_for_display(filtered_projects)
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     points = split_markers(schedule)
 
@@ -4489,6 +4541,7 @@ def complete():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+    unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
 
     project_map = {}
     for p in projects:
@@ -4528,8 +4581,7 @@ def complete():
         hours=hours_map,
         split_points=points,
         palette=COLORS,
-        unplanned_with=unplanned_with,
-        unplanned_without=unplanned_without,
+        unplanned_groups=unplanned_groups,
         worker_notes=worker_note_map,
     )
 
