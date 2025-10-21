@@ -5983,6 +5983,12 @@ def kanbanize_webhook():
         if changed:
             save_projects(projects)
     else:
+        if column_norm == 'pedidos pendiente generar of':
+            cards = load_kanban_cards()
+            cards.append({'timestamp': payload_timestamp, 'card': card})
+            save_kanban_cards(cards)
+            broadcast_event({"type": "kanban_update"})
+            return jsonify({"mensaje": "Tarjeta ignorada (columna Pedidos pendiente generar OF)"}), 200
         project = {
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
