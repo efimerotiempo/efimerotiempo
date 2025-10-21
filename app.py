@@ -439,6 +439,20 @@ def prune_orphan_uploads(projects):
 
 READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
 PENDING_VERIFICATION_COLUMN = normalize_key('Pdte. Verificación')
+MATERIAL_VERIFY_ALLOWED_COLUMNS = {
+    normalize_key('Material Recepcionado'),
+    READY_TO_ARCHIVE_COLUMN,
+    normalize_key('Plegado/Curvado'),
+    normalize_key('Planf. TAU'),
+    normalize_key('Planif. TAU'),
+    normalize_key('Planf. Bekola'),
+    normalize_key('Planif. Bekola'),
+    normalize_key('Planf. AZ'),
+    normalize_key('Planif. AZ'),
+    normalize_key('Planf. OTROS'),
+    normalize_key('Planif. OTROS'),
+    normalize_key('Tratamiento'),
+}
 
 SSE_CLIENTS = []
 
@@ -481,7 +495,10 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
                 column_key = normalize_key(column)
                 if column_key:
                     project_columns.add(column_key)
-                if column_key in MATERIAL_ALERT_COLUMNS:
+                if (
+                    column_key in MATERIAL_ALERT_COLUMNS
+                    and column_key not in MATERIAL_VERIFY_ALLOWED_COLUMNS
+                ):
                     status_map[pid_key] = 'missing'
                     if missing_titles_map is not None:
                         title = (detail.get('title') or '').strip()
@@ -494,8 +511,14 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
             if status_map.get(pid_key) == 'missing':
                 continue
             if PENDING_VERIFICATION_COLUMN in columns:
-                status_map[pid_key] = 'verify'
-                continue
+                other_columns = {
+                    column for column in columns if column != PENDING_VERIFICATION_COLUMN
+                }
+                if all(
+                    column in MATERIAL_VERIFY_ALLOWED_COLUMNS for column in other_columns
+                ):
+                    status_map[pid_key] = 'verify'
+                    continue
             if all(column == READY_TO_ARCHIVE_COLUMN for column in columns):
                 status_map[pid_key] = 'archived'
         for pid_key, current in list(status_map.items()):
