@@ -294,20 +294,7 @@ def load_vacations():
             data = json.load(f)
     else:
         data = []
-    today = local_today()
-    filtered = []
-    for v in data:
-        end = v.get('end')
-        if end:
-            try:
-                if date.fromisoformat(end) < today:
-                    continue
-            except ValueError:
-                pass
-        filtered.append(v)
-    if len(filtered) != len(data):
-        save_vacations(filtered)
-    return filtered
+    return data
 
 
 def save_vacations(data):

@@ -4282,7 +4282,29 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
+    today = local_today()
+
+    def parse_iso(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def vacation_sort_key(vacation):
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        reference = start_date or end_date or today
+        effective_end = end_date or start_date or reference
+        is_past = effective_end < today
+        ref_ord = reference.toordinal()
+        if not is_past:
+            return (0, ref_ord)
+        return (1, -ref_ord)
+
+    ordered_vacations = sorted(vacations, key=vacation_sort_key)
+    return render_template('vacations.html', vacations=ordered_vacations, workers=active_workers(), today=today.isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
