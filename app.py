@@ -4564,6 +4564,25 @@ def complete():
     )
     unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
 
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
+
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
@@ -4603,7 +4622,9 @@ def complete():
         split_points=points,
         palette=COLORS,
         unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
         worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
     )
 
 

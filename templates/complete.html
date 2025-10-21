@@ -88,7 +88,9 @@
                 <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
                 <button type="submit">Filtrar</button>
             </form>
-            <button id="today-btn">HOY</button>
+            <button id="today-btn" type="button">HOY</button>
+            <button id="sort-due-btn" class="order-toggle" type="button">Fecha tope</button>
+            <button id="sort-status-btn" class="order-toggle" type="button">Estado material</button>
         </div>
         <div class="calendar-flex">
         <div class="schedule-wrapper">
@@ -191,13 +193,13 @@
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
-            <div class="unplanned-list" data-worker="Sin planificar">
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="status">
             {% for section in unplanned_groups %}
             <div class="unplanned-status-group" data-status="{{ section.status }}">
                 <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
                 {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ section.status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
                 <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
@@ -223,6 +225,38 @@
                 </div>
             </div>
                 {% endfor %}
+            </div>
+            {% endfor %}
+            </div>
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="due" style="display:none;">
+            {% for g in unplanned_due %}
+            {% set folder_match = g.get('filter_match', True) %}
+            {% set status = g.get('material_status', 'complete') %}
+            {% set status_label = material_status_labels.get(status, status|capitalize) %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-content" style="display:none;">
+                {% for t in g.tasks %}
+                {% set matches_filter = t.get('filter_match', True) %}
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                    <span class="task-main">
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
+                    {% endif %}
+                    {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
+                    {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                </div>
             </div>
             {% endfor %}
             </div>
@@ -628,10 +662,43 @@
     wrapper.scrollLeft += e.deltaY;
   });
   const todayBtn = document.getElementById('today-btn');
-  todayBtn.addEventListener('click', () => {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
-  });
+  if (todayBtn) {
+    todayBtn.addEventListener('click', () => {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+    });
+  }
+
+  const sortDueBtn = document.getElementById('sort-due-btn');
+  const sortStatusBtn = document.getElementById('sort-status-btn');
+  const orderLists = document.querySelectorAll('.unplanned-list[data-mode]');
+  const ORDER_KEY = 'unplannedOrderMode';
+  const ORDER_STATUS = 'status';
+  const ORDER_DUE = 'due';
+
+  function applyUnplannedOrder(mode) {
+    const selected = mode === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+    orderLists.forEach((list) => {
+      const active = list.dataset.mode === selected;
+      list.style.display = active ? 'block' : 'none';
+      list.classList.toggle('active', active);
+    });
+    if (sortDueBtn) sortDueBtn.classList.toggle('active', selected === ORDER_DUE);
+    if (sortStatusBtn) sortStatusBtn.classList.toggle('active', selected === ORDER_STATUS);
+    localStorage.setItem(ORDER_KEY, selected);
+  }
+
+  const savedOrder = localStorage.getItem(ORDER_KEY);
+  const initialOrder = savedOrder === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+  if (sortDueBtn) {
+    sortDueBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_DUE));
+  }
+  if (sortStatusBtn) {
+    sortStatusBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_STATUS));
+  }
+  if (orderLists.length) {
+    applyUnplannedOrder(initialOrder);
+  }
 
 const tasks = document.querySelectorAll('.task');
 const folders = document.querySelectorAll('.unplanned-folder');
