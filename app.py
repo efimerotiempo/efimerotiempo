@@ -454,6 +454,56 @@ MATERIAL_VERIFY_ALLOWED_COLUMNS = {
     normalize_key('Tratamiento'),
 }
 
+KANBAN_COLUMN_PHASE_TARGETS = {
+    normalize_key('Pedidos pendiente generar OF'): 'pedidos',
+    normalize_key('Administración'): 'pedidos',
+    normalize_key('Oficina Técnica'): 'dibujo',
+    normalize_key('Pendiente Por Recepcionar'): 'recepcionar material',
+    normalize_key('Prep. Interno'): 'recepcionar material',
+    normalize_key('Prep. Externo'): 'recepcionar material',
+    normalize_key('Listo para iniciar'): 'recepcionar material',
+    normalize_key('Planificado para montaje'): 'recepcionar material',
+    normalize_key('Montaje'): 'montar',
+    normalize_key('Soldadura'): 'soldar',
+    normalize_key('Montaje 2º fase'): 'montar 2º',
+    normalize_key('Soldadura final'): 'soldar 2º',
+    normalize_key('Verificacion'): 'soldar 2º',
+    normalize_key('Enderezado'): 'soldar 2º',
+    normalize_key('Tratamiento'): 'tratamiento',
+    normalize_key('Mec. Interno'): 'mecanizar',
+    normalize_key('Mec. Externo'): 'mecanizar',
+    normalize_key('Pintura'): 'pintar',
+    normalize_key('Montaje final'): '__after_pintar__',
+    normalize_key('Hacer Albaran'): '__after_pintar__',
+    READY_TO_ARCHIVE_COLUMN: '__after_pintar__',
+}
+
+KANBAN_PHASE_EXCLUSIONS = {'dibujo', 'pedidos'}
+PHASE_INDEX = {phase: idx for idx, phase in enumerate(PHASE_ORDER)}
+
+
+def compute_previous_kanban_phases(column):
+    """Return planner phases considered previous to the current Kanban column."""
+
+    if not column:
+        return []
+    column_key = normalize_key(column)
+    target = KANBAN_COLUMN_PHASE_TARGETS.get(column_key)
+    if not target:
+        return []
+    if target == '__after_pintar__':
+        cutoff = len(PHASE_ORDER)
+    else:
+        cutoff = PHASE_INDEX.get(target)
+        if cutoff is None:
+            return []
+    previous = []
+    for phase in PHASE_ORDER[:cutoff]:
+        if phase in KANBAN_PHASE_EXCLUSIONS:
+            continue
+        previous.append(phase)
+    return previous
+
 SSE_CLIENTS = []
 
 
@@ -2984,6 +3034,7 @@ def calendar_view():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         if pid:
             pid_key = str(pid)
@@ -3112,6 +3163,7 @@ def calendar_pedidos():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         pid = p.get('id')
         if pid:
@@ -3876,6 +3928,7 @@ def gantt_orders_view():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
             'planned_start': planned_start_iso,
             'planned_end': planned_end_iso,
             'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
@@ -3940,6 +3993,7 @@ def gantt_orders_view():
                         'kanban_display_fields': {},
                         'kanban_attachments': [],
                         'phase_sequence': [],
+                        'kanban_previous_phases': [],
                         'frozen_phases': [],
                         'color': color,
                         'due_date': due,
@@ -4636,6 +4690,7 @@ def complete():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         pid = p.get('id')
         if pid:

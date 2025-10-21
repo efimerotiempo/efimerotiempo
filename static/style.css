@@ -31,6 +31,9 @@ table.schedule td.weekend-cell {
 .due-after { color: red; }
 .unplanned { color: orange; }
 .planned { color: green; }
+.phase-entry.phase-previous {
+    background-color: #e6e6e6;
+}
 .projects-table td.plan-col span {
     font-size: 3em;
     line-height: 1;
