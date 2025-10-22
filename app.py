@@ -3151,6 +3151,7 @@ def calendar_view():
             pid_key = str(pid)
             project_entry['material_status'] = material_status_map.get(pid_key, 'complete')
             project_entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = project_entry
         project_map[p['id']] = project_entry
     start_map = phase_start_map(projects)
 
@@ -3281,6 +3282,7 @@ def calendar_pedidos():
             pid_key = str(pid)
             entry['material_status'] = material_status_map.get(pid_key, 'complete')
             entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 
@@ -4808,6 +4810,7 @@ def complete():
             pid_key = str(pid)
             entry['material_status'] = material_status_map.get(pid_key, 'complete')
             entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 

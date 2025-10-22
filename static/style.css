@@ -104,6 +104,16 @@ table.schedule td.weekend-cell {
   margin: 0;
   color: inherit;
 }
+
+.task-project {
+  font-weight: inherit;
+  color: inherit;
+}
+
+.task-project-missing {
+  color: #c62828;
+  font-weight: 700;
+}
 #split-btn { margin-top: 4px; }
 .phase-delete-btn {
     background: red;
