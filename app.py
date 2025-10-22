@@ -984,12 +984,10 @@ def last_kanban_card(cid):
     return {}
 
 
-def load_compras_raw():
-    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+def _collect_compras_entries(entries, allowed_lanes, column_colors):
     compras_raw = {}
-    column_colors = load_column_colors()
     updated_colors = False
-    for entry in load_kanban_cards():
+    for entry in entries or []:
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
@@ -1010,8 +1008,29 @@ def load_compras_raw():
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
+    return compras_raw, column_colors, updated_colors
+
+
+def load_compras_raw():
+    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+    column_colors = load_column_colors()
+
+    entries = load_kanban_cards()
+    compras_raw, column_colors, updated_colors = _collect_compras_entries(
+        entries, allowed_lanes, column_colors
+    )
+
+    if not compras_raw:
+        refreshed = refresh_kanban_card_cache()
+        if refreshed:
+            column_colors = load_column_colors()
+            compras_raw, column_colors, updated_colors = _collect_compras_entries(
+                refreshed, allowed_lanes, column_colors
+            )
+
     if updated_colors:
         save_column_colors(column_colors)
+
     return compras_raw, column_colors
 
 
@@ -2827,6 +2846,98 @@ def _kanban_card_to_project(card):
         'source': 'api',
     }
     return project
+
+
+def _normalize_card_id(value):
+    """Return a trimmed string identifier for a Kanban card."""
+
+    if value in (None, ''):
+        return ''
+    text = str(value).strip()
+    return text or ''
+
+
+def _iter_card_link_entries(card):
+    """Yield dictionaries describing cards linked to *card*."""
+
+    if not isinstance(card, dict):
+        return
+
+    links = card.get('links')
+    if isinstance(links, dict):
+        values = links.values()
+    elif isinstance(links, list):
+        values = links
+    else:
+        return
+
+    for group in values:
+        if isinstance(group, dict):
+            group_values = group.values()
+        else:
+            group_values = group
+        if not isinstance(group_values, (list, tuple, set)):
+            group_values = [group_values]
+        for entry in group_values:
+            if isinstance(entry, dict):
+                yield entry
+
+
+def refresh_kanban_card_cache():
+    """Rebuild the local Kanban card cache by calling the Kanbanize API."""
+
+    projects = load_projects() or []
+    initial_ids = []
+    for project in projects:
+        card_id = (
+            project.get('kanban_id')
+            or project.get('kanbanId')
+            or project.get('kanban_card_id')
+        )
+        normalized = _normalize_card_id(card_id)
+        if normalized:
+            initial_ids.append(normalized)
+
+    if not initial_ids:
+        return []
+
+    seen = set()
+    queue = list(dict.fromkeys(initial_ids))
+    refreshed = []
+
+    while queue:
+        current_id = queue.pop()
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        card = _fetch_kanban_card(current_id, with_links=True)
+        if not card:
+            continue
+
+        refreshed.append(
+            {
+                'timestamp': local_now().isoformat(),
+                'card': card,
+                'stored_title_date': None,
+                'previous_title_date': None,
+            }
+        )
+
+        for entry in _iter_card_link_entries(card):
+            linked_id = (
+                entry.get('taskid')
+                or entry.get('cardId')
+                or entry.get('id')
+                or entry.get('linkedCardId')
+                or entry.get('linkedcardid')
+            )
+            normalized_link = _normalize_card_id(linked_id)
+            if normalized_link and normalized_link not in seen:
+                queue.append(normalized_link)
+
+    if refreshed:
+        save_kanban_cards(refreshed)
+    return refreshed
 
 
 def _fetch_kanban_card(card_id, with_links=False):
