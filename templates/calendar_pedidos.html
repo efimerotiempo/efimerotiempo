@@ -468,9 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function buildPhaseSection(info, context) {
-    const previousPhases = Array.isArray(info.kanban_previous_phases)
-      ? new Set(info.kanban_previous_phases)
-      : new Set();
     const phaseLines = [];
     PHASES.forEach(ph => {
       if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -482,7 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
         const classes = ['phase-entry'];
         classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
-        if (previousPhases.has(ph)) classes.push('phase-previous');
         let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
         if (ph === context.phase) {
           const partValue = normalizePartValue(context.part);

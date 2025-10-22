@@ -800,9 +800,6 @@ let dragInfo = null;
           kanbanHtml += '</div>';
           html += kanbanHtml;
         }
-        const previousPhases = Array.isArray(info.kanban_previous_phases)
-          ? new Set(info.kanban_previous_phases)
-          : new Set();
         const phaseLines = [];
         PHASES.forEach(ph => {
           if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -814,7 +811,6 @@ let dragInfo = null;
             const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
             const classes = ['phase-entry'];
             classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
-            if (previousPhases.has(ph)) classes.push('phase-previous');
             let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
             if (ph === t.dataset.phase) {
               const partValue = normalizePartValue(t.dataset.part);
