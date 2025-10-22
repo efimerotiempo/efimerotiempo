@@ -148,6 +148,11 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
+            {% set project_info = project_data.get(t.pid|string) %}
+            {% if project_info is none %}
+            {% set project_info = project_data.get(t.pid) %}
+            {% endif %}
+            {% set material_missing = project_info and project_info.material_status == 'missing' %}
             <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
@@ -159,7 +164,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                <span class="task-project{% if material_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                 </span>
                 {% if t.hours %}
                 <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -199,8 +204,9 @@
                 <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
                 {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
+            {% set folder_missing = section.status == 'missing' %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ section.status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
@@ -215,7 +221,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -233,8 +239,9 @@
             {% set folder_match = g.get('filter_match', True) %}
             {% set status = g.get('material_status', 'complete') %}
             {% set status_label = material_status_labels.get(status, status|capitalize) %}
+            {% set folder_missing = status == 'missing' %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
@@ -249,7 +256,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
