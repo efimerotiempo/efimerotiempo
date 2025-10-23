@@ -4769,6 +4769,7 @@ def complete():
     schedule, conflicts = schedule_projects(projects)
     today = local_today()
     worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -4933,6 +4934,72 @@ def complete():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
     unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
 
     def _due_sort_value(entry):
@@ -4996,6 +5063,7 @@ def complete():
         palette=COLORS,
         unplanned_groups=unplanned_groups,
         unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
         material_status_labels=MATERIAL_STATUS_LABELS,
     )

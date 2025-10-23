@@ -198,6 +198,35 @@
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
+            <div class="manual-group">
+                <div class="manual-header">Arrastrar aquí</div>
+                <div id="manual-dropzone" class="manual-dropzone" data-worker="Sin planificar">
+                    <div class="manual-placeholder"{% if manual_bucket %} style="display:none;"{% endif %}>Suelta aquí las fases que quieras guardar temporalmente.</div>
+                {% for item in manual_bucket %}
+                    {% set matches_filter = item.filter_match %}
+                    {% set status = item.material_status %}
+                    {% set missing = status == 'missing' %}
+                    {% set key = item.pid|string ~ '|' ~ item.phase ~ '|' ~ (item.day) %}
+                    <div class="task manual-task{% if item.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ item.color }};" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due_date or '' }}" data-start="{{ item.start_date or '' }}" data-day="{{ item.day or '' }}" data-pid="{{ item.pid }}" data-phase="{{ item.phase }}"{% if item.part is not none %} data-part="{{ item.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                        <span class="task-main">
+                        {% if item.due_status == 'after' %}
+                            <span class="due-after">&#10060;</span>
+                        {% elif item.due_status == 'before' %}
+                            <span class="due-before">&#10060;</span>
+                        {% elif item.due_status == 'met' %}
+                            <span class="due-ok">&#10004;</span>
+                        {% endif %}
+                        {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                        <span class="material-status-flag {{ item.material_css }}">{{ item.material_label }}</span>
+                        <span class="task-project{% if missing %} task-project-missing{% endif %}">{{ item.project }}</span>{% if item.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ item.client|truncate(15, True) }} - {{ item.phase }}
+                        </span>
+                        {% if item.hours %}
+                        <span class="task-hours">{% if item.auto and item.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ item.hours }}h</span>{% else %}{{ item.hours }}h{% endif %}</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
             <div class="unplanned-list" data-worker="Sin planificar" data-mode="status">
             {% for section in unplanned_groups %}
             <div class="unplanned-status-group" data-status="{{ section.status }}">
@@ -393,6 +422,7 @@
   const ROW_URL = "{{ url_for('update_project_row') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -721,11 +751,13 @@ const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
 let dragInfo = null;
+let draggedTaskElement = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
       const row = t.closest('[data-worker]');
       const partValue = normalizePartValue(t.dataset.part);
+      const manualSource = !!t.closest('#manual-dropzone');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
@@ -733,10 +765,11 @@ let dragInfo = null;
         worker: row ? row.dataset.worker : '',
         part: partValue
       };
-      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: partValue };
+      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: partValue, manual: manualSource };
+      draggedTaskElement = t;
       e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: partValue}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; });
+    t.addEventListener('dragend', () => { dragInfo = null; draggedTaskElement = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -1350,10 +1383,9 @@ let dragInfo = null;
       pendingBlock = null;
     });
   }
-  const unplanList = document.querySelector('.unplanned-list');
-  if (unplanList) {
-    unplanList.addEventListener('dragover', e => { e.preventDefault(); });
-    unplanList.addEventListener('drop', e => {
+  document.querySelectorAll('.unplanned-list').forEach((list) => {
+    list.addEventListener('dragover', (e) => { e.preventDefault(); });
+    list.addEventListener('drop', (e) => {
       e.preventDefault();
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const today = madridDateISO();
@@ -1373,6 +1405,139 @@ let dragInfo = null;
             return;
           }
           afterMove(data, today);
+        });
+    });
+  });
+
+  const manualZone = document.getElementById('manual-dropzone');
+
+  function manualDropIndex(zone, clientY) {
+    if (!zone) return 0;
+    const items = Array.from(zone.querySelectorAll('.manual-task'));
+    const filtered = draggedTaskElement ? items.filter(el => el !== draggedTaskElement) : items;
+    let index = filtered.length;
+    for (let i = 0; i < filtered.length; i += 1) {
+      const rect = filtered[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        index = i;
+        break;
+      }
+    }
+    return index;
+  }
+
+  function refreshManualPlaceholder() {
+    if (!manualZone) return;
+    const placeholder = manualZone.querySelector('.manual-placeholder');
+    if (!placeholder) return;
+    const hasTask = manualZone.querySelector('.manual-task');
+    placeholder.style.display = hasTask ? 'none' : 'block';
+  }
+
+  function persistManualOrder() {
+    if (!manualZone) return;
+    const order = Array.from(manualZone.querySelectorAll('.manual-task')).map((el) => {
+      const rawPart = normalizePartValue(el.dataset.part);
+      let part = null;
+      if (rawPart) {
+        const num = Number(rawPart);
+        part = Number.isFinite(num) ? num : null;
+      }
+      return {
+        pid: el.dataset.pid,
+        phase: el.dataset.phase,
+        part,
+      };
+    });
+    fetch(MANUAL_REORDER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ order }),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          return resp
+            .json()
+            .catch(() => ({}))
+            .then((d) => {
+              throw new Error(d.error || 'Error');
+            });
+        }
+        return null;
+      })
+      .catch((err) => {
+        alert(err.message || 'Error');
+      });
+  }
+
+  refreshManualPlaceholder();
+
+  if (manualZone) {
+    manualZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.add('drag-over');
+    });
+    manualZone.addEventListener('dragleave', (e) => {
+      if (e.target === manualZone || !manualZone.contains(e.relatedTarget)) {
+        manualZone.classList.remove('drag-over');
+      }
+    });
+    manualZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.remove('drag-over');
+      let data = null;
+      try {
+        data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      } catch (err) {
+        data = null;
+      }
+      if (!data) return;
+      const index = manualDropIndex(manualZone, e.clientY);
+      if (dragInfo && dragInfo.manual) {
+        const el = draggedTaskElement;
+        if (el) {
+          const siblings = Array.from(manualZone.querySelectorAll('.manual-task')).filter((item) => item !== el);
+          if (index >= siblings.length) {
+            manualZone.appendChild(el);
+          } else {
+            manualZone.insertBefore(el, siblings[index]);
+          }
+          persistManualOrder();
+          refreshManualPlaceholder();
+        }
+        return;
+      }
+      const today = madridDateISO();
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      const payload = {
+        pid: data.pid,
+        phase: data.phase,
+        date: today,
+        worker: 'Sin planificar',
+        part: data.part,
+        manual_bucket: true,
+        manual_position: index,
+      };
+      const placeholder = manualZone.querySelector('.manual-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then((resp) => resp.json().then((d) => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data: moveData }) => {
+          if (!ok) {
+            alert(moveData.error || 'Error');
+            return;
+          }
+          afterMove(moveData, today);
         });
     });
   }
