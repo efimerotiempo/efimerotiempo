@@ -704,29 +704,8 @@
   }
   document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
 
-  function adjustWorkerNoteFont(area) {
-    const textLength = (area.value || '').replace(/\s+/g, ' ').trim().length;
-    const minSize = 1.2;
-    const maxSize = 3.0;
-    const minChars = 10;
-    const maxChars = 60;
-    let size;
-    if (!textLength || textLength <= minChars) {
-      size = maxSize;
-    } else if (textLength >= maxChars) {
-      size = minSize;
-    } else {
-      const ratio = (textLength - minChars) / (maxChars - minChars);
-      size = maxSize - (maxSize - minSize) * ratio;
-    }
-    area.style.fontSize = size + 'em';
-  }
-
   document.querySelectorAll('.worker-note').forEach(area => {
-    adjustWorkerNoteFont(area);
-    area.addEventListener('input', () => adjustWorkerNoteFont(area));
     area.addEventListener('change', () => {
-      adjustWorkerNoteFont(area);
       fetch(WORKER_NOTE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
