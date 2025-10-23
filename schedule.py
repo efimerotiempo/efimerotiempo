@@ -17,6 +17,7 @@ INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
 WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+MANUAL_UNPLANNED_FILE = os.path.join(DATA_DIR, 'manual_unplanned.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -328,6 +329,56 @@ def save_daily_hours(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(DAILY_HOURS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def _sanitize_manual_entries(entries):
+    cleaned = []
+    seen = set()
+    if not isinstance(entries, list):
+        return cleaned
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        pid = item.get('pid')
+        phase = item.get('phase')
+        part = item.get('part')
+        if pid in (None, '') or phase in (None, ''):
+            continue
+        pid_str = str(pid)
+        part_val = None
+        if part not in (None, '', 'None'):
+            try:
+                part_val = int(part)
+            except Exception:
+                continue
+        key = (pid_str, str(phase), part_val)
+        if key in seen:
+            continue
+        seen.add(key)
+        entry = {'pid': pid_str, 'phase': str(phase)}
+        if part_val is not None:
+            entry['part'] = part_val
+        cleaned.append(entry)
+    return cleaned
+
+
+def load_manual_unplanned():
+    if os.path.exists(MANUAL_UNPLANNED_FILE):
+        with open(MANUAL_UNPLANNED_FILE, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = []
+        return _sanitize_manual_entries(data)
+    return []
+
+
+def save_manual_unplanned(entries):
+    cleaned = _sanitize_manual_entries(entries)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(MANUAL_UNPLANNED_FILE, 'w') as f:
+        json.dump(cleaned, f)
+    return cleaned
 
 
 def next_workday(d):

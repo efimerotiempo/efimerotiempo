@@ -169,6 +169,34 @@ table.schedule td.weekend-cell {
     box-sizing: border-box;
 }
 .unplanned-panel h3 { margin: 0; }
+.manual-group { margin-bottom: 12px; }
+.manual-header {
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+.manual-dropzone {
+    border: 2px dashed #bbb;
+    border-radius: 6px;
+    padding: 8px;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    background-color: #f8f8f8;
+}
+.manual-dropzone.drag-over {
+    border-color: #4a7bd8;
+    background-color: #eef3ff;
+}
+.manual-task { cursor: grab; }
+.manual-task.filter-muted { opacity: 0.35; }
+.manual-placeholder {
+    color: #666;
+    font-style: italic;
+    font-size: 0.95em;
+}
 .unplanned-list { overflow-y: auto; flex: 1; }
 .unplanned-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
 .summary-resizer { position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; background: #ccc; }
