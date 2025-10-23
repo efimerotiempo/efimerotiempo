@@ -55,6 +55,7 @@ save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda e
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
+rename_worker = getattr(_schedule_mod, "rename_worker", lambda old, new: False)
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
@@ -4710,10 +4711,35 @@ def resources():
             if new_worker and new_worker not in WORKERS:
                 _schedule_mod.add_worker(new_worker)
             return redirect(url_for('resources'))
+        rename_pairs = []
+        seen_targets = set()
+        for key in request.form.keys():
+            if not key.startswith('worker_name__'):
+                continue
+            idx = key.split('__', 1)[-1]
+            original = request.form.get(f'worker_original__{idx}', '').strip()
+            new_value = request.form.get(key, '').strip()
+            if not original or not new_value or original == new_value:
+                continue
+            if new_value in seen_targets:
+                continue
+            rename_pairs.append((original, new_value))
+            seen_targets.add(new_value)
+        rename_map = {}
+        for original, new_value in rename_pairs:
+            if rename_worker(original, new_value):
+                rename_map[original] = new_value
+        if rename_map:
+            workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+            worker_overrides = load_worker_hours()
         active = request.form.getlist('worker')
+        if rename_map:
+            active = [rename_map.get(w, w) for w in active]
         inactive = [w for w in workers if w not in active]
         save_inactive_workers(inactive)
         order = request.form.getlist('order')
+        if rename_map and order:
+            order = [rename_map.get(w, w) for w in order]
         if order:
             set_worker_order(order)
         hours_modified = False
@@ -4724,6 +4750,8 @@ def resources():
                 continue
             idx = key.split('__', 1)[-1]
             worker = request.form.get(f'hours_worker__{idx}')
+            if rename_map and worker:
+                worker = rename_map.get(worker, worker)
             if not worker:
                 continue
             value = request.form.get(f'hours__{idx}', '').strip()

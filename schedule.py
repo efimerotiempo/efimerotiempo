@@ -16,6 +16,7 @@ DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
+WORKER_RENAMES_FILE = os.path.join(DATA_DIR, 'worker_renames.json')
 WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
 MANUAL_UNPLANNED_FILE = os.path.join(DATA_DIR, 'manual_unplanned.json')
 
@@ -88,13 +89,68 @@ def save_worker_order(order):
         json.dump(order, f)
 
 
-def _build_workers(extra=None, order=None):
+def load_worker_renames():
+    if os.path.exists(WORKER_RENAMES_FILE):
+        with open(WORKER_RENAMES_FILE, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        if isinstance(data, dict):
+            cleaned = {}
+            for key, value in data.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    continue
+                key = key.strip()
+                value = value.strip()
+                if not key or not value or key == value:
+                    continue
+                cleaned[key] = value
+            return cleaned
+    return {}
+
+
+def save_worker_renames(renames):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_RENAMES_FILE, 'w') as f:
+        json.dump(renames or {}, f)
+
+
+def _apply_worker_renames(workers, renames):
+    if not renames:
+        return workers
+    cleaned = {}
+    used_targets = set()
+    for original, target in renames.items():
+        if original not in workers:
+            continue
+        target = target.strip()
+        if not target or target in used_targets:
+            continue
+        cleaned[original] = target
+        used_targets.add(target)
+    if not cleaned:
+        return workers
+    renamed = {}
+    for name, phases in workers.items():
+        target = cleaned.get(name)
+        if target:
+            renamed[target] = phases
+        elif name not in cleaned:
+            renamed[name] = phases
+    return renamed
+
+
+def _build_workers(extra=None, order=None, renames=None):
     workers = BASE_WORKERS.copy()
     if extra is None:
         extra = load_extra_workers()
     for w in extra:
         workers[w] = BASE_WORKERS['Eneko'][:]
     workers.update(TAIL_WORKERS)
+    if renames is None:
+        renames = load_worker_renames()
+    workers = _apply_worker_renames(workers, renames)
     if order is None:
         order = load_worker_order()
     if order:
@@ -201,6 +257,136 @@ def add_worker(name):
     HOURS_LIMITS[name] = HOURS_PER_DAY
     DEFAULT_HOURS_LIMITS[name] = HOURS_PER_DAY
     _apply_worker_hours(load_worker_hours())
+
+
+def rename_worker(old_name, new_name):
+    """Rename an existing worker and update persisted data."""
+
+    if not isinstance(old_name, str) or not isinstance(new_name, str):
+        return False
+    old_name = old_name.strip()
+    new_name = new_name.strip()
+    if not old_name or not new_name or old_name == new_name:
+        return False
+    if old_name not in WORKERS or new_name in WORKERS or new_name == UNPLANNED:
+        return False
+
+    extras = load_extra_workers()
+    renames = load_worker_renames()
+    renames_changed = False
+
+    if old_name in extras:
+        new_extras = [new_name if w == old_name else w for w in extras]
+        if new_extras != extras:
+            save_extra_workers(new_extras)
+        if renames.pop(old_name, None) is not None:
+            renames_changed = True
+    else:
+        current = renames.get(old_name)
+        if current != new_name:
+            renames = renames.copy()
+            renames[old_name] = new_name
+            renames_changed = True
+        # Ensure no conflicting aliases remain
+        for key, value in list(renames.items()):
+            if key != old_name and value == new_name:
+                renames.pop(key)
+                renames_changed = True
+
+    if renames_changed:
+        save_worker_renames(renames)
+
+    order = load_worker_order()
+    if order:
+        updated_order = [new_name if w == old_name else w for w in order]
+        if updated_order != order:
+            save_worker_order(updated_order)
+
+    inactive = load_inactive_workers()
+    if inactive:
+        updated_inactive = [new_name if w == old_name else w for w in inactive]
+        if updated_inactive != inactive:
+            save_inactive_workers(updated_inactive)
+
+    overrides = load_worker_hours()
+    if old_name in overrides and new_name not in overrides:
+        overrides[new_name] = overrides.pop(old_name)
+        save_worker_hours(overrides)
+    elif old_name in overrides:
+        overrides.pop(old_name, None)
+        save_worker_hours(overrides)
+
+    notes = load_worker_notes()
+    if old_name in notes and new_name not in notes:
+        notes[new_name] = notes.pop(old_name)
+        save_worker_notes(notes)
+    elif old_name in notes:
+        notes.pop(old_name, None)
+        save_worker_notes(notes)
+
+    vacations = load_vacations()
+    vac_changed = False
+    for vac in vacations:
+        if vac.get('worker') == old_name:
+            vac['worker'] = new_name
+            vac_changed = True
+    if vac_changed:
+        save_vacations(vacations)
+
+    manual_entries = load_manual_unplanned()
+    manual_changed = False
+    for entry in manual_entries:
+        if entry.get('worker') == old_name:
+            entry['worker'] = new_name
+            manual_changed = True
+    if manual_changed:
+        save_manual_unplanned(manual_entries)
+
+    projects = load_projects()
+    projects_changed = False
+    for project in projects:
+        assigned = project.get('assigned', {})
+        for phase, worker in list(assigned.items()):
+            if worker == old_name:
+                assigned[phase] = new_name
+                projects_changed = True
+        seg_workers = project.get('segment_workers') or {}
+        if isinstance(seg_workers, dict):
+            for phase, worker_list in list(seg_workers.items()):
+                if not isinstance(worker_list, list):
+                    continue
+                replaced = False
+                new_list = []
+                for worker in worker_list:
+                    if worker == old_name:
+                        worker = new_name
+                        replaced = True
+                    new_list.append(worker)
+                if replaced:
+                    seg_workers[phase] = new_list
+                    projects_changed = True
+        for task in project.get('frozen_tasks', []):
+            if task.get('worker') == old_name:
+                task['worker'] = new_name
+                projects_changed = True
+    if projects_changed:
+        save_projects(projects)
+
+    new_workers = _build_workers()
+    WORKERS.clear()
+    WORKERS.update(new_workers)
+
+    if old_name in HOURS_LIMITS:
+        HOURS_LIMITS[new_name] = HOURS_LIMITS.pop(old_name)
+    else:
+        HOURS_LIMITS.setdefault(new_name, HOURS_PER_DAY)
+    if old_name in DEFAULT_HOURS_LIMITS:
+        DEFAULT_HOURS_LIMITS[new_name] = DEFAULT_HOURS_LIMITS.pop(old_name)
+    else:
+        DEFAULT_HOURS_LIMITS.setdefault(new_name, HOURS_PER_DAY)
+    _apply_worker_hours(load_worker_hours())
+
+    return True
 
 
 def set_worker_order(order):
