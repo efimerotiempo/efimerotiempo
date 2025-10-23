@@ -50,6 +50,8 @@ load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
 _load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
 _save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
+load_manual_unplanned = getattr(_schedule_mod, "load_manual_unplanned", lambda: [])
+save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda entries: entries)
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
@@ -439,6 +441,70 @@ def prune_orphan_uploads(projects):
 
 READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
 PENDING_VERIFICATION_COLUMN = normalize_key('Pdte. Verificación')
+MATERIAL_VERIFY_ALLOWED_COLUMNS = {
+    normalize_key('Material Recepcionado'),
+    READY_TO_ARCHIVE_COLUMN,
+    normalize_key('Plegado/Curvado'),
+    normalize_key('Planf. TAU'),
+    normalize_key('Planif. TAU'),
+    normalize_key('Planf. Bekola'),
+    normalize_key('Planif. Bekola'),
+    normalize_key('Planf. AZ'),
+    normalize_key('Planif. AZ'),
+    normalize_key('Planf. OTROS'),
+    normalize_key('Planif. OTROS'),
+    normalize_key('Tratamiento'),
+}
+
+KANBAN_COLUMN_PHASE_TARGETS = {
+    normalize_key('Pedidos pendiente generar OF'): 'pedidos',
+    normalize_key('Administración'): 'pedidos',
+    normalize_key('Oficina Técnica'): 'dibujo',
+    normalize_key('Pendiente Por Recepcionar'): 'recepcionar material',
+    normalize_key('Prep. Interno'): 'recepcionar material',
+    normalize_key('Prep. Externo'): 'recepcionar material',
+    normalize_key('Listo para iniciar'): 'recepcionar material',
+    normalize_key('Planificado para montaje'): 'recepcionar material',
+    normalize_key('Montaje'): 'montar',
+    normalize_key('Soldadura'): 'soldar',
+    normalize_key('Montaje 2º fase'): 'montar 2º',
+    normalize_key('Soldadura final'): 'soldar 2º',
+    normalize_key('Verificacion'): 'soldar 2º',
+    normalize_key('Enderezado'): 'soldar 2º',
+    normalize_key('Tratamiento'): 'tratamiento',
+    normalize_key('Mec. Interno'): 'mecanizar',
+    normalize_key('Mec. Externo'): 'mecanizar',
+    normalize_key('Pintura'): 'pintar',
+    normalize_key('Montaje final'): '__after_pintar__',
+    normalize_key('Hacer Albaran'): '__after_pintar__',
+    READY_TO_ARCHIVE_COLUMN: '__after_pintar__',
+}
+
+KANBAN_PHASE_EXCLUSIONS = {'dibujo', 'pedidos'}
+PHASE_INDEX = {phase: idx for idx, phase in enumerate(PHASE_ORDER)}
+
+
+def compute_previous_kanban_phases(column):
+    """Return planner phases considered previous to the current Kanban column."""
+
+    if not column:
+        return []
+    column_key = normalize_key(column)
+    target = KANBAN_COLUMN_PHASE_TARGETS.get(column_key)
+    if not target:
+        return []
+    if target == '__after_pintar__':
+        cutoff = len(PHASE_ORDER)
+    else:
+        cutoff = PHASE_INDEX.get(target)
+        if cutoff is None:
+            return []
+    previous = []
+    for phase in PHASE_ORDER[:cutoff]:
+        if phase in KANBAN_PHASE_EXCLUSIONS:
+            continue
+        previous.append(phase)
+    return previous
 
 SSE_CLIENTS = []
 
@@ -481,7 +547,10 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
                 column_key = normalize_key(column)
                 if column_key:
                     project_columns.add(column_key)
-                if column_key in MATERIAL_ALERT_COLUMNS:
+                if (
+                    column_key in MATERIAL_ALERT_COLUMNS
+                    and column_key not in MATERIAL_VERIFY_ALLOWED_COLUMNS
+                ):
                     status_map[pid_key] = 'missing'
                     if missing_titles_map is not None:
                         title = (detail.get('title') or '').strip()
@@ -494,8 +563,14 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
             if status_map.get(pid_key) == 'missing':
                 continue
             if PENDING_VERIFICATION_COLUMN in columns:
-                status_map[pid_key] = 'verify'
-                continue
+                other_columns = {
+                    column for column in columns if column != PENDING_VERIFICATION_COLUMN
+                }
+                if all(
+                    column in MATERIAL_VERIFY_ALLOWED_COLUMNS for column in other_columns
+                ):
+                    status_map[pid_key] = 'verify'
+                    continue
             if all(column == READY_TO_ARCHIVE_COLUMN for column in columns):
                 status_map[pid_key] = 'archived'
         for pid_key, current in list(status_map.items()):
@@ -555,6 +630,95 @@ def group_unplanned_by_status(unplanned_list, status_map):
             }
         )
     return groups
+
+
+def _manual_entry_key(pid, phase, part):
+    if pid in (None, '', 'None') or phase in (None, '', 'None'):
+        return None
+    pid_str = str(pid)
+    phase_str = str(phase)
+    part_val = None
+    if part not in (None, '', 'None'):
+        try:
+            part_val = int(part)
+        except Exception:
+            return None
+    return pid_str, phase_str, part_val
+
+
+def _manual_entry_dict(key):
+    pid, phase, part = key
+    entry = {'pid': pid, 'phase': phase}
+    if part is not None:
+        entry['part'] = part
+    return entry
+
+
+def load_manual_bucket_entries():
+    entries = load_manual_unplanned()
+    cleaned = []
+    seen = set()
+    for item in entries:
+        key = _manual_entry_key(item.get('pid'), item.get('phase'), item.get('part'))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(_manual_entry_dict(key))
+    if cleaned != entries:
+        save_manual_unplanned(cleaned)
+    return cleaned
+
+
+def manual_bucket_add(pid, phase, part, position=None):
+    key = _manual_entry_key(pid, phase, part)
+    if not key:
+        return
+    entries = load_manual_bucket_entries()
+    filtered = [e for e in entries if (e['pid'], e['phase'], e.get('part')) != key]
+    entry = _manual_entry_dict(key)
+    if position is None:
+        position = len(filtered)
+    try:
+        position = int(position)
+    except Exception:
+        position = len(filtered)
+    if position < 0:
+        position = 0
+    if position > len(filtered):
+        position = len(filtered)
+    filtered.insert(position, entry)
+    if filtered != entries:
+        save_manual_unplanned(filtered)
+
+
+def manual_bucket_remove(pid, phase, part):
+    key = _manual_entry_key(pid, phase, part)
+    if not key:
+        return
+    entries = load_manual_bucket_entries()
+    filtered = [e for e in entries if (e['pid'], e['phase'], e.get('part')) != key]
+    if filtered != entries:
+        save_manual_unplanned(filtered)
+
+
+def manual_bucket_reorder(order):
+    if not isinstance(order, list):
+        return False
+    cleaned = []
+    seen = set()
+    for item in order:
+        if isinstance(item, dict):
+            key = _manual_entry_key(item.get('pid'), item.get('phase'), item.get('part'))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            key = _manual_entry_key(item[0], item[1], item[2] if len(item) > 2 else None)
+        else:
+            key = None
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(_manual_entry_dict(key))
+    save_manual_unplanned(cleaned)
+    return True
 
 
 def get_card_custom_id(card):
@@ -911,12 +1075,10 @@ def last_kanban_card(cid):
     return {}
 
 
-def load_compras_raw():
-    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+def _collect_compras_entries(entries, allowed_lanes, column_colors):
     compras_raw = {}
-    column_colors = load_column_colors()
     updated_colors = False
-    for entry in load_kanban_cards():
+    for entry in entries or []:
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
@@ -937,8 +1099,29 @@ def load_compras_raw():
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
+    return compras_raw, column_colors, updated_colors
+
+
+def load_compras_raw():
+    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+    column_colors = load_column_colors()
+
+    entries = load_kanban_cards()
+    compras_raw, column_colors, updated_colors = _collect_compras_entries(
+        entries, allowed_lanes, column_colors
+    )
+
+    if not compras_raw:
+        refreshed = refresh_kanban_card_cache()
+        if refreshed:
+            column_colors = load_column_colors()
+            compras_raw, column_colors, updated_colors = _collect_compras_entries(
+                refreshed, allowed_lanes, column_colors
+            )
+
     if updated_colors:
         save_column_colors(column_colors)
+
     return compras_raw, column_colors
 
 
@@ -2756,6 +2939,98 @@ def _kanban_card_to_project(card):
     return project
 
 
+def _normalize_card_id(value):
+    """Return a trimmed string identifier for a Kanban card."""
+
+    if value in (None, ''):
+        return ''
+    text = str(value).strip()
+    return text or ''
+
+
+def _iter_card_link_entries(card):
+    """Yield dictionaries describing cards linked to *card*."""
+
+    if not isinstance(card, dict):
+        return
+
+    links = card.get('links')
+    if isinstance(links, dict):
+        values = links.values()
+    elif isinstance(links, list):
+        values = links
+    else:
+        return
+
+    for group in values:
+        if isinstance(group, dict):
+            group_values = group.values()
+        else:
+            group_values = group
+        if not isinstance(group_values, (list, tuple, set)):
+            group_values = [group_values]
+        for entry in group_values:
+            if isinstance(entry, dict):
+                yield entry
+
+
+def refresh_kanban_card_cache():
+    """Rebuild the local Kanban card cache by calling the Kanbanize API."""
+
+    projects = load_projects() or []
+    initial_ids = []
+    for project in projects:
+        card_id = (
+            project.get('kanban_id')
+            or project.get('kanbanId')
+            or project.get('kanban_card_id')
+        )
+        normalized = _normalize_card_id(card_id)
+        if normalized:
+            initial_ids.append(normalized)
+
+    if not initial_ids:
+        return []
+
+    seen = set()
+    queue = list(dict.fromkeys(initial_ids))
+    refreshed = []
+
+    while queue:
+        current_id = queue.pop()
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        card = _fetch_kanban_card(current_id, with_links=True)
+        if not card:
+            continue
+
+        refreshed.append(
+            {
+                'timestamp': local_now().isoformat(),
+                'card': card,
+                'stored_title_date': None,
+                'previous_title_date': None,
+            }
+        )
+
+        for entry in _iter_card_link_entries(card):
+            linked_id = (
+                entry.get('taskid')
+                or entry.get('cardId')
+                or entry.get('id')
+                or entry.get('linkedCardId')
+                or entry.get('linkedcardid')
+            )
+            normalized_link = _normalize_card_id(linked_id)
+            if normalized_link and normalized_link not in seen:
+                queue.append(normalized_link)
+
+    if refreshed:
+        save_kanban_cards(refreshed)
+    return refreshed
+
+
 def _fetch_kanban_card(card_id, with_links=False):
     """Retrieve card details from Kanbanize via the REST API."""
     url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
@@ -2785,6 +3060,7 @@ def calendar_view():
     schedule, conflicts = schedule_projects(projects)
     today = local_today()
     worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -2931,7 +3207,92 @@ def calendar_view():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
     unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
+
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
 
     project_map = {}
     for p in projects:
@@ -2942,11 +3303,13 @@ def calendar_view():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         if pid:
             pid_key = str(pid)
             project_entry['material_status'] = material_status_map.get(pid_key, 'complete')
             project_entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = project_entry
         project_map[p['id']] = project_entry
     start_map = phase_start_map(projects)
 
@@ -2969,7 +3332,10 @@ def calendar_view():
         split_points=points,
         palette=COLORS,
         unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
     )
 
 
@@ -3068,12 +3434,14 @@ def calendar_pedidos():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         pid = p.get('id')
         if pid:
             pid_key = str(pid)
             entry['material_status'] = material_status_map.get(pid_key, 'complete')
             entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 
@@ -3832,6 +4200,7 @@ def gantt_orders_view():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
             'planned_start': planned_start_iso,
             'planned_end': planned_end_iso,
             'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
@@ -3896,6 +4265,7 @@ def gantt_orders_view():
                         'kanban_display_fields': {},
                         'kanban_attachments': [],
                         'phase_sequence': [],
+                        'kanban_previous_phases': [],
                         'frozen_phases': [],
                         'color': color,
                         'due_date': due,
@@ -4261,7 +4631,29 @@ def vacation_list():
         })
         save_vacations(vacations)
         return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
+    today = local_today()
+
+    def parse_iso(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def vacation_sort_key(vacation):
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        reference = start_date or end_date or today
+        effective_end = end_date or start_date or reference
+        is_past = effective_end < today
+        ref_ord = reference.toordinal()
+        if not is_past:
+            return (0, ref_ord)
+        return (1, -ref_ord)
+
+    ordered_vacations = sorted(vacations, key=vacation_sort_key)
+    return render_template('vacations.html', vacations=ordered_vacations, workers=active_workers(), today=today.isoformat())
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -4377,6 +4769,7 @@ def complete():
     schedule, conflicts = schedule_projects(projects)
     today = local_today()
     worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -4541,7 +4934,92 @@ def complete():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
     unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
+
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
 
     project_map = {}
     for p in projects:
@@ -4551,12 +5029,14 @@ def complete():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
         pid = p.get('id')
         if pid:
             pid_key = str(pid)
             entry['material_status'] = material_status_map.get(pid_key, 'complete')
             entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
         project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 
@@ -4582,7 +5062,10 @@ def complete():
         split_points=points,
         palette=COLORS,
         unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
     )
 
 
@@ -5114,6 +5597,8 @@ def move_phase():
             part = int(part)
         except Exception:
             part = None
+    manual_flag = str(data.get('manual_bucket')).lower() == 'true'
+    manual_position = data.get('manual_position')
     # 🔧 Respetamos el modo que viene en la petición
     mode = data.get('mode', 'split')
     push_pid = data.get('push_pid')
@@ -5167,14 +5652,21 @@ def move_phase():
     # available day when the chosen cell has no remaining hours.
     mapping = compute_schedule_map(projects)
     actual_day = None
+    actual_worker = None
     for w, d, ph, hrs, prt in mapping.get(pid, []):
         if ph == phase and (part is None or prt == part):
             actual_day = d
+            actual_worker = w
             break
     if actual_day != date_str:
         projects[:] = original_projects
         save_projects(projects)
         return jsonify({'error': 'Jornada ocupada'}), 409
+
+    if actual_worker == UNPLANNED and manual_flag:
+        manual_bucket_add(pid, phase, part, manual_position)
+    else:
+        manual_bucket_remove(pid, phase, part)
 
     # Build tracker entry with detailed reasoning
     proj = next((p for p in projects if p['id'] == pid), {})
@@ -5212,6 +5704,17 @@ def move_phase():
         resp['warning'] = warn
     return jsonify(resp)
 
+
+
+@app.route('/manual_bucket/reorder', methods=['POST'])
+def manual_bucket_reorder_route():
+    data = request.get_json(silent=True) or {}
+    order = data.get('order')
+    if not isinstance(order, list):
+        return jsonify({'error': 'Datos inválidos'}), 400
+    if not manual_bucket_reorder(order):
+        return jsonify({'error': 'Datos inválidos'}), 400
+    return '', 204
 
 
 def remove_project_and_preserve_schedule(projects, pid):
@@ -5919,6 +6422,12 @@ def kanbanize_webhook():
         if changed:
             save_projects(projects)
     else:
+        if column_norm == 'pedidos pendiente generar of':
+            cards = load_kanban_cards()
+            cards.append({'timestamp': payload_timestamp, 'card': card})
+            save_kanban_cards(cards)
+            broadcast_event({"type": "kanban_update"})
+            return jsonify({"mensaje": "Tarjeta ignorada (columna Pedidos pendiente generar OF)"}), 200
         project = {
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,

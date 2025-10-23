@@ -170,6 +170,15 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+function normalizePartValue(value) {
+  if (value === undefined || value === null) return '';
+  const text = `${value}`.trim();
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
+  return text;
+}
 let timelineMinStart = null;
 let timelinePxPerDay = pxPerDay;
 
@@ -1027,10 +1036,12 @@ function buildPhaseSection(info, context) {
     else total = parseInt(raw) || 0;
     if (total > 0) {
       const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-      const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
-      let line = `<div${cls}>${ph}: ${total}h`;
+      const classes = ['phase-entry'];
+      classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+      let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
       if (ph === context.phase) {
-        const partAttr = context.part !== undefined && context.part !== '' ? ` data-part="${context.part}"` : '';
+        const partValue = normalizePartValue(context.part);
+        const partAttr = partValue ? ` data-part="${partValue}"` : '';
         line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
       }
       line += `</div>`;
@@ -1137,7 +1148,9 @@ function openPhasePopup(context, anchorRect) {
     splitLine += `</div>`;
     actionLines.push(splitLine);
     actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
-    actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-part="${context.part || ''}">Sin planificar</button></div>`);
+    const unplanPart = normalizePartValue(context.part);
+    const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
+    actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}"${unplanAttr}>Sin planificar</button></div>`);
   }
   if (context.pid) {
     const obsValue = info && info.observations !== undefined && info.observations !== null
@@ -1195,7 +1208,8 @@ function openPhasePopup(context, anchorRect) {
       ev.stopPropagation();
       const today = madridDateISO();
       const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
-      if (unplan.dataset.part) body.part = unplan.dataset.part;
+      const partValue = normalizePartValue(unplan.dataset.part);
+      if (partValue) body.part = partValue;
       fetch(MOVE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1318,8 +1332,9 @@ function openPhasePopup(context, anchorRect) {
       const btn = hoursForm.querySelector('button');
       const val = document.getElementById('phase-hours-input').value;
       const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
-      if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
-        payload.part = btn.dataset.part;
+      const partValue = normalizePartValue(btn.dataset.part);
+      if (partValue) {
+        payload.part = partValue;
       }
       fetch(PHASE_HOURS_URL, {
         method: 'POST',

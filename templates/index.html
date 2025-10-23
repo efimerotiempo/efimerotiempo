@@ -29,7 +29,9 @@
         <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
         <button type="submit">Filtrar</button>
     </form>
-    <button id="today-btn">HOY</button>
+    <button id="today-btn" type="button">HOY</button>
+    <button id="sort-due-btn" class="order-toggle" type="button">Fecha tope</button>
+    <button id="sort-status-btn" class="order-toggle" type="button">Estado material</button>
 </div>
 <div class="hours-btn-container">
     <button id="hours-btn" type="button">Editar jornada laboral</button>
@@ -90,7 +92,12 @@
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+            {% set project_info = project_data.get(t.pid|string) %}
+            {% if project_info is none %}
+            {% set project_info = project_data.get(t.pid) %}
+            {% endif %}
+            {% set material_missing = project_info and project_info.material_status == 'missing' %}
+            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
                 {% if t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
@@ -101,7 +108,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                <span class="task-project{% if material_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                 </span>
                 {% if t.hours %}
                 <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -135,14 +142,44 @@
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
-            <div class="unplanned-list" data-worker="Sin planificar">
+            <div class="manual-group">
+                <div class="manual-header">Arrastrar aquí</div>
+                <div id="manual-dropzone" class="manual-dropzone" data-worker="Sin planificar">
+                    <div class="manual-placeholder"{% if manual_bucket %} style="display:none;"{% endif %}>Suelta aquí las fases que quieras guardar temporalmente.</div>
+                {% for item in manual_bucket %}
+                    {% set matches_filter = item.filter_match %}
+                    {% set status = item.material_status %}
+                    {% set missing = status == 'missing' %}
+                    {% set key = item.pid|string ~ '|' ~ item.phase ~ '|' ~ (item.day) %}
+                    <div class="task manual-task{% if item.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ item.color }};" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due_date or '' }}" data-start="{{ item.start_date or '' }}" data-day="{{ item.day or '' }}" data-pid="{{ item.pid }}" data-phase="{{ item.phase }}"{% if item.part is not none %} data-part="{{ item.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                        <span class="task-main">
+                        {% if item.due_status == 'after' %}
+                            <span class="due-after">&#10060;</span>
+                        {% elif item.due_status == 'before' %}
+                            <span class="due-before">&#10060;</span>
+                        {% elif item.due_status == 'met' %}
+                            <span class="due-ok">&#10004;</span>
+                        {% endif %}
+                        {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                        <span class="material-status-flag {{ item.material_css }}">{{ item.material_label }}</span>
+                        <span class="task-project{% if missing %} task-project-missing{% endif %}">{{ item.project }}</span>{% if item.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ item.client|truncate(15, True) }} - {{ item.phase }}
+                        </span>
+                        {% if item.hours %}
+                        <span class="task-hours">{% if item.auto and item.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ item.hours }}h</span>{% else %}{{ item.hours }}h{% endif %}</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="status">
             {% for section in unplanned_groups %}
             <div class="unplanned-status-group" data-status="{{ section.status }}">
                 <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
                 {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+            {% set folder_missing = section.status == 'missing' %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ section.status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
@@ -157,7 +194,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -167,6 +204,39 @@
                 </div>
             </div>
                 {% endfor %}
+            </div>
+            {% endfor %}
+            </div>
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="due" style="display:none;">
+            {% for g in unplanned_due %}
+            {% set folder_match = g.get('filter_match', True) %}
+            {% set status = g.get('material_status', 'complete') %}
+            {% set status_label = material_status_labels.get(status, status|capitalize) %}
+            {% set folder_missing = status == 'missing' %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-content" style="display:none;">
+                {% for t in g.tasks %}
+                {% set matches_filter = t.get('filter_match', True) %}
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                    <span class="task-main">
+                    {% if t.due_status == 'after' %}
+                        <span class="due-after">&#10060;</span>
+                    {% elif t.due_status == 'before' %}
+                        <span class="due-before">&#10060;</span>
+                    {% elif t.due_status == 'met' %}
+                        <span class="due-ok">&#10004;</span>
+                    {% endif %}
+                    {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
+                    {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    </span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                </div>
             </div>
             {% endfor %}
             </div>
@@ -226,6 +296,7 @@
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -247,6 +318,15 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function normalizePartValue(value) {
+    if (value === undefined || value === null) return '';
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
+    return text;
   }
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
@@ -729,33 +809,70 @@
   });
 
   const todayBtn = document.getElementById('today-btn');
-  todayBtn.addEventListener('click', () => {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) {
-      todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
-    }
-  });
+  if (todayBtn) {
+    todayBtn.addEventListener('click', () => {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) {
+        todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+      }
+    });
+  }
+
+  const sortDueBtn = document.getElementById('sort-due-btn');
+  const sortStatusBtn = document.getElementById('sort-status-btn');
+  const orderLists = document.querySelectorAll('.unplanned-list[data-mode]');
+  const ORDER_KEY = 'unplannedOrderMode';
+  const ORDER_STATUS = 'status';
+  const ORDER_DUE = 'due';
+
+  function applyUnplannedOrder(mode) {
+    const selected = mode === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+    orderLists.forEach((list) => {
+      const active = list.dataset.mode === selected;
+      list.style.display = active ? 'block' : 'none';
+      list.classList.toggle('active', active);
+    });
+    if (sortDueBtn) sortDueBtn.classList.toggle('active', selected === ORDER_DUE);
+    if (sortStatusBtn) sortStatusBtn.classList.toggle('active', selected === ORDER_STATUS);
+    localStorage.setItem(ORDER_KEY, selected);
+  }
+
+  const savedOrder = localStorage.getItem(ORDER_KEY);
+  const initialOrder = savedOrder === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+  if (sortDueBtn) {
+    sortDueBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_DUE));
+  }
+  if (sortStatusBtn) {
+    sortStatusBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_STATUS));
+  }
+  if (orderLists.length) {
+    applyUnplannedOrder(initialOrder);
+  }
 
 const tasks = document.querySelectorAll('.task');
 const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
 let lastDrag = null;
 let dragInfo = null;
+let draggedTaskElement = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
       popup.style.display = 'none';
       const row = t.closest('[data-worker]');
+      const partValue = normalizePartValue(t.dataset.part);
+      const manualSource = !!t.closest('#manual-dropzone');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
         worker: row ? row.dataset.worker : '',
-        part: t.dataset.part
+        part: partValue
       };
-      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
-      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
+      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: partValue, manual: manualSource };
+      draggedTaskElement = t;
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: partValue}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; });
+    t.addEventListener('dragend', () => { dragInfo = null; draggedTaskElement = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -817,6 +934,9 @@ let dragInfo = null;
         kanbanHtml += '</div>';
         html += kanbanHtml;
       }
+      const previousPhases = Array.isArray(info.kanban_previous_phases)
+        ? new Set(info.kanban_previous_phases)
+        : new Set();
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -826,10 +946,13 @@ let dragInfo = null;
         else total = parseInt(val) || 0;
         if (total > 0) {
           const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
-          let line = `<div${cls}>${ph}: ${total}h`;
+          const classes = ['phase-entry'];
+          classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+          if (previousPhases.has(ph)) classes.push('phase-previous');
+          let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
           if (ph === t.dataset.phase) {
-            const partAttr = t.dataset.part !== undefined ? ` data-part="${t.dataset.part}"` : '';
+            const partValue = normalizePartValue(t.dataset.part);
+            const partAttr = partValue ? ` data-part="${partValue}"` : '';
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
           }
           line += `</div>`;
@@ -868,7 +991,9 @@ let dragInfo = null;
       splitLine += `</div>`;
       actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
-      actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-part="${t.dataset.part}">Sin planificar</button></div>`);
+      const unplanPart = normalizePartValue(t.dataset.part);
+      const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
+      actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${unplanAttr}>Sin planificar</button></div>`);
       const obsValue = info && info.observations !== undefined && info.observations !== null
         ? `${info.observations}`
         : '';
@@ -923,7 +1048,8 @@ let dragInfo = null;
           ev.stopPropagation();
           const today = madridDateISO();
           const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
-          if (unplan.dataset.part) body.part = unplan.dataset.part;
+          const partValue = normalizePartValue(unplan.dataset.part);
+          if (partValue) body.part = partValue;
           fetch(MOVE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1072,8 +1198,9 @@ let dragInfo = null;
           const btn = hoursForm.querySelector('button');
           const val = document.getElementById('phase-hours-input').value;
           const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
-          if (btn.dataset.part !== undefined && btn.dataset.part !== '') {
-            payload.part = btn.dataset.part;
+          const partValue = normalizePartValue(btn.dataset.part);
+          if (partValue) {
+            payload.part = partValue;
           }
           fetch(PHASE_HOURS_URL, {
             method: 'POST',
@@ -1208,7 +1335,9 @@ let dragInfo = null;
     let hours = 0;
     const tasks = Array.from(cell.querySelectorAll('.task'));
     for (const t of tasks) {
-      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
+      const currentPart = normalizePartValue(t.dataset.part);
+      const draggingPart = dragInfo ? normalizePartValue(dragInfo.part) : '';
+      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && currentPart === draggingPart) continue;
       const rect = t.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) break;
       hours += parseFloat(t.dataset.hours || '0');
@@ -1284,8 +1413,7 @@ let dragInfo = null;
       pendingBlock = null;
     });
   }
-  const unplanList = document.querySelector('.unplanned-list');
-  if (unplanList) {
+  document.querySelectorAll('.unplanned-list').forEach((unplanList) => {
     unplanList.addEventListener('dragover', e => { e.preventDefault(); });
     unplanList.addEventListener('drop', e => {
       e.preventDefault();
@@ -1307,6 +1435,138 @@ let dragInfo = null;
             return;
           }
           afterMove(data, today);
+        });
+    });
+  });
+  const manualZone = document.getElementById('manual-dropzone');
+
+  function manualDropIndex(zone, clientY) {
+    if (!zone) return 0;
+    const items = Array.from(zone.querySelectorAll('.manual-task'));
+    const filtered = draggedTaskElement ? items.filter(el => el !== draggedTaskElement) : items;
+    let index = filtered.length;
+    for (let i = 0; i < filtered.length; i += 1) {
+      const rect = filtered[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        index = i;
+        break;
+      }
+    }
+    return index;
+  }
+
+  function refreshManualPlaceholder() {
+    if (!manualZone) return;
+    const placeholder = manualZone.querySelector('.manual-placeholder');
+    if (!placeholder) return;
+    const hasTask = manualZone.querySelector('.manual-task');
+    placeholder.style.display = hasTask ? 'none' : 'block';
+  }
+
+  function persistManualOrder() {
+    if (!manualZone) return;
+    const order = Array.from(manualZone.querySelectorAll('.manual-task')).map((el) => {
+      const rawPart = normalizePartValue(el.dataset.part);
+      let part = null;
+      if (rawPart) {
+        const num = Number(rawPart);
+        part = Number.isFinite(num) ? num : null;
+      }
+      return {
+        pid: el.dataset.pid,
+        phase: el.dataset.phase,
+        part,
+      };
+    });
+    fetch(MANUAL_REORDER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ order }),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          return resp
+            .json()
+            .catch(() => ({}))
+            .then((d) => {
+              throw new Error(d.error || 'Error');
+            });
+        }
+        return null;
+      })
+      .catch((err) => {
+        alert(err.message || 'Error');
+      });
+  }
+
+  refreshManualPlaceholder();
+
+  if (manualZone) {
+    manualZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.add('drag-over');
+    });
+    manualZone.addEventListener('dragleave', (e) => {
+      if (e.target === manualZone || !manualZone.contains(e.relatedTarget)) {
+        manualZone.classList.remove('drag-over');
+      }
+    });
+    manualZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.remove('drag-over');
+      let data = null;
+      try {
+        data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      } catch (err) {
+        data = null;
+      }
+      if (!data) return;
+      const index = manualDropIndex(manualZone, e.clientY);
+      if (dragInfo && dragInfo.manual) {
+        const el = draggedTaskElement;
+        if (el) {
+          const siblings = Array.from(manualZone.querySelectorAll('.manual-task')).filter((item) => item !== el);
+          if (index >= siblings.length) {
+            manualZone.appendChild(el);
+          } else {
+            manualZone.insertBefore(el, siblings[index]);
+          }
+          persistManualOrder();
+          refreshManualPlaceholder();
+        }
+        return;
+      }
+      const today = madridDateISO();
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      const payload = {
+        pid: data.pid,
+        phase: data.phase,
+        date: today,
+        worker: 'Sin planificar',
+        part: data.part,
+        manual_bucket: true,
+        manual_position: index,
+      };
+      const placeholder = manualZone.querySelector('.manual-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then((resp) => resp.json().then((d) => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data: moveData }) => {
+          if (!ok) {
+            alert(moveData.error || 'Error');
+            return;
+          }
+          afterMove(moveData, today);
         });
     });
   }
