@@ -3468,6 +3468,13 @@ def cronologico_view():
     week_days = [week_start + timedelta(days=i) for i in range(5)]
 
     interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
+    phase_display = {
+        'montar': 'MONTAR',
+        'soldar': 'SOLDAR',
+        'pintar': 'PINTAR',
+        'mecanizar': 'MECANIZAR',
+        'tratamiento': 'TRATAMIENTO',
+    }
     phase_entries = {}
     for worker, days in schedule_map.items():
         if worker == UNPLANNED:
@@ -3486,6 +3493,7 @@ def cronologico_view():
                     key,
                     {
                         'project': task.get('project'),
+                        'client': task.get('client'),
                         'worker': worker,
                         'phase': phase,
                         'days': set(),
@@ -3508,6 +3516,7 @@ def cronologico_view():
     }
 
     events_by_day = {d.isoformat(): [] for d in week_days}
+    same_day_completions = {}
     for entry in phase_entries.values():
         days = sorted(entry['days'])
         if not days:
@@ -3515,10 +3524,22 @@ def cronologico_view():
         start_day = days[0]
         end_day = days[-1]
         project_name = entry['project'] or 'Sin nombre'
+        client_name = entry.get('client') or 'Sin cliente'
         worker_name = entry['worker'] or UNPLANNED
         if worker_name == UNPLANNED:
             continue
         phase = entry['phase']
+
+        if start_day == end_day:
+            key = (
+                start_day.isoformat(),
+                worker_name,
+                project_name,
+                client_name,
+            )
+            phases = same_day_completions.setdefault(key, [])
+            phases.append(phase)
+            continue
 
         start_template = start_templates.get(phase)
         day_key = start_day.isoformat()
@@ -3529,6 +3550,36 @@ def cronologico_view():
         finish_key = end_day.isoformat()
         if finish_template and finish_key in events_by_day:
             events_by_day[finish_key].append((1, finish_template.format(worker=worker_name, project=project_name)))
+
+    for key, phases in same_day_completions.items():
+        day_key, worker_name, project_name, client_name = key
+        if day_key not in events_by_day:
+            continue
+        unique_phases = []
+        seen_phases = set()
+        for phase in phases:
+            if phase in seen_phases:
+                continue
+            seen_phases.add(phase)
+            label = phase_display.get(phase, phase.upper())
+            unique_phases.append(label)
+        if not unique_phases:
+            continue
+        if len(unique_phases) == 1:
+            message = (
+                f"{worker_name} Inicia y termina la fase {unique_phases[0]} "
+                f"de {project_name} - {client_name}"
+            )
+        else:
+            if len(unique_phases) == 2:
+                phases_text = f"{unique_phases[0]} y {unique_phases[1]}"
+            else:
+                phases_text = ", ".join(unique_phases[:-1]) + f" y {unique_phases[-1]}"
+            message = (
+                f"{worker_name} Inicia y termina las fases {phases_text} "
+                f"de {project_name} - {client_name}"
+            )
+        events_by_day[day_key].append((0, message))
 
     for day_key, messages in events_by_day.items():
         messages.sort(key=lambda item: (item[0], item[1]))
