@@ -3516,6 +3516,34 @@ def cronologico_view():
     }
 
     events_by_day = {d.isoformat(): [] for d in week_days}
+    previews_by_day = {d.isoformat(): [] for d in week_days}
+    preview_seen = {d.isoformat(): set() for d in week_days}
+    project_lookup = {p.get('id'): p for p in projects}
+    for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
+        for day_key, tasks in days.items():
+            if day_key not in previews_by_day:
+                continue
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                project = project_lookup.get(pid)
+                if not project:
+                    continue
+                image_path = project.get('image')
+                if not image_path or pid in preview_seen[day_key]:
+                    continue
+                previews_by_day[day_key].append(
+                    {
+                        'project': project.get('name') or 'Sin nombre',
+                        'client': project.get('client') or '',
+                        'image': image_path,
+                    }
+                )
+                preview_seen[day_key].add(pid)
+
     same_day_completions = {}
     for entry in phase_entries.values():
         days = sorted(entry['days'])
@@ -3592,10 +3620,14 @@ def cronologico_view():
             deduped.append(message)
         events_by_day[day_key] = deduped
 
+    for day_key, previews in previews_by_day.items():
+        previews.sort(key=lambda item: item['project'])
+
     return render_template(
         'cronologico.html',
         week_days=week_days,
         events_by_day=events_by_day,
+        previews_by_day=previews_by_day,
         today=today,
     )
 
