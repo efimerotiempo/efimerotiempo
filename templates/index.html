@@ -316,6 +316,10 @@
   const splitPart1Hint = document.getElementById('split-part1-hint');
   const splitPart2Hint = document.getElementById('split-part2-hint');
   const SPLIT_WORKDAY_HOURS = 8;
+  const historyModal = document.getElementById('history-modal');
+  const historyList = document.getElementById('history-list');
+  const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
+  const historyTitle = document.getElementById('history-title');
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -462,10 +466,6 @@
   const materialModal = document.getElementById('material-modal');
   const materialList = document.getElementById('material-list');
   const materialClose = document.getElementById('material-close');
-  const historyModal = document.getElementById('history-modal');
-  const historyList = document.getElementById('history-list');
-  const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
-  const historyTitle = document.getElementById('history-title');
   let pendingMaterialCallback = null;
   let pedidosLinksPromise = null;
   const pedidosCache = {
