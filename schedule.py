@@ -19,6 +19,7 @@ WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
 WORKER_RENAMES_FILE = os.path.join(DATA_DIR, 'worker_renames.json')
 WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
 MANUAL_UNPLANNED_FILE = os.path.join(DATA_DIR, 'manual_unplanned.json')
+PHASE_HISTORY_FILE = os.path.join(DATA_DIR, 'phase_history.json')
 
 PHASE_ORDER = [
     'dibujo',
@@ -565,6 +566,55 @@ def save_manual_unplanned(entries):
     with open(MANUAL_UNPLANNED_FILE, 'w') as f:
         json.dump(cleaned, f)
     return cleaned
+
+
+def phase_history_key(pid, phase, part=None):
+    part_value = ''
+    if part not in (None, '', 'None'):
+        part_value = str(part)
+    return f"{str(pid)}|{phase}|{part_value}"
+
+
+def load_phase_history():
+    if not os.path.exists(PHASE_HISTORY_FILE):
+        return {}
+    try:
+        with open(PHASE_HISTORY_FILE, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for key, entries in data.items():
+        if not isinstance(key, str) or not isinstance(entries, list):
+            continue
+        filtered = []
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            ts = item.get('timestamp')
+            if not isinstance(ts, str):
+                continue
+            record = {
+                'timestamp': ts,
+                'from_day': item.get('from_day') if isinstance(item.get('from_day'), str) or item.get('from_day') is None else None,
+                'to_day': item.get('to_day') if isinstance(item.get('to_day'), str) or item.get('to_day') is None else None,
+                'from_worker': item.get('from_worker') if isinstance(item.get('from_worker'), str) or item.get('from_worker') is None else None,
+                'to_worker': item.get('to_worker') if isinstance(item.get('to_worker'), str) or item.get('to_worker') is None else None,
+            }
+            filtered.append(record)
+        if filtered:
+            cleaned[key] = filtered
+    return cleaned
+
+
+def save_phase_history(data):
+    if not isinstance(data, dict):
+        data = {}
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(PHASE_HISTORY_FILE, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def next_workday(d):

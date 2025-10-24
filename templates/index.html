@@ -253,6 +253,13 @@
         <button id="material-close" type="button">Cerrar</button>
     </div>
 </div>
+<div id="history-modal" class="history-modal">
+    <div class="history-content">
+        <button type="button" class="history-close" aria-label="Cerrar">&#10005;</button>
+        <h3 id="history-title">Historial</h3>
+        <div id="history-list" class="history-list"></div>
+    </div>
+</div>
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
     <button type="submit">Borrar todos</button>
@@ -297,6 +304,7 @@
   const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
+  const HISTORY_URL = "{{ url_for('phase_history') }}";
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -328,6 +336,124 @@
     if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
     return text;
   }
+  const historyTimestampFormatter = typeof Intl !== 'undefined'
+    ? new Intl.DateTimeFormat('es-ES', {
+        timeZone: window.EFIMERO_TZ || 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  function formatHistoryTimestamp(value) {
+    if (!value) return '';
+    if (!historyTimestampFormatter) return value;
+    try {
+      const dt = new Date(value);
+      if (Number.isNaN(dt.valueOf())) return value;
+      return historyTimestampFormatter.format(dt);
+    } catch (err) {
+      return value;
+    }
+  }
+
+  function formatHistoryDay(value) {
+    if (!value) return 'Sin planificar';
+    const parts = `${value}`.split('-');
+    if (parts.length < 3) return value;
+    const month = parts[1].split('T')[0].padStart(2, '0');
+    const dayPart = parts[2].split('T')[0];
+    const day = dayPart.padStart(2, '0');
+    return `${day}/${month}`;
+  }
+
+  function formatHistoryWorker(value) {
+    const text = value === undefined || value === null ? '' : `${value}`.trim();
+    return text || 'Sin planificar';
+  }
+
+  function closeHistoryModal() {
+    if (historyModal) {
+      historyModal.classList.remove('open');
+    }
+  }
+
+  function renderHistoryEntries(entries) {
+    if (!historyList) return;
+    if (!Array.isArray(entries) || !entries.length) {
+      historyList.innerHTML = '<div class="history-empty">No hay movimientos registrados.</div>';
+      return;
+    }
+    const html = entries
+      .map(entry => {
+        const ts = formatHistoryTimestamp(entry.timestamp);
+        const fromDay = formatHistoryDay(entry.from_day);
+        const toDay = formatHistoryDay(entry.to_day);
+        const fromWorker = formatHistoryWorker(entry.from_worker);
+        const toWorker = formatHistoryWorker(entry.to_worker);
+        return `
+          <div class="history-entry">
+            <div class="history-entry-time">${ts}</div>
+            <div class="history-entry-body">De <strong>${fromDay}</strong> (${fromWorker}) a <strong>${toDay}</strong> (${toWorker})</div>
+          </div>
+        `;
+      })
+      .join('');
+    historyList.innerHTML = html;
+  }
+
+  function openHistory(pid, phase, part, projectName, clientName) {
+    if (!historyModal || !historyList || !HISTORY_URL) return;
+    const pieces = [];
+    if (projectName) pieces.push(projectName);
+    if (clientName) pieces.push(clientName);
+    const baseTitle = pieces.length ? pieces.join(' - ') : 'Historial';
+    if (historyTitle) {
+      const suffix = phase ? ` (${phase})` : '';
+      historyTitle.textContent = `Historial - ${baseTitle}${suffix}`;
+    }
+    historyModal.classList.add('open');
+    historyList.innerHTML = '<div class="history-loading">Cargando...</div>';
+    const params = new URLSearchParams({ pid, phase });
+    if (part) params.append('part', part);
+    fetch(`${HISTORY_URL}?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+    })
+      .then(resp => (resp.ok ? resp.json() : Promise.reject()))
+      .then(data => {
+        const entries = Array.isArray(data.history) ? data.history : [];
+        renderHistoryEntries(entries);
+      })
+      .catch(() => {
+        if (historyList) {
+          historyList.innerHTML = '<div class="history-error">No se pudo cargar el historial.</div>';
+        }
+      });
+  }
+
+  if (historyClose) {
+    historyClose.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closeHistoryModal();
+    });
+  }
+  if (historyModal) {
+    historyModal.addEventListener('click', ev => {
+      if (ev.target === historyModal) closeHistoryModal();
+    });
+    const historyContent = historyModal.querySelector('.history-content');
+    if (historyContent) {
+      historyContent.addEventListener('click', ev => ev.stopPropagation());
+    }
+  }
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+      closeHistoryModal();
+    }
+  });
+
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
   const blockUnfreeze = document.getElementById('block-unfreeze');
@@ -336,6 +462,10 @@
   const materialModal = document.getElementById('material-modal');
   const materialList = document.getElementById('material-list');
   const materialClose = document.getElementById('material-close');
+  const historyModal = document.getElementById('history-modal');
+  const historyList = document.getElementById('history-list');
+  const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
+  const historyTitle = document.getElementById('history-title');
   let pendingMaterialCallback = null;
   let pedidosLinksPromise = null;
   const pedidosCache = {
@@ -702,7 +832,7 @@
       document.addEventListener('mouseup', onUp);
     });
   }
-  document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
+  document.querySelectorAll('.modal-content, .conflict-content, .info-popup, .history-content').forEach(makeDraggable);
 
   document.querySelectorAll('.worker-note').forEach(area => {
     area.addEventListener('change', () => {
@@ -872,6 +1002,7 @@ let draggedTaskElement = null;
         }
       });
       const info = PROJECT_DATA[t.dataset.pid];
+      const normalizedPart = normalizePartValue(t.dataset.part);
       let html = `<div class="popup-section popup-header"><strong>${info.name}${info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : ''} - ${info.client} - ${t.dataset.phase}</strong></div>`;
       const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
       const metaLines = [];
@@ -930,7 +1061,7 @@ let draggedTaskElement = null;
           if (previousPhases.has(ph)) classes.push('phase-previous');
           let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
           if (ph === t.dataset.phase) {
-            const partValue = normalizePartValue(t.dataset.part);
+            const partValue = normalizedPart;
             const partAttr = partValue ? ` data-part="${partValue}"` : '';
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
           }
@@ -946,6 +1077,8 @@ let draggedTaskElement = null;
       }
       if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
       const actionLines = [];
+      const historyPartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+      actionLines.push(`<div><button type="button" class="history-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${historyPartAttr}>Historial</button></div>`);
       actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
       actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
       const phaseHoursEntry = info.phases ? info.phases[t.dataset.phase] : null;
@@ -970,7 +1103,7 @@ let draggedTaskElement = null;
       splitLine += `</div>`;
       actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
-      const unplanPart = normalizePartValue(t.dataset.part);
+      const unplanPart = normalizedPart;
       const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
       actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${unplanAttr}>Sin planificar</button></div>`);
       const obsValue = info && info.observations !== undefined && info.observations !== null
@@ -1007,6 +1140,14 @@ let draggedTaskElement = null;
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
+      const historyBtn = popup.querySelector('.history-btn');
+      if (historyBtn) {
+        historyBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const partValue = normalizePartValue(historyBtn.dataset.part);
+          openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, info.name, info.client);
+        });
+      }
       const del = document.getElementById('del-btn');
       if (del) {
         del.addEventListener('click', ev => {

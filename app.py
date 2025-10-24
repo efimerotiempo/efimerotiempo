@@ -52,6 +52,9 @@ _load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
 _save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
 load_manual_unplanned = getattr(_schedule_mod, "load_manual_unplanned", lambda: [])
 save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda entries: entries)
+load_phase_history = getattr(_schedule_mod, "load_phase_history", lambda: {})
+save_phase_history = getattr(_schedule_mod, "save_phase_history", lambda data: None)
+phase_history_key = getattr(_schedule_mod, "phase_history_key", lambda pid, phase, part=None: f"{pid}|{phase}|{'' if part in (None, '', 'None') else part}")
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
@@ -5738,6 +5741,31 @@ def move_phase():
 
     projects = get_projects()
     original_projects = copy.deepcopy(projects)
+    before_mapping = compute_schedule_map(original_projects)
+    pid_candidates = []
+    for candidate in (pid, str(pid)):
+        if candidate not in pid_candidates:
+            pid_candidates.append(candidate)
+    try:
+        pid_int = int(pid)
+    except Exception:
+        pid_int = None
+    else:
+        for candidate in (pid_int, str(pid_int)):
+            if candidate not in pid_candidates:
+                pid_candidates.append(candidate)
+
+    def _find_phase_entry(mapping_data):
+        for key in pid_candidates:
+            entries = mapping_data.get(key)
+            if not entries:
+                continue
+            for w, d, ph, _, prt in entries:
+                if ph == phase and (part is None or prt == part):
+                    return d, w
+        return None, None
+
+    before_day, before_worker = _find_phase_entry(before_mapping)
     tracker_events = []
     new_day, warn, info = move_phase_date(
         projects,
@@ -5762,13 +5790,7 @@ def move_phase():
     # scheduled elsewhere. This prevents the phase from jumping to the next
     # available day when the chosen cell has no remaining hours.
     mapping = compute_schedule_map(projects)
-    actual_day = None
-    actual_worker = None
-    for w, d, ph, hrs, prt in mapping.get(pid, []):
-        if ph == phase and (part is None or prt == part):
-            actual_day = d
-            actual_worker = w
-            break
+    actual_day, actual_worker = _find_phase_entry(mapping)
     if actual_day != date_str:
         projects[:] = original_projects
         save_projects(projects)
@@ -5791,9 +5813,10 @@ def move_phase():
                 'client': p2.get('client', ''),
                 'phase': ev['phase'],
             })
+    movement_timestamp = local_now().isoformat()
     logs = load_tracker()
     logs.append({
-        'timestamp': local_now().isoformat(),
+        'timestamp': movement_timestamp,
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -5801,6 +5824,21 @@ def move_phase():
         'affected': affected_entries,
     })
     save_tracker(logs)
+
+    previous_worker = (before_worker or '').strip() or UNPLANNED
+    current_worker = (actual_worker or '').strip() or UNPLANNED
+    if before_day != actual_day or previous_worker != current_worker:
+        history = load_phase_history()
+        key = phase_history_key(pid, phase, part)
+        entry = {
+            'timestamp': movement_timestamp,
+            'from_day': before_day,
+            'to_day': actual_day,
+            'from_worker': previous_worker,
+            'to_worker': current_worker,
+        }
+        history.setdefault(key, []).append(entry)
+        save_phase_history(history)
 
     blockers = material_blockers_for_project(projects, pid, new_day)
 
@@ -5815,6 +5853,37 @@ def move_phase():
         resp['warning'] = warn
     return jsonify(resp)
 
+
+@app.route('/phase_history')
+def phase_history():
+    pid = request.args.get('pid')
+    phase = request.args.get('phase')
+    part = request.args.get('part')
+    if not pid or not phase:
+        return jsonify({'history': []})
+    if part in (None, '', 'None'):
+        part_value = None
+    else:
+        part_value = part
+    history = load_phase_history()
+    key = phase_history_key(pid, phase, part_value)
+    entries = history.get(key, []) if isinstance(history, dict) else []
+    cleaned = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        ts = item.get('timestamp')
+        if not isinstance(ts, str):
+            continue
+        cleaned.append({
+            'timestamp': ts,
+            'from_day': item.get('from_day'),
+            'to_day': item.get('to_day'),
+            'from_worker': item.get('from_worker'),
+            'to_worker': item.get('to_worker'),
+        })
+    cleaned.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    return jsonify({'history': cleaned})
 
 
 @app.route('/manual_bucket/reorder', methods=['POST'])
