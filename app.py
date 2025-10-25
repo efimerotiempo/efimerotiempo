@@ -52,9 +52,13 @@ _load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
 _save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
 load_manual_unplanned = getattr(_schedule_mod, "load_manual_unplanned", lambda: [])
 save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda entries: entries)
+load_phase_history = getattr(_schedule_mod, "load_phase_history", lambda: {})
+save_phase_history = getattr(_schedule_mod, "save_phase_history", lambda data: None)
+phase_history_key = getattr(_schedule_mod, "phase_history_key", lambda pid, phase, part=None: f"{pid}|{phase}|{'' if part in (None, '', 'None') else part}")
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
+rename_worker = getattr(_schedule_mod, "rename_worker", lambda old, new: False)
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
@@ -3467,6 +3471,13 @@ def cronologico_view():
     week_days = [week_start + timedelta(days=i) for i in range(5)]
 
     interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
+    phase_display = {
+        'montar': 'MONTAR',
+        'soldar': 'SOLDAR',
+        'pintar': 'PINTAR',
+        'mecanizar': 'MECANIZAR',
+        'tratamiento': 'TRATAMIENTO',
+    }
     phase_entries = {}
     for worker, days in schedule_map.items():
         if worker == UNPLANNED:
@@ -3485,6 +3496,7 @@ def cronologico_view():
                     key,
                     {
                         'project': task.get('project'),
+                        'client': task.get('client'),
                         'worker': worker,
                         'phase': phase,
                         'days': set(),
@@ -3507,6 +3519,35 @@ def cronologico_view():
     }
 
     events_by_day = {d.isoformat(): [] for d in week_days}
+    previews_by_day = {d.isoformat(): [] for d in week_days}
+    preview_seen = {d.isoformat(): set() for d in week_days}
+    project_lookup = {p.get('id'): p for p in projects}
+    for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
+        for day_key, tasks in days.items():
+            if day_key not in previews_by_day:
+                continue
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                project = project_lookup.get(pid)
+                if not project:
+                    continue
+                image_path = project.get('image')
+                if not image_path or pid in preview_seen[day_key]:
+                    continue
+                previews_by_day[day_key].append(
+                    {
+                        'project': project.get('name') or 'Sin nombre',
+                        'client': project.get('client') or '',
+                        'image': image_path,
+                    }
+                )
+                preview_seen[day_key].add(pid)
+
+    same_day_completions = {}
     for entry in phase_entries.values():
         days = sorted(entry['days'])
         if not days:
@@ -3514,10 +3555,22 @@ def cronologico_view():
         start_day = days[0]
         end_day = days[-1]
         project_name = entry['project'] or 'Sin nombre'
+        client_name = entry.get('client') or 'Sin cliente'
         worker_name = entry['worker'] or UNPLANNED
         if worker_name == UNPLANNED:
             continue
         phase = entry['phase']
+
+        if start_day == end_day:
+            key = (
+                start_day.isoformat(),
+                worker_name,
+                project_name,
+                client_name,
+            )
+            phases = same_day_completions.setdefault(key, [])
+            phases.append(phase)
+            continue
 
         start_template = start_templates.get(phase)
         day_key = start_day.isoformat()
@@ -3528,6 +3581,36 @@ def cronologico_view():
         finish_key = end_day.isoformat()
         if finish_template and finish_key in events_by_day:
             events_by_day[finish_key].append((1, finish_template.format(worker=worker_name, project=project_name)))
+
+    for key, phases in same_day_completions.items():
+        day_key, worker_name, project_name, client_name = key
+        if day_key not in events_by_day:
+            continue
+        unique_phases = []
+        seen_phases = set()
+        for phase in phases:
+            if phase in seen_phases:
+                continue
+            seen_phases.add(phase)
+            label = phase_display.get(phase, phase.upper())
+            unique_phases.append(label)
+        if not unique_phases:
+            continue
+        if len(unique_phases) == 1:
+            message = (
+                f"{worker_name} Inicia y termina la fase {unique_phases[0]} "
+                f"de {project_name} - {client_name}"
+            )
+        else:
+            if len(unique_phases) == 2:
+                phases_text = f"{unique_phases[0]} y {unique_phases[1]}"
+            else:
+                phases_text = ", ".join(unique_phases[:-1]) + f" y {unique_phases[-1]}"
+            message = (
+                f"{worker_name} Inicia y termina las fases {phases_text} "
+                f"de {project_name} - {client_name}"
+            )
+        events_by_day[day_key].append((0, message))
 
     for day_key, messages in events_by_day.items():
         messages.sort(key=lambda item: (item[0], item[1]))
@@ -3540,10 +3623,14 @@ def cronologico_view():
             deduped.append(message)
         events_by_day[day_key] = deduped
 
+    for day_key, previews in previews_by_day.items():
+        previews.sort(key=lambda item: item['project'])
+
     return render_template(
         'cronologico.html',
         week_days=week_days,
         events_by_day=events_by_day,
+        previews_by_day=previews_by_day,
         today=today,
     )
 
@@ -4710,10 +4797,35 @@ def resources():
             if new_worker and new_worker not in WORKERS:
                 _schedule_mod.add_worker(new_worker)
             return redirect(url_for('resources'))
+        rename_pairs = []
+        seen_targets = set()
+        for key in request.form.keys():
+            if not key.startswith('worker_name__'):
+                continue
+            idx = key.split('__', 1)[-1]
+            original = request.form.get(f'worker_original__{idx}', '').strip()
+            new_value = request.form.get(key, '').strip()
+            if not original or not new_value or original == new_value:
+                continue
+            if new_value in seen_targets:
+                continue
+            rename_pairs.append((original, new_value))
+            seen_targets.add(new_value)
+        rename_map = {}
+        for original, new_value in rename_pairs:
+            if rename_worker(original, new_value):
+                rename_map[original] = new_value
+        if rename_map:
+            workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+            worker_overrides = load_worker_hours()
         active = request.form.getlist('worker')
+        if rename_map:
+            active = [rename_map.get(w, w) for w in active]
         inactive = [w for w in workers if w not in active]
         save_inactive_workers(inactive)
         order = request.form.getlist('order')
+        if rename_map and order:
+            order = [rename_map.get(w, w) for w in order]
         if order:
             set_worker_order(order)
         hours_modified = False
@@ -4724,6 +4836,8 @@ def resources():
                 continue
             idx = key.split('__', 1)[-1]
             worker = request.form.get(f'hours_worker__{idx}')
+            if rename_map and worker:
+                worker = rename_map.get(worker, worker)
             if not worker:
                 continue
             value = request.form.get(f'hours__{idx}', '').strip()
@@ -5627,6 +5741,31 @@ def move_phase():
 
     projects = get_projects()
     original_projects = copy.deepcopy(projects)
+    before_mapping = compute_schedule_map(original_projects)
+    pid_candidates = []
+    for candidate in (pid, str(pid)):
+        if candidate not in pid_candidates:
+            pid_candidates.append(candidate)
+    try:
+        pid_int = int(pid)
+    except Exception:
+        pid_int = None
+    else:
+        for candidate in (pid_int, str(pid_int)):
+            if candidate not in pid_candidates:
+                pid_candidates.append(candidate)
+
+    def _find_phase_entry(mapping_data):
+        for key in pid_candidates:
+            entries = mapping_data.get(key)
+            if not entries:
+                continue
+            for w, d, ph, _, prt in entries:
+                if ph == phase and (part is None or prt == part):
+                    return d, w
+        return None, None
+
+    before_day, before_worker = _find_phase_entry(before_mapping)
     tracker_events = []
     new_day, warn, info = move_phase_date(
         projects,
@@ -5651,13 +5790,7 @@ def move_phase():
     # scheduled elsewhere. This prevents the phase from jumping to the next
     # available day when the chosen cell has no remaining hours.
     mapping = compute_schedule_map(projects)
-    actual_day = None
-    actual_worker = None
-    for w, d, ph, hrs, prt in mapping.get(pid, []):
-        if ph == phase and (part is None or prt == part):
-            actual_day = d
-            actual_worker = w
-            break
+    actual_day, actual_worker = _find_phase_entry(mapping)
     if actual_day != date_str:
         projects[:] = original_projects
         save_projects(projects)
@@ -5680,9 +5813,10 @@ def move_phase():
                 'client': p2.get('client', ''),
                 'phase': ev['phase'],
             })
+    movement_timestamp = local_now().isoformat()
     logs = load_tracker()
     logs.append({
-        'timestamp': local_now().isoformat(),
+        'timestamp': movement_timestamp,
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -5690,6 +5824,21 @@ def move_phase():
         'affected': affected_entries,
     })
     save_tracker(logs)
+
+    previous_worker = (before_worker or '').strip() or UNPLANNED
+    current_worker = (actual_worker or '').strip() or UNPLANNED
+    if before_day != actual_day or previous_worker != current_worker:
+        history = load_phase_history()
+        key = phase_history_key(pid, phase, part)
+        entry = {
+            'timestamp': movement_timestamp,
+            'from_day': before_day,
+            'to_day': actual_day,
+            'from_worker': previous_worker,
+            'to_worker': current_worker,
+        }
+        history.setdefault(key, []).append(entry)
+        save_phase_history(history)
 
     blockers = material_blockers_for_project(projects, pid, new_day)
 
@@ -5704,6 +5853,37 @@ def move_phase():
         resp['warning'] = warn
     return jsonify(resp)
 
+
+@app.route('/phase_history')
+def phase_history():
+    pid = request.args.get('pid')
+    phase = request.args.get('phase')
+    part = request.args.get('part')
+    if not pid or not phase:
+        return jsonify({'history': []})
+    if part in (None, '', 'None'):
+        part_value = None
+    else:
+        part_value = part
+    history = load_phase_history()
+    key = phase_history_key(pid, phase, part_value)
+    entries = history.get(key, []) if isinstance(history, dict) else []
+    cleaned = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        ts = item.get('timestamp')
+        if not isinstance(ts, str):
+            continue
+        cleaned.append({
+            'timestamp': ts,
+            'from_day': item.get('from_day'),
+            'to_day': item.get('to_day'),
+            'from_worker': item.get('from_worker'),
+            'to_worker': item.get('to_worker'),
+        })
+    cleaned.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    return jsonify({'history': cleaned})
 
 
 @app.route('/manual_bucket/reorder', methods=['POST'])

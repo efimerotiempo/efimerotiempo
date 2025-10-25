@@ -7,6 +7,7 @@
         <tr>
             {% for day in week_days %}
             <th class="cronologico-header{% if day == today %} cronologico-today{% endif %}">{{ day.strftime('%d/%m/%Y') }}</th>
+            <th class="cronologico-header cronologico-preview-header{% if day == today %} cronologico-today{% endif %}">Imágenes</th>
             {% endfor %}
         </tr>
     </thead>
@@ -15,6 +16,7 @@
             {% for day in week_days %}
             {% set key = day.isoformat() %}
             {% set events = events_by_day.get(key, []) %}
+            {% set previews = previews_by_day.get(key, []) %}
             <td class="cronologico-cell{% if day == today %} cronologico-today{% endif %}">
                 {% if events %}
                 <ul class="cronologico-events">
@@ -24,6 +26,25 @@
                 </ul>
                 {% else %}
                 <span class="cronologico-empty">Sin acontecimientos</span>
+                {% endif %}
+            </td>
+            <td class="cronologico-cell cronologico-preview-cell{% if day == today %} cronologico-today{% endif %}">
+                {% if previews %}
+                <ul class="cronologico-preview-list">
+                    {% for preview in previews %}
+                    <li class="cronologico-preview-item">
+                        <img src="{{ url_for('static', filename=preview.image) }}" alt="Imagen de {{ preview.project }}">
+                        <div class="cronologico-preview-caption">
+                            <span class="cronologico-preview-project">{{ preview.project }}</span>
+                            {% if preview.client %}
+                            <span class="cronologico-preview-client">{{ preview.client }}</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <span class="cronologico-empty">Sin imágenes</span>
                 {% endif %}
             </td>
             {% endfor %}
