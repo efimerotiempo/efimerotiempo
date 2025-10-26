@@ -85,20 +85,18 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
+            <div class="proj-header">
             {% if code_value %}
                 <span class="proj-code"
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ code_value }}</span>
-                <span class="proj-sep"> - </span>
             {% endif %}
-            <span class="proj-title"
-                  data-project="{{ project_value }}"
-                  data-code="{{ code_value }}">{{ title_value or project_value }}</span>
-            {% if item.client %}
-                <span class="proj-client" data-project="{{ (item.project or item.title)|trim }}"> — {{ item.client }}</span>
-            {% endif %}
+                <strong class="proj-title"
+                        data-project="{{ project_value }}"
+                        data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
+            </div>
             {% for link in item.links %}
-                <span class="link-title" data-title="{{ link }}">{{ link }}</span>
+                <div class="link-title" data-title="{{ link }}">{{ link }}</div>
             {% endfor %}
         </div>
     {% endfor %}
@@ -768,18 +766,15 @@ document.addEventListener('DOMContentLoaded', () => {
           const code = (item.custom_card_id || '').trim();
           div.dataset.display = display;
           div.dataset.code = code;
-          let html = '';
+          let html = '<div class="proj-header">';
           if (code) {
             html += `<span class="proj-code" data-project="${projectValue}" data-code="${code}">${code}</span>`;
-            html += `<span class="proj-sep"> - </span>`;
           }
           const titleText = (fullTitle || projectValue) || '';
-          html += `<span class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</span>`;
-          if (item.client) {
-            html += `<span class="proj-client" data-project="${projectValue}"> — ${item.client}</span>`;
-          }
+          html += `<strong class="proj-title" data-project="${projectValue}" data-code="${code}">${titleText}</strong>`;
+          html += '</div>';
           item.links.forEach(link => {
-            html += `<span class="link-title" data-title="${link}">${link}</span>`;
+            html += `<div class="link-title" data-title="${link}">${link}</div>`;
           });
           div.innerHTML = html;
           resolveRowPid(div);

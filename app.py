@@ -6,6 +6,7 @@ import copy
 import json
 import re
 import smtplib
+import unicodedata
 from email.message import EmailMessage
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
@@ -139,6 +140,21 @@ TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
 
 PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
+_NON_ALNUM_RE = re.compile(r'[^0-9a-z]+')
+
+
+def normalize_key(text):
+    """Return a case-insensitive token stripped of diacritics and punctuation."""
+
+    if not text:
+        return ''
+
+    normalized = unicodedata.normalize('NFKD', str(text))
+    normalized = ''.join(
+        ch for ch in normalized if not unicodedata.category(ch).startswith('M')
+    )
+    normalized = normalized.casefold()
+    return _NON_ALNUM_RE.sub('', normalized)
 
 SSE_CLIENTS = []
 
@@ -484,77 +500,151 @@ def split_project_and_client(title):
 
 def build_project_links(compras_raw):
     children_by_parent = {}
+    children_norms_by_parent = {}
+    seguimiento_titles = {}
+    candidate_cards = []
+    excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+    target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
+    seguimiento_lane = normalize_key('Seguimiento compras')
+    seen_candidates = set()
+
+    card_index = {}
     for data in compras_raw.values():
         card = data['card']
+        if not isinstance(card, dict):
+            continue
+        card_id = card.get('taskid') or card.get('cardId') or card.get('id')
+        if card_id:
+            card_index[str(card_id)] = card
+
+    for data in compras_raw.values():
+        card = data['card']
+        if not isinstance(card, dict):
+            continue
         title = (card.get('title') or '').strip()
         custom_id = get_card_custom_id(card)
-        cid = card.get('taskid') or card.get('cardId') or card.get('id')
-        cid = str(cid) if cid else None
+        cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
+        cid = str(cid_value) if cid_value else None
         links_info = card.get('links') or {}
 
-        parents = links_info.get('parent') if isinstance(links_info, dict) else []
-        if isinstance(parents, list) and title:
+        parents = []
+        children = []
+        if isinstance(links_info, dict):
+            parent_entries = links_info.get('parent')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+            parent_entries = links_info.get('parents')
+            if isinstance(parent_entries, list):
+                parents.extend(parent_entries)
+
+            child_entries = links_info.get('child')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
+            child_entries = links_info.get('children')
+            if isinstance(child_entries, list):
+                children.extend(child_entries)
+
+        normalized_child_title = normalize_key(title)
+        if parents and normalized_child_title:
             for p in parents:
                 if isinstance(p, dict):
                     pid = p.get('taskid') or p.get('cardId') or p.get('id')
                     if pid:
-                        lst = children_by_parent.setdefault(str(pid), [])
-                        if title not in lst:
+                        key = str(pid)
+                        lst = children_by_parent.setdefault(key, [])
+                        norms = children_norms_by_parent.setdefault(key, set())
+                        if normalized_child_title not in norms:
                             lst.append(title)
+                            norms.add(normalized_child_title)
 
-        children = links_info.get('child') if isinstance(links_info, dict) else []
-        if isinstance(children, list) and cid:
+        if children and cid:
             for ch in children:
                 if isinstance(ch, dict):
                     child_id = ch.get('taskid') or ch.get('cardId') or ch.get('id')
                     child_title = (ch.get('title') or '').strip()
+                    child_key = str(child_id) if child_id else None
+                    if child_key:
+                        cached_card = card_index.get(child_key)
+                        if cached_card:
+                            canonical = (cached_card.get('title') or '').strip()
+                            if canonical:
+                                child_title = canonical
                     if child_id and not child_title:
                         fetched = _fetch_kanban_card(child_id)
                         if fetched:
                             child_title = (fetched.get('title') or '').strip()
-                    if child_id and child_title:
+                    norm_child = normalize_key(child_title)
+                    if child_id and norm_child:
                         lst = children_by_parent.setdefault(cid, [])
-                        if child_title not in lst:
+                        norms = children_norms_by_parent.setdefault(cid, set())
+                        if norm_child not in norms:
                             lst.append(child_title)
+                            norms.add(norm_child)
+
+        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        lane_key = normalize_key(lane_name)
+        column = (card.get('columnname') or card.get('columnName') or '').strip()
+        column_key = normalize_key(column)
+
+        if title and normalized_child_title and lane_key == seguimiento_lane and column_key not in excluded_columns:
+            titles = seguimiento_titles.setdefault(normalized_child_title, [])
+            if title not in titles:
+                titles.append(title)
+
+        if cid and lane_key in target_lanes and cid not in seen_candidates:
+            project_name, client_name = split_project_and_client(title)
+            due = parse_kanban_date(card.get('deadline'))
+            base_display = title or project_name or ''
+            if custom_id and base_display:
+                if base_display.lower().startswith(custom_id.lower()):
+                    display_title = base_display
+                else:
+                    display_title = f"{custom_id} - {base_display}"
+            else:
+                display_title = base_display or custom_id
+            candidate_cards.append({
+                'cid': cid,
+                'project': project_name,
+                'title': title,
+                'display_title': display_title,
+                'client': client_name,
+                'custom_card_id': custom_id,
+                'due': due,
+            })
+            seen_candidates.add(cid)
 
     links_table = []
-    seen_links = set()
-    for data in compras_raw.values():
-        card = data['card']
-        title = (card.get('title') or '').strip()
-        project_name, client_name = split_project_and_client(title)
-        lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        column = (card.get('columnname') or card.get('columnName') or '').strip()
-        due = parse_kanban_date(card.get('deadline'))
-        lane_key = lane_name.lower()
-        custom_id = get_card_custom_id(card)
-        base_display = title or project_name or ''
-        if custom_id and base_display:
-            if base_display.lower().startswith(custom_id.lower()):
-                display_title = base_display
-            else:
-                display_title = f"{custom_id} - {base_display}"
+    for info in candidate_cards:
+        child_links = children_by_parent.get(info['cid'], [])
+        matches = []
+        seen_norms = set()
+        for child_title in child_links:
+            norm_child = normalize_key(child_title)
+            if not norm_child or norm_child in seen_norms:
+                continue
+            lane_titles = seguimiento_titles.get(norm_child)
+            if lane_titles:
+                for lane_title in lane_titles:
+                    if lane_title not in matches:
+                        matches.append(lane_title)
+            elif child_title not in matches:
+                matches.append(child_title)
+            seen_norms.add(norm_child)
+        if not matches:
+            continue
+        entry = {
+            'project': info['project'],
+            'title': info['title'],
+            'display_title': info['display_title'],
+            'client': info['client'],
+            'custom_card_id': info['custom_card_id'],
+            'links': matches,
+        }
+        if info['due']:
+            entry['due'] = info['due'].isoformat()
         else:
-            display_title = base_display or custom_id
-        if (
-            lane_key in PROJECT_LINK_LANES
-            and column not in ['Ready to Archive', 'Hacer Albaran']
-        ):
-            key = (project_name, client_name, title)
-            if key not in seen_links:
-                cid = card.get('taskid') or card.get('cardId') or card.get('id')
-                child_links = children_by_parent.get(str(cid), [])
-                if child_links:
-                    links_table.append({
-                        'project': project_name,
-                        'title': title,
-                        'display_title': display_title,
-                        'client': client_name,
-                        'custom_card_id': custom_id,
-                        'links': child_links,
-                        'due': due.isoformat() if due else None
-                    })
-                    seen_links.add(key)
+            entry['due'] = None
+        links_table.append(entry)
     return links_table
 
 
@@ -680,10 +770,21 @@ def filter_project_links_by_titles(links_table, valid_titles):
     if not valid_titles:
         return []
 
-    valid = set(valid_titles)
+    valid_norms = {normalize_key(title) for title in valid_titles if title}
+    if not valid_norms:
+        return []
+
     filtered = []
     for item in links_table:
-        matches = [link for link in item['links'] if link in valid]
+        matches = []
+        seen_norms = set()
+        for link in item['links']:
+            norm_link = normalize_key(link)
+            if not norm_link or norm_link in seen_norms:
+                continue
+            if norm_link in valid_norms:
+                matches.append(link)
+                seen_norms.add(norm_link)
         if not matches:
             continue
         entry = dict(item)
