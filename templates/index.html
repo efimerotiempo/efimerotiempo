@@ -346,6 +346,70 @@
     return (value || '').toString().trim().toLowerCase();
   }
 
+  function normalizeColumnKey(value) {
+    const text = (value || '').toString().trim().toLowerCase();
+    if (!text) return '';
+    if (typeof text.normalize === 'function') {
+      return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    return text;
+  }
+
+  const MATERIAL_EXCLUDED_COLUMNS = new Set([
+    normalizeColumnKey('Ready to Archive'),
+    normalizeColumnKey('Ready to archieve'),
+    normalizeColumnKey('Material Recepcionado'),
+    normalizeColumnKey('Material recepcionado'),
+    normalizeColumnKey('Pdte. Verificación'),
+    normalizeColumnKey('Pndt. Verificación'),
+  ]);
+
+  function parseISODate(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+      const time = value.getTime();
+      return Number.isNaN(time) ? null : new Date(time);
+    }
+    const text = String(value).trim();
+    if (!text || text === '0') return null;
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if ([year, month, day].some(n => Number.isNaN(n))) return null;
+    const result = new Date(Date.UTC(year, month - 1, day));
+    if (Number.isNaN(result.getTime())) return null;
+    return result;
+  }
+
+  function getBlockingMaterialTitles(entry, plannedDate) {
+    if (!entry) return [];
+    const planned = plannedDate instanceof Date ? plannedDate : parseISODate(plannedDate);
+    if (!(planned instanceof Date) || Number.isNaN(planned.getTime())) return [];
+    const details = Array.isArray(entry.link_details) ? entry.link_details : [];
+    const rawTitles = Array.isArray(entry.links) ? entry.links : [];
+    const count = Math.max(details.length, rawTitles.length);
+    const blocking = [];
+    const seen = new Set();
+    for (let i = 0; i < count; i += 1) {
+      const detail = details[i] && typeof details[i] === 'object' ? details[i] : null;
+      const title = detail && detail.title ? detail.title : rawTitles[i] || '';
+      if (!title || seen.has(title)) continue;
+      if (!detail || !detail.column) continue;
+      const columnKey = normalizeColumnKey(detail.column);
+      if (columnKey && MATERIAL_EXCLUDED_COLUMNS.has(columnKey)) continue;
+      if (!detail.deadline) continue;
+      const deadline = parseISODate(detail.deadline);
+      if (!deadline) continue;
+      if (deadline.getTime() > planned.getTime()) {
+        blocking.push(title);
+        seen.add(title);
+      }
+    }
+    return blocking;
+  }
+
   function indexPedidosLinks(items) {
     const list = Array.isArray(items) ? items : [];
     pedidosCache.entries = list;
@@ -427,23 +491,24 @@
     }
   }
 
-  function showMaterialWarning(entry, onClose) {
+  function showMaterialWarning(titles, onClose) {
+    const callback = typeof onClose === 'function' ? onClose : () => {};
     if (!materialModal || !materialList) {
-      onClose();
+      callback();
       return;
     }
-    const links = Array.isArray(entry && entry.links) ? entry.links : [];
-    if (!links.length) {
-      onClose();
+    const items = Array.isArray(titles) ? titles.filter(title => title && title.trim()) : [];
+    if (!items.length) {
+      callback();
       return;
     }
     materialList.innerHTML = '';
-    links.forEach(link => {
+    items.forEach(title => {
       const li = document.createElement('li');
-      li.textContent = link;
+      li.textContent = title;
       materialList.appendChild(li);
     });
-    pendingMaterialCallback = onClose;
+    pendingMaterialCallback = callback;
     materialModal.style.display = 'block';
   }
 
@@ -480,11 +545,26 @@
       if (data.warning) showDeadline(data.warning, () => location.reload());
       else location.reload();
     };
+    if (Object.prototype.hasOwnProperty.call(data, 'material_blockers')) {
+      const directBlockers = Array.isArray(data.material_blockers)
+        ? data.material_blockers.filter(title => title && title.trim())
+        : [];
+      if (directBlockers.length) {
+        showMaterialWarning(directBlockers, finalize);
+      } else {
+        finalize();
+      }
+      return;
+    }
     ensurePedidosLinks()
       .then(() => {
         const entry = findPedidosEntry(data.pid);
-        if (entry && Array.isArray(entry.links) && entry.links.length) {
-          showMaterialWarning(entry, finalize);
+        const plannedDate = data && data.date ? data.date : null;
+        const blockingTitles = entry
+          ? getBlockingMaterialTitles(entry, plannedDate)
+          : [];
+        if (blockingTitles.length) {
+          showMaterialWarning(blockingTitles, finalize);
         } else {
           finalize();
         }

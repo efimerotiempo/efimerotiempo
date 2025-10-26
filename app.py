@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
+from itertools import zip_longest
 import uuid
 import os
 import copy
@@ -310,6 +311,15 @@ PROJECT_LINK_LANES = {
     'seguimiento compras',
 }
 
+MATERIAL_EXCLUDED_COLUMNS = {
+    normalize_key('Ready to Archive'),
+    normalize_key('Ready to archieve'),
+    normalize_key('Material Recepcionado'),
+    normalize_key('Material recepcionado'),
+    normalize_key('Pdte. Verificación'),
+    normalize_key('Pndt. Verificación'),
+}
+
 
 def active_workers(today=None):
     """Return the list of workers shown in the calendar."""
@@ -503,6 +513,7 @@ def build_project_links(compras_raw):
     children_norms_by_parent = {}
     children_ids_by_parent = {}
     seguimiento_titles = {}
+    seguimiento_by_id = {}
     candidate_cards = []
     excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
     target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
@@ -608,14 +619,22 @@ def build_project_links(compras_raw):
             and lane_key == seguimiento_lane
             and column_key not in excluded_columns
         ):
+            deadline = parse_kanban_date(card.get('deadline'))
+            detail = {
+                'id': cid or '',
+                'title': title,
+                'column': column,
+                'deadline': deadline.isoformat() if deadline else None,
+            }
+            if detail['id']:
+                seguimiento_by_id[detail['id']] = detail
             titles = seguimiento_titles.setdefault(normalized_child_title, [])
-            cid_entry = cid or ''
-            if cid_entry:
-                if not any(existing_id == cid_entry for existing_id, _ in titles):
-                    titles.append((cid_entry, title))
+            if detail['id']:
+                if not any(existing.get('id') == detail['id'] for existing in titles):
+                    titles.append(detail)
             else:
-                if not any(existing_title == title for _, existing_title in titles):
-                    titles.append(('', title))
+                if not any(existing.get('title') == title for existing in titles):
+                    titles.append(detail)
 
         if cid and lane_key in target_lanes and cid not in seen_candidates:
             project_name, client_name = split_project_and_client(title)
@@ -644,28 +663,40 @@ def build_project_links(compras_raw):
         child_links = children_by_parent.get(info['cid'], [])
         matches = []
         match_ids = []
+        match_details = []
         seen_norms = set()
         seen_ids = set()
         for child_id, child_title in child_links:
             norm_child = normalize_key(child_title)
-            child_id = child_id or ''
+            child_id = str(child_id).strip() if child_id else ''
             if not norm_child and not child_id:
                 continue
             if child_id and child_id in seen_ids:
                 continue
             if norm_child and norm_child in seen_norms and not child_id:
                 continue
-            lane_titles = seguimiento_titles.get(norm_child) if norm_child else None
+            lane_entries = seguimiento_titles.get(norm_child) if norm_child else None
             appended = False
-            if lane_titles:
-                for lane_id, lane_title in lane_titles:
-                    lane_id = lane_id or ''
+            if lane_entries:
+                for lane_detail in lane_entries:
+                    lane_id = str(lane_detail.get('id') or '').strip()
+                    lane_title = (lane_detail.get('title') or '').strip() or child_title
                     if lane_id and lane_id in seen_ids:
                         continue
                     if lane_title in matches:
                         continue
                     matches.append(lane_title)
                     match_ids.append(lane_id)
+                    serialized = {'title': lane_title}
+                    if lane_id:
+                        serialized['id'] = lane_id
+                    column_name = lane_detail.get('column')
+                    if column_name:
+                        serialized['column'] = column_name
+                    deadline_value = lane_detail.get('deadline')
+                    if deadline_value:
+                        serialized['deadline'] = deadline_value
+                    match_details.append(serialized)
                     if lane_id:
                         seen_ids.add(lane_id)
                     appended = True
@@ -675,6 +706,18 @@ def build_project_links(compras_raw):
                 if child_title not in matches:
                     matches.append(child_title)
                     match_ids.append(child_id)
+                    serialized = {'title': child_title}
+                    if child_id:
+                        serialized['id'] = child_id
+                    detail = seguimiento_by_id.get(child_id) if child_id else None
+                    if detail:
+                        column_name = detail.get('column')
+                        if column_name:
+                            serialized['column'] = column_name
+                        deadline_value = detail.get('deadline')
+                        if deadline_value:
+                            serialized['deadline'] = deadline_value
+                    match_details.append(serialized)
                     if child_id:
                         seen_ids.add(child_id)
                 if norm_child:
@@ -691,6 +734,8 @@ def build_project_links(compras_raw):
         }
         if any(match_ids):
             entry['link_ids'] = match_ids
+        if match_details:
+            entry['link_details'] = match_details
         if info['due']:
             entry['due'] = info['due'].isoformat()
         else:
@@ -833,12 +878,14 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         link_ids = list(item.get('link_ids') or [])
         if len(link_ids) < len(link_titles):
             link_ids.extend([''] * (len(link_titles) - len(link_ids)))
+        link_details = list(item.get('link_details') or [])
 
         matches = []
         kept_ids = []
+        kept_details = []
         seen_norms = set()
         seen_ids = set()
-        for title, cid in zip(link_titles, link_ids):
+        for idx, (title, cid) in enumerate(zip(link_titles, link_ids)):
             text = title or ''
             cid_str = str(cid).strip() if cid not in (None, '') else ''
             norm_link = normalize_key(text)
@@ -850,6 +897,16 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
             if allow:
                 matches.append(text)
                 kept_ids.append(cid_str)
+                detail = link_details[idx] if idx < len(link_details) else None
+                if isinstance(detail, dict):
+                    detail_copy = {k: v for k, v in detail.items() if v not in (None, '')}
+                else:
+                    detail_copy = {}
+                if 'title' not in detail_copy or not detail_copy['title']:
+                    detail_copy['title'] = text
+                if cid_str and ('id' not in detail_copy or not detail_copy['id']):
+                    detail_copy['id'] = cid_str
+                kept_details.append(detail_copy)
                 if norm_link:
                     seen_norms.add(norm_link)
                 if cid_str:
@@ -862,8 +919,124 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
             entry['link_ids'] = kept_ids
         else:
             entry.pop('link_ids', None)
+        if kept_details:
+            entry['link_details'] = kept_details
+        else:
+            entry.pop('link_details', None)
         filtered.append(entry)
     return filtered
+
+
+def _extract_blocking_material_titles(entry, planned_day):
+    """Return titles that block scheduling because of material deadlines."""
+
+    if not entry or not isinstance(planned_day, date):
+        return []
+
+    details = entry.get('link_details')
+    raw_titles = entry.get('links')
+    if not details and not raw_titles:
+        return []
+
+    blocking = []
+    seen = set()
+    for detail, fallback in zip_longest(details or [], raw_titles or []):
+        if isinstance(detail, dict):
+            title = (detail.get('title') or fallback or '').strip()
+            column = detail.get('column')
+            deadline_str = detail.get('deadline')
+        else:
+            title = (fallback or '').strip()
+            column = None
+            deadline_str = None
+        if not title:
+            continue
+        norm_title = normalize_key(title)
+        if norm_title in seen:
+            continue
+        if column and normalize_key(column) in MATERIAL_EXCLUDED_COLUMNS:
+            continue
+        if not deadline_str:
+            continue
+        deadline = parse_kanban_date(deadline_str)
+        if not isinstance(deadline, date):
+            continue
+        if deadline > planned_day:
+            blocking.append(title)
+            seen.add(norm_title)
+    return blocking
+
+
+def _find_link_entry_for_project(project, links_table):
+    """Return the Columna 1 entry that corresponds to *project*."""
+
+    if not project:
+        return None
+
+    keys = set()
+    name = (project.get('name') or '').strip()
+    if name:
+        keys.add(normalize_key(name))
+        proj_name, _ = split_project_and_client(name)
+        if proj_name:
+            keys.add(normalize_key(proj_name))
+        code_match = re.search(r'OF\s*\d{4}', name, re.IGNORECASE)
+        if code_match:
+            keys.add(normalize_key(code_match.group(0)))
+
+    custom = (project.get('custom_card_id') or '').strip()
+    if custom:
+        keys.add(normalize_key(custom))
+
+    if not keys:
+        return None
+
+    for item in links_table or []:
+        for field in ('project', 'title', 'display_title', 'custom_card_id'):
+            value = item.get(field)
+            if not value:
+                continue
+            if normalize_key(value) in keys:
+                return item
+    return None
+
+
+def material_blockers_for_project(projects, pid, planned_day):
+    """Return Kanban Seguimiento Compras titles that block *pid* on *planned_day*."""
+
+    if not pid or not planned_day:
+        return []
+
+    if isinstance(planned_day, str):
+        try:
+            planned_date = date.fromisoformat(planned_day)
+        except ValueError:
+            return []
+    elif isinstance(planned_day, date):
+        planned_date = planned_day
+    else:
+        return []
+
+    str_pid = str(pid)
+    project = next((p for p in projects if str(p.get('id')) == str_pid), None)
+    if not project:
+        return []
+
+    compras_raw, _ = load_compras_raw()
+    base_links = build_project_links(compras_raw)
+    enriched_links = attach_phase_starts(base_links, projects)
+    entry = next(
+        (item for item in enriched_links if str(item.get('pid')) == str_pid),
+        None,
+    )
+    if not entry:
+        entry = _find_link_entry_for_project(project, enriched_links)
+    if not entry:
+        entry = _find_link_entry_for_project(project, base_links)
+    if not entry:
+        return []
+
+    return _extract_blocking_material_titles(entry, planned_date)
 
 
 def load_column_colors():
@@ -3174,11 +3347,14 @@ def move_phase():
     })
     save_tracker(logs)
 
+    blockers = material_blockers_for_project(projects, pid, new_day)
+
     resp = {
         'date': new_day,
         'pid': pid,
         'phase': phase,
         'part': part,
+        'material_blockers': blockers,
     }
     if warn and not ack_warning:
         resp['warning'] = warn
