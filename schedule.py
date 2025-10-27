@@ -2,6 +2,7 @@ from datetime import date, timedelta, datetime, time
 import json
 import os
 import copy
+import unicodedata
 
 from localtime import local_today
 
@@ -33,6 +34,16 @@ PHASE_ORDER = [
     'tratamiento',
     'pintar',
 ]
+
+PHASE_DEADLINE_FIELDS = {
+    'montar': 'CALDERERIA',
+    'soldar': 'CALDERERIA',
+    'montar 2º': 'CALDERERIA',
+    'soldar 2º': 'CALDERERIA',
+    'mecanizar': 'MECANIZADO',
+    'tratamiento': 'TRATAMIENTO',
+    'pintar': 'PINTADO',
+}
 
 UNPLANNED = 'Sin planificar'
 
@@ -115,6 +126,41 @@ def save_worker_renames(renames):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(WORKER_RENAMES_FILE, 'w') as f:
         json.dump(renames or {}, f)
+
+def _normalize_display_key(value):
+    if not isinstance(value, str):
+        return None
+    text = value.strip().upper()
+    if not text:
+        return None
+    decomposed = unicodedata.normalize('NFD', text)
+    return ''.join(ch for ch in decomposed if unicodedata.category(ch) != 'Mn')
+
+
+def _parse_phase_deadline(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        text = str(value).strip()
+    if not text or text == '0':
+        return None
+    try:
+        return date.fromisoformat(text)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return datetime.fromisoformat(text).date()
+    except (ValueError, TypeError):
+        pass
+    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y/%m/%d', '%d-%m-%Y', '%Y.%m.%d'):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
 
 
 def _apply_worker_renames(workers, renames):
@@ -751,6 +797,20 @@ def schedule_projects(projects):
             frozen_map.setdefault(t.get('phase'), []).append(t)
         end_date = current
         assigned = project.get('assigned', {})
+        display_fields = project.get('kanban_display_fields') or {}
+        normalized_fields = {}
+        if isinstance(display_fields, dict):
+            for key, value in display_fields.items():
+                normalized_key = _normalize_display_key(key)
+                if not normalized_key:
+                    continue
+                normalized_fields[normalized_key] = value
+        phase_deadlines = {}
+        for phase_name, field_name in PHASE_DEADLINE_FIELDS.items():
+            deadline_value = normalized_fields.get(field_name)
+            deadline_date = _parse_phase_deadline(deadline_value)
+            if deadline_date:
+                phase_deadlines[phase_name] = deadline_date
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
@@ -869,6 +929,7 @@ def schedule_projects(projects):
                         material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
+                        phase_deadline=phase_deadlines.get(phase),
                     )
                     record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
@@ -911,6 +972,7 @@ def assign_phase(
     material_date=None,
     auto=False,
     due_confirmed=False,
+    phase_deadline=None,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -940,6 +1002,14 @@ def assign_phase(
     first_day = None
     first_hour = 0
     due_dt = None
+    phase_deadline_dt = None
+    if isinstance(phase_deadline, date):
+        phase_deadline_dt = phase_deadline
+    elif phase_deadline is not None:
+        parsed = _parse_phase_deadline(phase_deadline)
+        if parsed:
+            phase_deadline_dt = parsed
+
     if due_date:
         try:
             due_dt = date.fromisoformat(due_date)
@@ -1125,6 +1195,14 @@ def assign_phase(
                 task['due_status'] = 'met'
         else:
             task['due_status'] = None
+    if phase_entries:
+        if phase_deadline_dt and last_day:
+            status = 'late' if last_day > phase_deadline_dt else 'met'
+            for task, _ in phase_entries:
+                task['phase_deadline_status'] = status
+        else:
+            for task, _ in phase_entries:
+                task['phase_deadline_status'] = None
     next_day = day
     next_hour = hour
     return next_day, next_hour, last_day, first_day, first_hour

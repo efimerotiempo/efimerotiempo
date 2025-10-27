@@ -29,6 +29,19 @@ table.schedule td.weekend-cell {
 .due-ok { color: green; }
 .due-before { color: #e6b800; }
 .due-after { color: red; }
+
+.phase-deadline-indicator {
+  margin-right: 2px;
+  font-weight: bold;
+}
+
+.phase-deadline-met {
+  color: #2e7d32;
+}
+
+.phase-deadline-late {
+  color: #c62828;
+}
 .unplanned { color: orange; }
 .planned { color: green; }
 .phase-entry.phase-previous {

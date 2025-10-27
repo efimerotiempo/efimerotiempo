@@ -155,7 +155,12 @@
             {% set material_missing = project_info and project_info.material_status == 'missing' %}
             <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                 <span class="task-main">
-                {% if t.due_status == 'after' %}
+                {% set phase_status = t.get('phase_deadline_status') %}
+                {% if phase_status == 'late' %}
+                    <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                {% elif phase_status == 'met' %}
+                    <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                {% elif t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
                 {% elif t.due_status == 'before' %}
                     <span class="due-before">&#10060;</span>
@@ -209,7 +214,12 @@
                     {% set key = item.pid|string ~ '|' ~ item.phase ~ '|' ~ (item.day) %}
                     <div class="task manual-task{% if item.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ item.color }};" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due_date or '' }}" data-start="{{ item.start_date or '' }}" data-day="{{ item.day or '' }}" data-pid="{{ item.pid }}" data-phase="{{ item.phase }}"{% if item.part is not none %} data-part="{{ item.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                         <span class="task-main">
-                        {% if item.due_status == 'after' %}
+                        {% set phase_status = item.phase_deadline_status %}
+                        {% if phase_status == 'late' %}
+                            <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                        {% elif phase_status == 'met' %}
+                            <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                        {% elif item.due_status == 'after' %}
                             <span class="due-after">&#10060;</span>
                         {% elif item.due_status == 'before' %}
                             <span class="due-before">&#10060;</span>
@@ -241,7 +251,12 @@
                 {% set matches_filter = t.get('filter_match', True) %}
                 <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if t.due_status == 'after' %}
+                    {% set phase_status = t.get('phase_deadline_status') %}
+                    {% if phase_status == 'late' %}
+                        <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                    {% elif phase_status == 'met' %}
+                        <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                    {% elif t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
                     {% elif t.due_status == 'before' %}
                         <span class="due-before">&#10060;</span>
@@ -276,7 +291,12 @@
                 {% set matches_filter = t.get('filter_match', True) %}
                 <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if t.due_status == 'after' %}
+                    {% set phase_status = t.get('phase_deadline_status') %}
+                    {% if phase_status == 'late' %}
+                        <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                    {% elif phase_status == 'met' %}
+                        <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                    {% elif t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
                     {% elif t.due_status == 'before' %}
                         <span class="due-before">&#10060;</span>
