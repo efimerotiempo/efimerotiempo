@@ -6281,6 +6281,7 @@ def kanbanize_webhook():
     else:
         prev_custom = {}
     prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
+    prev_popup_raw = {field: prev_custom.get(field) for field in KANBAN_POPUP_FIELDS}
     for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         prev_custom.pop(k, None)
 
@@ -6398,6 +6399,18 @@ def kanbanize_webhook():
     if trat_flag:
         trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
         display_fields['TRATAMIENTO'] = trat_value
+
+    prev_display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
+        cleaned_prev = _clean_display_value(prev_popup_raw.get(field))
+        if cleaned_prev:
+            prev_display_fields[field] = cleaned_prev
+    if prev_mecan_flag:
+        prev_mecan_value = _clean_display_value(prev_popup_raw.get('MECANIZADO')) or 'Sí'
+        prev_display_fields['MECANIZADO'] = prev_mecan_value
+    if prev_trat_flag:
+        prev_trat_value = _clean_display_value(prev_popup_raw.get('TRATAMIENTO')) or 'Sí'
+        prev_display_fields['TRATAMIENTO'] = prev_trat_value
 
     phase_hours_new_raw = {
         'recepcionar material': prep_raw,
@@ -6519,17 +6532,43 @@ def kanbanize_webhook():
     else:
         clean_column = ''
 
+    prev_column = pick(prev_card, 'columnname', 'columnName', 'column')
+    if isinstance(prev_column, str):
+        prev_clean_column = prev_column.strip()
+    elif prev_column:
+        prev_clean_column = str(prev_column).strip()
+    else:
+        prev_clean_column = ''
+
+    column_changed = clean_column != prev_clean_column
+    attachments_changed = prev_kanban_files != kanban_files
+    display_fields_changed = display_fields != prev_display_fields
+
+    def _extract_archived_flag(card_data):
+        if not isinstance(card_data, dict):
+            return False
+        for key in ('isArchived', 'IsArchived', 'archived', 'Archived', 'is_archived'):
+            if key in card_data:
+                return bool(card_data.get(key))
+        return False
+
+    is_archived = _extract_archived_flag(card)
+    prev_is_archived = _extract_archived_flag(prev_card)
+
     if existing:
         changed = False
-        if existing.get('kanban_column') != clean_column:
+        if column_changed and existing.get('kanban_column') != clean_column:
             existing['kanban_column'] = clean_column
             changed = True
-        if existing.get('kanban_archived'):
-            existing['kanban_archived'] = False
+        archived_changed = is_archived != prev_is_archived
+        if archived_changed and existing.get('kanban_archived') != is_archived:
+            existing['kanban_archived'] = is_archived
             changed = True
-        if existing.get('kanban_id') != task_id:
-            existing['kanban_id'] = task_id
-            changed = True
+        id_changed = task_id and task_id != prev_task_id
+        if task_id and (id_changed or not existing.get('kanban_id')):
+            if existing.get('kanban_id') != task_id:
+                existing['kanban_id'] = task_id
+                changed = True
         if prev_nombre_proyecto != nombre_proyecto and existing.get('name') != nombre_proyecto:
             existing['name'] = nombre_proyecto
             changed = True
@@ -6554,10 +6593,10 @@ def kanbanize_webhook():
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
-        if prev_kanban_files != kanban_files and existing.get('kanban_attachments') != kanban_files:
+        if attachments_changed and existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
             changed = True
-        if existing.get('kanban_display_fields') != display_fields:
+        if display_fields_changed and existing.get('kanban_display_fields') != display_fields:
             existing['kanban_display_fields'] = display_fields
             changed = True
 
