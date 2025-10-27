@@ -328,14 +328,11 @@ body.columna-1-resizing * {
     word-break: break-word;
 }
 
-.columna-1-table .proj-code-cell {
-    white-space: nowrap;
-}
-
 .columna-1-table .proj-code {
     font-weight: 600;
     cursor: pointer;
     display: inline-block;
+    margin-right: 0.45rem;
 }
 
 .columna-1-table .proj-title-cell {

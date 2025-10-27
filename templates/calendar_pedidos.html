@@ -79,15 +79,13 @@
     <div class="columna-1-table-wrapper">
       <table class="columna-1-table">
         <colgroup>
-          <col data-col-key="code" data-default-width="120">
-          <col data-col-key="project" data-default-width="320">
+          <col data-col-key="project" data-default-width="420">
           <col data-col-key="due" data-default-width="140">
           <col data-col-key="start" data-default-width="170">
           <col data-col-key="links" data-default-width="360">
         </colgroup>
         <thead>
           <tr>
-            <th scope="col">Código</th>
             <th scope="col">Proyecto</th>
             <th scope="col">Entrega</th>
             <th scope="col">Inicio planificado</th>
@@ -99,8 +97,9 @@
             {% set project_value = (item.project or item.title)|trim %}
             {% set title_value = (item.title or item.project)|trim %}
             {% set code_value = (item.custom_card_id or '')|trim %}
+            {% set plan_value = item.plan_start or item.montar_start %}
             {% set due_display = (item.due|format_due_date)|trim %}
-            {% set start_display = (item.montar_start|format_due_date)|trim %}
+            {% set start_display = (plan_value|format_due_date)|trim %}
             {% set details = item.link_details or [] %}
           <tr class="project-row"
               data-pid="{{ item.pid or '' }}"
@@ -110,15 +109,13 @@
               data-client="{{ item.client }}"
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
-              data-montar="{{ item.montar_start or '' }}">
-            <td class="proj-code-cell">
-            {% if code_value %}
+              data-plan="{{ plan_value or '' }}">
+            <td class="proj-title-cell">
+              {% if code_value %}
               <span class="proj-code"
                     data-project="{{ project_value }}"
                     data-code="{{ code_value }}">{{ code_value }}</span>
-            {% endif %}
-            </td>
-            <td class="proj-title-cell">
+              {% endif %}
               <strong class="proj-title"
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
@@ -136,9 +133,19 @@
             <td class="links-cell">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set column_value = detail.column|default('', true) %}
+                {% set lane_value = detail.lane|default('', true) %}
+                {% set tooltip = column_value %}
+                {% if not tooltip and lane_value %}
+                  {% set tooltip = lane_value %}
+                {% elif tooltip and lane_value and lane_value != column_value %}
+                  {% set tooltip = tooltip ~ ' · ' ~ lane_value %}
+                {% endif %}
               <div class="link-title"
                    data-title="{{ link }}"
-                   data-lane="{{ detail.lane or '' }}">{{ link }}</div>
+                   data-lane="{{ lane_value }}"
+                   data-column="{{ column_value }}"
+                   {% if tooltip %}title="{{ tooltip }}"{% endif %}>{{ link }}</div>
             {% endfor %}
             </td>
           </tr>
@@ -832,7 +839,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskMap = buildTaskMap();
     const dueLateTitles = new Set();
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const montarStart = row.dataset.montar || '';
+      const planStart = row.dataset.plan || '';
       const projectDue = row.dataset.due || '';
       row.querySelectorAll('.link-title').forEach(link => {
         const title = link.dataset.title;
@@ -848,8 +855,8 @@ document.addEventListener('DOMContentLoaded', () => {
           referenceDate = projectDue;
         }
         let isLate = false;
-        if (montarStart && referenceDate) {
-          const diff = diffInDays(referenceDate, montarStart);
+        if (planStart && referenceDate) {
+          const diff = diffInDays(referenceDate, planStart);
           if (diff !== null && Math.abs(diff) <= 3) {
             isLate = true;
             dueLateTitles.add(title);
@@ -1222,29 +1229,27 @@ document.addEventListener('DOMContentLoaded', () => {
           const resolvedTitle = fullTitle || projectValue;
           row.dataset.title = resolvedTitle;
           row.dataset.client = item.client || '';
-          row.dataset.montar = item.montar_start || '';
+          const planValueRaw = item.plan_start || item.montar_start || '';
+          const planValue = planValueRaw ? String(planValueRaw).trim() : '';
+          row.dataset.plan = planValue;
           row.dataset.due = item.due || '';
           const display = (item.display_title || resolvedTitle || '').trim();
           const code = (item.custom_card_id || '').trim();
           const dueDisplay = formatDueDisplay(item.due);
-          const startDisplay = formatDueDisplay(item.montar_start);
+          const startDisplay = formatDueDisplay(planValue);
           row.dataset.display = display;
           row.dataset.code = code;
 
-          const codeCell = document.createElement('td');
-          codeCell.className = 'proj-code-cell';
+          const titleCell = document.createElement('td');
+          titleCell.className = 'proj-title-cell';
           if (code) {
             const codeSpan = document.createElement('span');
             codeSpan.className = 'proj-code';
             codeSpan.dataset.project = projectValue;
             codeSpan.dataset.code = code;
             codeSpan.textContent = code;
-            codeCell.appendChild(codeSpan);
+            titleCell.appendChild(codeSpan);
           }
-          row.appendChild(codeCell);
-
-          const titleCell = document.createElement('td');
-          titleCell.className = 'proj-title-cell';
           const titleStrong = document.createElement('strong');
           titleStrong.className = 'proj-title';
           titleStrong.dataset.project = projectValue;
@@ -1281,7 +1286,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const linkDiv = document.createElement('div');
             linkDiv.className = 'link-title';
             linkDiv.dataset.title = link;
-            linkDiv.dataset.lane = detail && detail.lane ? detail.lane : '';
+            const laneValue = detail && detail.lane ? detail.lane : '';
+            const columnValue = detail && detail.column ? detail.column : '';
+            let tooltip = columnValue;
+            if (!tooltip && laneValue) {
+              tooltip = laneValue;
+            } else if (tooltip && laneValue && laneValue !== columnValue) {
+              tooltip = `${tooltip} · ${laneValue}`;
+            }
+            linkDiv.dataset.lane = laneValue;
+            linkDiv.dataset.column = columnValue;
+            if (tooltip) linkDiv.title = tooltip;
             linkDiv.textContent = link;
             linksCell.appendChild(linkDiv);
           });
