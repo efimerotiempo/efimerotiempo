@@ -582,6 +582,24 @@ def compute_material_status_map(projects, *, include_missing_titles=False):
                 status_map[pid_key] = 'pending'
     except Exception:  # pragma: no cover - defensive logging
         app.logger.exception('Failed to compute material status from project links')
+    for project in projects or []:
+        pid = project.get('id')
+        if not pid:
+            continue
+        tags = project.get('kanban_tags')
+        if not tags:
+            continue
+        if isinstance(tags, str):
+            tag_values = [tags]
+        else:
+            tag_values = list(tags)
+        normalized_tags = set()
+        for tag in tag_values:
+            normalized = _normalize_tag_value(tag)
+            if normalized:
+                normalized_tags.add(normalized)
+        if 'sin pedidos' in normalized_tags:
+            status_map[str(pid)] = 'complete'
     if missing_titles_map is not None:
         for pid_key, status in status_map.items():
             if status == 'missing':
@@ -6265,6 +6283,7 @@ def kanbanize_webhook():
     # Retrieve the most recent stored version of this card to detect which
     # fields actually changed in Kanbanize.
     prev_card = last_kanban_card(cid)
+    prev_card_tags = _extract_card_tags(prev_card)
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
@@ -6649,6 +6668,9 @@ def kanbanize_webhook():
     column_changed = clean_column != prev_clean_column
     attachments_changed = prev_kanban_files != kanban_files
     display_fields_changed = display_fields != prev_display_fields
+    normalized_tags = sorted(card_tags)
+    prev_normalized_tags = sorted(prev_card_tags)
+    tags_changed = normalized_tags != prev_normalized_tags
     has_no_planner_tag = 'no planificador' in card_tags
 
     def _extract_archived_flag(card_data):
@@ -6721,6 +6743,9 @@ def kanbanize_webhook():
         if display_fields_changed and existing.get('kanban_display_fields') != display_fields:
             existing['kanban_display_fields'] = display_fields
             changed = True
+        if tags_changed or existing.get('kanban_tags') != normalized_tags:
+            existing['kanban_tags'] = normalized_tags
+            changed = True
 
         existing_phases = existing.setdefault('phases', {})
         existing_assigned = existing.setdefault('assigned', {})
@@ -6789,6 +6814,7 @@ def kanbanize_webhook():
             'image': image_path,
             'kanban_attachments': kanban_files,
             'kanban_display_fields': display_fields,
+            'kanban_tags': normalized_tags,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
