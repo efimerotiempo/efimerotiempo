@@ -6156,6 +6156,12 @@ def kanbanize_webhook():
 
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
+    if isinstance(column, str):
+        clean_column = column.strip()
+    elif column:
+        clean_column = str(column).strip()
+    else:
+        clean_column = ''
 
     # Retrieve the most recent stored version of this card to detect which
     # fields actually changed in Kanbanize.
@@ -6183,13 +6189,25 @@ def kanbanize_webhook():
             else:
                 new_cards.append(c)
         prev_date = prev.get('stored_title_date') if prev else None
+        prev_last_column = prev.get('last_column') if prev else ''
         title = card.get('title') or ''
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
         if m:
             stored_date = f"{m.group(1)}/{m.group(2)}"
         else:
             stored_date = prev_date
-        new_cards.append({'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date})
+        last_column = clean_column or prev_last_column
+        if not last_column and prev:
+            prev_card_data = prev.get('card') or {}
+            prev_column_value = pick(prev_card_data, 'columnname', 'columnName', 'column')
+            if isinstance(prev_column_value, str):
+                last_column = prev_column_value.strip()
+            elif prev_column_value:
+                last_column = str(prev_column_value).strip()
+        entry = {'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date}
+        if last_column:
+            entry['last_column'] = last_column
+        new_cards.append(entry)
         save_kanban_cards(new_cards)
         broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
@@ -6266,8 +6284,6 @@ def kanbanize_webhook():
         custom = {}
     custom.setdefault('CALDERERIA', custom.get('CALDERERÍA'))
     popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
-        custom.pop(k, None)
     card['customFields'] = custom
 
     prev_raw_custom = prev_card.get('customFields') or {}
@@ -6282,8 +6298,6 @@ def kanbanize_webhook():
         prev_custom = {}
     prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
     prev_popup_raw = {field: prev_custom.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
-        prev_custom.pop(k, None)
 
     deadline_str = card.get('deadline')
     fecha_cli_str = (
@@ -6525,13 +6539,6 @@ def kanbanize_webhook():
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
     new_auto = {f['nombre']: True for f in fases if f.get('auto')}
-    if isinstance(column, str):
-        clean_column = column.strip()
-    elif column:
-        clean_column = str(column).strip()
-    else:
-        clean_column = ''
-
     prev_column = pick(prev_card, 'columnname', 'columnName', 'column')
     if isinstance(prev_column, str):
         prev_clean_column = prev_column.strip()
@@ -6645,7 +6652,11 @@ def kanbanize_webhook():
     else:
         if column_norm == 'pedidos pendiente generar of':
             cards = load_kanban_cards()
-            cards.append({'timestamp': payload_timestamp, 'card': card})
+            entry_last_column = clean_column or prev_clean_column
+            entry = {'timestamp': payload_timestamp, 'card': card}
+            if entry_last_column:
+                entry['last_column'] = entry_last_column
+            cards.append(entry)
             save_kanban_cards(cards)
             broadcast_event({"type": "kanban_update"})
             return jsonify({"mensaje": "Tarjeta ignorada (columna Pedidos pendiente generar OF)"}), 200
@@ -6675,7 +6686,11 @@ def kanbanize_webhook():
         save_projects(projects)
 
     cards = load_kanban_cards()
-    cards.append({'timestamp': payload_timestamp, 'card': card})
+    entry_last_column = clean_column or prev_clean_column
+    entry = {'timestamp': payload_timestamp, 'card': card}
+    if entry_last_column:
+        entry['last_column'] = entry_last_column
+    cards.append(entry)
     save_kanban_cards(cards)
 
     if not existing:
