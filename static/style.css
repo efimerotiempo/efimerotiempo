@@ -801,6 +801,58 @@ tr.collapsed td:not(:first-child) { display: none; }
     color: #555;
     white-space: nowrap;
 }
+.split-parts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    text-align: left;
+}
+.split-part-row label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.split-part-label {
+    min-width: 150px;
+    font-weight: 600;
+}
+.split-part-input {
+    flex: 1 1 120px;
+    padding: 4px 6px;
+}
+.split-part-input[readonly] {
+    background: #f5f5f5;
+    cursor: default;
+}
+.split-add-part {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #555;
+    background: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    margin: 0 auto 12px;
+}
+.split-add-part:hover {
+    background: #f0f0f0;
+}
+.split-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+}
+.split-input-error {
+    border-color: #c00 !important;
+    box-shadow: 0 0 0 1px rgba(204,0,0,0.4);
+}
 .material-modal .material-content {
     max-width: 480px;
 }

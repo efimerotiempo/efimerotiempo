@@ -5464,38 +5464,61 @@ def update_phase_hours():
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
-        prev_total = (
-            sum(map(int, prev_val)) if isinstance(prev_val, list)
-            else int(prev_val or 0)
-        )
+        prev_total = _phase_total_hours(prev_val)
         assigned = proj.setdefault('assigned', {})
-        if part_index is not None and isinstance(prev_val, list):
+        if part_index is not None:
+            if not isinstance(prev_val, list):
+                return jsonify({'error': 'La fase no está dividida'}), 400
             if part_index >= len(prev_val):
                 return jsonify({'error': 'Parte inválida'}), 400
+
+            def _coerce_part(value):
+                if isinstance(value, int):
+                    return value
+                if isinstance(value, float):
+                    if not float(value).is_integer():
+                        raise ValueError
+                    return int(value)
+                text = '' if value is None else str(value).strip()
+                if not text:
+                    raise ValueError
+                try:
+                    return int(text)
+                except Exception:
+                    num = float(text)
+                    if not float(num).is_integer():
+                        raise ValueError
+                    return int(num)
+
+            try:
+                current_parts = [_coerce_part(item) for item in prev_val]
+            except Exception:
+                return jsonify({'error': 'Horas inválidas registradas en la fase'}), 400
+
             diff = hours - prev_total
-            new_parts = [int(v) for v in prev_val]
-            new_value = new_parts[part_index] + diff
+            new_value = current_parts[part_index] + diff
             if new_value <= 0:
                 return jsonify({'error': 'La parte resultante debe ser mayor que cero'}), 400
-            new_parts[part_index] = new_value
-            proj['phases'][phase] = new_parts
+
+            current_parts[part_index] = new_value
+            proj['phases'][phase] = current_parts
             if assigned.get(phase) in (None, ''):
                 assigned[phase] = UNPLANNED
             seg_map = proj.get('segment_starts', {})
             if seg_map and phase in seg_map:
                 seg_list = seg_map[phase]
-                if seg_list is not None and len(seg_list) < len(new_parts):
-                    seg_list.extend([None] * (len(new_parts) - len(seg_list)))
+                if seg_list is not None and len(seg_list) < len(current_parts):
+                    seg_list.extend([None] * (len(current_parts) - len(seg_list)))
             hour_map = proj.get('segment_start_hours', {})
             if hour_map and phase in hour_map:
                 hour_list = hour_map[phase]
-                if hour_list is not None and len(hour_list) < len(new_parts):
-                    hour_list.extend([0] * (len(new_parts) - len(hour_list)))
+                if hour_list is not None and len(hour_list) < len(current_parts):
+                    hour_list.extend([0] * (len(current_parts) - len(hour_list)))
             worker_map = proj.get('segment_workers', {})
             if worker_map and phase in worker_map:
                 worker_list = worker_map[phase]
-                if worker_list is not None and len(worker_list) < len(new_parts):
-                    worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(new_parts) - len(worker_list)))
+                if worker_list is not None and len(worker_list) < len(current_parts):
+                    worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(current_parts) - len(worker_list)))
         else:
             proj['phases'][phase] = hours
             if prev_total <= 0:
@@ -5709,19 +5732,43 @@ def split_phase_route():
     pid = data.get('pid')
     phase = data.get('phase')
     date_str = data.get('date')
-    part1_str = data.get('part1')
-    part2_str = data.get('part2')
-    if not pid or not phase or not date_str or part1_str is None or part2_str is None:
+    parts_raw = data.get('parts')
+    part_values = []
+    if isinstance(parts_raw, list):
+        part_values = parts_raw
+    elif isinstance(parts_raw, str):
+        try:
+            parsed_parts = json.loads(parts_raw)
+            if isinstance(parsed_parts, list):
+                part_values = parsed_parts
+        except Exception:
+            part_values = []
+
+    if not part_values:
+        part1_str = data.get('part1')
+        part2_str = data.get('part2')
+        if part1_str is None or part2_str is None:
+            return '', 400
+        part_values = [part1_str, part2_str]
+
+    if not pid or not phase or not date_str:
         return '', 400
     try:
         date.fromisoformat(date_str)
     except Exception:
         return '', 400
+    parsed_parts = []
     try:
-        part1 = int(part1_str)
-        part2 = int(part2_str)
+        for item in part_values:
+            parsed = int(item)
+            parsed_parts.append(parsed)
     except Exception:
         return '', 400
+
+    if len(parsed_parts) < 2:
+        return jsonify({'error': 'Debes crear al menos dos partes'}), 400
+    if any(val <= 0 for val in parsed_parts):
+        return jsonify({'error': 'Las partes deben ser mayores que cero'}), 400
 
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
@@ -5729,14 +5776,40 @@ def split_phase_route():
         return '', 400
 
     val = proj['phases'][phase]
-    total = sum(int(v) for v in val) if isinstance(val, list) else int(val)
-    if part1 + part2 != total:
+    total = _phase_total_hours(val)
+    if total <= 0:
+        return jsonify({'error': 'La fase no tiene horas válidas'}), 400
+    if sum(parsed_parts) != total:
         return jsonify({'error': 'Las horas no coinciden con el total'}), 400
 
-    proj['phases'][phase] = [part1, part2]
-    proj.setdefault('segment_starts', {}).setdefault(phase, [None, None])
+    proj['phases'][phase] = parsed_parts
+
+    seg_map = proj.setdefault('segment_starts', {})
+    prev_starts = list(seg_map.get(phase) or [])
+    if len(prev_starts) >= len(parsed_parts):
+        seg_map[phase] = prev_starts[: len(parsed_parts)]
+    else:
+        seg_map[phase] = prev_starts + [None] * (len(parsed_parts) - len(prev_starts))
+
+    hour_map = proj.setdefault('segment_start_hours', {})
+    prev_hours = list(hour_map.get(phase) or [])
+    if len(prev_hours) >= len(parsed_parts):
+        hour_map[phase] = prev_hours[: len(parsed_parts)]
+    else:
+        hour_map[phase] = prev_hours + [None] * (len(parsed_parts) - len(prev_hours))
+
     worker = proj.get('assigned', {}).get(phase)
-    proj.setdefault('segment_workers', {}).setdefault(phase, [worker, worker])
+    worker_map = proj.setdefault('segment_workers', {})
+    prev_workers = list(worker_map.get(phase) or [])
+    if not prev_workers:
+        prev_workers = [worker] * len(parsed_parts)
+    else:
+        if len(prev_workers) >= len(parsed_parts):
+            prev_workers = prev_workers[: len(parsed_parts)]
+        else:
+            prev_workers.extend([worker] * (len(parsed_parts) - len(prev_workers)))
+    worker_map[phase] = prev_workers
+
     save_projects(projects)
     return '', 204
 

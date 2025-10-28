@@ -26,10 +26,12 @@
   <div class="conflict-content">
     <form id="split-form">
       <div id="split-total-hours" class="split-total-hours"></div>
-      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required><span id="split-part1-hint" class="split-hours-hint"></span></label><br>
-      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required><span id="split-part2-hint" class="split-hours-hint"></span></label><br>
-      <button type="submit">Aceptar</button>
-      <button type="button" id="split-cancel">Cancelar</button>
+      <div id="split-parts-container" class="split-parts-container"></div>
+      <button type="button" id="split-add-part" class="split-add-part" title="Añadir parte">+</button>
+      <div class="split-actions">
+        <button type="submit">Aceptar</button>
+        <button type="button" id="split-cancel">Cancelar</button>
+      </div>
     </form>
   </div>
 </div>
@@ -134,12 +136,11 @@ const body = document.getElementById('gantt_body');
 const popup = document.getElementById('info-popup');
 const splitModal = document.getElementById('split-modal');
 const splitForm = document.getElementById('split-form');
-const splitPart1 = document.getElementById('split-part1');
-const splitPart2 = document.getElementById('split-part2');
+const splitPartsContainer = document.getElementById('split-parts-container');
+const splitAddPartButton = document.getElementById('split-add-part');
 const splitTotalDisplay = document.getElementById('split-total-hours');
-const splitPart1Hint = document.getElementById('split-part1-hint');
-const splitPart2Hint = document.getElementById('split-part2-hint');
 const splitCancel = document.getElementById('split-cancel');
+let splitRemainderInput = null;
 const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
 let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
 let pxPerDay = 40 * zoom;
@@ -149,6 +150,7 @@ const BAR_HEIGHT = 30;
 let currentSort = localStorage.getItem('ganttSort') || null;
 const DAY_MS = 24*60*60*1000;
 const SPLIT_WORKDAY_HOURS = 8;
+const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
 
 function toStartOfDay(value){
   const raw = (value ?? '').toString().trim();
@@ -178,6 +180,14 @@ function normalizePartValue(value) {
   const lower = text.toLowerCase();
   if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
   return text;
+}
+
+function formatPartSuffix(value) {
+  const normalized = normalizePartValue(value);
+  if (!normalized) return '';
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return '';
+  return ` (${Math.trunc(num) + 1})`;
 }
 let timelineMinStart = null;
 let timelinePxPerDay = pxPerDay;
@@ -293,6 +303,134 @@ function formatSplitHint(value) {
   return duration ? `(${duration})` : '';
 }
 
+function splitOrdinalLabel(index) {
+  if (!Number.isInteger(index) || index < 0) return 'Horas parte';
+  if (index < SPLIT_ORDINAL_WORDS.length) {
+    return `Horas ${SPLIT_ORDINAL_WORDS[index]} parte`;
+  }
+  return `Horas parte ${index + 1}`;
+}
+
+function getSplitManualInputs() {
+  if (!splitPartsContainer) return [];
+  return Array.from(
+    splitPartsContainer.querySelectorAll('input.split-part-input[data-manual="true"]')
+  );
+}
+
+function ensureSplitRemainderInput() {
+  if (!splitPartsContainer) return null;
+  if (splitRemainderInput && splitRemainderInput.isConnected) {
+    return splitRemainderInput;
+  }
+  const row = document.createElement('div');
+  row.className = 'split-part-row split-remainder-row';
+  const label = document.createElement('label');
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'split-part-label';
+  label.appendChild(labelSpan);
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.readOnly = true;
+  input.tabIndex = -1;
+  input.className = 'split-part-input split-part-remainder';
+  input.dataset.manual = 'false';
+  label.appendChild(input);
+  const hint = document.createElement('span');
+  hint.className = 'split-hours-hint';
+  label.appendChild(hint);
+  row.appendChild(label);
+  splitPartsContainer.appendChild(row);
+  input._hintElement = hint;
+  input._labelElement = labelSpan;
+  splitRemainderInput = input;
+  return splitRemainderInput;
+}
+
+function refreshSplitPartLabels() {
+  const manuals = getSplitManualInputs();
+  manuals.forEach((input, idx) => {
+    if (input && input._labelElement) {
+      input._labelElement.textContent = `${splitOrdinalLabel(idx)}:`;
+    }
+  });
+  if (splitRemainderInput && splitRemainderInput._labelElement) {
+    splitRemainderInput._labelElement.textContent = `${splitOrdinalLabel(manuals.length)}:`;
+  }
+}
+
+function createSplitPartRow(initialValue, beforeElement) {
+  if (!splitPartsContainer) return null;
+  const row = document.createElement('div');
+  row.className = 'split-part-row';
+  const label = document.createElement('label');
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'split-part-label';
+  label.appendChild(labelSpan);
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '1';
+  input.step = '1';
+  input.required = true;
+  input.className = 'split-part-input';
+  input.dataset.manual = 'true';
+  if (initialValue !== null && Number.isFinite(initialValue) && initialValue > 0) {
+    input.value = toSplitInputValue(initialValue);
+  }
+  input.addEventListener('input', () => {
+    input.classList.remove('split-input-error');
+    updateSplitModalDisplay();
+  });
+  label.appendChild(input);
+  const hint = document.createElement('span');
+  hint.className = 'split-hours-hint';
+  label.appendChild(hint);
+  row.appendChild(label);
+  input._hintElement = hint;
+  input._labelElement = labelSpan;
+  if (beforeElement) {
+    splitPartsContainer.insertBefore(row, beforeElement);
+  } else {
+    splitPartsContainer.appendChild(row);
+  }
+  return input;
+}
+
+function resetSplitParts(existingParts) {
+  if (!splitPartsContainer) return;
+  splitPartsContainer.innerHTML = '';
+  splitRemainderInput = null;
+  const normalized = Array.isArray(existingParts)
+    ? existingParts
+        .map(value => parseSplitHours(value))
+        .filter(value => Number.isFinite(value) && value > 0)
+    : [];
+  let manualValues = [];
+  let remainderValue = null;
+  if (normalized.length >= 2) {
+    manualValues = normalized.slice(0, normalized.length - 1);
+    remainderValue = normalized[normalized.length - 1];
+  } else if (normalized.length === 1) {
+    manualValues = [normalized[0]];
+  }
+  if (!manualValues.length) {
+    manualValues = [null];
+  }
+  manualValues.forEach(value => {
+    createSplitPartRow(value, null);
+  });
+  const remainder = ensureSplitRemainderInput();
+  if (remainder) {
+    if (remainderValue !== null) {
+      remainder.value = toSplitInputValue(remainderValue);
+    } else {
+      remainder.value = '';
+    }
+  }
+  refreshSplitPartLabels();
+  updateSplitModalDisplay();
+}
+
 function updateSplitModalDisplay() {
   if (!splitModal) return;
   const total = parseSplitHours(splitModal.dataset.totalHours);
@@ -306,57 +444,89 @@ function updateSplitModalDisplay() {
       splitTotalDisplay.textContent = `Total fase: ${baseNumber} ${hoursLabel}${duration ? ` (${duration})` : ''}`;
     }
   }
-  if (splitPart1Hint) {
-    const value = splitPart1 ? parseSplitHours(splitPart1.value) : null;
-    splitPart1Hint.textContent = value === null ? '' : formatSplitHint(value);
-  }
-  if (splitPart2Hint) {
-    const value = splitPart2 ? parseSplitHours(splitPart2.value) : null;
-    splitPart2Hint.textContent = value === null ? '' : formatSplitHint(value);
-  }
-}
-
-function handleSplitPart1Input() {
-  if (!splitModal) return;
-  const total = parseSplitHours(splitModal.dataset.totalHours);
-  const value = splitPart1 ? parseSplitHours(splitPart1.value) : null;
-  if (splitPart2) {
-    if (total === null || value === null) {
-      splitPart2.value = '';
+  const manuals = getSplitManualInputs();
+  let manualSum = 0;
+  manuals.forEach(input => {
+    const value = parseSplitHours(input.value);
+    if (Number.isFinite(value)) {
+      manualSum += value;
+    }
+    if (input._hintElement) {
+      input._hintElement.textContent = Number.isFinite(value) ? formatSplitHint(value) : '';
+    }
+    if (total !== null && Number.isFinite(total)) {
+      input.setAttribute('max', total);
     } else {
-      let remainder = total - value;
-      if (remainder < 0) remainder = 0;
-      splitPart2.value = toSplitInputValue(remainder);
+      input.removeAttribute('max');
+    }
+  });
+  if (splitRemainderInput) {
+    let remainderValue = null;
+    if (total !== null && Number.isFinite(total)) {
+      remainderValue = total - manualSum;
+    }
+    if (Number.isFinite(remainderValue)) {
+      const cleanValue = Math.max(remainderValue, 0);
+      splitRemainderInput.value = toSplitInputValue(cleanValue);
+      splitRemainderInput.classList.toggle('split-input-error', remainderValue <= 0);
+      if (splitRemainderInput._hintElement) {
+        splitRemainderInput._hintElement.textContent = formatSplitHint(cleanValue);
+      }
+    } else {
+      splitRemainderInput.value = '';
+      splitRemainderInput.classList.remove('split-input-error');
+      if (splitRemainderInput._hintElement) {
+        splitRemainderInput._hintElement.textContent = '';
+      }
     }
   }
-  updateSplitModalDisplay();
-}
-
-function handleSplitPart2Input() {
-  updateSplitModalDisplay();
+  refreshSplitPartLabels();
 }
 
 function prepareSplitModal(button) {
   if (!splitModal) return;
   const totalAttr = button ? parseSplitHours(button.dataset.totalHours) : null;
   const fallbackAttr = button ? parseSplitHours(button.dataset.hours) : null;
-  const total = totalAttr !== null ? totalAttr : fallbackAttr;
-  if (total !== null) {
+  let total = totalAttr !== null ? totalAttr : fallbackAttr;
+  let existingParts = [];
+  if (button) {
+    const pid = button.dataset.pid;
+    const phase = button.dataset.phase;
+    if (pid && phase && PROJECT_DATA[pid] && PROJECT_DATA[pid].phases) {
+      const phaseEntry = PROJECT_DATA[pid].phases[phase];
+      if (Array.isArray(phaseEntry)) {
+        existingParts = phaseEntry;
+        const computedTotal = phaseEntry
+          .map(value => parseSplitHours(value))
+          .filter(value => Number.isFinite(value) && value > 0)
+          .reduce((acc, value) => acc + value, 0);
+        if (Number.isFinite(computedTotal) && computedTotal > 0) {
+          total = computedTotal;
+        }
+      }
+    }
+  }
+  if (total !== null && Number.isFinite(total)) {
     splitModal.dataset.totalHours = total;
   } else {
     delete splitModal.dataset.totalHours;
   }
-  if (splitPart1) {
-    splitPart1.value = '';
-    if (total !== null) splitPart1.setAttribute('max', total);
-    else splitPart1.removeAttribute('max');
-  }
-  if (splitPart2) {
-    splitPart2.value = '';
-    if (total !== null) splitPart2.setAttribute('max', total);
-    else splitPart2.removeAttribute('max');
+  resetSplitParts(existingParts);
+  if (fallbackAttr && Number.isFinite(fallbackAttr)) {
+    const manuals = getSplitManualInputs();
+    if (manuals.length) {
+      const first = manuals[0];
+      const currentValue = parseSplitHours(first.value);
+      if (!(Number.isFinite(currentValue) && Math.abs(currentValue - fallbackAttr) < 1e-6)) {
+        first.value = toSplitInputValue(fallbackAttr);
+      }
+    }
   }
   updateSplitModalDisplay();
+  const manuals = getSplitManualInputs();
+  if (manuals.length) {
+    manuals[0].focus();
+  }
 }
 
 const PHASE_SUMMARY_COLUMNS = [
@@ -1008,6 +1178,41 @@ if (splitForm && !splitForm.dataset.enhanced) {
   splitForm.addEventListener('submit', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
+    if (!splitModal) return;
+    const manuals = getSplitManualInputs();
+    if (!manuals.length) {
+      alert('Debes indicar al menos una parte.');
+      return;
+    }
+    const parts = [];
+    let invalid = false;
+    manuals.forEach(input => {
+      const value = parseSplitHours(input.value);
+      if (!Number.isInteger(value) || value <= 0) {
+        input.classList.add('split-input-error');
+        invalid = true;
+        return;
+      }
+      parts.push(value);
+    });
+    const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
+    const total = parseSplitHours(splitModal.dataset.totalHours);
+    let remainderInt = null;
+    if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
+      invalid = true;
+    } else {
+      remainderInt = remainderValue;
+      parts.push(remainderInt);
+    }
+    const sumParts = parts.reduce((acc, value) => acc + value, 0);
+    if (total !== null && Number.isFinite(total) && sumParts !== total) {
+      invalid = true;
+    }
+    if (invalid) {
+      alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
+      updateSplitModalDisplay();
+      return;
+    }
     fetch(SPLIT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1016,14 +1221,24 @@ if (splitForm && !splitForm.dataset.enhanced) {
         pid: splitModal.dataset.pid,
         phase: splitModal.dataset.phase,
         date: splitModal.dataset.date,
-        part1: splitPart1.value,
-        part2: splitPart2.value
+        parts,
       })
     }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
   });
-  if (splitPart1) splitPart1.addEventListener('input', handleSplitPart1Input);
-  if (splitPart2) splitPart2.addEventListener('input', handleSplitPart2Input);
   splitForm.dataset.enhanced = 'true';
+}
+
+if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
+  splitAddPartButton.addEventListener('click', ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
+    const input = createSplitPartRow(null, remainderRow);
+    ensureSplitRemainderInput();
+    updateSplitModalDisplay();
+    if (input) input.focus();
+  });
+  splitAddPartButton.dataset.bound = 'true';
 }
 
 function buildPhaseSection(info, context) {
@@ -1038,8 +1253,10 @@ function buildPhaseSection(info, context) {
       const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
       const classes = ['phase-entry'];
       classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
-      let line = `<div class="${classes.join(' ')}">${ph}: ${total}h`;
-      if (ph === context.phase) {
+      const isActivePhase = ph === context.phase;
+      const partSuffix = isActivePhase ? formatPartSuffix(context.part) : '';
+      let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
+      if (isActivePhase) {
         const partValue = normalizePartValue(context.part);
         const partAttr = partValue ? ` data-part="${partValue}"` : '';
         line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
@@ -1064,7 +1281,7 @@ function openPhasePopup(context, anchorRect) {
   const headerParts = [info.name];
   if (info.blocked) headerParts[0] += ' <span class="blocked-sign">\u{1F6AB}</span>';
   headerParts.push(info.client || '');
-  if (context.phase) headerParts.push(context.phase);
+  if (context.phase) headerParts.push(`${context.phase}${formatPartSuffix(context.part)}`);
   let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
   const metaLines = [];
   if (IS_ORDER_GANTT) {
