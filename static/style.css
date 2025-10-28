@@ -1,4 +1,13 @@
 body { font-family: Arial, sans-serif; }
+
+.notice.error {
+    color: #a00;
+    background: #f8d7da;
+    border: 1px solid #f5c2c7;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
 table.schedule {
     border-collapse: collapse;
     width: auto; /* fit content so columns match cells */

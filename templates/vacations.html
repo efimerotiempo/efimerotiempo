@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Vacaciones</h2>
+{% if error %}
+<p class="notice error">{{ error }}</p>
+{% endif %}
 <form method="post">
     <label>Trabajador:
         <select name="worker">
@@ -9,8 +12,8 @@
             {% endfor %}
         </select>
     </label>
-    <label>Inicio:<input type="text" name="start" placeholder="dd-mm" required></label>
-    <label>Fin:<input type="text" name="end" placeholder="dd-mm" required></label>
+    <label>Inicio:<input type="date" name="start" required></label>
+    <label>Fin:<input type="date" name="end" required></label>
     <button type="submit">Añadir</button>
 </form>
 <table>
@@ -18,8 +21,8 @@
     {% for v in vacations %}
     <tr>
         <td><strong>{{ v.worker.upper() }}</strong></td>
-        <td>{{ v.start }}</td>
-        <td>{{ v.end }}</td>
+        <td>{{ v.start_display }}</td>
+        <td>{{ v.end_display }}</td>
         <td>
             <form method="post" action="{{ url_for('delete_vacation', vid=v.id) }}">
                 <button class="delete-btn" type="submit">&#10060;</button>

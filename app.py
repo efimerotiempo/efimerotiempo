@@ -4708,17 +4708,38 @@ def observation_list():
 @app.route('/vacations', methods=['GET', 'POST'])
 def vacation_list():
     vacations = load_vacations()
+    error = None
+
+    def includes_year(raw_value):
+        raw_value = (raw_value or '').strip()
+        if not raw_value:
+            return False
+        normalized = raw_value.replace('/', '-').replace('.', '-').replace(' ', '')
+        parts = [p for p in normalized.split('-') if p]
+        if len(parts) < 3:
+            return False
+        return any(len(part) == 4 for part in parts)
+
     if request.method == 'POST':
-        start = parse_input_date(request.form['start'])
-        end = parse_input_date(request.form['end'])
-        vacations.append({
-            'id': str(uuid.uuid4()),
-            'worker': request.form['worker'],
-            'start': start.isoformat() if start else '',
-            'end': end.isoformat() if end else '',
-        })
-        save_vacations(vacations)
-        return redirect(url_for('vacation_list'))
+        start_raw = request.form['start']
+        end_raw = request.form['end']
+
+        if not (includes_year(start_raw) and includes_year(end_raw)):
+            error = 'Las fechas deben incluir el año (dd/mm/aaaa).'
+        else:
+            start = parse_input_date(start_raw)
+            end = parse_input_date(end_raw)
+            if not start or not end:
+                error = 'Introduce fechas de inicio y fin válidas.'
+            else:
+                vacations.append({
+                    'id': str(uuid.uuid4()),
+                    'worker': request.form['worker'],
+                    'start': start.isoformat(),
+                    'end': end.isoformat(),
+                })
+                save_vacations(vacations)
+                return redirect(url_for('vacation_list'))
     today = local_today()
 
     def parse_iso(value):
@@ -4741,7 +4762,23 @@ def vacation_list():
         return (1, -ref_ord)
 
     ordered_vacations = sorted(vacations, key=vacation_sort_key)
-    return render_template('vacations.html', vacations=ordered_vacations, workers=active_workers(), today=today.isoformat())
+
+    formatted_vacations = []
+    for vacation in ordered_vacations:
+        entry = dict(vacation)
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        entry['start_display'] = start_date.strftime('%d/%m/%Y') if start_date else ''
+        entry['end_display'] = end_date.strftime('%d/%m/%Y') if end_date else ''
+        formatted_vacations.append(entry)
+
+    return render_template(
+        'vacations.html',
+        vacations=formatted_vacations,
+        workers=active_workers(),
+        today=today.isoformat(),
+        error=error,
+    )
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
