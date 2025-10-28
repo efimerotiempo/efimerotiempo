@@ -1063,6 +1063,66 @@ def save_kanban_cards(data):
         json.dump(data, f)
 
 
+def _normalize_tag_value(value):
+    if value in (None, ''):
+        return None
+    if not isinstance(value, str):
+        try:
+            value = str(value)
+        except Exception:
+            return None
+    text = re.sub(r'\s+', ' ', value).strip()
+    if not text:
+        return None
+    decomposed = unicodedata.normalize('NFD', text)
+    text = ''.join(ch for ch in decomposed if unicodedata.category(ch) != 'Mn')
+    return text.lower()
+
+
+def _extract_card_tags(card):
+    tags = set()
+    if not isinstance(card, dict):
+        return tags
+    for key in (
+        'tags',
+        'Tags',
+        'tag',
+        'Tag',
+        'tagNames',
+        'tag_names',
+        'tagList',
+        'tag_list',
+    ):
+        raw = card.get(key)
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            parts = re.split(r'[;,]', raw)
+            for part in parts:
+                normalized = _normalize_tag_value(part)
+                if normalized:
+                    tags.add(normalized)
+        elif isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    candidate = (
+                        item.get('name')
+                        or item.get('tag')
+                        or item.get('text')
+                        or item.get('value')
+                    )
+                else:
+                    candidate = item
+                normalized = _normalize_tag_value(candidate)
+                if normalized:
+                    tags.add(normalized)
+        else:
+            normalized = _normalize_tag_value(raw)
+            if normalized:
+                tags.add(normalized)
+    return tags
+
+
 def last_kanban_card(cid):
     """Return the most recent stored Kanban card with the given *cid*.
 
@@ -6191,6 +6251,8 @@ def kanbanize_webhook():
         if isinstance(fetched, dict):
             card = fetched
 
+    card_tags = _extract_card_tags(card)
+
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
     if isinstance(column, str):
@@ -6587,6 +6649,7 @@ def kanbanize_webhook():
     column_changed = clean_column != prev_clean_column
     attachments_changed = prev_kanban_files != kanban_files
     display_fields_changed = display_fields != prev_display_fields
+    has_no_planner_tag = 'no planificador' in card_tags
 
     def _extract_archived_flag(card_data):
         if not isinstance(card_data, dict):
@@ -6598,6 +6661,21 @@ def kanbanize_webhook():
 
     is_archived = _extract_archived_flag(card)
     prev_is_archived = _extract_archived_flag(prev_card)
+
+    if has_no_planner_tag:
+        if existing:
+            removed_project = remove_project_and_preserve_schedule(projects, existing['id'])
+            if removed_project:
+                save_projects(projects)
+        cards = load_kanban_cards()
+        entry_last_column = clean_column or prev_clean_column
+        entry = {'timestamp': payload_timestamp, 'card': card}
+        if entry_last_column:
+            entry['last_column'] = entry_last_column
+        cards.append(entry)
+        save_kanban_cards(cards)
+        broadcast_event({"type": "kanban_update"})
+        return jsonify({"mensaje": "Tarjeta ignorada (tag No planificador)"}), 200
 
     if existing:
         changed = False
