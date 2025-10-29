@@ -316,6 +316,148 @@ def annotate_schedule_frozen_background(schedule):
             for task in tasks:
                 annotate_frozen_background(task)
 
+
+def load_archived_calendar_entries():
+    if not os.path.exists(ARCHIVED_CALENDAR_FILE):
+        return []
+    try:
+        with open(ARCHIVED_CALENDAR_FILE, 'r') as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned = []
+    for entry in data:
+        if isinstance(entry, dict):
+            cleaned.append(entry)
+    return cleaned
+
+
+def save_archived_calendar_entries(entries):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(ARCHIVED_CALENDAR_FILE, 'w') as fh:
+        json.dump(entries or [], fh)
+
+
+def store_archived_calendar_entry(entry):
+    if not isinstance(entry, dict):
+        return
+    entries = load_archived_calendar_entries()
+
+    def _same(existing):
+        if not isinstance(existing, dict):
+            return False
+        pid = str(existing.get('pid') or '')
+        kid = str(existing.get('kanban_id') or '')
+        entry_pid = str(entry.get('pid') or '')
+        entry_kid = str(entry.get('kanban_id') or '')
+        if entry_pid and pid and entry_pid == pid:
+            return True
+        if entry_kid and kid and entry_kid == kid:
+            return True
+        return False
+
+    filtered = [e for e in entries if not _same(e)]
+    filtered.append(entry)
+    save_archived_calendar_entries(filtered)
+
+
+def remove_archived_calendar_entry(pid=None, kanban_id=None, names=None):
+    entries = load_archived_calendar_entries()
+    if not entries:
+        return False
+    pid = str(pid or '').strip()
+    kid = str(kanban_id or '').strip()
+    name_set = set()
+    if names:
+        for name in names:
+            if isinstance(name, str) and name.strip():
+                name_set.add(name.strip())
+
+    def _matches(entry):
+        if not isinstance(entry, dict):
+            return False
+        entry_pid = str(entry.get('pid') or '').strip()
+        entry_kid = str(entry.get('kanban_id') or '').strip()
+        entry_name = (entry.get('name') or '').strip()
+        if pid and entry_pid and pid == entry_pid:
+            return True
+        if kid and entry_kid and kid == entry_kid:
+            return True
+        if name_set and entry_name and entry_name in name_set:
+            return True
+        return False
+
+    filtered = [e for e in entries if not _matches(e)]
+    if len(filtered) != len(entries):
+        save_archived_calendar_entries(filtered)
+        return True
+    return False
+
+
+def inject_archived_tasks(schedule):
+    entries = load_archived_calendar_entries()
+    project_infos = {}
+    for entry in entries:
+        tasks = entry.get('tasks') or []
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            worker = item.get('worker')
+            day = item.get('day')
+            payload = item.get('task')
+            if not worker or not day or not isinstance(payload, dict):
+                continue
+            task = copy.deepcopy(payload)
+            task['archived_shadow'] = True
+            task['frozen'] = True
+            task['color'] = '#000000'
+            task['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+            if 'pid' in task:
+                task['pid'] = str(task['pid'])
+            tasks_list = schedule.setdefault(worker, {}).setdefault(day, [])
+            duplicate = False
+            for existing in tasks_list:
+                if (
+                    existing.get('pid') == task.get('pid')
+                    and existing.get('phase') == task.get('phase')
+                    and existing.get('part') == task.get('part')
+                    and existing.get('start') == task.get('start')
+                    and existing.get('hours') == task.get('hours')
+                ):
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            tasks_list.append(task)
+            tasks_list.sort(key=lambda t: t.get('start', 0))
+
+        info = entry.get('project')
+        if isinstance(info, dict):
+            info_copy = copy.deepcopy(info)
+            info_copy['archived_shadow'] = True
+            info_copy['kanban_archived'] = True
+            info_copy['kanban_column'] = info_copy.get('kanban_column') or 'Ready to Archive'
+            info_copy.setdefault('kanban_display_fields', {})
+            info_copy.setdefault('kanban_attachments', [])
+            phases = info_copy.setdefault('phases', {})
+            info_copy.setdefault('assigned', {})
+            info_copy.setdefault('auto_hours', {})
+            info_copy.setdefault('frozen_tasks', [])
+            info_copy['frozen_phases'] = sorted(
+                {t.get('phase') for t in info_copy.get('frozen_tasks', []) if t.get('phase')}
+            )
+            info_copy['phase_sequence'] = list(phases.keys())
+            info_copy['material_status'] = 'archived'
+            info_copy.setdefault('material_missing_titles', [])
+            pid = str(info_copy.get('id') or entry.get('pid') or '')
+            if not pid:
+                continue
+            info_copy['id'] = pid
+            project_infos[pid] = info_copy
+    return entries, project_infos
+
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -325,6 +467,7 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+ARCHIVED_CALENDAR_FILE = os.path.join(DATA_DIR, 'archived_calendar.json')
 
 if _load_worker_hours_func and _save_worker_hours_func:
     load_worker_hours = _load_worker_hours_func
@@ -3211,6 +3354,7 @@ def calendar_view():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
     annotate_schedule_frozen_background(schedule)
+    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
@@ -3369,6 +3513,9 @@ def calendar_view():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+    for archived_pid in archived_project_map.keys():
+        material_status_map[str(archived_pid)] = 'archived'
+        material_missing_map.setdefault(str(archived_pid), [])
 
     manual_index = {}
     manual_bucket_items = []
@@ -3475,6 +3622,13 @@ def calendar_view():
             project_entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
             project_map[pid_key] = project_entry
         project_map[p['id']] = project_entry
+    for pid, info in archived_project_map.items():
+        info.setdefault('kanban_display_fields', {})
+        info.setdefault('kanban_attachments', [])
+        info['material_status'] = material_status_map.get(str(pid), 'archived')
+        info['material_missing_titles'] = material_missing_map.get(str(pid), [])
+        project_map[pid] = info
+        project_map[str(pid)] = info
     start_map = phase_start_map(projects)
 
     return render_template(
@@ -5144,6 +5298,7 @@ def complete():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
     annotate_schedule_frozen_background(schedule)
+    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
@@ -5320,6 +5475,9 @@ def complete():
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
+    for archived_pid in archived_project_map.keys():
+        material_status_map[str(archived_pid)] = 'archived'
+        material_missing_map.setdefault(str(archived_pid), [])
 
     manual_index = {}
     manual_bucket_items = []
@@ -5426,6 +5584,13 @@ def complete():
             entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
             project_map[pid_key] = entry
         project_map[p['id']] = entry
+    for pid, info in archived_project_map.items():
+        info.setdefault('kanban_display_fields', {})
+        info.setdefault('kanban_attachments', [])
+        info['material_status'] = material_status_map.get(str(pid), 'archived')
+        info['material_missing_titles'] = material_missing_map.get(str(pid), [])
+        project_map[pid] = info
+        project_map[str(pid)] = info
     start_map = phase_start_map(projects)
 
     return render_template(
@@ -6567,14 +6732,19 @@ def kanbanize_webhook():
     if lane_norm not in allowed_lanes_n:
         return jsonify({"mensaje": f"Lane ignorada ({lane})"}), 200
 
+    name_candidates = [
+        pick(card, 'customCardId', 'effectiveCardId'),
+        pick(card, 'title'),
+    ]
+    name_candidates = [n for n in name_candidates if n]
+    if column_norm != 'ready to archive':
+        remove_archived_calendar_entry(
+            kanban_id=str(cid) if cid else None,
+            names=name_candidates,
+        )
+
     if column_norm == 'ready to archive':
         projects = load_projects()
-        name_candidates = [
-            pick(card, 'customCardId', 'effectiveCardId'),
-            pick(card, 'title'),
-        ]
-        name_candidates = [n for n in name_candidates if n]
-
         pid = None
         matched_project = None
         for p in projects:
@@ -6585,18 +6755,76 @@ def kanbanize_webhook():
                 matched_project = p
                 break
         if pid:
+            pid_str = str(pid)
+            snapshot_projects = copy.deepcopy(projects)
+            snapshot_schedule, _ = schedule_projects(snapshot_projects)
+            annotate_schedule_frozen_background(snapshot_schedule)
+            archived_tasks = []
+            for worker, days in snapshot_schedule.items():
+                if worker == UNPLANNED:
+                    continue
+                if not isinstance(days, dict):
+                    continue
+                for day, tasks in days.items():
+                    if not isinstance(tasks, list):
+                        continue
+                    for task in tasks:
+                        if str(task.get('pid')) != pid_str:
+                            continue
+                        task_copy = copy.deepcopy(task)
+                        task_copy['archived_shadow'] = True
+                        task_copy['frozen'] = True
+                        task_copy['color'] = '#000000'
+                        task_copy['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+                        task_copy['pid'] = pid_str
+                        archived_tasks.append(
+                            {
+                                'worker': worker,
+                                'day': day,
+                                'task': task_copy,
+                            }
+                        )
+
             removed_project = remove_project_and_preserve_schedule(projects, pid)
             save_projects(projects)
 
-            archived_info = removed_project or matched_project or {}
+            archived_source = removed_project or matched_project or {}
+            archived_project = copy.deepcopy(archived_source) if isinstance(archived_source, dict) else {}
+            if archived_project:
+                archived_project['kanban_archived'] = True
+                archived_project['kanban_column'] = (
+                    clean_column or archived_project.get('kanban_column') or 'Ready to Archive'
+                )
+                archived_project['id'] = pid_str
+                if cid and not archived_project.get('kanban_id'):
+                    archived_project['kanban_id'] = cid
+                archived_project['archived_shadow'] = True
+
             if name_candidates:
                 fallback_name = name_candidates[0]
             elif cid:
                 fallback_name = f"Tarjeta {cid}"
             else:
                 fallback_name = 'Proyecto'
-            project_name = archived_info.get('name') or fallback_name
-            client_name = archived_info.get('client') or pick(card, 'client', 'Cliente', 'customer') or ''
+            project_name = archived_project.get('name') or fallback_name
+            client_name = (
+                archived_project.get('client')
+                or pick(card, 'client', 'Cliente', 'customer')
+                or ''
+            )
+
+            store_archived_calendar_entry(
+                {
+                    'pid': pid_str,
+                    'kanban_id': str(cid) if cid else '',
+                    'name': project_name,
+                    'client': client_name,
+                    'lane': lane,
+                    'timestamp': payload_timestamp,
+                    'project': archived_project,
+                    'tasks': archived_tasks,
+                }
+            )
 
             extras = load_extra_conflicts()
             conflict_id = str(uuid.uuid4())
