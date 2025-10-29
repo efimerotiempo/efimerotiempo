@@ -5205,6 +5205,7 @@ def update_worker_day_hours():
 @app.route('/resources', methods=['GET', 'POST'])
 def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+    current_order_snapshot = list(workers)
     inactive = set(load_inactive_workers())
     worker_overrides = load_worker_hours()
     if request.method == 'POST':
@@ -5233,17 +5234,33 @@ def resources():
                 rename_map[original] = new_value
         if rename_map:
             workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+            current_order_snapshot = list(workers)
+            inactive = set(load_inactive_workers())
             worker_overrides = load_worker_hours()
         active = request.form.getlist('worker')
         if rename_map:
             active = [rename_map.get(w, w) for w in active]
-        inactive = [w for w in workers if w not in active]
-        save_inactive_workers(inactive)
+        new_inactive = [w for w in workers if w not in active]
+        if set(new_inactive) != inactive:
+            save_inactive_workers(new_inactive)
+            inactive = set(new_inactive)
         order = request.form.getlist('order')
         if rename_map and order:
             order = [rename_map.get(w, w) for w in order]
         if order:
-            set_worker_order(order)
+            cleaned_order = []
+            seen = set()
+            for name in order:
+                if name in workers and name not in seen:
+                    cleaned_order.append(name)
+                    seen.add(name)
+            for name in workers:
+                if name not in seen:
+                    cleaned_order.append(name)
+            if cleaned_order != current_order_snapshot:
+                set_worker_order(cleaned_order)
+                workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+                current_order_snapshot = list(workers)
         hours_modified = False
         for key, changed in request.form.items():
             if not key.startswith('hours_changed__'):
