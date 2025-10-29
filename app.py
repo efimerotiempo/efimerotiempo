@@ -1077,7 +1077,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
-    'Planificado para montaje',
+    'Listo para iniciar',
 }
 
 PEDIDOS_HIDDEN_COLUMNS = [
@@ -4075,7 +4075,7 @@ def orden_carpetas_view():
     }
     pending_rows = []
     pending_seen = set()
-    montaje_keys = {normalize_key('Planificado para montaje')}
+    montaje_keys = {normalize_key('Listo para iniciar')}
     montaje_rows = {}
 
     for entry in links_table:
