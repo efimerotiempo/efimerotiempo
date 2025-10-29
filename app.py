@@ -83,7 +83,7 @@ next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
 
-AUTO_RECEIVING_PHASE = 'recepcionar material'
+AUTO_RECEIVING_PHASE = 'preparar material'
 AUTO_RECEIVING_DEPENDENCIES = (
     'montar',
     'soldar',
@@ -677,11 +677,11 @@ KANBAN_COLUMN_PHASE_TARGETS = {
     normalize_key('Pedidos pendiente generar OF'): 'pedidos',
     normalize_key('Administración'): 'pedidos',
     normalize_key('Oficina Técnica'): 'dibujo',
-    normalize_key('Pendiente Por Recepcionar'): 'recepcionar material',
-    normalize_key('Prep. Interno'): 'recepcionar material',
-    normalize_key('Prep. Externo'): 'recepcionar material',
-    normalize_key('Listo para iniciar'): 'recepcionar material',
-    normalize_key('Planificado para montaje'): 'recepcionar material',
+    normalize_key('Pendiente Por Recepcionar'): 'preparar material',
+    normalize_key('Prep. Interno'): 'preparar material',
+    normalize_key('Prep. Externo'): 'preparar material',
+    normalize_key('Listo para iniciar'): 'preparar material',
+    normalize_key('Planificado para montaje'): 'preparar material',
     normalize_key('Montaje'): 'montar',
     normalize_key('Soldadura'): 'soldar',
     normalize_key('Montaje 2º fase'): 'montar 2º',
@@ -3168,11 +3168,11 @@ def _kanban_card_to_project(card):
         and not mecan_flag
         and not trat_flag
     ):
-        phases['recepcionar material'] = 1
-        auto_hours['recepcionar material'] = True
+        phases['preparar material'] = 1
+        auto_hours['preparar material'] = True
     else:
         if prep > 0:
-            phases['recepcionar material'] = prep
+            phases['preparar material'] = prep
         if mont:
             phases['montar'] = mont
         if sold2:
@@ -7022,7 +7022,7 @@ def kanbanize_webhook():
         prev_display_fields['TRATAMIENTO'] = prev_trat_value
 
     phase_hours_new_raw = {
-        'recepcionar material': prep_raw,
+        'preparar material': prep_raw,
         'montar': mont_raw,
         'soldar 2º': sold2_raw,
         'soldar': sold_raw,
@@ -7032,7 +7032,7 @@ def kanbanize_webhook():
         'tratamiento': 1 if trat_flag else 0,
     }
     phase_hours_prev = {
-        'recepcionar material': prev_prep_raw,
+        'preparar material': prev_prep_raw,
         'montar': prev_mont_raw,
         'soldar 2º': prev_sold2_raw,
         'soldar': prev_sold_raw,
@@ -7056,9 +7056,9 @@ def kanbanize_webhook():
         auto_prep = True
     fases = []
     if auto_prep:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': True})
+        fases.append({'nombre': 'preparar material', 'duracion': prep_hours, 'auto': True})
     elif prep_hours > 0:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
+        fases.append({'nombre': 'preparar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
     if sold2_hours > 0:

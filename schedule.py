@@ -26,7 +26,7 @@ PHASE_HISTORY_FILE = os.path.join(DATA_DIR, 'phase_history.json')
 PHASE_ORDER = [
     'dibujo',
     'pedidos',
-    'recepcionar material',
+    'preparar material',
     'montar',
     'soldar',
     'montar 2º',
@@ -60,7 +60,7 @@ BASE_WORKERS = {
     'Fabio': ['soldar', 'soldar 2º'],
     'Beltxa': ['soldar', 'soldar 2º', 'montar', 'montar 2º'],
     'Igor': ['soldar', 'soldar 2º'],
-    'Albi': ['recepcionar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Albi': ['preparar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
     'Eneko': ['pintar', 'montar', 'montar 2º', 'soldar', 'soldar 2º'],
 }
 
