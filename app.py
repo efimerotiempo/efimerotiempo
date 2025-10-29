@@ -412,7 +412,7 @@ def inject_archived_tasks(schedule):
             task = copy.deepcopy(payload)
             task['archived_shadow'] = True
             task['frozen'] = True
-            task['color'] = '#000000'
+            task['color'] = '#b3b3b3'
             task['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
             if 'pid' in task:
                 task['pid'] = str(task['pid'])
@@ -6774,7 +6774,7 @@ def kanbanize_webhook():
                         task_copy = copy.deepcopy(task)
                         task_copy['archived_shadow'] = True
                         task_copy['frozen'] = True
-                        task_copy['color'] = '#000000'
+                        task_copy['color'] = '#b3b3b3'
                         task_copy['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
                         task_copy['pid'] = pid_str
                         archived_tasks.append(
