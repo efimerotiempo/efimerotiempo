@@ -72,7 +72,7 @@ table.schedule td.weekend-cell {
     background: #fff;
 }
 .task.frozen {
-    background: #cce5ff;
+    background: var(--frozen-background, rgba(204, 229, 255, 0.45));
 }
 .task-main {
     display: -webkit-box;

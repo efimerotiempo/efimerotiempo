@@ -256,6 +256,64 @@ def _next_api_color():
         if color != _last_api_color:
             _last_api_color = color
             return color
+
+
+def compute_frozen_background(color, alpha=0.25):
+    """Return an ``rgba`` value that reuses ``color`` with transparency."""
+
+    fallback = f'rgba(204, 229, 255, {alpha})'
+    if not color or not isinstance(color, str):
+        return fallback
+
+    color = color.strip()
+    if color.startswith('#'):
+        hex_value = color[1:]
+        if len(hex_value) == 3:
+            hex_value = ''.join(ch * 2 for ch in hex_value)
+        if len(hex_value) == 6:
+            try:
+                r = int(hex_value[0:2], 16)
+                g = int(hex_value[2:4], 16)
+                b = int(hex_value[4:6], 16)
+            except ValueError:
+                return fallback
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        return fallback
+
+    match = re.match(r'rgba?\(([^)]+)\)', color)
+    if match:
+        parts = [p.strip() for p in match.group(1).split(',')]
+        if len(parts) >= 3:
+            try:
+                r = max(0, min(255, int(float(parts[0]))))
+                g = max(0, min(255, int(float(parts[1]))))
+                b = max(0, min(255, int(float(parts[2]))))
+            except ValueError:
+                return fallback
+            return f'rgba({r}, {g}, {b}, {alpha})'
+
+    return fallback
+
+
+def annotate_frozen_background(task):
+    if not isinstance(task, dict):
+        return
+    if task.get('frozen'):
+        task['frozen_background'] = compute_frozen_background(task.get('color'))
+    else:
+        task.pop('frozen_background', None)
+
+
+def annotate_schedule_frozen_background(schedule):
+    for days in schedule.values():
+        if not isinstance(days, dict):
+            continue
+        for tasks in days.values():
+            if not isinstance(tasks, list):
+                continue
+            for task in tasks:
+                annotate_frozen_background(task)
+
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -3140,6 +3198,7 @@ def home():
 def calendar_view():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
+    annotate_schedule_frozen_background(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
@@ -3183,6 +3242,7 @@ def calendar_view():
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'frozen_background': item.get('frozen_background'),
                 'auto': item.get('auto', False),
             },
         )
@@ -3203,6 +3263,9 @@ def calendar_view():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+            bg = item.get('frozen_background')
+            if bg:
+                ph['frozen_background'] = bg
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -3328,6 +3391,7 @@ def calendar_view():
                     'phase_deadline_status': task.get('phase_deadline_status'),
                     'blocked': task.get('blocked', False),
                     'frozen': task.get('frozen', False),
+                    'frozen_background': task.get('frozen_background'),
                     'auto': task.get('auto', False),
                     'material_status': status,
                     'material_label': material_status_label(status),
@@ -4997,6 +5061,7 @@ def resources():
 def complete():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
+    annotate_schedule_frozen_background(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
@@ -5041,6 +5106,7 @@ def complete():
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'frozen_background': item.get('frozen_background'),
                 'auto': item.get('auto', False),
             },
         )
@@ -5061,6 +5127,9 @@ def complete():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+            bg = item.get('frozen_background')
+            if bg:
+                ph['frozen_background'] = bg
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -5203,6 +5272,7 @@ def complete():
                     'phase_deadline_status': task.get('phase_deadline_status'),
                     'blocked': task.get('blocked', False),
                     'frozen': task.get('frozen', False),
+                    'frozen_background': task.get('frozen_background'),
                     'auto': task.get('auto', False),
                     'material_status': status,
                     'material_label': material_status_label(status),
