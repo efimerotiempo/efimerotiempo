@@ -19,6 +19,7 @@ EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
 WORKER_RENAMES_FILE = os.path.join(DATA_DIR, 'worker_renames.json')
 WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+WORKER_DAY_HOURS_FILE = os.path.join(DATA_DIR, 'worker_day_hours.json')
 MANUAL_UNPLANNED_FILE = os.path.join(DATA_DIR, 'manual_unplanned.json')
 PHASE_HISTORY_FILE = os.path.join(DATA_DIR, 'phase_history.json')
 
@@ -283,6 +284,59 @@ def save_worker_hours(data):
 _apply_worker_hours(load_worker_hours())
 
 
+def _sanitize_worker_day_hours(data):
+    """Return mapping of worker -> {date -> hours} limited to 1..12."""
+
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for worker, entries in data.items():
+        if worker not in WORKERS:
+            continue
+        if not isinstance(entries, dict):
+            continue
+        worker_map = {}
+        for day, value in entries.items():
+            if not isinstance(day, str):
+                continue
+            try:
+                date.fromisoformat(day)
+            except (TypeError, ValueError):
+                continue
+            try:
+                hours = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hours <= 12:
+                worker_map[day] = hours
+        if worker_map:
+            cleaned[worker] = worker_map
+    return cleaned
+
+
+def load_worker_day_hours():
+    """Return persisted worker/day hour overrides."""
+
+    if os.path.exists(WORKER_DAY_HOURS_FILE):
+        with open(WORKER_DAY_HOURS_FILE, 'r') as f:
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        return _sanitize_worker_day_hours(raw)
+    return {}
+
+
+def save_worker_day_hours(data):
+    """Persist worker/day overrides after sanitizing them."""
+
+    overrides = _sanitize_worker_day_hours(data or {})
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_DAY_HOURS_FILE, 'w') as f:
+        json.dump(overrides, f)
+    return overrides
+
+
 def add_worker(name):
     """Add a new worker that behaves like Eneko."""
     name = name.strip()
@@ -418,6 +472,20 @@ def rename_worker(old_name, new_name):
                 projects_changed = True
     if projects_changed:
         save_projects(projects)
+
+    day_overrides = load_worker_day_hours()
+    day_changed = False
+    if old_name in day_overrides:
+        existing = day_overrides.pop(old_name)
+        if existing:
+            if new_name in day_overrides:
+                merged = day_overrides[new_name]
+                merged.update(existing)
+            else:
+                day_overrides[new_name] = existing
+            day_changed = True
+    if day_changed:
+        save_worker_day_hours(day_overrides)
 
     new_workers = _build_workers()
     WORKERS.clear()
@@ -698,6 +766,7 @@ def schedule_projects(projects):
     inactive = set(load_inactive_workers())
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
+    worker_day_map = load_worker_day_hours()
     vac_map = _build_vacation_map()
 
     def preload_frozen(schedule_map):
@@ -923,6 +992,7 @@ def schedule_projects(projects):
                         project['start_date'],
                         project['id'],
                         hours_map,
+                        worker_day_map,
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
                         project_blocked=project.get('blocked', False),
@@ -964,6 +1034,7 @@ def assign_phase(
     start_date,
     pid,
     hours_map,
+    worker_day_map=None,
     part=None,
     *,
     manual=False,
@@ -1016,6 +1087,9 @@ def assign_phase(
         except ValueError:
             due_dt = None
     # Unplanned tasks ignore the daily limit but still split into 8h blocks.
+    if worker_day_map is None:
+        worker_day_map = {}
+
     if worker == UNPLANNED:
         while remaining > 0:
             if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
@@ -1078,6 +1152,8 @@ def assign_phase(
         tasks = schedule.get(day_str, [])
         tasks.sort(key=lambda t: t.get('start', 0))
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        worker_overrides = worker_day_map.get(worker) or {}
+        override_limit = worker_overrides.get(day_str)
         if (
             limit != float('inf')
             and worker not in ('Irene', 'Mecanizar', 'Tratamiento')
@@ -1086,6 +1162,11 @@ def assign_phase(
             day_limit = hours_map.get(day_str)
             if day_limit is not None:
                 limit = min(limit, day_limit)
+        if override_limit is not None:
+            if limit == float('inf'):
+                limit = override_limit
+            else:
+                limit = min(limit, override_limit)
 
         if phase in ('tratamiento', 'mecanizar'):
             start = 0

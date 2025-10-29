@@ -50,6 +50,8 @@ load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
 _load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
 _save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
+_load_worker_day_hours_func = getattr(_schedule_mod, "load_worker_day_hours", None)
+_save_worker_day_hours_func = getattr(_schedule_mod, "save_worker_day_hours", None)
 load_manual_unplanned = getattr(_schedule_mod, "load_manual_unplanned", lambda: [])
 save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda entries: entries)
 load_phase_history = getattr(_schedule_mod, "load_phase_history", lambda: {})
@@ -392,6 +394,16 @@ else:
         load_worker_hours()
     except Exception:
         pass
+
+if _load_worker_day_hours_func and _save_worker_day_hours_func:
+    load_worker_day_hours = _load_worker_day_hours_func
+    save_worker_day_hours = _save_worker_day_hours_func
+else:
+    def load_worker_day_hours():
+        return {}
+
+    def save_worker_day_hours(data):
+        return {}
 
 KANBAN_POPUP_FIELDS = [
     'LANZAMIENTO',
@@ -3332,6 +3344,7 @@ def calendar_view():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
 
@@ -3483,6 +3496,7 @@ def calendar_view():
         manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
         material_status_labels=MATERIAL_STATUS_LABELS,
+        worker_day_hours=worker_day_overrides,
     )
 
 
@@ -4966,6 +4980,69 @@ def remove_vacation():
     return ('', 204)
 
 
+@app.route('/assign_vacation_day', methods=['POST'])
+def assign_vacation_day():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    vacations = load_vacations()
+    already_marked = False
+    for entry in vacations:
+        if entry.get('worker') != worker:
+            continue
+        try:
+            start = date.fromisoformat(entry.get('start'))
+            end = date.fromisoformat(entry.get('end'))
+        except (TypeError, ValueError):
+            continue
+        if start <= day <= end:
+            already_marked = True
+            break
+    if not already_marked:
+        vacations.append(
+            {
+                'id': str(uuid.uuid4()),
+                'worker': worker,
+                'start': day.isoformat(),
+                'end': day.isoformat(),
+            }
+        )
+        save_vacations(vacations)
+    return ('', 204)
+
+
+@app.route('/update_worker_day_hours', methods=['POST'])
+def update_worker_day_hours():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    hours_value = data.get('hours')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    try:
+        hours = int(hours_value)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Horas no válidas'}), 400
+    if hours < 1 or hours > 10:
+        return jsonify({'error': 'Horas fuera de rango'}), 400
+    overrides = load_worker_day_hours()
+    worker_map = overrides.get(worker, {})
+    worker_map[day.isoformat()] = hours
+    overrides[worker] = worker_map
+    save_worker_day_hours(overrides)
+    return ('', 204)
+
+
 @app.route('/resources', methods=['GET', 'POST'])
 def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
@@ -5216,6 +5293,7 @@ def complete():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
     note_map = {}
     for n in notes:
         note_map.setdefault(n['date'], []).append(n['description'])
@@ -5367,6 +5445,7 @@ def complete():
         manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
         material_status_labels=MATERIAL_STATUS_LABELS,
+        worker_day_hours=worker_day_overrides,
     )
 
 

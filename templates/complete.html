@@ -140,7 +140,13 @@
         {% set d = c.dates[0] %}
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set total = tasks|sum(attribute='hours') %}
+        {% set worker_overrides = worker_day_hours.get(worker, {}) %}
+        {% set override = worker_overrides.get(d.isoformat()) %}
+        {% if override is none %}
         {% set limit = hours.get(d.isoformat(), 8) %}
+        {% else %}
+        {% set limit = override %}
+        {% endif %}
         {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
         <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
@@ -341,6 +347,21 @@
         <div id="history-list" class="history-list"></div>
     </div>
 </div>
+<div id="day-menu-modal" class="day-menu-modal" aria-hidden="true">
+  <div class="day-menu-content">
+    <button type="button" class="day-menu-close" aria-label="Cerrar">&#10005;</button>
+    <div id="day-menu-title" class="day-menu-title"></div>
+    <button type="button" id="day-menu-vacation" class="day-menu-action">Asignar vacaciones a este día</button>
+    <div class="day-menu-hours">
+      <select id="day-menu-hour-select" class="day-menu-select">
+        {% for n in range(1, 11) %}
+        <option value="{{ n }}">{{ n }}h</option>
+        {% endfor %}
+      </select>
+      <button type="button" id="day-menu-hours-btn" class="day-menu-action">Cambiar jornada de este día</button>
+    </div>
+  </div>
+</div>
     </div>
     <div class="complete-projects">
         <h2>Proyectos <button id="projects-toggle" type="button">&#8722;</button></h2>
@@ -463,6 +484,10 @@
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
   const HISTORY_URL = "{{ url_for('phase_history') }}";
+  const ASSIGN_VACATION_DAY_URL = "{{ url_for('assign_vacation_day') }}";
+  const UPDATE_WORKER_DAY_HOURS_URL = "{{ url_for('update_worker_day_hours') }}";
+  const WORKER_DAY_HOURS = {{ worker_day_hours|tojson }};
+  const DAILY_HOURS = {{ hours|tojson }};
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
@@ -481,9 +506,116 @@
   const historyList = document.getElementById('history-list');
   const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
   const historyTitle = document.getElementById('history-title');
+  const dayMenuModal = document.getElementById('day-menu-modal');
+  const dayMenuClose = dayMenuModal ? dayMenuModal.querySelector('.day-menu-close') : null;
+  const dayMenuTitle = document.getElementById('day-menu-title');
+  const dayMenuVacationBtn = document.getElementById('day-menu-vacation');
+  const dayMenuHoursBtn = document.getElementById('day-menu-hours-btn');
+  const dayMenuHourSelect = document.getElementById('day-menu-hour-select');
+  let dayMenuWorker = null;
+  let dayMenuDate = null;
+  const dayMenuFormatter = typeof Intl !== 'undefined'
+    ? new Intl.DateTimeFormat('es-ES', {
+        timeZone: window.EFIMERO_TZ || 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : null;
   let pendingBlock = null;
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+
+  function clampDayHours(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 8;
+    if (num < 1) return 1;
+    if (num > 10) return 10;
+    return Math.round(num);
+  }
+
+  function formatDayMenuLabel(dateText, worker) {
+    if (!dateText) {
+      return worker || '';
+    }
+    if (dayMenuFormatter) {
+      try {
+        const dt = new Date(`${dateText}T00:00:00`);
+        if (!Number.isNaN(dt.valueOf())) {
+          return `${dayMenuFormatter.format(dt)} - ${worker}`;
+        }
+      } catch (err) {
+        // ignore formatting errors
+      }
+    }
+    return `${dateText} - ${worker}`;
+  }
+
+  function getWorkerDayHours(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function openDayMenu(worker, dateText) {
+    if (!dayMenuModal) return;
+    dayMenuWorker = worker;
+    dayMenuDate = dateText;
+    if (dayMenuTitle) {
+      dayMenuTitle.textContent = formatDayMenuLabel(dateText, worker);
+    }
+    if (dayMenuHourSelect) {
+      const hoursValue = clampDayHours(getWorkerDayHours(worker, dateText));
+      dayMenuHourSelect.value = String(hoursValue);
+    }
+    dayMenuModal.classList.add('open');
+    dayMenuModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeDayMenu() {
+    if (!dayMenuModal) return;
+    dayMenuModal.classList.remove('open');
+    dayMenuModal.setAttribute('aria-hidden', 'true');
+    dayMenuWorker = null;
+    dayMenuDate = null;
+  }
+
+  function submitDayMenuAction(url, payload, button, errorMessage) {
+    if (!url) return;
+    if (button) {
+      button.disabled = true;
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(resp => {
+        if (!resp.ok) {
+          throw new Error('request failed');
+        }
+        closeDayMenu();
+        window.location.reload();
+      })
+      .catch(() => {
+        alert(errorMessage);
+      })
+      .finally(() => {
+        if (button) {
+          button.disabled = false;
+        }
+      });
+  }
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -626,9 +758,72 @@
       historyContent.addEventListener('click', ev => ev.stopPropagation());
     }
   }
+  if (dayMenuClose) {
+    dayMenuClose.addEventListener('click', ev => {
+      ev.preventDefault();
+      closeDayMenu();
+    });
+  }
+  if (dayMenuModal) {
+    dayMenuModal.addEventListener('click', ev => {
+      if (ev.target === dayMenuModal) {
+        closeDayMenu();
+      }
+    });
+    const dayMenuContent = dayMenuModal.querySelector('.day-menu-content');
+    if (dayMenuContent) {
+      dayMenuContent.addEventListener('click', ev => ev.stopPropagation());
+    }
+  }
+  if (dayMenuVacationBtn) {
+    dayMenuVacationBtn.addEventListener('click', () => {
+      if (!dayMenuWorker || !dayMenuDate) return;
+      submitDayMenuAction(
+        ASSIGN_VACATION_DAY_URL,
+        { worker: dayMenuWorker, date: dayMenuDate },
+        dayMenuVacationBtn,
+        'No se pudo asignar las vacaciones.'
+      );
+    });
+  }
+  if (dayMenuHoursBtn) {
+    dayMenuHoursBtn.addEventListener('click', () => {
+      if (!dayMenuWorker || !dayMenuDate || !dayMenuHourSelect) return;
+      const selected = clampDayHours(dayMenuHourSelect.value);
+      submitDayMenuAction(
+        UPDATE_WORKER_DAY_HOURS_URL,
+        { worker: dayMenuWorker, date: dayMenuDate, hours: selected },
+        dayMenuHoursBtn,
+        'No se pudo actualizar la jornada.'
+      );
+    });
+  }
+  if (dayMenuHourSelect) {
+    dayMenuHourSelect.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' && dayMenuHoursBtn) {
+        ev.preventDefault();
+        dayMenuHoursBtn.click();
+      }
+    });
+  }
+  document.querySelectorAll('.schedule').forEach(table => {
+    table.addEventListener('contextmenu', ev => {
+      const cell = ev.target.closest('td[data-date]');
+      if (!cell) {
+        return;
+      }
+      const row = cell.closest('tr[data-worker]');
+      if (!row) {
+        return;
+      }
+      ev.preventDefault();
+      openDayMenu(row.dataset.worker, cell.dataset.date);
+    });
+  });
   document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape') {
       closeHistoryModal();
+      closeDayMenu();
     }
   });
 
