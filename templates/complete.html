@@ -141,6 +141,7 @@
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set total = tasks|sum(attribute='hours') %}
         {% set worker_overrides = worker_day_hours.get(worker, {}) %}
+        {% set base_limit = worker_limits.get(worker) %}
         {% set override = worker_overrides.get(d.isoformat()) %}
         {% if override is none %}
         {% set limit = hours.get(d.isoformat(), 8) %}
@@ -148,7 +149,7 @@
         {% set limit = override %}
         {% endif %}
         {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
-        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if override is not none and (base_limit is none or override != base_limit) %}hour-override {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
             {% set matches_filter = t.get('filter_match', True) %}
             {% if t.phase == 'vacaciones' %}

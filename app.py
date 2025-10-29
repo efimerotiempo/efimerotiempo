@@ -3345,6 +3345,10 @@ def calendar_view():
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
     worker_day_overrides = load_worker_day_hours()
+    worker_limits_map = {
+        worker: HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        for worker in WORKERS
+    }
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
 
@@ -3497,6 +3501,7 @@ def calendar_view():
         worker_notes=worker_note_map,
         material_status_labels=MATERIAL_STATUS_LABELS,
         worker_day_hours=worker_day_overrides,
+        worker_limits=worker_limits_map,
     )
 
 
@@ -5294,6 +5299,10 @@ def complete():
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
     worker_day_overrides = load_worker_day_hours()
+    worker_limits_map = {
+        worker: HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        for worker in WORKERS
+    }
     note_map = {}
     for n in notes:
         note_map.setdefault(n['date'], []).append(n['description'])
@@ -5446,6 +5455,7 @@ def complete():
         worker_notes=worker_note_map,
         material_status_labels=MATERIAL_STATUS_LABELS,
         worker_day_hours=worker_day_overrides,
+        worker_limits=worker_limits_map,
     )
 
 
