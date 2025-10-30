@@ -356,6 +356,7 @@
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
+  const CALENDAR_PEDIDOS_URL = "{{ url_for('calendar_pedidos') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
   const HISTORY_URL = "{{ url_for('phase_history') }}";
@@ -1444,14 +1445,36 @@ let draggedTaskElement = null;
       if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
       const kanbanFields = info.kanban_display_fields || {};
       const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+      let addedPedidosButton = false;
       if (kanbanEntries.length) {
         let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
         kanbanEntries.forEach(([label, value]) => {
           const displayValue = `${value}`;
           kanbanHtml += `<div>${label}: ${displayValue}</div>`;
+          if (!addedPedidosButton) {
+            const normalizedLabel = (label || '').toString().trim().toLowerCase();
+            if (normalizedLabel === 'estado pedidos' || normalizedLabel === 'estado de los pedidos') {
+              const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+              const safePidAttr = escapeHtml(t.dataset.pid || '');
+              kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+              addedPedidosButton = true;
+            }
+          }
         });
+        if (!addedPedidosButton) {
+          const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+          const safePidAttr = escapeHtml(t.dataset.pid || '');
+          kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+          addedPedidosButton = true;
+        }
         kanbanHtml += '</div>';
         html += kanbanHtml;
+      }
+      if (!addedPedidosButton) {
+        const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+        const safePidAttr = escapeHtml(t.dataset.pid || '');
+        html += `<div class="popup-section kanban-extra-fields"><div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div></div>`;
+        addedPedidosButton = true;
       }
       const previousPhases = Array.isArray(info.kanban_previous_phases)
         ? new Set(info.kanban_previous_phases)
@@ -1562,11 +1585,27 @@ let draggedTaskElement = null;
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
       const historyBtn = popup.querySelector('.history-btn');
+      const viewPedidosBtn = popup.querySelector('.view-pedidos-btn');
       if (historyBtn) {
         historyBtn.addEventListener('click', ev => {
           ev.stopPropagation();
           const partValue = normalizePartValue(historyBtn.dataset.part);
           openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, displayName, displayClient);
+        });
+      }
+      if (viewPedidosBtn) {
+        viewPedidosBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          try {
+            const url = new URL(CALENDAR_PEDIDOS_URL, window.location.origin);
+            const projectName = viewPedidosBtn.dataset.project || '';
+            if (projectName) url.searchParams.set('filter', projectName);
+            const pidValue = viewPedidosBtn.dataset.pid || '';
+            if (pidValue) url.searchParams.set('highlight', pidValue);
+            window.open(url.toString(), '_blank');
+          } catch (error) {
+            console.error('No se pudo abrir Calendario pedidos:', error);
+          }
         });
       }
       const del = document.getElementById('del-btn');
