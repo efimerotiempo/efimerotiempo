@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
 from itertools import zip_longest
+from collections import defaultdict
 import uuid
 import os
 import copy
@@ -47,9 +48,19 @@ load_vacations = _schedule_mod.load_vacations
 save_vacations = _schedule_mod.save_vacations
 load_daily_hours = _schedule_mod.load_daily_hours
 save_daily_hours = _schedule_mod.save_daily_hours
+_load_worker_hours_func = getattr(_schedule_mod, "load_worker_hours", None)
+_save_worker_hours_func = getattr(_schedule_mod, "save_worker_hours", None)
+_load_worker_day_hours_func = getattr(_schedule_mod, "load_worker_day_hours", None)
+_save_worker_day_hours_func = getattr(_schedule_mod, "save_worker_day_hours", None)
+load_manual_unplanned = getattr(_schedule_mod, "load_manual_unplanned", lambda: [])
+save_manual_unplanned = getattr(_schedule_mod, "save_manual_unplanned", lambda entries: entries)
+load_phase_history = getattr(_schedule_mod, "load_phase_history", lambda: {})
+save_phase_history = getattr(_schedule_mod, "save_phase_history", lambda data: None)
+phase_history_key = getattr(_schedule_mod, "phase_history_key", lambda pid, phase, part=None: f"{pid}|{phase}|{'' if part in (None, '', 'None') else part}")
 load_inactive_workers = _schedule_mod.load_inactive_workers
 save_inactive_workers = _schedule_mod.save_inactive_workers
 set_worker_order = _schedule_mod.set_worker_order
+rename_worker = getattr(_schedule_mod, "rename_worker", lambda old, new: False)
 PHASE_ORDER = _schedule_mod.PHASE_ORDER
 WORKERS = _schedule_mod.WORKERS
 IGOR_END = _schedule_mod.IGOR_END
@@ -71,10 +82,131 @@ HOURS_LIMITS = _schedule_mod.HOURS_LIMITS
 next_workday = _schedule_mod.next_workday
 DEADLINE_MSG = 'Fecha cliente soprepasada.'
 CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.'
-DEADLINE_CONFLICT_MESSAGE = 'No se cumple la fecha de entrega'
+
+AUTO_RECEIVING_PHASE = 'preparar material'
+AUTO_RECEIVING_DEPENDENCIES = (
+    'montar',
+    'soldar',
+    'montar 2º',
+    'soldar 2º',
+    'mecanizar',
+    'tratamiento',
+    'pintar',
+)
+
+
+MATERIAL_STATUS_ORDER = ['archived', 'complete', 'verify', 'missing', 'pending']
+MATERIAL_STATUS_LABELS = {
+    'missing': 'FALTA MATERIAL',
+    'pending': 'MATERIAL POR PEDIR',
+    'verify': 'SOLO FALTA VERIFICAR MATERIAL',
+    'archived': 'MATERIAL ARCHIVADO',
+    'complete': 'MATERIAL COMPLETO',
+}
+
+
+def _phase_total_hours(value):
+    """Return the numeric hours stored for a phase entry."""
+
+    if isinstance(value, list):
+        total = 0
+        for item in value:
+            total += _phase_total_hours(item)
+        return total
+    if value in (None, ''):
+        return 0
+    try:
+        return int(value)
+    except Exception:
+        try:
+            return int(float(value))
+        except Exception:
+            return 0
+
+
+def _remove_phase_references(project, phase):
+    """Remove a phase and related bookkeeping from a project."""
+
+    changed = False
+    phases = project.get('phases')
+    if phases and phase in phases:
+        phases.pop(phase, None)
+        changed = True
+        if not phases:
+            project.pop('phases', None)
+    assigned = project.get('assigned')
+    if assigned and phase in assigned:
+        assigned.pop(phase, None)
+        changed = True
+        if not assigned:
+            project.pop('assigned', None)
+    seg_starts = project.get('segment_starts')
+    if seg_starts and phase in seg_starts:
+        seg_starts.pop(phase, None)
+        changed = True
+        if not seg_starts:
+            project.pop('segment_starts', None)
+    seg_workers = project.get('segment_workers')
+    if seg_workers and phase in seg_workers:
+        seg_workers.pop(phase, None)
+        changed = True
+        if not seg_workers:
+            project.pop('segment_workers', None)
+    auto = project.get('auto_hours')
+    if auto and phase in auto:
+        auto.pop(phase, None)
+        changed = True
+        if not auto:
+            project.pop('auto_hours', None)
+    frozen = project.get('frozen_tasks')
+    if frozen:
+        new_frozen = [t for t in frozen if t.get('phase') != phase]
+        if len(new_frozen) != len(frozen):
+            project['frozen_tasks'] = new_frozen
+            changed = True
+    return changed
+
+
+def _cleanup_auto_receiving_placeholder(project):
+    """Drop the automatic receiving phase if other phases gained hours."""
+
+    auto = project.get('auto_hours') or {}
+    if not auto.get(AUTO_RECEIVING_PHASE):
+        return False
+    phases = project.get('phases') or {}
+    for phase in AUTO_RECEIVING_DEPENDENCIES:
+        if _phase_total_hours(phases.get(phase)) > 0:
+            return _remove_phase_references(project, AUTO_RECEIVING_PHASE)
+    return False
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
+
+
+@app.template_filter('format_due_date')
+def format_due_date(value, include_year=True):
+    """Return a human readable ``dd/mm`` or ``dd/mm/YYYY`` string."""
+
+    if not value:
+        return ''
+
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return ''
+        try:
+            value = date.fromisoformat(value[:10])
+        except ValueError:
+            parsed = parse_input_date(value)
+            if not parsed:
+                return value
+            value = parsed
+
+    if not isinstance(value, date):
+        return str(value)
+
+    fmt = '%d/%m/%Y' if include_year else '%d/%m'
+    return value.strftime(fmt)
 
 # Basic HTTP authentication setup
 AUTH_USER = os.environ.get("EFIMERO_USER", "admin")
@@ -95,11 +227,7 @@ def _authenticate():
 
 @app.before_request
 def _require_auth():
-    if (
-        request.path.startswith("/static")
-        or request.path.startswith("/kanbanize-webhook")
-        or request.path.startswith("/events")
-    ):
+    if request.path.startswith("/static") or request.path.startswith("/kanbanize-webhook"):
         return
     auth = request.authorization
     if not auth or not _check_auth(auth.username, auth.password):
@@ -130,6 +258,206 @@ def _next_api_color():
         if color != _last_api_color:
             _last_api_color = color
             return color
+
+
+def compute_frozen_background(color, alpha=0.25):
+    """Return an ``rgba`` value that reuses ``color`` with transparency."""
+
+    fallback = f'rgba(204, 229, 255, {alpha})'
+    if not color or not isinstance(color, str):
+        return fallback
+
+    color = color.strip()
+    if color.startswith('#'):
+        hex_value = color[1:]
+        if len(hex_value) == 3:
+            hex_value = ''.join(ch * 2 for ch in hex_value)
+        if len(hex_value) == 6:
+            try:
+                r = int(hex_value[0:2], 16)
+                g = int(hex_value[2:4], 16)
+                b = int(hex_value[4:6], 16)
+            except ValueError:
+                return fallback
+            return f'rgba({r}, {g}, {b}, {alpha})'
+        return fallback
+
+    match = re.match(r'rgba?\(([^)]+)\)', color)
+    if match:
+        parts = [p.strip() for p in match.group(1).split(',')]
+        if len(parts) >= 3:
+            try:
+                r = max(0, min(255, int(float(parts[0]))))
+                g = max(0, min(255, int(float(parts[1]))))
+                b = max(0, min(255, int(float(parts[2]))))
+            except ValueError:
+                return fallback
+            return f'rgba({r}, {g}, {b}, {alpha})'
+
+    return fallback
+
+
+def annotate_frozen_background(task):
+    if not isinstance(task, dict):
+        return
+    if task.get('frozen'):
+        task['frozen_background'] = compute_frozen_background(task.get('color'))
+    else:
+        task.pop('frozen_background', None)
+
+
+def annotate_schedule_frozen_background(schedule):
+    for days in schedule.values():
+        if not isinstance(days, dict):
+            continue
+        for tasks in days.values():
+            if not isinstance(tasks, list):
+                continue
+            for task in tasks:
+                annotate_frozen_background(task)
+
+
+def load_archived_calendar_entries():
+    if not os.path.exists(ARCHIVED_CALENDAR_FILE):
+        return []
+    try:
+        with open(ARCHIVED_CALENDAR_FILE, 'r') as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned = []
+    for entry in data:
+        if isinstance(entry, dict):
+            cleaned.append(entry)
+    return cleaned
+
+
+def save_archived_calendar_entries(entries):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(ARCHIVED_CALENDAR_FILE, 'w') as fh:
+        json.dump(entries or [], fh)
+
+
+def store_archived_calendar_entry(entry):
+    if not isinstance(entry, dict):
+        return
+    entries = load_archived_calendar_entries()
+
+    def _same(existing):
+        if not isinstance(existing, dict):
+            return False
+        pid = str(existing.get('pid') or '')
+        kid = str(existing.get('kanban_id') or '')
+        entry_pid = str(entry.get('pid') or '')
+        entry_kid = str(entry.get('kanban_id') or '')
+        if entry_pid and pid and entry_pid == pid:
+            return True
+        if entry_kid and kid and entry_kid == kid:
+            return True
+        return False
+
+    filtered = [e for e in entries if not _same(e)]
+    filtered.append(entry)
+    save_archived_calendar_entries(filtered)
+
+
+def remove_archived_calendar_entry(pid=None, kanban_id=None, names=None):
+    entries = load_archived_calendar_entries()
+    if not entries:
+        return False
+    pid = str(pid or '').strip()
+    kid = str(kanban_id or '').strip()
+    name_set = set()
+    if names:
+        for name in names:
+            if isinstance(name, str) and name.strip():
+                name_set.add(name.strip())
+
+    def _matches(entry):
+        if not isinstance(entry, dict):
+            return False
+        entry_pid = str(entry.get('pid') or '').strip()
+        entry_kid = str(entry.get('kanban_id') or '').strip()
+        entry_name = (entry.get('name') or '').strip()
+        if pid and entry_pid and pid == entry_pid:
+            return True
+        if kid and entry_kid and kid == entry_kid:
+            return True
+        if name_set and entry_name and entry_name in name_set:
+            return True
+        return False
+
+    filtered = [e for e in entries if not _matches(e)]
+    if len(filtered) != len(entries):
+        save_archived_calendar_entries(filtered)
+        return True
+    return False
+
+
+def inject_archived_tasks(schedule):
+    entries = load_archived_calendar_entries()
+    project_infos = {}
+    for entry in entries:
+        tasks = entry.get('tasks') or []
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            worker = item.get('worker')
+            day = item.get('day')
+            payload = item.get('task')
+            if not worker or not day or not isinstance(payload, dict):
+                continue
+            task = copy.deepcopy(payload)
+            task['archived_shadow'] = True
+            task['frozen'] = True
+            task['color'] = '#d9d9d9'
+            task['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+            if 'pid' in task:
+                task['pid'] = str(task['pid'])
+            tasks_list = schedule.setdefault(worker, {}).setdefault(day, [])
+            duplicate = False
+            for existing in tasks_list:
+                if (
+                    existing.get('pid') == task.get('pid')
+                    and existing.get('phase') == task.get('phase')
+                    and existing.get('part') == task.get('part')
+                    and existing.get('start') == task.get('start')
+                    and existing.get('hours') == task.get('hours')
+                ):
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            tasks_list.append(task)
+            tasks_list.sort(key=lambda t: t.get('start', 0))
+
+        info = entry.get('project')
+        if isinstance(info, dict):
+            info_copy = copy.deepcopy(info)
+            info_copy['archived_shadow'] = True
+            info_copy['kanban_archived'] = True
+            info_copy['kanban_column'] = info_copy.get('kanban_column') or 'Ready to Archive'
+            info_copy.setdefault('kanban_display_fields', {})
+            info_copy.setdefault('kanban_attachments', [])
+            phases = info_copy.setdefault('phases', {})
+            info_copy.setdefault('assigned', {})
+            info_copy.setdefault('auto_hours', {})
+            info_copy.setdefault('frozen_tasks', [])
+            info_copy['frozen_phases'] = sorted(
+                {t.get('phase') for t in info_copy.get('frozen_tasks', []) if t.get('phase')}
+            )
+            info_copy['phase_sequence'] = list(phases.keys())
+            info_copy['material_status'] = 'archived'
+            info_copy.setdefault('material_missing_titles', [])
+            pid = str(info_copy.get('id') or entry.get('pid') or '')
+            if not pid:
+                continue
+            info_copy['id'] = pid
+            project_infos[pid] = info_copy
+    return entries, project_infos
+
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -139,8 +467,95 @@ KANBAN_CARDS_FILE = os.path.join(DATA_DIR, 'kanban_cards.json')
 KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
+ARCHIVED_CALENDAR_FILE = os.path.join(DATA_DIR, 'archived_calendar.json')
 
-KANBAN_POPUP_FIELDS = ['LANZAMIENTO', 'MATERIAL', 'MECANIZADO', 'PINTADO', 'TRATAMIENTO']
+if _load_worker_hours_func and _save_worker_hours_func:
+    load_worker_hours = _load_worker_hours_func
+    save_worker_hours = _save_worker_hours_func
+else:
+    _WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+    _WORKER_DEFAULT_LIMITS = {worker: limit for worker, limit in HOURS_LIMITS.items()}
+
+    def _sanitize_worker_hours_payload(data):
+        """Return a mapping of workers to hour overrides (1..12)."""
+
+        if not isinstance(data, dict):
+            return {}
+        cleaned = {}
+        for worker, value in data.items():
+            if worker not in WORKERS:
+                continue
+            try:
+                hours = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hours <= 12:
+                cleaned[worker] = hours
+        return cleaned
+
+    def _sync_worker_defaults():
+        for worker in WORKERS:
+            if worker not in _WORKER_DEFAULT_LIMITS:
+                limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+                if isinstance(limit, (int, float)):
+                    _WORKER_DEFAULT_LIMITS[worker] = limit
+                else:
+                    _WORKER_DEFAULT_LIMITS[worker] = HOURS_PER_DAY
+        for worker in list(_WORKER_DEFAULT_LIMITS):
+            if worker not in WORKERS:
+                _WORKER_DEFAULT_LIMITS.pop(worker, None)
+
+    def _apply_worker_hour_overrides(overrides):
+        _sync_worker_defaults()
+        for worker, default in _WORKER_DEFAULT_LIMITS.items():
+            HOURS_LIMITS[worker] = default
+        for worker, hours in overrides.items():
+            if worker in HOURS_LIMITS:
+                HOURS_LIMITS[worker] = hours
+
+    def load_worker_hours():
+        overrides = {}
+        if os.path.exists(_WORKER_HOURS_FILE):
+            try:
+                with open(_WORKER_HOURS_FILE, 'r') as fh:
+                    raw = json.load(fh)
+            except (json.JSONDecodeError, OSError):
+                raw = {}
+            overrides = _sanitize_worker_hours_payload(raw)
+        _apply_worker_hour_overrides(overrides)
+        return overrides
+
+    def save_worker_hours(data):
+        overrides = _sanitize_worker_hours_payload(data or {})
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(_WORKER_HOURS_FILE, 'w') as fh:
+            json.dump(overrides, fh)
+        _apply_worker_hour_overrides(overrides)
+
+    # Ensure in-memory limits reflect any persisted overrides.
+    try:
+        load_worker_hours()
+    except Exception:
+        pass
+
+if _load_worker_day_hours_func and _save_worker_day_hours_func:
+    load_worker_day_hours = _load_worker_day_hours_func
+    save_worker_day_hours = _save_worker_day_hours_func
+else:
+    def load_worker_day_hours():
+        return {}
+
+    def save_worker_day_hours(data):
+        return {}
+
+KANBAN_POPUP_FIELDS = [
+    'LANZAMIENTO',
+    'MATERIAL',
+    'CALDERERIA',
+    'PINTADO',
+    'MECANIZADO',
+    'TRATAMIENTO',
+]
 
 PROJECT_TITLE_PATTERN = re.compile(r'\bOF\s*\d{4}\b', re.IGNORECASE)
 _NON_ALNUM_RE = re.compile(r'[^0-9a-z]+')
@@ -159,7 +574,386 @@ def normalize_key(text):
     normalized = normalized.casefold()
     return _NON_ALNUM_RE.sub('', normalized)
 
+
+MATERIAL_ALERT_COLUMNS = {
+    normalize_key('Plegado/Curvado'),
+    normalize_key('Comerciales varios'),
+    normalize_key('Tubo/perfil/llanta/chapa'),
+    normalize_key('Oxicorte'),
+    normalize_key('Laser'),
+    normalize_key('Plegado/Curvado - fabricación'),
+    normalize_key('Material Incompleto'),
+    normalize_key('Material NO CONFORME'),
+}
+
+
+def _upload_folder_path():
+    """Return the absolute path to the uploads directory."""
+
+    if os.path.isabs(UPLOAD_FOLDER):
+        return UPLOAD_FOLDER
+    return os.path.join(app.root_path, UPLOAD_FOLDER)
+
+
+def _extract_upload_filename(image_value):
+    """Return the file name for a stored project image, if local."""
+
+    if not image_value:
+        return None
+    value = str(image_value).strip().replace('\\', '/').lstrip('/')
+    if not value:
+        return None
+    if value.startswith('static/'):
+        value = value[len('static/'):]
+    if not value.startswith('uploads/'):
+        return None
+    basename = os.path.basename(value[len('uploads/'):])
+    return basename or None
+
+
+def _remove_upload_file(image_value):
+    """Delete the file associated with *image_value* if it lives in uploads."""
+
+    filename = _extract_upload_filename(image_value)
+    if not filename:
+        return False
+    directory = _upload_folder_path()
+    path = os.path.join(directory, filename)
+    try:
+        os.remove(path)
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        app.logger.warning('No se pudo eliminar la imagen %s', path, exc_info=True)
+        return False
+
+
+def prune_orphan_uploads(projects):
+    """Remove files in the uploads folder that no project references."""
+
+    directory = _upload_folder_path()
+    if not os.path.isdir(directory):
+        return
+    referenced = set()
+    for project in projects or []:
+        filename = _extract_upload_filename(project.get('image'))
+        if filename:
+            referenced.add(filename)
+    try:
+        entries = os.listdir(directory)
+    except OSError:
+        app.logger.warning('No se pudo listar la carpeta de imágenes', exc_info=True)
+        return
+    for name in entries:
+        path = os.path.join(directory, name)
+        if not os.path.isfile(path):
+            continue
+        if name in referenced:
+            continue
+        try:
+            os.remove(path)
+        except OSError:
+            app.logger.warning('No se pudo eliminar la imagen huérfana %s', path, exc_info=True)
+
+READY_TO_ARCHIVE_COLUMN = normalize_key('Ready to Archive')
+PENDING_VERIFICATION_COLUMN = normalize_key('Pdte. Verificación')
+MATERIAL_VERIFY_ALLOWED_COLUMNS = {
+    normalize_key('Material Recepcionado'),
+    READY_TO_ARCHIVE_COLUMN,
+    normalize_key('Plegado/Curvado'),
+    normalize_key('Planf. TAU'),
+    normalize_key('Planif. TAU'),
+    normalize_key('Planf. Bekola'),
+    normalize_key('Planif. Bekola'),
+    normalize_key('Planf. AZ'),
+    normalize_key('Planif. AZ'),
+    normalize_key('Planf. OTROS'),
+    normalize_key('Planif. OTROS'),
+    normalize_key('Tratamiento'),
+}
+
+KANBAN_COLUMN_PHASE_TARGETS = {
+    normalize_key('Pedidos pendiente generar OF'): 'pedidos',
+    normalize_key('Administración'): 'pedidos',
+    normalize_key('Oficina Técnica'): 'dibujo',
+    normalize_key('Pendiente Por Recepcionar'): 'preparar material',
+    normalize_key('Prep. Interno'): 'preparar material',
+    normalize_key('Prep. Externo'): 'preparar material',
+    normalize_key('Listo para iniciar'): 'preparar material',
+    normalize_key('Planificado para montaje'): 'preparar material',
+    normalize_key('Montaje'): 'montar',
+    normalize_key('Soldadura'): 'soldar',
+    normalize_key('Montaje 2º fase'): 'montar 2º',
+    normalize_key('Soldadura final'): 'soldar 2º',
+    normalize_key('Verificacion'): 'soldar 2º',
+    normalize_key('Enderezado'): 'soldar 2º',
+    normalize_key('Tratamiento'): 'tratamiento',
+    normalize_key('Mec. Interno'): 'mecanizar',
+    normalize_key('Mec. Externo'): 'mecanizar',
+    normalize_key('Pintura'): 'pintar',
+    normalize_key('Montaje final'): '__after_pintar__',
+    normalize_key('Hacer Albaran'): '__after_pintar__',
+    READY_TO_ARCHIVE_COLUMN: '__after_pintar__',
+}
+
+KANBAN_PHASE_EXCLUSIONS = {'dibujo', 'pedidos'}
+PHASE_INDEX = {phase: idx for idx, phase in enumerate(PHASE_ORDER)}
+
+
+def compute_previous_kanban_phases(column):
+    """Return planner phases considered previous to the current Kanban column."""
+
+    if not column:
+        return []
+    column_key = normalize_key(column)
+    target = KANBAN_COLUMN_PHASE_TARGETS.get(column_key)
+    if not target:
+        return []
+    if target == '__after_pintar__':
+        cutoff = len(PHASE_ORDER)
+    else:
+        cutoff = PHASE_INDEX.get(target)
+        if cutoff is None:
+            return []
+    previous = []
+    for phase in PHASE_ORDER[:cutoff]:
+        if phase in KANBAN_PHASE_EXCLUSIONS:
+            continue
+        previous.append(phase)
+    return previous
+
 SSE_CLIENTS = []
+
+
+def compute_material_status_map(projects, *, include_missing_titles=False):
+    """Return a mapping pid->material availability status for planning views.
+
+    When ``include_missing_titles`` is ``True`` the function also returns a
+    second dictionary mapping each project id to the list of missing material
+    card titles detected in alert columns.
+    """
+
+    status_map = {}
+    missing_titles_map = defaultdict(list) if include_missing_titles else None
+    try:
+        compras_raw, _ = load_compras_raw()
+        raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+        projects_with_children = set()
+        columns_by_pid = {}
+        for project in projects or []:
+            pid = project.get('id')
+            if pid:
+                status_map[str(pid)] = 'complete'
+        for entry in raw_links:
+            pid = entry.get('pid')
+            if not pid:
+                continue
+            pid_key = str(pid)
+            details = entry.get('link_details') or []
+            if details or entry.get('links'):
+                projects_with_children.add(pid_key)
+            if details:
+                project_columns = columns_by_pid.setdefault(pid_key, set())
+            if status_map.get(pid_key) == 'missing':
+                continue
+            for detail in details:
+                if not isinstance(detail, dict):
+                    continue
+                column = detail.get('column')
+                column_key = normalize_key(column)
+                if column_key:
+                    project_columns.add(column_key)
+                if (
+                    column_key in MATERIAL_ALERT_COLUMNS
+                    and column_key not in MATERIAL_VERIFY_ALLOWED_COLUMNS
+                ):
+                    status_map[pid_key] = 'missing'
+                    if missing_titles_map is not None:
+                        title = (detail.get('title') or '').strip()
+                        if title and title not in missing_titles_map[pid_key]:
+                            missing_titles_map[pid_key].append(title)
+                    continue
+        for pid_key, columns in columns_by_pid.items():
+            if not columns:
+                continue
+            if status_map.get(pid_key) == 'missing':
+                continue
+            if PENDING_VERIFICATION_COLUMN in columns:
+                other_columns = {
+                    column for column in columns if column != PENDING_VERIFICATION_COLUMN
+                }
+                if all(
+                    column in MATERIAL_VERIFY_ALLOWED_COLUMNS for column in other_columns
+                ):
+                    status_map[pid_key] = 'verify'
+                    continue
+            if all(column == READY_TO_ARCHIVE_COLUMN for column in columns):
+                status_map[pid_key] = 'archived'
+        for pid_key, current in list(status_map.items()):
+            if pid_key not in projects_with_children and current != 'missing':
+                status_map[pid_key] = 'pending'
+    except Exception:  # pragma: no cover - defensive logging
+        app.logger.exception('Failed to compute material status from project links')
+    for project in projects or []:
+        pid = project.get('id')
+        if not pid:
+            continue
+        tags = project.get('kanban_tags')
+        if not tags:
+            continue
+        if isinstance(tags, str):
+            tag_values = [tags]
+        else:
+            tag_values = list(tags)
+        normalized_tags = set()
+        for tag in tag_values:
+            normalized = _normalize_tag_value(tag)
+            if normalized:
+                normalized_tags.add(normalized)
+        if 'sin pedidos' in normalized_tags:
+            status_map[str(pid)] = 'complete'
+    if missing_titles_map is not None:
+        for pid_key, status in status_map.items():
+            if status == 'missing':
+                missing_titles_map.setdefault(pid_key, [])
+        return status_map, {k: list(v) for k, v in missing_titles_map.items()}
+    return status_map
+
+
+def material_status_label(status):
+    text = MATERIAL_STATUS_LABELS.get(status)
+    if text:
+        return text
+    if not status:
+        return 'Sin estado'
+    cleaned = str(status).replace('_', ' ').strip()
+    return cleaned.title() or 'Sin estado'
+
+
+def group_unplanned_by_status(unplanned_list, status_map):
+    buckets = defaultdict(list)
+    for entry in unplanned_list:
+        pid = entry.get('pid')
+        status = 'complete'
+        if pid:
+            status = status_map.get(str(pid), 'complete')
+        entry['material_status'] = status
+        buckets[status].append(entry)
+    groups = []
+    for status in MATERIAL_STATUS_ORDER:
+        items = buckets.pop(status, [])
+        if items:
+            groups.append(
+                {
+                    'status': status,
+                    'label': material_status_label(status),
+                    'css_class': f"material-status-{status}",
+                    'projects': items,
+                }
+            )
+    for status in sorted(buckets.keys()):
+        items = buckets[status]
+        if not items:
+            continue
+        groups.append(
+            {
+                'status': status,
+                'label': material_status_label(status),
+                'css_class': f"material-status-{status}",
+                'projects': items,
+            }
+        )
+    return groups
+
+
+def _manual_entry_key(pid, phase, part):
+    if pid in (None, '', 'None') or phase in (None, '', 'None'):
+        return None
+    pid_str = str(pid)
+    phase_str = str(phase)
+    part_val = None
+    if part not in (None, '', 'None'):
+        try:
+            part_val = int(part)
+        except Exception:
+            return None
+    return pid_str, phase_str, part_val
+
+
+def _manual_entry_dict(key):
+    pid, phase, part = key
+    entry = {'pid': pid, 'phase': phase}
+    if part is not None:
+        entry['part'] = part
+    return entry
+
+
+def load_manual_bucket_entries():
+    entries = load_manual_unplanned()
+    cleaned = []
+    seen = set()
+    for item in entries:
+        key = _manual_entry_key(item.get('pid'), item.get('phase'), item.get('part'))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(_manual_entry_dict(key))
+    if cleaned != entries:
+        save_manual_unplanned(cleaned)
+    return cleaned
+
+
+def manual_bucket_add(pid, phase, part, position=None):
+    key = _manual_entry_key(pid, phase, part)
+    if not key:
+        return
+    entries = load_manual_bucket_entries()
+    filtered = [e for e in entries if (e['pid'], e['phase'], e.get('part')) != key]
+    entry = _manual_entry_dict(key)
+    if position is None:
+        position = len(filtered)
+    try:
+        position = int(position)
+    except Exception:
+        position = len(filtered)
+    if position < 0:
+        position = 0
+    if position > len(filtered):
+        position = len(filtered)
+    filtered.insert(position, entry)
+    if filtered != entries:
+        save_manual_unplanned(filtered)
+
+
+def manual_bucket_remove(pid, phase, part):
+    key = _manual_entry_key(pid, phase, part)
+    if not key:
+        return
+    entries = load_manual_bucket_entries()
+    filtered = [e for e in entries if (e['pid'], e['phase'], e.get('part')) != key]
+    if filtered != entries:
+        save_manual_unplanned(filtered)
+
+
+def manual_bucket_reorder(order):
+    if not isinstance(order, list):
+        return False
+    cleaned = []
+    seen = set()
+    for item in order:
+        if isinstance(item, dict):
+            key = _manual_entry_key(item.get('pid'), item.get('phase'), item.get('part'))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            key = _manual_entry_key(item[0], item[1], item[2] if len(item) > 2 else None)
+        else:
+            key = None
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(_manual_entry_dict(key))
+    save_manual_unplanned(cleaned)
+    return True
 
 
 def get_card_custom_id(card):
@@ -185,13 +979,6 @@ def get_card_custom_id(card):
 def broadcast_event(data):
     for q in list(SSE_CLIENTS):
         q.put(data)
-
-
-def split_deadline_conflicts(conflicts):
-    deadline = [c for c in conflicts if c.get('message') == DEADLINE_CONFLICT_MESSAGE]
-    others = [c for c in conflicts if c.get('message') != DEADLINE_CONFLICT_MESSAGE]
-    return others, deadline
-
 
 @app.route('/events')
 def event_stream():
@@ -290,6 +1077,7 @@ PEDIDOS_ALLOWED_COLUMNS = {
     'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
+    'Listo para iniciar',
 }
 
 PEDIDOS_HIDDEN_COLUMNS = [
@@ -297,6 +1085,10 @@ PEDIDOS_HIDDEN_COLUMNS = [
     "Material recepcionado",
     "Pdte. Verificación",
 ]
+
+PENDING_VERIFICATION_COLUMN_KEYS = {
+    normalize_key('Pdte. Verificación'),
+}
 
 PEDIDOS_UNCONFIRMED_COLUMNS = {
     'Tau',
@@ -313,11 +1105,37 @@ PEDIDOS_EXTRA_LANE_COLUMNS = {
     'Premecanizado',
 }
 
+PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS = {
+    'Tratamiento',
+    'Tratamiento final',
+    'Planf. TAU',
+    'Planif. Bekola',
+    'Planif. AZ',
+    'Planif. OTROS',
+    'Tau',
+    'Bekola',
+    'AZ',
+    'OTROS',
+}
+
 PROJECT_LINK_LANES = {
     'acero al carbono',
     'inoxidable - aluminio',
     'seguimiento compras',
 }
+
+COLUMN1_ALLOWED_LANE_KEYS = {
+    normalize_key('Acero al Carbono'),
+    normalize_key('Inoxidable - Aluminio'),
+}
+
+PEDIDOS_ALLOWED_KEYS = {normalize_key(col) for col in PEDIDOS_ALLOWED_COLUMNS}
+PEDIDOS_UNCONFIRMED_KEYS = {normalize_key(col) for col in PEDIDOS_UNCONFIRMED_COLUMNS}
+PEDIDOS_HIDDEN_KEYS = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
+PEDIDOS_OFFSET_TO_PLAN_END_KEYS = {
+    normalize_key(col) for col in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
+}
+PEDIDOS_SEGUIMIENTO_LANE_KEY = normalize_key('Seguimiento compras')
 
 MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Ready to Archive'),
@@ -325,7 +1143,6 @@ MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Material Recepcionado'),
     normalize_key('Material recepcionado'),
     normalize_key('Pdte. Verificación'),
-    normalize_key('Pndt. Verificación'),
 }
 
 
@@ -388,6 +1205,58 @@ def parse_kanban_date(value):
         return parse_input_date(value)
 
 
+def _coerce_custom_field_map(raw):
+    """Return a dict mapping custom-field names to values."""
+
+    if isinstance(raw, dict):
+        return raw
+
+    if isinstance(raw, list):
+        fields = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get('name')
+            if not name:
+                continue
+            value = entry.get('value')
+            if isinstance(value, dict) and 'value' in value:
+                value = value['value']
+            fields[name] = value
+        return fields
+
+    return {}
+
+
+def _resolve_order_custom_field(card):
+    """Extract the "Fecha pedido" value (parsed date and raw text) from *card*."""
+
+    if not isinstance(card, dict):
+        return None, None
+
+    raw_fields = card.get('customFields') or card.get('customfields')
+    fields = _coerce_custom_field_map(raw_fields)
+    if not fields:
+        return None, None
+
+    for key, value in fields.items():
+        if not isinstance(key, str):
+            continue
+        if key.strip().lower() != 'fecha pedido':
+            continue
+        if isinstance(value, dict) and 'value' in value:
+            value = value['value']
+        if value in (None, ''):
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        parsed = parse_kanban_date(text)
+        return parsed, text
+
+    return None, None
+
+
 def _sort_cell_tasks(schedule):
     """Sort tasks in each day so started phases appear before unstarted ones."""
     for days in schedule.values():
@@ -425,6 +1294,66 @@ def save_kanban_cards(data):
         json.dump(data, f)
 
 
+def _normalize_tag_value(value):
+    if value in (None, ''):
+        return None
+    if not isinstance(value, str):
+        try:
+            value = str(value)
+        except Exception:
+            return None
+    text = re.sub(r'\s+', ' ', value).strip()
+    if not text:
+        return None
+    decomposed = unicodedata.normalize('NFD', text)
+    text = ''.join(ch for ch in decomposed if unicodedata.category(ch) != 'Mn')
+    return text.lower()
+
+
+def _extract_card_tags(card):
+    tags = set()
+    if not isinstance(card, dict):
+        return tags
+    for key in (
+        'tags',
+        'Tags',
+        'tag',
+        'Tag',
+        'tagNames',
+        'tag_names',
+        'tagList',
+        'tag_list',
+    ):
+        raw = card.get(key)
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            parts = re.split(r'[;,]', raw)
+            for part in parts:
+                normalized = _normalize_tag_value(part)
+                if normalized:
+                    tags.add(normalized)
+        elif isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    candidate = (
+                        item.get('name')
+                        or item.get('tag')
+                        or item.get('text')
+                        or item.get('value')
+                    )
+                else:
+                    candidate = item
+                normalized = _normalize_tag_value(candidate)
+                if normalized:
+                    tags.add(normalized)
+        else:
+            normalized = _normalize_tag_value(raw)
+            if normalized:
+                tags.add(normalized)
+    return tags
+
+
 def last_kanban_card(cid):
     """Return the most recent stored Kanban card with the given *cid*.
 
@@ -441,12 +1370,10 @@ def last_kanban_card(cid):
     return {}
 
 
-def load_compras_raw():
-    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+def _collect_compras_entries(entries, allowed_lanes, column_colors):
     compras_raw = {}
-    column_colors = load_column_colors()
     updated_colors = False
-    for entry in load_kanban_cards():
+    for entry in entries or []:
         if not isinstance(entry, dict):
             continue
         card = entry.get('card') or {}
@@ -467,8 +1394,29 @@ def load_compras_raw():
         if column and column not in column_colors:
             column_colors[column] = _next_api_color()
             updated_colors = True
+    return compras_raw, column_colors, updated_colors
+
+
+def load_compras_raw():
+    allowed_lanes = {lane.lower() for lane in PROJECT_LINK_LANES}
+    column_colors = load_column_colors()
+
+    entries = load_kanban_cards()
+    compras_raw, column_colors, updated_colors = _collect_compras_entries(
+        entries, allowed_lanes, column_colors
+    )
+
+    if not compras_raw:
+        refreshed = refresh_kanban_card_cache()
+        if refreshed:
+            column_colors = load_column_colors()
+            compras_raw, column_colors, updated_colors = _collect_compras_entries(
+                refreshed, allowed_lanes, column_colors
+            )
+
     if updated_colors:
         save_column_colors(column_colors)
+
     return compras_raw, column_colors
 
 
@@ -510,12 +1458,48 @@ def build_project_links(compras_raw):
     seguimiento_titles = {}
     seguimiento_by_id = {}
     candidate_cards = []
-    excluded_columns = {normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS}
-    target_lanes = {normalize_key('Acero al Carbono'), normalize_key('Inoxidable - Aluminio')}
+    excluded_columns = {
+        normalize_key(col) for col in PEDIDOS_HIDDEN_COLUMNS
+        if normalize_key(col) not in PENDING_VERIFICATION_COLUMN_KEYS
+    }
+    target_lanes = {normalize_key(lane) for lane in PROJECT_LINK_LANES}
     seguimiento_lane = normalize_key('Seguimiento compras')
     seen_candidates = set()
 
     card_index = {}
+    def _attach_child_card_metadata(serialized, card_id):
+        """Populate ``serialized`` with lane/column info from cached Kanban cards."""
+
+        if not isinstance(serialized, dict):
+            return serialized
+
+        key = str(card_id).strip() if card_id not in (None, '') else ''
+        if not key:
+            return serialized
+
+        card = card_index.get(key)
+        if not isinstance(card, dict):
+            return serialized
+
+        if not serialized.get('column'):
+            column = (card.get('columnname') or card.get('columnName') or '').strip()
+            if column:
+                serialized['column'] = column
+
+        if not serialized.get('lane'):
+            lane = (card.get('lanename') or card.get('laneName') or '').strip()
+            if lane:
+                serialized['lane'] = lane
+
+        if 'order_date' not in serialized or 'order_date_raw' not in serialized:
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw and not serialized.get('order_date_raw'):
+                serialized['order_date_raw'] = order_raw
+            if order_date_obj and not serialized.get('order_date'):
+                serialized['order_date'] = order_date_obj.isoformat()
+
+        return serialized
+
     for data in compras_raw.values():
         card = data['card']
         if not isinstance(card, dict):
@@ -529,6 +1513,7 @@ def build_project_links(compras_raw):
         if not isinstance(card, dict):
             continue
         title = (card.get('title') or '').strip()
+        description = (card.get('description') or '').strip()
         custom_id = get_card_custom_id(card)
         cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
         cid = str(cid_value) if cid_value else None
@@ -604,6 +1589,7 @@ def build_project_links(compras_raw):
                             norms.add(norm_child)
 
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
+        board_name = (card.get('boardName') or card.get('boardname') or '').strip()
         lane_key = normalize_key(lane_name)
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         column_key = normalize_key(column)
@@ -620,7 +1606,13 @@ def build_project_links(compras_raw):
                 'title': title,
                 'column': column,
                 'deadline': deadline.isoformat() if deadline else None,
+                'lane': lane_name,
             }
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw:
+                detail['order_date_raw'] = order_raw
+            if order_date_obj:
+                detail['order_date'] = order_date_obj.isoformat()
             if detail['id']:
                 seguimiento_by_id[detail['id']] = detail
             titles = seguimiento_titles.setdefault(normalized_child_title, [])
@@ -650,6 +1642,10 @@ def build_project_links(compras_raw):
                 'client': client_name,
                 'custom_card_id': custom_id,
                 'due': due,
+                'column': column,
+                'lane': lane_name,
+                'board': board_name,
+                'description': description,
             })
             seen_candidates.add(cid)
 
@@ -685,15 +1681,25 @@ def build_project_links(compras_raw):
                     serialized = {'title': lane_title}
                     if lane_id:
                         serialized['id'] = lane_id
+                    order_value = lane_detail.get('order_date')
+                    if order_value:
+                        serialized['order_date'] = order_value
+                    order_raw_value = lane_detail.get('order_date_raw')
+                    if order_raw_value:
+                        serialized['order_date_raw'] = order_raw_value
                     column_name = lane_detail.get('column')
                     if column_name:
                         serialized['column'] = column_name
                     deadline_value = lane_detail.get('deadline')
                     if deadline_value:
                         serialized['deadline'] = deadline_value
+                    lane_value = lane_detail.get('lane')
+                    if lane_value:
+                        serialized['lane'] = lane_value
                     match_details.append(serialized)
                     if lane_id:
                         seen_ids.add(lane_id)
+                    _attach_child_card_metadata(serialized, lane_id or child_id)
                     appended = True
                 if norm_child:
                     seen_norms.add(norm_child)
@@ -706,19 +1712,27 @@ def build_project_links(compras_raw):
                         serialized['id'] = child_id
                     detail = seguimiento_by_id.get(child_id) if child_id else None
                     if detail:
+                        order_value = detail.get('order_date')
+                        if order_value:
+                            serialized['order_date'] = order_value
+                        order_raw_value = detail.get('order_date_raw')
+                        if order_raw_value:
+                            serialized['order_date_raw'] = order_raw_value
                         column_name = detail.get('column')
                         if column_name:
                             serialized['column'] = column_name
                         deadline_value = detail.get('deadline')
                         if deadline_value:
                             serialized['deadline'] = deadline_value
+                        lane_value = detail.get('lane')
+                        if lane_value:
+                            serialized['lane'] = lane_value
+                    _attach_child_card_metadata(serialized, child_id or detail and detail.get('id'))
                     match_details.append(serialized)
                     if child_id:
                         seen_ids.add(child_id)
                 if norm_child:
                     seen_norms.add(norm_child)
-        if not matches:
-            continue
         entry = {
             'project': info['project'],
             'title': info['title'],
@@ -726,11 +1740,22 @@ def build_project_links(compras_raw):
             'client': info['client'],
             'custom_card_id': info['custom_card_id'],
             'links': matches,
+            'description': info.get('description', ''),
         }
-        if any(match_ids):
+        if info.get('column'):
+            entry['column'] = info['column']
+        if info.get('lane'):
+            entry['lane'] = info['lane']
+        if info.get('board'):
+            entry['board'] = info['board']
+        if matches and any(match_ids):
             entry['link_ids'] = match_ids
+        elif not matches:
+            entry['link_ids'] = []
         if match_details:
             entry['link_details'] = match_details
+        elif not matches:
+            entry['link_details'] = []
         if info['due']:
             entry['due'] = info['due'].isoformat()
         else:
@@ -740,43 +1765,180 @@ def build_project_links(compras_raw):
 
 
 def attach_phase_starts(links_table, projects=None):
-    """Attach the scheduled start date of the ``montar`` phase to each link."""
+    """Attach scheduled start information to each Columna 1 entry."""
 
     if projects is None:
         projects = load_projects()
+    def _coerce_date(value):
+        if isinstance(value, date):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            parsed = _safe_iso_date(value)
+            if parsed:
+                return parsed
+        return None
+
+    def _serialize_date(value):
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, str):
+            parsed = _safe_iso_date(value)
+            if parsed:
+                return parsed.isoformat()
+            value = value.strip()
+            return value or None
+        return None
+
     projects = filter_visible_projects(projects)
-    start_mapping = phase_start_map(projects)
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+    planned_phase_starts = {}
+    earliest_planned = {}
+
+    for worker, days in schedule_data.items():
+        if worker == UNPLANNED:
+            continue
+        for day_key, tasks in days.items():
+            day_fallback = _safe_iso_date(day_key)
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                start_value = task.get('start_time')
+                if isinstance(start_value, datetime):
+                    start_day = start_value.date()
+                else:
+                    start_day = None
+                    if start_value:
+                        start_day = _safe_iso_date(start_value)
+                    if not start_day:
+                        start_day = _coerce_date(task.get('start_date'))
+                if not start_day:
+                    start_day = day_fallback
+                if not start_day:
+                    continue
+                phase = task.get('phase')
+                if phase:
+                    phase_map = planned_phase_starts.setdefault(pid, {})
+                    current = phase_map.get(phase)
+                    if current is None or start_day < current:
+                        phase_map[phase] = start_day
+                current_earliest = earliest_planned.get(pid)
+                if current_earliest is None or start_day < current_earliest:
+                    earliest_planned[pid] = start_day
+
     montar_by_name = {}
+    plan_by_name = {}
     ids_by_name = {}
+    montar_by_key = {}
+    plan_by_key = {}
+    ids_by_key = {}
+
     for proj in projects:
-        phase_starts = start_mapping.get(proj['id'], {})
-        montar_start = phase_starts.get('montar')
-        name = (proj['name'] or '').strip()
+        phase_starts = planned_phase_starts.get(proj['id'], {}) or {}
+        montar_serialized = _serialize_date(phase_starts.get('montar'))
+        first_phase_date = earliest_planned.get(proj['id'])
+        plan_serialized = (
+            first_phase_date.isoformat() if isinstance(first_phase_date, date) else None
+        )
+
+        name = (proj.get('name') or '').strip()
         if not name:
             continue
-        if montar_start:
-            montar_by_name[name] = montar_start
+        if montar_serialized:
+            montar_by_name[name] = montar_serialized
+        if plan_serialized:
+            plan_by_name[name] = plan_serialized
         ids_by_name[name] = proj['id']
 
         split_name, _ = split_project_and_client(name)
         if split_name and split_name != name:
-            if montar_start and split_name not in montar_by_name:
-                montar_by_name[split_name] = montar_start
+            if montar_serialized and split_name not in montar_by_name:
+                montar_by_name[split_name] = montar_serialized
+            if plan_serialized and split_name not in plan_by_name:
+                plan_by_name[split_name] = plan_serialized
             ids_by_name.setdefault(split_name, proj['id'])
+
+        keys = {normalize_key(name)}
+        if split_name:
+            keys.add(normalize_key(split_name))
+
+        custom_id = (proj.get('custom_card_id') or '').strip()
+        if custom_id:
+            ids_by_name.setdefault(custom_id, proj['id'])
+            if montar_serialized and custom_id not in montar_by_name:
+                montar_by_name[custom_id] = montar_serialized
+            if plan_serialized and custom_id not in plan_by_name:
+                plan_by_name[custom_id] = plan_serialized
+            keys.add(normalize_key(custom_id))
+
+        code_match = PROJECT_TITLE_PATTERN.search(name)
+        if not code_match and custom_id:
+            code_match = PROJECT_TITLE_PATTERN.search(custom_id)
+        if code_match:
+            code_key = code_match.group(0)
+            ids_by_name.setdefault(code_key, proj['id'])
+            if montar_serialized and code_key not in montar_by_name:
+                montar_by_name[code_key] = montar_serialized
+            if plan_serialized and code_key not in plan_by_name:
+                plan_by_name[code_key] = plan_serialized
+            keys.add(normalize_key(code_key))
+
+        for key in keys:
+            if not key:
+                continue
+            if montar_serialized and key not in montar_by_key:
+                montar_by_key[key] = montar_serialized
+            if plan_serialized and key not in plan_by_key:
+                plan_by_key[key] = plan_serialized
+            ids_by_key.setdefault(key, proj['id'])
 
     enriched = []
     for item in links_table:
         entry = dict(item)
-        montar_start = (
-            montar_by_name.get((item.get('project') or '').strip())
-            or montar_by_name.get((item.get('title') or '').strip())
-        )
+        montar_start = entry.get('montar_start')
+        plan_start = entry.get('plan_start')
+        pid = entry.get('pid')
+
+        candidate_values = []
+        for field in ('project', 'title', 'display_title', 'custom_card_id'):
+            value = (entry.get(field) or '').strip()
+            if value:
+                candidate_values.append(value)
+                split_value, _ = split_project_and_client(value)
+                if split_value and split_value != value:
+                    candidate_values.append(split_value)
+        for value in list(candidate_values):
+            code_match = PROJECT_TITLE_PATTERN.search(value)
+            if code_match:
+                candidate_values.append(code_match.group(0))
+
+        for value in candidate_values:
+            if montar_start and plan_start and pid:
+                break
+            if not montar_start:
+                montar_start = montar_by_name.get(value)
+            if not plan_start:
+                plan_start = plan_by_name.get(value)
+            norm_key = normalize_key(value)
+            if norm_key:
+                if not montar_start:
+                    montar_start = montar_by_key.get(norm_key)
+                if not plan_start:
+                    plan_start = plan_by_key.get(norm_key)
+                if not pid:
+                    pid = ids_by_key.get(norm_key)
+            if not pid:
+                pid = ids_by_name.get(value) or pid
+
         if montar_start:
             entry['montar_start'] = montar_start
-        pid = (
-            ids_by_name.get((item.get('project') or '').strip())
-            or ids_by_name.get((item.get('title') or '').strip())
-        )
+        if plan_start:
+            entry['plan_start'] = plan_start
         if pid:
             entry['pid'] = pid
         enriched.append(entry)
@@ -801,17 +1963,18 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
 
         column = (card.get('columnname') or card.get('columnName') or '').strip()
         lane_name = (card.get('lanename') or card.get('laneName') or '').strip()
-        lane_key = lane_name.lower()
+        column_key = normalize_key(column)
+        lane_key = normalize_key(lane_name)
 
         column_allowed = (
-            column in PEDIDOS_ALLOWED_COLUMNS
-            or column in PEDIDOS_UNCONFIRMED_COLUMNS
+            column_key in PEDIDOS_ALLOWED_KEYS
+            or column_key in PEDIDOS_UNCONFIRMED_KEYS
         )
 
-        if not column_allowed or lane_key != 'seguimiento compras':
+        if not column_allowed or lane_key != PEDIDOS_SEGUIMIENTO_LANE_KEY:
             continue
 
-        if column in PEDIDOS_HIDDEN_COLUMNS:
+        if column_key in PEDIDOS_HIDDEN_KEYS:
             continue
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -822,7 +1985,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
                 d = date(today.year, month, day)
             except Exception:
                 d = parse_kanban_date(card.get('deadline'))
-        elif column in PEDIDOS_UNCONFIRMED_COLUMNS:
+        elif column_key in PEDIDOS_UNCONFIRMED_KEYS:
             d = None
         else:
             m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -845,6 +2008,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'cid': cid,
             'prev_date': prev_date,
             'custom_card_id': custom_id,
+            'kanban_date': stored_date or card.get('deadline') or '',
         }
 
         if d:
@@ -857,17 +2021,92 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
     return pedidos, unconfirmed, calendar_titles
 
 
-def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
+def annotate_order_details(entries, *, today=None):
+    """Add formatted order dates and elapsed days to link details."""
+
+    if today is None:
+        today = local_today()
+
+    if not entries:
+        return entries
+
+    for entry in entries:
+        details = entry.get('link_details')
+        if not isinstance(details, list):
+            continue
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            order_date_obj = None
+            order_iso = detail.get('order_date')
+            if isinstance(order_iso, str) and order_iso.strip():
+                text = order_iso.strip()
+                try:
+                    order_date_obj = date.fromisoformat(text[:10])
+                except ValueError:
+                    parsed = parse_kanban_date(text)
+                    if isinstance(parsed, date):
+                        order_date_obj = parsed
+                else:
+                    detail['order_date'] = order_date_obj.isoformat()
+            if order_date_obj is None:
+                raw_value = detail.get('order_date_raw')
+                if isinstance(raw_value, str) and raw_value.strip():
+                    parsed = parse_kanban_date(raw_value.strip())
+                    if isinstance(parsed, date):
+                        order_date_obj = parsed
+                        detail['order_date'] = parsed.isoformat()
+            if order_date_obj is not None:
+                elapsed = business_days_since(order_date_obj, today=today)
+                if elapsed is not None:
+                    detail['order_days'] = elapsed
+            elif 'order_days' in detail:
+                detail.pop('order_days', None)
+
+    return entries
+
+
+def filter_project_links_by_titles(
+    links_table, valid_titles, valid_ids=None, kanban_cards=None
+):
     if not links_table:
         return []
 
-    valid_norms = {normalize_key(title) for title in (valid_titles or []) if title}
-    valid_ids = {str(cid) for cid in (valid_ids or []) if cid}
+    valid_norm_map = {}
+    for raw_title in valid_titles or []:
+        if not raw_title:
+            continue
+        norm = normalize_key(raw_title)
+        if not norm:
+            continue
+        valid_norm_map.setdefault(norm, []).append(raw_title)
 
-    if not valid_norms and not valid_ids:
+    valid_norms = set(valid_norm_map.keys())
+
+    if not valid_norms:
         return []
 
+    card_by_id = {}
+    cards_by_norm = {}
+    if kanban_cards:
+        for cid, payload in kanban_cards.items():
+            if not isinstance(payload, dict):
+                continue
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                continue
+            card_id = card.get('taskid') or card.get('cardId') or card.get('id') or cid
+            card_id = str(card_id).strip() if card_id not in (None, '') else ''
+            title = (card.get('title') or '').strip()
+            if card_id:
+                card_by_id[card_id] = payload
+            if title:
+                norm = normalize_key(title)
+                if norm:
+                    cards_by_norm.setdefault(norm, []).append(payload)
+
     filtered = []
+    covered_norms = set()
     for item in links_table:
         link_titles = list(item.get('links') or [])
         link_ids = list(item.get('link_ids') or [])
@@ -879,33 +2118,83 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         kept_ids = []
         kept_details = []
         seen_norms = set()
-        seen_ids = set()
         for idx, (title, cid) in enumerate(zip(link_titles, link_ids)):
-            text = title or ''
+            text = (title or '').strip()
             cid_str = str(cid).strip() if cid not in (None, '') else ''
-            norm_link = normalize_key(text)
-            allow = False
-            if cid_str and cid_str in valid_ids and cid_str not in seen_ids:
-                allow = True
-            elif norm_link and norm_link in valid_norms and norm_link not in seen_norms:
-                allow = True
-            if allow:
-                matches.append(text)
+
+            detail = link_details[idx] if idx < len(link_details) else None
+            detail_copy = {}
+            detail_title = ''
+            if isinstance(detail, dict):
+                detail_copy = {k: v for k, v in detail.items() if v not in (None, '')}
+                detail_title = (detail.get('title') or '').strip()
+
+            payload = card_by_id.get(cid_str) if cid_str else None
+            card_title = ''
+            if payload:
+                card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+                if card:
+                    card_title = (card.get('title') or '').strip()
+
+            candidate_titles = []
+            if text:
+                candidate_titles.append(text)
+            if detail_title and detail_title not in candidate_titles:
+                candidate_titles.append(detail_title)
+            if card_title and card_title not in candidate_titles:
+                candidate_titles.append(card_title)
+
+            matched_norm = None
+            display_title = ''
+            for candidate in candidate_titles:
+                norm_candidate = normalize_key(candidate)
+                if not norm_candidate or norm_candidate in seen_norms:
+                    continue
+                if norm_candidate in valid_norms:
+                    matched_norm = norm_candidate
+                    titles = valid_norm_map.get(matched_norm)
+                    display_title = titles[0] if titles else candidate
+                    break
+
+            if not matched_norm:
+                continue
+
+            if not display_title:
+                display_title = text or detail_title or card_title
+
+            matches.append(display_title)
+
+            if cid_str:
                 kept_ids.append(cid_str)
-                detail = link_details[idx] if idx < len(link_details) else None
-                if isinstance(detail, dict):
-                    detail_copy = {k: v for k, v in detail.items() if v not in (None, '')}
-                else:
-                    detail_copy = {}
-                if 'title' not in detail_copy or not detail_copy['title']:
-                    detail_copy['title'] = text
-                if cid_str and ('id' not in detail_copy or not detail_copy['id']):
-                    detail_copy['id'] = cid_str
-                kept_details.append(detail_copy)
-                if norm_link:
-                    seen_norms.add(norm_link)
-                if cid_str:
-                    seen_ids.add(cid_str)
+
+            if not detail_copy:
+                detail_copy = {}
+            if 'title' not in detail_copy or not detail_copy['title']:
+                detail_copy['title'] = display_title
+            if cid_str and ('id' not in detail_copy or not detail_copy['id']):
+                detail_copy['id'] = cid_str
+
+            if payload and isinstance(payload.get('card'), dict):
+                card = payload['card']
+                column = (card.get('columnname') or card.get('columnName') or '').strip()
+                lane = (card.get('lanename') or card.get('laneName') or '').strip()
+                deadline = parse_kanban_date(card.get('deadline'))
+                if column and not detail_copy.get('column'):
+                    detail_copy['column'] = column
+                if lane and not detail_copy.get('lane'):
+                    detail_copy['lane'] = lane
+                if deadline and not detail_copy.get('deadline'):
+                    detail_copy['deadline'] = deadline.isoformat()
+                order_date_obj, order_raw = _resolve_order_custom_field(card)
+                if order_raw and not detail_copy.get('order_date_raw'):
+                    detail_copy['order_date_raw'] = order_raw
+                if order_date_obj and not detail_copy.get('order_date'):
+                    detail_copy['order_date'] = order_date_obj.isoformat()
+
+            kept_details.append(detail_copy)
+            seen_norms.add(matched_norm)
+            covered_norms.add(matched_norm)
+
         if not matches:
             continue
         entry = dict(item)
@@ -919,6 +2208,92 @@ def filter_project_links_by_titles(links_table, valid_titles, valid_ids=None):
         else:
             entry.pop('link_details', None)
         filtered.append(entry)
+
+    if kanban_cards:
+        seen_payloads = set()
+
+        def _payload_identity(payload):
+            return id(payload)
+
+        def _build_fallback_entry(payload):
+            card = payload.get('card') if isinstance(payload.get('card'), dict) else None
+            if not card:
+                return None
+            title = (card.get('title') or '').strip()
+            if not title:
+                return None
+            norm_title = normalize_key(title)
+            if norm_title not in valid_norms:
+                return None
+            project_name, client_name = split_project_and_client(title)
+            custom_id = get_card_custom_id(card)
+            column = (card.get('columnname') or card.get('columnName') or '').strip()
+            lane = (card.get('lanename') or card.get('laneName') or '').strip()
+            board = (card.get('boardName') or card.get('boardname') or '').strip()
+            description = (card.get('description') or '').strip()
+            due = parse_kanban_date(card.get('deadline'))
+            cid_value = card.get('taskid') or card.get('cardId') or card.get('id')
+            cid_str = str(cid_value).strip() if cid_value not in (None, '') else ''
+            detail = {'title': title}
+            if cid_str:
+                detail['id'] = cid_str
+            if column:
+                detail['column'] = column
+            if lane:
+                detail['lane'] = lane
+            if due:
+                detail['deadline'] = due.isoformat()
+            order_date_obj, order_raw = _resolve_order_custom_field(card)
+            if order_raw:
+                detail['order_date_raw'] = order_raw
+            if order_date_obj:
+                detail['order_date'] = order_date_obj.isoformat()
+            entry = {
+                'project': project_name or title,
+                'title': title,
+                'display_title': title,
+                'client': client_name,
+                'custom_card_id': custom_id,
+                'links': [title],
+                'link_details': [detail],
+                'due': due.isoformat() if due else None,
+                'description': description,
+            }
+            if column:
+                entry['column'] = column
+            if lane:
+                entry['lane'] = lane
+            if board:
+                entry['board'] = board
+            if cid_str:
+                entry['link_ids'] = [cid_str]
+            stored_date = payload.get('stored_date')
+            if stored_date:
+                entry['stored_date'] = stored_date
+            prev_date = payload.get('prev_date')
+            if prev_date:
+                entry['prev_date'] = prev_date
+            return entry
+
+        missing_norms = [
+            norm for norm in valid_norms if norm and norm not in covered_norms
+        ]
+        for norm in missing_norms:
+            for payload in cards_by_norm.get(norm, []):
+                ident = _payload_identity(payload)
+                if ident in seen_payloads:
+                    continue
+                entry = _build_fallback_entry(payload)
+                if not entry:
+                    continue
+                filtered.append(entry)
+                seen_payloads.add(ident)
+                if entry.get('links'):
+                    for link in entry['links']:
+                        norm_link = normalize_key(link)
+                        if norm_link:
+                            covered_norms.add(norm_link)
+
     return filtered
 
 
@@ -1197,10 +2572,14 @@ def move_phase_date(
     * ``"push"`` shifts subsequent tasks for the same worker so the phase can
       remain continuous.
 
-    Return tuple ``(day, error)`` where ``day`` is the first day of the phase
-    after rescheduling, or ``None`` if it could not be moved. ``error`` provides
-    a message explaining the failure when applicable.
+    Return tuple ``(day, warning, info)`` where ``day`` is the first day of the
+    phase after rescheduling (``None`` when it could not be moved), ``warning``
+    carries deadline or blocking messages, and ``info`` aggregates metadata
+    about the operation.
     """
+    def _fail(warn, info=None):
+        return None, warn, info
+
     if part in (None, '', 'None'):
         part = None
     else:
@@ -1212,19 +2591,19 @@ def move_phase_date(
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
     if not tasks:
-        return None, 'Fase no encontrada'
+        return _fail('Fase no encontrada')
     if part is not None:
         tasks = [t for t in tasks if t[4] == part]
         if not tasks:
-            return None, 'Fase no encontrada'
+            return _fail('Fase no encontrada')
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
-        return None, 'Proyecto no encontrado'
+        return _fail('Proyecto no encontrado')
     if phase != 'pedidos' and any(
         t['phase'] == phase and (part is None or t.get('part') == part)
         for t in proj.get('frozen_tasks', [])
     ):
-        return None, 'Fase congelada'
+        return _fail('Fase congelada')
 
     vac_map = _schedule_mod._build_vacation_map()
     if (
@@ -1233,7 +2612,7 @@ def move_phase_date(
         and worker != 'Irene'
         and new_date in vac_map.get(worker, set())
     ):
-        return None, 'Vacaciones en esa fecha'
+        return _fail('Vacaciones en esa fecha')
 
     # Remember the originally requested day.  When ``start_hour`` exceeds the
     # daily limit we normally roll the phase to the next workday, but in push
@@ -1260,7 +2639,7 @@ def move_phase_date(
             phase_hours = proj['phases'].get(phase)
             if isinstance(phase_hours, list):
                 if part is None or part >= len(phase_hours):
-                    return None, 'Fase no encontrada'
+                    return _fail('Fase no encontrada')
                 hours = int(phase_hours[part])
             else:
                 hours = int(phase_hours)
@@ -1277,7 +2656,7 @@ def move_phase_date(
         phase_val = proj['phases'].get(phase)
         if isinstance(phase_val, list):
             if part is None or part >= len(phase_val):
-                return None, 'Fase no encontrada'
+                return _fail('Fase no encontrada')
             hours = int(phase_val[part])
         else:
             hours = int(phase_val)
@@ -1399,12 +2778,14 @@ def move_phase_date(
                 for t in other_proj.get('frozen_tasks', [])
             ):
                 if not unblock and not skip_block:
-                    return None, {
-                        'pid': opid,
-                        'phase': oph,
-                        'part': oprt,
-                        'name': other_proj.get('name', ''),
-                    }
+                    return _fail(
+                        {
+                            'pid': opid,
+                            'phase': oph,
+                            'part': oprt,
+                            'name': other_proj.get('name', ''),
+                        }
+                    )
                 if skip_block:
                     val = other_proj['phases'][oph]
                     if isinstance(val, list):
@@ -1632,6 +3013,7 @@ def get_projects():
             p['plan_state'] = 'partial'
     if changed:
         save_projects(projects)
+    prune_orphan_uploads(projects)
     return projects
 
 
@@ -1736,8 +3118,9 @@ def _kanban_card_to_project(card):
         fields = dict(fields_raw)
     else:
         fields = {}
+    fields.setdefault('CALDERERIA', fields.get('CALDERERÍA'))
     popup_raw = {field: fields.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
+    for k in ['Horas', 'MATERIAL', 'CALDERERIA', 'CALDERERÍA']:
         fields.pop(k, None)
 
     project_name = (
@@ -1764,6 +3147,15 @@ def _kanban_card_to_project(card):
     sold = h('Horas Soldadura')
     pint = h('Horas Acabado')
     mont2 = h('Horas Montaje 2º') or h('Horas Montaje 2°')
+
+    def _bool_flag(value):
+        if isinstance(value, str):
+            return value.strip().lower() not in ('', '0', 'false', 'no')
+        return bool(value)
+
+    mecan_flag = _bool_flag(popup_raw.get('MECANIZADO'))
+    trat_flag = _bool_flag(popup_raw.get('TRATAMIENTO'))
+
     phases = {}
     auto_hours = {}
     if (
@@ -1773,10 +3165,14 @@ def _kanban_card_to_project(card):
         and sold <= 0
         and pint <= 0
         and mont2 <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
-        phases['recepcionar material'] = 1
-        auto_hours['recepcionar material'] = True
+        phases['preparar material'] = 1
+        auto_hours['preparar material'] = True
     else:
+        if prep > 0:
+            phases['preparar material'] = prep
         if mont:
             phases['montar'] = mont
         if sold2:
@@ -1787,13 +3183,12 @@ def _kanban_card_to_project(card):
             phases['montar 2º'] = mont2
         if sold:
             phases['soldar'] = sold
-        if prep:
-            phases['recepcionar material'] = prep
-
-    def _bool_flag(value):
-        if isinstance(value, str):
-            return value.strip().lower() not in ('', '0', 'false', 'no')
-        return bool(value)
+        if mecan_flag:
+            phases['mecanizar'] = 1
+            auto_hours['mecanizar'] = True
+        if trat_flag:
+            phases['tratamiento'] = 1
+            auto_hours['tratamiento'] = True
 
     def _clean_display_value(value):
         if value is None:
@@ -1809,13 +3204,13 @@ def _kanban_card_to_project(card):
         return text or None
 
     display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
-    if _bool_flag(popup_raw.get('MECANIZADO')):
+    if mecan_flag:
         display_fields['MECANIZADO'] = _clean_display_value(popup_raw.get('MECANIZADO')) or 'Sí'
-    if _bool_flag(popup_raw.get('TRATAMIENTO')):
+    if trat_flag:
         display_fields['TRATAMIENTO'] = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
 
     project = {
@@ -1837,6 +3232,98 @@ def _kanban_card_to_project(card):
         'source': 'api',
     }
     return project
+
+
+def _normalize_card_id(value):
+    """Return a trimmed string identifier for a Kanban card."""
+
+    if value in (None, ''):
+        return ''
+    text = str(value).strip()
+    return text or ''
+
+
+def _iter_card_link_entries(card):
+    """Yield dictionaries describing cards linked to *card*."""
+
+    if not isinstance(card, dict):
+        return
+
+    links = card.get('links')
+    if isinstance(links, dict):
+        values = links.values()
+    elif isinstance(links, list):
+        values = links
+    else:
+        return
+
+    for group in values:
+        if isinstance(group, dict):
+            group_values = group.values()
+        else:
+            group_values = group
+        if not isinstance(group_values, (list, tuple, set)):
+            group_values = [group_values]
+        for entry in group_values:
+            if isinstance(entry, dict):
+                yield entry
+
+
+def refresh_kanban_card_cache():
+    """Rebuild the local Kanban card cache by calling the Kanbanize API."""
+
+    projects = load_projects() or []
+    initial_ids = []
+    for project in projects:
+        card_id = (
+            project.get('kanban_id')
+            or project.get('kanbanId')
+            or project.get('kanban_card_id')
+        )
+        normalized = _normalize_card_id(card_id)
+        if normalized:
+            initial_ids.append(normalized)
+
+    if not initial_ids:
+        return []
+
+    seen = set()
+    queue = list(dict.fromkeys(initial_ids))
+    refreshed = []
+
+    while queue:
+        current_id = queue.pop()
+        if current_id in seen:
+            continue
+        seen.add(current_id)
+        card = _fetch_kanban_card(current_id, with_links=True)
+        if not card:
+            continue
+
+        refreshed.append(
+            {
+                'timestamp': local_now().isoformat(),
+                'card': card,
+                'stored_title_date': None,
+                'previous_title_date': None,
+            }
+        )
+
+        for entry in _iter_card_link_entries(card):
+            linked_id = (
+                entry.get('taskid')
+                or entry.get('cardId')
+                or entry.get('id')
+                or entry.get('linkedCardId')
+                or entry.get('linkedcardid')
+            )
+            normalized_link = _normalize_card_id(linked_id)
+            if normalized_link and normalized_link not in seen:
+                queue.append(normalized_link)
+
+    if refreshed:
+        save_kanban_cards(refreshed)
+    return refreshed
 
 
 def _fetch_kanban_card(card_id, with_links=False):
@@ -1866,8 +3353,11 @@ def home():
 def calendar_view():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
+    annotate_schedule_frozen_background(schedule)
+    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -1879,6 +3369,7 @@ def calendar_view():
     for item in unplanned_raw:
         pid = item['pid']
         phase = item['phase']
+        part = item.get('part')
         proj = groups.setdefault(
             pid,
             {
@@ -1889,13 +3380,15 @@ def calendar_view():
                 'phases': {},
             },
         )
+        phase_key = (phase, part) if part is not None else (phase, None)
         ph = proj['phases'].setdefault(
-            phase,
+            phase_key,
             {
                 'project': item['project'],
                 'client': item['client'],
                 'pid': pid,
                 'phase': phase,
+                'part': part,
                 'color': item.get('color'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
@@ -1905,6 +3398,7 @@ def calendar_view():
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'frozen_background': item.get('frozen_background'),
                 'auto': item.get('auto', False),
             },
         )
@@ -1925,6 +3419,9 @@ def calendar_view():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+            bg = item.get('frozen_background')
+            if bg:
+                ph['frozen_background'] = bg
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -1953,8 +3450,11 @@ def calendar_view():
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
-    conflicts = [c for c in conflicts if c['key'] not in dismissed]
-    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
+    conflicts = [
+        c
+        for c in conflicts
+        if c['key'] not in dismissed and c.get('message') != 'No se cumple la fecha de entrega'
+    ]
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
@@ -1988,10 +3488,13 @@ def calendar_view():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
+    worker_limits_map = {
+        worker: HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        for worker in WORKERS
+    }
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     note_map = {}
     for n in notes:
@@ -2007,15 +3510,125 @@ def calendar_view():
             except ValueError:
                 fmt = ''
         worker_note_map[w] = {'text': text, 'edited': fmt}
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
+    for archived_pid in archived_project_map.keys():
+        material_status_map[str(archived_pid)] = 'archived'
+        material_missing_map.setdefault(str(archived_pid), [])
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'phase_deadline_status': task.get('phase_deadline_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'frozen_background': task.get('frozen_background'),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
+    unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
+
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
+
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_display_fields', {})
-        project_map[p['id']] = {
+        pid = p.get('id')
+        project_entry = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
+        if pid:
+            pid_key = str(pid)
+            project_entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            project_entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = project_entry
+        project_map[p['id']] = project_entry
+    for pid, info in archived_project_map.items():
+        info.setdefault('kanban_display_fields', {})
+        info.setdefault('kanban_attachments', [])
+        info['material_status'] = material_status_map.get(str(pid), 'archived')
+        info['material_missing_titles'] = material_missing_map.get(str(pid), [])
+        project_map[pid] = info
+        project_map[str(pid)] = info
     start_map = phase_start_map(projects)
 
     return render_template(
@@ -2024,7 +3637,6 @@ def calendar_view():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         today=today,
         project_filter=project_filter,
@@ -2037,9 +3649,13 @@ def calendar_view():
         hours=hours_map,
         split_points=points,
         palette=COLORS,
-        unplanned_with=unplanned_with,
-        unplanned_without=unplanned_without,
+        unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
+        worker_day_hours=worker_day_overrides,
+        worker_limits=worker_limits_map,
     )
 
 
@@ -2048,7 +3664,7 @@ def calendar_pedidos():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
-    raw_links = attach_phase_starts(build_project_links(compras_raw), projects)
+    base_links = build_project_links(compras_raw)
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
@@ -2062,9 +3678,23 @@ def calendar_pedidos():
         cid = item.get('cid')
         if cid:
             calendar_ids.add(str(cid))
-    links_table = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+    filtered_links = filter_project_links_by_titles(
+        base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
+    enriched_links = attach_phase_starts(filtered_links, projects)
+    annotate_order_details(enriched_links, today=today)
+    links_table = [
+        item
+        for item in enriched_links
+        if normalize_key(item.get('lane')) in COLUMN1_ALLOWED_LANE_KEYS
+    ]
+
+    info_names = sorted({
+        name.strip()
+        for name in (item.get('board') for item in links_table)
+        if name and name.strip()
+    })
+    info_title = ' / '.join(info_names)
 
 
     # --- ARMAR CALENDARIO SEMANAL ---
@@ -2112,15 +3742,27 @@ def calendar_pedidos():
         weeks.append(week)
         current += timedelta(weeks=1)
 
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
+
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_display_fields', {})
-        project_map[p['id']] = {
+        entry = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
+        pid = p.get('id')
+        if pid:
+            pid_key = str(pid)
+            entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
+        project_map[p['id']] = entry
     start_map = phase_start_map(projects)
 
     return render_template(
@@ -2132,6 +3774,180 @@ def calendar_pedidos():
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        project_info_title=info_title,
+    )
+
+
+@app.route('/cronologico')
+def cronologico_view():
+    projects = get_visible_projects()
+    schedule_map, _ = schedule_projects(copy.deepcopy(projects))
+    today = local_today()
+    week_start = today - timedelta(days=today.weekday())
+    week_days = [week_start + timedelta(days=i) for i in range(5)]
+
+    interesting_phases = {'montar', 'soldar', 'pintar', 'mecanizar', 'tratamiento'}
+    phase_display = {
+        'montar': 'MONTAR',
+        'soldar': 'SOLDAR',
+        'pintar': 'PINTAR',
+        'mecanizar': 'MECANIZAR',
+        'tratamiento': 'TRATAMIENTO',
+    }
+    phase_entries = {}
+    for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
+        for day_str, tasks in days.items():
+            try:
+                day_obj = date.fromisoformat(day_str)
+            except ValueError:
+                continue
+            for task in tasks:
+                phase = task.get('phase')
+                if phase not in interesting_phases:
+                    continue
+                key = (task.get('pid'), phase, task.get('part'), worker)
+                entry = phase_entries.setdefault(
+                    key,
+                    {
+                        'project': task.get('project'),
+                        'client': task.get('client'),
+                        'worker': worker,
+                        'phase': phase,
+                        'days': set(),
+                    },
+                )
+                entry['days'].add(day_obj)
+
+    start_templates = {
+        'montar': '{worker} inicia la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} inicia la fase SOLDAR del proyecto {project}',
+        'pintar': '{worker} inicia la fase PINTAR del proyecto {project}',
+        'mecanizar': 'Llevar {project} a mecanizar.',
+        'tratamiento': 'Llevar {project} a tratamiento.',
+    }
+    finish_templates = {
+        'montar': '{worker} termina la fase MONTAR del proyecto {project}',
+        'soldar': '{worker} termina la fase SOLDAR del proyecto {project}',
+        'mecanizar': 'Recepcionar {project} del mecanizado.',
+        'tratamiento': 'Recepcionar {project} del tratamiento.',
+    }
+
+    events_by_day = {d.isoformat(): [] for d in week_days}
+    previews_by_day = {d.isoformat(): [] for d in week_days}
+    preview_seen = {d.isoformat(): set() for d in week_days}
+    project_lookup = {p.get('id'): p for p in projects}
+    for worker, days in schedule_map.items():
+        if worker == UNPLANNED:
+            continue
+        for day_key, tasks in days.items():
+            if day_key not in previews_by_day:
+                continue
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                project = project_lookup.get(pid)
+                if not project:
+                    continue
+                image_path = project.get('image')
+                if not image_path or pid in preview_seen[day_key]:
+                    continue
+                previews_by_day[day_key].append(
+                    {
+                        'project': project.get('name') or 'Sin nombre',
+                        'client': project.get('client') or '',
+                        'image': image_path,
+                    }
+                )
+                preview_seen[day_key].add(pid)
+
+    same_day_completions = {}
+    for entry in phase_entries.values():
+        days = sorted(entry['days'])
+        if not days:
+            continue
+        start_day = days[0]
+        end_day = days[-1]
+        project_name = entry['project'] or 'Sin nombre'
+        client_name = entry.get('client') or 'Sin cliente'
+        worker_name = entry['worker'] or UNPLANNED
+        if worker_name == UNPLANNED:
+            continue
+        phase = entry['phase']
+
+        if start_day == end_day:
+            key = (
+                start_day.isoformat(),
+                worker_name,
+                project_name,
+                client_name,
+            )
+            phases = same_day_completions.setdefault(key, [])
+            phases.append(phase)
+            continue
+
+        start_template = start_templates.get(phase)
+        day_key = start_day.isoformat()
+        if start_template and day_key in events_by_day:
+            events_by_day[day_key].append((0, start_template.format(worker=worker_name, project=project_name)))
+
+        finish_template = finish_templates.get(phase)
+        finish_key = end_day.isoformat()
+        if finish_template and finish_key in events_by_day:
+            events_by_day[finish_key].append((1, finish_template.format(worker=worker_name, project=project_name)))
+
+    for key, phases in same_day_completions.items():
+        day_key, worker_name, project_name, client_name = key
+        if day_key not in events_by_day:
+            continue
+        unique_phases = []
+        seen_phases = set()
+        for phase in phases:
+            if phase in seen_phases:
+                continue
+            seen_phases.add(phase)
+            label = phase_display.get(phase, phase.upper())
+            unique_phases.append(label)
+        if not unique_phases:
+            continue
+        if len(unique_phases) == 1:
+            message = (
+                f"{worker_name} Inicia y termina la fase {unique_phases[0]} "
+                f"de {project_name} - {client_name}"
+            )
+        else:
+            if len(unique_phases) == 2:
+                phases_text = f"{unique_phases[0]} y {unique_phases[1]}"
+            else:
+                phases_text = ", ".join(unique_phases[:-1]) + f" y {unique_phases[-1]}"
+            message = (
+                f"{worker_name} Inicia y termina las fases {phases_text} "
+                f"de {project_name} - {client_name}"
+            )
+        events_by_day[day_key].append((0, message))
+
+    for day_key, messages in events_by_day.items():
+        messages.sort(key=lambda item: (item[0], item[1]))
+        deduped = []
+        seen = set()
+        for _, message in messages:
+            if message in seen:
+                continue
+            seen.add(message)
+            deduped.append(message)
+        events_by_day[day_key] = deduped
+
+    for day_key, previews in previews_by_day.items():
+        previews.sort(key=lambda item: item['project'])
+
+    return render_template(
+        'cronologico.html',
+        week_days=week_days,
+        events_by_day=events_by_day,
+        previews_by_day=previews_by_day,
+        today=today,
     )
 
 
@@ -2139,9 +3955,8 @@ def calendar_pedidos():
 def project_links_api():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
-    raw_links = attach_phase_starts(
-        build_project_links(compras_raw), get_visible_projects()
-    )
+    projects = get_visible_projects()
+    base_links = build_project_links(compras_raw)
     pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
         compras_raw, column_colors, today
     )
@@ -2155,51 +3970,310 @@ def project_links_api():
         cid = item.get('cid')
         if cid:
             calendar_ids.add(str(cid))
-    links = filter_project_links_by_titles(
-        raw_links, calendar_titles, calendar_ids
+    filtered_links = filter_project_links_by_titles(
+        base_links, calendar_titles, calendar_ids, kanban_cards=compras_raw
     )
-    return jsonify(links)
+    enriched_links = attach_phase_starts(filtered_links, projects)
+    annotate_order_details(enriched_links, today=today)
+    lane_filtered = [
+        item
+        for item in enriched_links
+        if normalize_key(item.get('lane')) in COLUMN1_ALLOWED_LANE_KEYS
+    ]
+    return jsonify(lane_filtered)
 
 
-def build_gantt_payload():
+@app.route('/orden-carpetas')
+@app.route('/pndt-verificacion')
+def orden_carpetas_view():
+    projects = get_visible_projects()
+    project_lookup = {}
+    planned_starts = {}
+    project_workers = {}
+
+    for project in projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        pid_str = str(pid)
+        project_lookup[pid_str] = project
+        planned_starts[pid_str] = None
+        project_workers[pid_str] = set()
+
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+
+    for worker, days in schedule_data.items():
+        for tasks in days.values():
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                pid_str = str(pid)
+                project_workers.setdefault(pid_str, set())
+                if worker:
+                    project_workers[pid_str].add(worker)
+                task_worker = task.get('worker')
+                if task_worker and task_worker != worker:
+                    project_workers[pid_str].add(task_worker)
+                if worker == UNPLANNED or task_worker == UNPLANNED:
+                    continue
+                start_day = _safe_iso_date(task.get('start_time'))
+                if not start_day:
+                    continue
+                current = planned_starts.get(pid_str)
+                if current is None or start_day < current:
+                    planned_starts[pid_str] = start_day
+                else:
+                    planned_starts.setdefault(pid_str, start_day)
+    all_unplanned_projects = {}
+    for pid_str, workers in project_workers.items():
+        cleaned = {w for w in workers if w}
+        all_unplanned_projects[pid_str] = bool(cleaned) and all(
+            w == UNPLANNED for w in cleaned
+        )
+
+    project_key_map = {}
+    for project in projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        pid_str = str(pid)
+        name = (project.get('name') or '').strip()
+        if name:
+            norm = normalize_key(name)
+            if norm:
+                project_key_map.setdefault(norm, pid_str)
+            split_name, _ = split_project_and_client(name)
+            if split_name:
+                norm_split = normalize_key(split_name)
+                if norm_split:
+                    project_key_map.setdefault(norm_split, pid_str)
+            code_match = PROJECT_TITLE_PATTERN.search(name)
+            if code_match:
+                code_key = normalize_key(code_match.group(0))
+                if code_key:
+                    project_key_map.setdefault(code_key, pid_str)
+        custom = (project.get('custom_card_id') or '').strip()
+        if custom:
+            norm_custom = normalize_key(custom)
+            if norm_custom:
+                project_key_map.setdefault(norm_custom, pid_str)
+            code_match = PROJECT_TITLE_PATTERN.search(custom)
+            if code_match:
+                code_key = normalize_key(code_match.group(0))
+                if code_key:
+                    project_key_map.setdefault(code_key, pid_str)
+
+    compras_raw, _ = load_compras_raw()
+    links_table = attach_phase_starts(build_project_links(compras_raw), projects)
+
+    target_column_keys = {
+        normalize_key('Pdte. Verificación'),
+        normalize_key('Pendiente Verificación'),
+        normalize_key('Pendiente de Verificación'),
+    }
+    pending_rows = []
+    pending_seen = set()
+    montaje_keys = {normalize_key('Listo para iniciar')}
+    montaje_rows = {}
+
+    for entry in links_table:
+        pid_value = entry.get('pid')
+        pid_str = str(pid_value) if pid_value not in (None, '') else ''
+        if not pid_str:
+            for field in ('project', 'title', 'display_title', 'custom_card_id'):
+                candidate = entry.get(field)
+                norm_candidate = normalize_key(candidate)
+                if norm_candidate and norm_candidate in project_key_map:
+                    pid_str = project_key_map[norm_candidate]
+                    break
+        def ensure_montaje_row():
+            project = project_lookup.get(pid_str)
+            project_title = ''
+            project_description = ''
+            if project:
+                project_title = (project.get('name') or '').strip()
+                project_description = (project.get('client') or '').strip()
+            if not project_title:
+                fallback = (
+                    entry.get('project')
+                    or entry.get('title')
+                    or entry.get('display_title')
+                    or ''
+                )
+                project_title = fallback.strip()
+            if not project_description:
+                project_description = (entry.get('client') or '').strip()
+            key = pid_str or normalize_key(project_title)
+            if not key or key in montaje_rows:
+                return
+            planned_date = None
+            if pid_str and not all_unplanned_projects.get(pid_str, False):
+                planned_date = planned_starts.get(pid_str)
+            display_date = ''
+            if isinstance(planned_date, date):
+                display_date = planned_date.strftime('%d/%m/%Y')
+            montaje_rows[key] = {
+                'project_title': project_title,
+                'project_description': project_description,
+                'planned_date': display_date,
+                'sort_key': planned_date if isinstance(planned_date, date) else None,
+                'title_key': project_title.casefold() if project_title else '',
+            }
+
+        entry_column = normalize_key(entry.get('column'))
+        if entry_column in montaje_keys:
+            ensure_montaje_row()
+
+        details = entry.get('link_details') or []
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            column_name = detail.get('column')
+            normalized_column = normalize_key(column_name)
+            if normalized_column in target_column_keys:
+                title = (detail.get('title') or '').strip()
+                if not title:
+                    fallback = (
+                        entry.get('project')
+                        or entry.get('title')
+                        or entry.get('display_title')
+                        or ''
+                    )
+                    title = fallback.strip()
+                card_id = str(detail.get('id') or '').strip()
+                dedupe_key = (card_id or normalize_key(title), pid_str)
+                if dedupe_key in pending_seen:
+                    continue
+                pending_seen.add(dedupe_key)
+                planned_date = None
+                if pid_str and not all_unplanned_projects.get(pid_str, False):
+                    planned_date = planned_starts.get(pid_str)
+                display_date = ''
+                if isinstance(planned_date, date):
+                    display_date = planned_date.strftime('%d/%m/%Y')
+                project = project_lookup.get(pid_str)
+                project_title = ''
+                project_description = ''
+                if project:
+                    project_title = (project.get('name') or '').strip()
+                    project_description = (project.get('client') or '').strip()
+                if not project_title:
+                    fallback = (
+                        entry.get('project')
+                        or entry.get('title')
+                        or entry.get('display_title')
+                        or ''
+                    )
+                    project_title = fallback.strip()
+                if not project_description:
+                    project_description = (entry.get('client') or '').strip()
+                pending_rows.append(
+                    {
+                        'title': title,
+                        'project_title': project_title,
+                        'project_description': project_description,
+                        'planned_date': display_date,
+                        'sort_key': planned_date if isinstance(planned_date, date) else None,
+                        'title_key': title.casefold() if title else '',
+                    }
+                )
+            if normalized_column in montaje_keys:
+                ensure_montaje_row()
+
+    pending_rows.sort(
+        key=lambda item: (
+            item['sort_key'] is None,
+            item['sort_key'] or date.max,
+            item['title_key'],
+        )
+    )
+    for item in pending_rows:
+        item.pop('sort_key', None)
+        item.pop('title_key', None)
+
+    montaje_list = list(montaje_rows.values())
+    montaje_list.sort(
+        key=lambda item: (
+            item['sort_key'] is None,
+            item['sort_key'] or date.max,
+            item['title_key'],
+        )
+    )
+    for item in montaje_list:
+        item.pop('sort_key', None)
+        item.pop('title_key', None)
+
+    return render_template(
+        'orden_carpetas.html',
+        pending_rows=pending_rows,
+        montaje_rows=montaje_list,
+    )
+
+
+def _normalize_order_code(value):
+    if not value:
+        return ''
+    text = str(value).strip()
+    match = re.search(r'OF\s*(\d+)', text, re.IGNORECASE)
+    if match:
+        return f"OF {match.group(1)}"
+    return text
+
+
+def _pick_deadline_start(project):
+    candidates = [
+        project.get('due_date'),
+        project.get('client_date'),
+        project.get('client_due_date'),
+        project.get('customer_date'),
+    ]
+    for value in candidates:
+        if not value:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            parsed = parse_input_date(text)
+            if parsed:
+                return parsed.isoformat()
+    display_fields = project.get('kanban_display_fields') or {}
+    for label in ('Fecha Cliente', 'Fecha cliente'):
+        raw = display_fields.get(label)
+        if not raw:
+            continue
+        parsed = parse_input_date(str(raw).strip())
+        if parsed:
+            return parsed.isoformat()
+    return ''
+
+
+@app.route('/gantt')
+def gantt_view():
     projects = get_visible_projects()
     sched, _ = schedule_projects(copy.deepcopy(projects))
     by_pid = {}
+    project_workers = {}
     for worker, days in sched.items():
-        if worker == UNPLANNED:
-            continue
         for day, tasks in days.items():
             for t in tasks:
-                by_pid.setdefault(t['pid'], []).append(t)
+                pid = t.get('pid')
+                if not pid:
+                    continue
+                if worker:
+                    project_workers.setdefault(pid, set()).add(worker)
+                if worker == UNPLANNED:
+                    continue
+                by_pid.setdefault(pid, []).append(t)
 
-    def _pick_deadline_start(project):
-        candidates = [
-            project.get('due_date'),
-            project.get('client_date'),
-            project.get('client_due_date'),
-            project.get('customer_date'),
-        ]
-        for value in candidates:
-            if not value:
-                continue
-            text = str(value).strip()
-            if not text:
-                continue
-            try:
-                return date.fromisoformat(text).isoformat()
-            except ValueError:
-                parsed = parse_input_date(text)
-                if parsed:
-                    return parsed.isoformat()
-        display_fields = project.get('kanban_display_fields') or {}
-        for label in ('Fecha Cliente', 'Fecha cliente'):
-            raw = display_fields.get(label)
-            if not raw:
-                continue
-            parsed = parse_input_date(str(raw).strip())
-            if parsed:
-                return parsed.isoformat()
-        return ''
+    all_unplanned_projects = {
+        pid: bool(workers) and all(w == UNPLANNED for w in workers)
+        for pid, workers in project_workers.items()
+    }
 
     project_map = {}
     for p in projects:
@@ -2209,6 +4283,7 @@ def build_gantt_payload():
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
         }
 
     start_map = phase_start_map(projects)
@@ -2224,23 +4299,63 @@ def build_gantt_payload():
         phase_map = {}
         for t in tasks:
             key = t['phase']
+            start_time = t.get('start_time')
+            end_time = t.get('end_time')
             entry = phase_map.get(key)
             if not entry:
                 entry = {
                     'id': f"{pid}-{key}",
                     'name': key,
-                    'start': t['start_time'],
-                    'end': t['end_time'],
+                    'start': start_time,
+                    'end': end_time,
                     'color': t.get('color', p.get('color')),
                     'worker': t.get('worker'),
+                    'segments': [],
+                    '_segment_map': {},
                 }
                 phase_map[key] = entry
             else:
-                if t['start_time'] < entry['start']:
-                    entry['start'] = t['start_time']
-                if t['end_time'] > entry['end']:
-                    entry['end'] = t['end_time']
-        phases = list(phase_map.values())
+                if start_time and (not entry['start'] or start_time < entry['start']):
+                    entry['start'] = start_time
+                if end_time and (not entry['end'] or end_time > entry['end']):
+                    entry['end'] = end_time
+                if not entry.get('worker') and t.get('worker'):
+                    entry['worker'] = t.get('worker')
+
+            seg_key = t.get('part')
+            if seg_key is None:
+                seg_key = '__default__'
+            segment_map = entry['_segment_map']
+            segment = segment_map.get(seg_key)
+            if not segment:
+                segment = {
+                    'start': start_time,
+                    'end': end_time,
+                    'worker': t.get('worker'),
+                    'part': t.get('part'),
+                }
+                segment_map[seg_key] = segment
+                entry['segments'].append(segment)
+            else:
+                if start_time and segment['start'] and start_time < segment['start']:
+                    segment['start'] = start_time
+                if end_time and segment['end'] and end_time > segment['end']:
+                    segment['end'] = end_time
+                if not segment.get('worker') and t.get('worker'):
+                    segment['worker'] = t.get('worker')
+
+        phases = []
+        for entry in phase_map.values():
+            segments = entry.get('segments') or []
+            segments.sort(key=lambda seg: (seg.get('start') or ''))
+            starts = [seg.get('start') for seg in segments if seg.get('start')]
+            ends = [seg.get('end') for seg in segments if seg.get('end')]
+            if starts:
+                entry['start'] = min(starts)
+            if ends:
+                entry['end'] = max(ends)
+            entry.pop('_segment_map', None)
+            phases.append(entry)
         gantt_projects.append({
             'id': pid,
             'name': p['name'],
@@ -2251,31 +4366,437 @@ def build_gantt_payload():
             'color': p.get('color'),
             'deadline_start': _pick_deadline_start(p),
             'phases': phases,
+            'all_phases_unplanned': all_unplanned_projects.get(pid, False),
         })
-    return gantt_projects, project_map, start_map
-
-
-@app.route('/gantt')
-def gantt_view():
-    gantt_projects, project_map, start_map = build_gantt_payload()
     return render_template(
         'gantt.html',
         projects=json.dumps(gantt_projects),
         project_data=project_map,
         start_map=start_map,
         phases=PHASE_ORDER,
+        gantt_mode='phases',
+        phase_actions_enabled=True,
     )
 
 
-@app.route('/gantt/data')
-def gantt_data_api():
-    gantt_projects, project_map, start_map = build_gantt_payload()
-    return jsonify(
-        {
-            'projects': gantt_projects,
-            'project_map': project_map,
-            'start_map': start_map,
+def _safe_iso_date(value):
+    if not value:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _extract_order_title_date(title, reference_day, fallback_year):
+    if not title:
+        return None
+    match = re.search(r"\((\d{2})/(\d{2})\)", title)
+    if not match:
+        return None
+    try:
+        day = int(match.group(1))
+        month = int(match.group(2))
+    except ValueError:
+        return None
+    year = fallback_year
+    if isinstance(reference_day, date):
+        year = reference_day.year
+    try:
+        candidate = date(year, month, day)
+    except ValueError:
+        return None
+    if isinstance(reference_day, date):
+        delta_days = (candidate - reference_day).days
+        if delta_days < -183:
+            try:
+                candidate = date(year + 1, month, day)
+            except ValueError:
+                pass
+        elif delta_days > 183:
+            try:
+                candidate = date(year - 1, month, day)
+            except ValueError:
+                pass
+    return candidate
+
+
+def _parse_order_deadline(raw_value):
+    if not raw_value:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    parsed = parse_input_date(text)
+    if parsed:
+        return parsed
+    return parse_kanban_date(text)
+
+
+def _resolve_unconfirmed_schedule_day(entry, planned_end, today):
+    explicit = _parse_order_deadline(entry.get('kanban_date'))
+    if explicit:
+        return explicit
+    if isinstance(planned_end, date):
+        return _subtract_business_days(planned_end, 5)
+    return today
+
+
+def _subtract_business_days(day, count):
+    if not isinstance(day, date) or count <= 0:
+        return day
+    current = day
+    removed = 0
+    while removed < count:
+        current -= timedelta(days=1)
+        if current.weekday() not in WEEKEND:
+            removed += 1
+    return current
+
+
+def business_days_elapsed(start, end):
+    """Return the number of business days between *start* and *end*.
+
+    The result excludes weekends and does not count the starting day.
+    A positive value means ``end`` is after ``start``; negative values
+    indicate the opposite direction.
+    """
+
+    if not isinstance(start, date) or not isinstance(end, date):
+        return None
+
+    if start == end:
+        return 0
+
+    if end >= start:
+        begin = start
+        finish = end
+        sign = 1
+    else:
+        begin = end
+        finish = start
+        sign = -1
+
+    delta_days = (finish - begin).days
+    full_weeks, remainder = divmod(delta_days, 7)
+    business = full_weeks * 5
+    for offset in range(1, remainder + 1):
+        candidate = begin + timedelta(days=offset)
+        if candidate.weekday() not in WEEKEND:
+            business += 1
+
+    return business * sign
+
+
+def business_days_since(start, *, today=None):
+    """Return business days elapsed from *start* to *today* (>= 0)."""
+
+    if today is None:
+        today = local_today()
+
+    diff = business_days_elapsed(start, today)
+    if diff is None:
+        return None
+    return diff if diff >= 0 else 0
+
+
+def _should_highlight_order(order_day, planned_start, *, window=3, today=None):
+    if not isinstance(order_day, date) or not isinstance(planned_start, date):
+        return False
+
+    highlight = False
+    threshold = _subtract_business_days(planned_start, window)
+    if threshold <= order_day <= planned_start:
+        highlight = True
+
+    if isinstance(today, date) and planned_start <= order_day <= today:
+        highlight = True
+
+    return highlight
+
+
+@app.route('/gantt-pedidos')
+def gantt_orders_view():
+    today = local_today()
+    compras_raw, column_colors = load_compras_raw()
+    pedidos, unconfirmed, _ = compute_pedidos_entries(compras_raw, column_colors, today)
+    base_links = build_project_links(compras_raw)
+
+    order_to_code = {}
+    for entry in base_links:
+        code = _normalize_order_code(entry.get('custom_card_id'))
+        if not code:
+            code = _normalize_order_code(entry.get('display_title') or entry.get('title'))
+        details = entry.get('link_details') or []
+        for detail in details:
+            if isinstance(detail, dict):
+                cid = str(detail.get('id') or '').strip()
+                if cid and code:
+                    order_to_code.setdefault(cid, code)
+        for cid in entry.get('link_ids') or []:
+            cid = str(cid or '').strip()
+            if cid and code:
+                order_to_code.setdefault(cid, code)
+
+    projects = get_visible_projects()
+    scheduled_projects = copy.deepcopy(projects)
+    schedule_data, _ = schedule_projects(scheduled_projects)
+
+    planned_windows = {}
+    project_workers = {}
+
+    for project in scheduled_projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        planned_windows.setdefault(pid, {'start': None, 'end': None})
+
+    for worker, days in schedule_data.items():
+        for tasks in days.values():
+            for task in tasks:
+                pid = task.get('pid')
+                if not pid:
+                    continue
+                if worker:
+                    project_workers.setdefault(pid, set()).add(worker)
+                if worker == UNPLANNED or task.get('worker') == UNPLANNED:
+                    continue
+                start_day = _safe_iso_date(task.get('start_time'))
+                end_day = _safe_iso_date(task.get('end_time'))
+                window = planned_windows.setdefault(pid, {'start': None, 'end': None})
+                if start_day and (window['start'] is None or start_day < window['start']):
+                    window['start'] = start_day
+                if end_day and (window['end'] is None or end_day > window['end']):
+                    window['end'] = end_day
+
+    for project in scheduled_projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        window = planned_windows.setdefault(pid, {'start': None, 'end': None})
+        if window['start'] is None:
+            start_day = _safe_iso_date(project.get('start_date'))
+            if start_day:
+                window['start'] = start_day
+        if window['end'] is None:
+            end_day = _safe_iso_date(project.get('end_date'))
+            if end_day:
+                window['end'] = end_day
+
+    all_unplanned_projects = {
+        pid: bool(workers) and all(w == UNPLANNED for w in workers)
+        for pid, workers in project_workers.items()
+    }
+
+    project_map = {}
+    code_to_project = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        plan_window = planned_windows.get(p['id']) or {}
+        planned_start_iso = plan_window.get('start').isoformat() if plan_window.get('start') else ''
+        planned_end_iso = plan_window.get('end').isoformat() if plan_window.get('end') else ''
+        project_map[p['id']] = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
+            'planned_start': planned_start_iso,
+            'planned_end': planned_end_iso,
+            'all_phases_unplanned': all_unplanned_projects.get(p['id'], False),
         }
+        code = _normalize_order_code(p.get('name'))
+        if code:
+            code_to_project[code] = p
+
+    for entry in unconfirmed:
+        cid = str(entry.get('cid') or '').strip()
+        code = _normalize_order_code(entry.get('custom_card_id'))
+        if not code and cid:
+            code = order_to_code.get(cid, '')
+        if not code:
+            code = _normalize_order_code(entry.get('project'))
+        planned_end = None
+        if code:
+            project = code_to_project.get(code)
+            if project:
+                window = planned_windows.get(project['id']) or {}
+                planned_end = window.get('end')
+        scheduled_day = _resolve_unconfirmed_schedule_day(entry, planned_end, today)
+        pedidos.setdefault(scheduled_day, []).append(entry)
+
+    orders_by_pid = {}
+    pseudo_counter = 0
+
+    for scheduled_day, entries in pedidos.items():
+        if not isinstance(scheduled_day, date):
+            continue
+        day_iso = scheduled_day.isoformat()
+        for entry in entries:
+            cid = str(entry.get('cid') or '').strip()
+            code = _normalize_order_code(entry.get('custom_card_id'))
+            if not code and cid:
+                code = order_to_code.get(cid, '')
+            if not code:
+                code = _normalize_order_code(entry.get('project'))
+
+            project = code_to_project.get(code)
+            entry_color = entry.get('color')
+            if project:
+                pid = project['id']
+                name = project.get('name') or code or entry.get('project') or 'Pedido'
+                client = project.get('client', '')
+                color = project.get('color') or entry_color
+                due = project.get('due_date')
+                deadline_start = _pick_deadline_start(project)
+            else:
+                pseudo_counter += 1
+                pid = f"pedido-{pseudo_counter}"
+                name = code or entry.get('project') or f"Pedido {pseudo_counter}"
+                client = entry.get('client') or ''
+                color = entry_color or '#6c9ec1'
+                due = ''
+                deadline_start = ''
+                if pid not in project_map:
+                    project_map[pid] = {
+                        'id': pid,
+                        'name': name,
+                        'client': client,
+                        'kanban_display_fields': {},
+                        'kanban_attachments': [],
+                        'phase_sequence': [],
+                        'kanban_previous_phases': [],
+                        'frozen_phases': [],
+                        'color': color,
+                        'due_date': due,
+                        'deadline_start': deadline_start,
+                        'observations': '',
+                        'planned_start': '',
+                        'planned_end': '',
+                    }
+
+            plan_window = planned_windows.get(pid)
+            planned_start_date = plan_window.get('start') if plan_window else None
+            planned_end_date = plan_window.get('end') if plan_window else None
+            planned_start_iso = planned_start_date.isoformat() if planned_start_date else ''
+            planned_end_iso = planned_end_date.isoformat() if planned_end_date else ''
+
+            proj_entry = orders_by_pid.setdefault(pid, {
+                'id': pid,
+                'name': name,
+                'client': client,
+                'start': planned_start_iso or day_iso,
+                'end': planned_end_iso or day_iso,
+                'due_date': due,
+                'color': color or '#6c9ec1',
+                'deadline_start': deadline_start,
+                'planned_start': planned_start_iso,
+                'planned_end': planned_end_iso,
+                'order_dates': [],
+                'phases': [],
+                'all_phases_unplanned': all_unplanned_projects.get(pid, False),
+            })
+
+            proj_entry['all_phases_unplanned'] = all_unplanned_projects.get(pid, False)
+
+            order_column = (entry.get('column') or '').strip()
+
+            effective_day = scheduled_day
+            title_date = _extract_order_title_date(entry.get('project'), scheduled_day, today.year)
+            if title_date:
+                effective_day = title_date
+            order_column_key = normalize_key(order_column)
+            if (
+                planned_end_date
+                and order_column_key in PEDIDOS_OFFSET_TO_PLAN_END_KEYS
+            ):
+                effective_day = _subtract_business_days(planned_end_date, 5)
+            effective_iso = effective_day.isoformat()
+
+            proj_entry['order_dates'].append(effective_iso)
+
+            should_flag_order = False
+            if planned_start_date and order_column not in {'Tratamiento', 'Tratamiento final'}:
+                should_flag_order = _should_highlight_order(
+                    effective_day,
+                    planned_start_date,
+                    today=today,
+                )
+
+            phase = {
+                'id': f"{pid}-pedido-{cid or len(proj_entry['phases'])}",
+                'name': entry.get('project') or 'Pedido',
+                'start': effective_iso,
+                'end': effective_iso,
+                'color': entry.get('color') or color,
+                'worker': order_column,
+                'order_column': order_column,
+                'order_lane': entry.get('lane') or '',
+                'order_client': entry.get('client') or '',
+                'order_code': code,
+                'order_cid': cid,
+                'order_prev_date': entry.get('prev_date') or '',
+                'order_date': effective_iso,
+                'order_kanban_date': entry.get('kanban_date') or '',
+                'order_highlight': should_flag_order,
+            }
+            proj_entry['phases'].append(phase)
+
+            if planned_start_iso:
+                proj_entry['start'] = planned_start_iso
+                proj_entry['planned_start'] = planned_start_iso
+            if planned_end_iso:
+                proj_entry['end'] = planned_end_iso
+                proj_entry['planned_end'] = planned_end_iso
+
+    final_projects = []
+    for pid, proj_entry in orders_by_pid.items():
+        order_dates = sorted(d for d in proj_entry.pop('order_dates', []) if d)
+        plan_window = planned_windows.get(pid)
+        planned_start_date = plan_window.get('start') if plan_window else None
+        planned_end_date = plan_window.get('end') if plan_window else None
+        if planned_start_date:
+            planned_start_iso = planned_start_date.isoformat()
+            proj_entry['planned_start'] = planned_start_iso
+            proj_entry['start'] = planned_start_iso
+        else:
+            if order_dates:
+                proj_entry['start'] = order_dates[0]
+                proj_entry['planned_start'] = order_dates[0]
+            else:
+                proj_entry['planned_start'] = proj_entry.get('planned_start') or proj_entry.get('start', '')
+                proj_entry['start'] = proj_entry['planned_start']
+        if planned_end_date:
+            planned_end_iso = planned_end_date.isoformat()
+            proj_entry['planned_end'] = planned_end_iso
+            proj_entry['end'] = planned_end_iso
+        else:
+            if order_dates:
+                proj_entry['end'] = order_dates[-1]
+                proj_entry['planned_end'] = order_dates[-1]
+            else:
+                proj_entry['planned_end'] = proj_entry.get('planned_end') or proj_entry.get('end', proj_entry['start'])
+                proj_entry['end'] = proj_entry['planned_end']
+        if pid in project_map:
+            project_map[pid]['planned_start'] = proj_entry['planned_start']
+            project_map[pid]['planned_end'] = proj_entry['planned_end']
+            project_map[pid]['all_phases_unplanned'] = all_unplanned_projects.get(pid, False)
+        proj_entry['phases'].sort(key=lambda ph: ph.get('start') or '')
+        final_projects.append(proj_entry)
+
+    gantt_projects = sorted(final_projects, key=lambda item: item.get('start') or item.get('planned_start') or '9999-12-31')
+
+    return render_template(
+        'gantt.html',
+        projects=json.dumps(gantt_projects),
+        project_data=project_map,
+        start_map={},
+        phases=PHASE_ORDER,
+        gantt_mode='orders',
+        phase_actions_enabled=False,
     )
 
 @app.route('/projects')
@@ -2502,18 +5023,77 @@ def observation_list():
 @app.route('/vacations', methods=['GET', 'POST'])
 def vacation_list():
     vacations = load_vacations()
+    error = None
+
+    def includes_year(raw_value):
+        raw_value = (raw_value or '').strip()
+        if not raw_value:
+            return False
+        normalized = raw_value.replace('/', '-').replace('.', '-').replace(' ', '')
+        parts = [p for p in normalized.split('-') if p]
+        if len(parts) < 3:
+            return False
+        return any(len(part) == 4 for part in parts)
+
     if request.method == 'POST':
-        start = parse_input_date(request.form['start'])
-        end = parse_input_date(request.form['end'])
-        vacations.append({
-            'id': str(uuid.uuid4()),
-            'worker': request.form['worker'],
-            'start': start.isoformat() if start else '',
-            'end': end.isoformat() if end else '',
-        })
-        save_vacations(vacations)
-        return redirect(url_for('vacation_list'))
-    return render_template('vacations.html', vacations=vacations, workers=active_workers(), today=local_today().isoformat())
+        start_raw = request.form['start']
+        end_raw = request.form['end']
+
+        if not (includes_year(start_raw) and includes_year(end_raw)):
+            error = 'Las fechas deben incluir el año (dd/mm/aaaa).'
+        else:
+            start = parse_input_date(start_raw)
+            end = parse_input_date(end_raw)
+            if not start or not end:
+                error = 'Introduce fechas de inicio y fin válidas.'
+            else:
+                vacations.append({
+                    'id': str(uuid.uuid4()),
+                    'worker': request.form['worker'],
+                    'start': start.isoformat(),
+                    'end': end.isoformat(),
+                })
+                save_vacations(vacations)
+                return redirect(url_for('vacation_list'))
+    today = local_today()
+
+    def parse_iso(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def vacation_sort_key(vacation):
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        reference = start_date or end_date or today
+        effective_end = end_date or start_date or reference
+        is_past = effective_end < today
+        ref_ord = reference.toordinal()
+        if not is_past:
+            return (0, ref_ord)
+        return (1, -ref_ord)
+
+    ordered_vacations = sorted(vacations, key=vacation_sort_key)
+
+    formatted_vacations = []
+    for vacation in ordered_vacations:
+        entry = dict(vacation)
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        entry['start_display'] = start_date.strftime('%d/%m/%Y') if start_date else ''
+        entry['end_display'] = end_date.strftime('%d/%m/%Y') if end_date else ''
+        formatted_vacations.append(entry)
+
+    return render_template(
+        'vacations.html',
+        vacations=formatted_vacations,
+        workers=active_workers(),
+        today=today.isoformat(),
+        error=error,
+    )
 
 
 @app.route('/delete_vacation/<vid>', methods=['POST'])
@@ -2559,33 +5139,186 @@ def remove_vacation():
     return ('', 204)
 
 
+@app.route('/assign_vacation_day', methods=['POST'])
+def assign_vacation_day():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    vacations = load_vacations()
+    already_marked = False
+    for entry in vacations:
+        if entry.get('worker') != worker:
+            continue
+        try:
+            start = date.fromisoformat(entry.get('start'))
+            end = date.fromisoformat(entry.get('end'))
+        except (TypeError, ValueError):
+            continue
+        if start <= day <= end:
+            already_marked = True
+            break
+    if not already_marked:
+        vacations.append(
+            {
+                'id': str(uuid.uuid4()),
+                'worker': worker,
+                'start': day.isoformat(),
+                'end': day.isoformat(),
+            }
+        )
+        save_vacations(vacations)
+    return ('', 204)
+
+
+@app.route('/update_worker_day_hours', methods=['POST'])
+def update_worker_day_hours():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    hours_value = data.get('hours')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    try:
+        hours = int(hours_value)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Horas no válidas'}), 400
+    if hours < 1 or hours > 10:
+        return jsonify({'error': 'Horas fuera de rango'}), 400
+    overrides = load_worker_day_hours()
+    worker_map = overrides.get(worker, {})
+    worker_map[day.isoformat()] = hours
+    overrides[worker] = worker_map
+    save_worker_day_hours(overrides)
+    return ('', 204)
+
+
 @app.route('/resources', methods=['GET', 'POST'])
 def resources():
     workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+    current_order_snapshot = list(workers)
     inactive = set(load_inactive_workers())
+    worker_overrides = load_worker_hours()
     if request.method == 'POST':
         if 'add_worker' in request.form:
             new_worker = request.form.get('new_worker', '').strip()
             if new_worker and new_worker not in WORKERS:
                 _schedule_mod.add_worker(new_worker)
             return redirect(url_for('resources'))
+        rename_pairs = []
+        seen_targets = set()
+        for key in request.form.keys():
+            if not key.startswith('worker_name__'):
+                continue
+            idx = key.split('__', 1)[-1]
+            original = request.form.get(f'worker_original__{idx}', '').strip()
+            new_value = request.form.get(key, '').strip()
+            if not original or not new_value or original == new_value:
+                continue
+            if new_value in seen_targets:
+                continue
+            rename_pairs.append((original, new_value))
+            seen_targets.add(new_value)
+        rename_map = {}
+        for original, new_value in rename_pairs:
+            if rename_worker(original, new_value):
+                rename_map[original] = new_value
+        if rename_map:
+            workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+            current_order_snapshot = list(workers)
+            inactive = set(load_inactive_workers())
+            worker_overrides = load_worker_hours()
         active = request.form.getlist('worker')
-        inactive = [w for w in workers if w not in active]
-        save_inactive_workers(inactive)
+        if rename_map:
+            active = [rename_map.get(w, w) for w in active]
+        new_inactive = [w for w in workers if w not in active]
+        if set(new_inactive) != inactive:
+            save_inactive_workers(new_inactive)
+            inactive = set(new_inactive)
         order = request.form.getlist('order')
+        if rename_map and order:
+            order = [rename_map.get(w, w) for w in order]
         if order:
-            set_worker_order(order)
+            cleaned_order = []
+            seen = set()
+            for name in order:
+                if name in workers and name not in seen:
+                    cleaned_order.append(name)
+                    seen.add(name)
+            for name in workers:
+                if name not in seen:
+                    cleaned_order.append(name)
+            if cleaned_order != current_order_snapshot:
+                set_worker_order(cleaned_order)
+                workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+                current_order_snapshot = list(workers)
+        hours_modified = False
+        for key, changed in request.form.items():
+            if not key.startswith('hours_changed__'):
+                continue
+            if changed != '1':
+                continue
+            idx = key.split('__', 1)[-1]
+            worker = request.form.get(f'hours_worker__{idx}')
+            if rename_map and worker:
+                worker = rename_map.get(worker, worker)
+            if not worker:
+                continue
+            value = request.form.get(f'hours__{idx}', '').strip()
+            if value == 'inf' or not value:
+                if worker in worker_overrides:
+                    worker_overrides.pop(worker, None)
+                    hours_modified = True
+                continue
+            try:
+                hours_val = int(value)
+            except ValueError:
+                continue
+            if 1 <= hours_val <= 12:
+                if worker_overrides.get(worker) != hours_val:
+                    worker_overrides[worker] = hours_val
+                    hours_modified = True
+        if hours_modified:
+            save_worker_hours(worker_overrides)
         get_projects()
         return redirect(url_for('resources'))
-    return render_template('resources.html', workers=workers, inactive=inactive)
+    worker_limits = {}
+    for w in workers:
+        limit = HOURS_LIMITS.get(w)
+        if isinstance(limit, (int, float)) and limit == float('inf'):
+            worker_limits[w] = 'inf'
+        elif isinstance(limit, (int, float)):
+            worker_limits[w] = int(limit)
+        else:
+            worker_limits[w] = HOURS_PER_DAY
+    hour_options = list(range(1, 13))
+    return render_template(
+        'resources.html',
+        workers=workers,
+        inactive=inactive,
+        worker_limits=worker_limits,
+        hour_options=hour_options,
+    )
 
 
 @app.route('/complete')
 def complete():
     projects = get_visible_projects()
     schedule, conflicts = schedule_projects(projects)
+    annotate_schedule_frozen_background(schedule)
+    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -2598,6 +5331,7 @@ def complete():
     for item in unplanned_raw:
         pid = item['pid']
         phase = item['phase']
+        part = item.get('part')
         proj = groups.setdefault(
             pid,
             {
@@ -2608,13 +5342,15 @@ def complete():
                 'phases': {},
             },
         )
+        phase_key = (phase, part) if part is not None else (phase, None)
         ph = proj['phases'].setdefault(
-            phase,
+            phase_key,
             {
                 'project': item['project'],
                 'client': item['client'],
                 'pid': pid,
                 'phase': phase,
+                'part': part,
                 'color': item.get('color'),
                 'due_date': item.get('due_date'),
                 'start_date': item.get('start_date'),
@@ -2624,6 +5360,7 @@ def complete():
                 'due_status': item.get('due_status'),
                 'blocked': item.get('blocked', False),
                 'frozen': item.get('frozen', False),
+                'frozen_background': item.get('frozen_background'),
                 'auto': item.get('auto', False),
             },
         )
@@ -2644,6 +5381,9 @@ def complete():
             ph['blocked'] = True
         if item.get('frozen'):
             ph['frozen'] = True
+            bg = item.get('frozen_background')
+            if bg:
+                ph['frozen_background'] = bg
         if item.get('auto'):
             ph['auto'] = True
     unplanned_list = []
@@ -2671,8 +5411,11 @@ def complete():
     extra = load_extra_conflicts()
     conflicts.extend(extra)
     dismissed = load_dismissed()
-    conflicts = [c for c in conflicts if c['key'] not in dismissed]
-    conflicts, deadline_conflicts = split_deadline_conflicts(conflicts)
+    conflicts = [
+        c
+        for c in conflicts
+        if c['key'] not in dismissed and c.get('message') != 'No se cumple la fecha de entrega'
+    ]
 
     sort_option = request.args.get('sort', 'created')
     orig_order = {p['id']: idx for idx, p in enumerate(projects)}
@@ -2719,8 +5462,6 @@ def complete():
     filtered_projects = expand_for_display(filtered_projects)
 
     unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
-    unplanned_with = [g for g in unplanned_list if g.get('material_date')]
-    unplanned_without = [g for g in unplanned_list if not g.get('material_date')]
 
     points = split_markers(schedule)
 
@@ -2729,6 +5470,11 @@ def complete():
     end = today + timedelta(days=180)
     days, cols, week_spans = build_calendar(start, end)
     hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
+    worker_limits_map = {
+        worker: HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        for worker in WORKERS
+    }
     note_map = {}
     for n in notes:
         note_map.setdefault(n['date'], []).append(n['description'])
@@ -2743,15 +5489,125 @@ def complete():
             except ValueError:
                 fmt = ''
         worker_note_map[w] = {'text': text, 'edited': fmt}
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
+    for archived_pid in archived_project_map.keys():
+        material_status_map[str(archived_pid)] = 'archived'
+        material_missing_map.setdefault(str(archived_pid), [])
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'phase_deadline_status': task.get('phase_deadline_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'frozen_background': task.get('frozen_background'),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
+    unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
+
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
+
     project_map = {}
     for p in projects:
         p.setdefault('kanban_attachments', [])
         p.setdefault('kanban_display_fields', {})
-        project_map[p['id']] = {
+        entry = {
             **p,
             'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
             'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
         }
+        pid = p.get('id')
+        if pid:
+            pid_key = str(pid)
+            entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
+        project_map[p['id']] = entry
+    for pid, info in archived_project_map.items():
+        info.setdefault('kanban_display_fields', {})
+        info.setdefault('kanban_attachments', [])
+        info['material_status'] = material_status_map.get(str(pid), 'archived')
+        info['material_missing_titles'] = material_missing_map.get(str(pid), [])
+        project_map[pid] = info
+        project_map[str(pid)] = info
     start_map = phase_start_map(projects)
 
     return render_template(
@@ -2760,7 +5616,6 @@ def complete():
         cols=cols,
         week_spans=week_spans,
         conflicts=conflicts,
-        deadline_conflicts=deadline_conflicts,
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
@@ -2776,9 +5631,13 @@ def complete():
         hours=hours_map,
         split_points=points,
         palette=COLORS,
-        unplanned_with=unplanned_with,
-        unplanned_without=unplanned_without,
+        unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
         worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
+        worker_day_hours=worker_day_overrides,
+        worker_limits=worker_limits_map,
     )
 
 
@@ -2910,6 +5769,7 @@ def update_phase_hours():
     pid = data.get('pid')
     phase = data.get('phase')
     hours_val = data.get('hours')
+    part_val = data.get('part')
     next_url = data.get('next') or request.args.get('next') or url_for('project_list')
     if not pid or not phase or hours_val is None:
         return jsonify({'error': 'Datos incompletos'}), 400
@@ -2917,52 +5777,115 @@ def update_phase_hours():
         hours = int(hours_val)
     except Exception:
         return jsonify({'error': 'Horas inválidas'}), 400
+    part_index = None
+    if part_val not in (None, '', 'null'):
+        try:
+            part_index = int(part_val)
+        except Exception:
+            return jsonify({'error': 'Parte inválida'}), 400
+        if part_index < 0:
+            return jsonify({'error': 'Parte inválida'}), 400
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
+    proj.setdefault('auto_hours', {})
     if hours <= 0:
-        if phase in proj['phases']:
-            proj['phases'].pop(phase, None)
-            if proj.get('assigned'):
-                proj['assigned'].pop(phase, None)
-            if proj.get('segment_starts'):
-                proj['segment_starts'].pop(phase, None)
-                if not proj['segment_starts']:
-                    proj.pop('segment_starts')
-            if proj.get('segment_workers'):
-                proj['segment_workers'].pop(phase, None)
-                if not proj['segment_workers']:
-                    proj.pop('segment_workers')
-            if not proj.get('phases'):
-                remove_project_and_preserve_schedule(projects, pid)
-                if request.is_json:
-                    return '', 204
-                return redirect(next_url)
-            proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+        removed = _remove_phase_references(proj, phase)
+        if not proj.get('phases'):
+            remove_project_and_preserve_schedule(projects, pid)
+            if request.is_json:
+                return '', 204
+            return redirect(next_url)
+        if removed:
+            proj['frozen_tasks'] = [
+                t for t in proj.get('frozen_tasks', []) if t['phase'] != phase
+            ]
     else:
         prev_val = proj['phases'].get(phase)
         was_list = isinstance(prev_val, list)
-        prev_total = (
-            sum(map(int, prev_val)) if isinstance(prev_val, list)
-            else int(prev_val or 0)
-        )
-        proj['phases'][phase] = hours
+        prev_total = _phase_total_hours(prev_val)
         assigned = proj.setdefault('assigned', {})
-        if prev_total <= 0:
-            assigned[phase] = UNPLANNED
+        if part_index is not None:
+            if not isinstance(prev_val, list):
+                return jsonify({'error': 'La fase no está dividida'}), 400
+            if part_index >= len(prev_val):
+                return jsonify({'error': 'Parte inválida'}), 400
+
+            def _coerce_part(value):
+                if isinstance(value, int):
+                    return value
+                if isinstance(value, float):
+                    if not float(value).is_integer():
+                        raise ValueError
+                    return int(value)
+                text = '' if value is None else str(value).strip()
+                if not text:
+                    raise ValueError
+                try:
+                    return int(text)
+                except Exception:
+                    num = float(text)
+                    if not float(num).is_integer():
+                        raise ValueError
+                    return int(num)
+
+            try:
+                current_parts = [_coerce_part(item) for item in prev_val]
+            except Exception:
+                return jsonify({'error': 'Horas inválidas registradas en la fase'}), 400
+
+            diff = hours - prev_total
+            new_value = current_parts[part_index] + diff
+            if new_value <= 0:
+                return jsonify({'error': 'La parte resultante debe ser mayor que cero'}), 400
+
+            current_parts[part_index] = new_value
+            proj['phases'][phase] = current_parts
+            if assigned.get(phase) in (None, ''):
+                assigned[phase] = UNPLANNED
+            seg_map = proj.get('segment_starts', {})
+            if seg_map and phase in seg_map:
+                seg_list = seg_map[phase]
+                if seg_list is not None and len(seg_list) < len(current_parts):
+                    seg_list.extend([None] * (len(current_parts) - len(seg_list)))
+            hour_map = proj.get('segment_start_hours', {})
+            if hour_map and phase in hour_map:
+                hour_list = hour_map[phase]
+                if hour_list is not None and len(hour_list) < len(current_parts):
+                    hour_list.extend([0] * (len(current_parts) - len(hour_list)))
+            worker_map = proj.get('segment_workers', {})
+            if worker_map and phase in worker_map:
+                worker_list = worker_map[phase]
+                if worker_list is not None and len(worker_list) < len(current_parts):
+                    worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(current_parts) - len(worker_list)))
         else:
-            assigned.setdefault(phase, UNPLANNED)
-        if was_list:
-            if proj.get('segment_starts'):
-                proj['segment_starts'].pop(phase, None)
-                if not proj['segment_starts']:
-                    proj.pop('segment_starts')
-            if proj.get('segment_workers'):
-                proj['segment_workers'].pop(phase, None)
-                if not proj['segment_workers']:
-                    proj.pop('segment_workers')
+            proj['phases'][phase] = hours
+            if prev_total <= 0:
+                assigned[phase] = UNPLANNED
+            else:
+                assigned.setdefault(phase, UNPLANNED)
+            if was_list:
+                if proj.get('segment_starts'):
+                    proj['segment_starts'].pop(phase, None)
+                    if not proj['segment_starts']:
+                        proj.pop('segment_starts')
+                if proj.get('segment_start_hours'):
+                    proj['segment_start_hours'].pop(phase, None)
+                    if not proj['segment_start_hours']:
+                        proj.pop('segment_start_hours')
+                if proj.get('segment_workers'):
+                    proj['segment_workers'].pop(phase, None)
+                    if not proj['segment_workers']:
+                        proj.pop('segment_workers')
+        if phase == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                proj['frozen_tasks'] = [
+                    t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
+                ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
     schedule_projects(projects)
     save_projects(projects)
@@ -2999,24 +5922,14 @@ def update_project_row():
     if 'color' in data:
         proj['color'] = data['color']
 
+    proj.setdefault('auto_hours', {})
     for ph, val in (data.get('phases') or {}).items():
         try:
             hours = int(val)
         except Exception:
             continue
         if hours <= 0:
-            if ph in proj.get('phases', {}):
-                proj['phases'].pop(ph, None)
-                if proj.get('assigned'):
-                    proj['assigned'].pop(ph, None)
-                if proj.get('segment_starts'):
-                    proj['segment_starts'].pop(ph, None)
-                    if not proj['segment_starts']:
-                        proj.pop('segment_starts')
-                if proj.get('segment_workers'):
-                    proj['segment_workers'].pop(ph, None)
-                    if not proj['segment_workers']:
-                        proj.pop('segment_workers')
+            if _remove_phase_references(proj, ph):
                 modified.add(ph)
             continue
         proj.setdefault('phases', {})
@@ -3041,6 +5954,11 @@ def update_project_row():
                 proj['segment_workers'].pop(ph, None)
                 if not proj['segment_workers']:
                     proj.pop('segment_workers')
+        if ph == AUTO_RECEIVING_PHASE:
+            proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
+        else:
+            if _cleanup_auto_receiving_placeholder(proj):
+                modified.add(AUTO_RECEIVING_PHASE)
         modified.add(ph)
 
     if data.get('phase_starts'):
@@ -3096,7 +6014,11 @@ def update_image(pid):
         fname = f"{uuid.uuid4()}{ext}"
         save_path = os.path.join(UPLOAD_FOLDER, fname)
         file.save(save_path)
+        previous_image = proj.get('image')
         proj['image'] = f"uploads/{fname}"
+        if previous_image and previous_image != proj['image']:
+            _remove_upload_file(previous_image)
+        prune_orphan_uploads(projects)
         save_projects(projects)
     if request.is_json:
         return '', 204
@@ -3135,10 +6057,8 @@ def delete_phase():
     projects = get_projects()
     for p in projects:
         if p['id'] == pid:
-            if phase in p.get('phases', {}):
-                p['phases'].pop(phase, None)
-                if p.get('assigned'):
-                    p['assigned'].pop(phase, None)
+            if phase in (p.get('phases') or {}):
+                _remove_phase_references(p, phase)
                 if not p.get('phases'):
                     remove_project_and_preserve_schedule(projects, pid)
                 else:
@@ -3153,19 +6073,43 @@ def split_phase_route():
     pid = data.get('pid')
     phase = data.get('phase')
     date_str = data.get('date')
-    part1_str = data.get('part1')
-    part2_str = data.get('part2')
-    if not pid or not phase or not date_str or part1_str is None or part2_str is None:
+    parts_raw = data.get('parts')
+    part_values = []
+    if isinstance(parts_raw, list):
+        part_values = parts_raw
+    elif isinstance(parts_raw, str):
+        try:
+            parsed_parts = json.loads(parts_raw)
+            if isinstance(parsed_parts, list):
+                part_values = parsed_parts
+        except Exception:
+            part_values = []
+
+    if not part_values:
+        part1_str = data.get('part1')
+        part2_str = data.get('part2')
+        if part1_str is None or part2_str is None:
+            return '', 400
+        part_values = [part1_str, part2_str]
+
+    if not pid or not phase or not date_str:
         return '', 400
     try:
         date.fromisoformat(date_str)
     except Exception:
         return '', 400
+    parsed_parts = []
     try:
-        part1 = int(part1_str)
-        part2 = int(part2_str)
+        for item in part_values:
+            parsed = int(item)
+            parsed_parts.append(parsed)
     except Exception:
         return '', 400
+
+    if len(parsed_parts) < 2:
+        return jsonify({'error': 'Debes crear al menos dos partes'}), 400
+    if any(val <= 0 for val in parsed_parts):
+        return jsonify({'error': 'Las partes deben ser mayores que cero'}), 400
 
     projects = get_projects()
     proj = next((p for p in projects if p['id'] == pid), None)
@@ -3173,14 +6117,40 @@ def split_phase_route():
         return '', 400
 
     val = proj['phases'][phase]
-    total = sum(int(v) for v in val) if isinstance(val, list) else int(val)
-    if part1 + part2 != total:
+    total = _phase_total_hours(val)
+    if total <= 0:
+        return jsonify({'error': 'La fase no tiene horas válidas'}), 400
+    if sum(parsed_parts) != total:
         return jsonify({'error': 'Las horas no coinciden con el total'}), 400
 
-    proj['phases'][phase] = [part1, part2]
-    proj.setdefault('segment_starts', {}).setdefault(phase, [None, None])
+    proj['phases'][phase] = parsed_parts
+
+    seg_map = proj.setdefault('segment_starts', {})
+    prev_starts = list(seg_map.get(phase) or [])
+    if len(prev_starts) >= len(parsed_parts):
+        seg_map[phase] = prev_starts[: len(parsed_parts)]
+    else:
+        seg_map[phase] = prev_starts + [None] * (len(parsed_parts) - len(prev_starts))
+
+    hour_map = proj.setdefault('segment_start_hours', {})
+    prev_hours = list(hour_map.get(phase) or [])
+    if len(prev_hours) >= len(parsed_parts):
+        hour_map[phase] = prev_hours[: len(parsed_parts)]
+    else:
+        hour_map[phase] = prev_hours + [None] * (len(parsed_parts) - len(prev_hours))
+
     worker = proj.get('assigned', {}).get(phase)
-    proj.setdefault('segment_workers', {}).setdefault(phase, [worker, worker])
+    worker_map = proj.setdefault('segment_workers', {})
+    prev_workers = list(worker_map.get(phase) or [])
+    if not prev_workers:
+        prev_workers = [worker] * len(parsed_parts)
+    else:
+        if len(prev_workers) >= len(parsed_parts):
+            prev_workers = prev_workers[: len(parsed_parts)]
+        else:
+            prev_workers.extend([worker] * (len(parsed_parts) - len(prev_workers)))
+    worker_map[phase] = prev_workers
+
     save_projects(projects)
     return '', 204
 
@@ -3213,15 +6183,45 @@ def unsplit_phase():
         if worker:
             proj.setdefault('assigned', {})[phase] = worker
     proj['phases'][phase] = total
-    segs = proj.get('segment_starts', {}).get(phase)
-    if segs:
-        proj['segment_starts'][phase] = [segs[0]]
-        if not segs[0]:
-            proj['segment_starts'].pop(phase)
-    segw = proj.get('segment_workers', {}).get(phase)
-    if segw is not None:
-        proj['segment_workers'].pop(phase, None)
-        if not proj['segment_workers']:
+    seg_map = proj.get('segment_starts')
+    hour_map = proj.get('segment_start_hours')
+    starts = (seg_map or {}).get(phase) or []
+    hours_list = (hour_map or {}).get(phase) or []
+    chosen_idx = None
+    for idx, start in enumerate(starts):
+        if start:
+            chosen_idx = idx
+            break
+    if chosen_idx is None and starts:
+        first = starts[0]
+        if first:
+            chosen_idx = 0
+    chosen_start = None
+    chosen_hour = None
+    if chosen_idx is not None:
+        chosen_start = starts[chosen_idx]
+        if chosen_start:
+            if hours_list and chosen_idx < len(hours_list):
+                chosen_hour = hours_list[chosen_idx]
+    if seg_map is not None:
+        if chosen_start:
+            seg_map[phase] = [chosen_start]
+        else:
+            seg_map.pop(phase, None)
+        if not seg_map:
+            proj.pop('segment_starts', None)
+    if hour_map is not None:
+        if chosen_start:
+            hour_value = chosen_hour if chosen_hour is not None else 0
+            hour_map[phase] = [hour_value]
+        else:
+            hour_map.pop(phase, None)
+        if not hour_map:
+            proj.pop('segment_start_hours', None)
+    seg_workers = proj.get('segment_workers')
+    if seg_workers and phase in seg_workers:
+        seg_workers.pop(phase, None)
+        if not seg_workers:
             proj.pop('segment_workers')
     save_projects(projects)
     return '', 204
@@ -3242,6 +6242,8 @@ def move_phase():
             part = int(part)
         except Exception:
             part = None
+    manual_flag = str(data.get('manual_bucket')).lower() == 'true'
+    manual_position = data.get('manual_position')
     # 🔧 Respetamos el modo que viene en la petición
     mode = data.get('mode', 'split')
     push_pid = data.get('push_pid')
@@ -3270,6 +6272,31 @@ def move_phase():
 
     projects = get_projects()
     original_projects = copy.deepcopy(projects)
+    before_mapping = compute_schedule_map(original_projects)
+    pid_candidates = []
+    for candidate in (pid, str(pid)):
+        if candidate not in pid_candidates:
+            pid_candidates.append(candidate)
+    try:
+        pid_int = int(pid)
+    except Exception:
+        pid_int = None
+    else:
+        for candidate in (pid_int, str(pid_int)):
+            if candidate not in pid_candidates:
+                pid_candidates.append(candidate)
+
+    def _find_phase_entry(mapping_data):
+        for key in pid_candidates:
+            entries = mapping_data.get(key)
+            if not entries:
+                continue
+            for w, d, ph, _, prt in entries:
+                if ph == phase and (part is None or prt == part):
+                    return d, w
+        return None, None
+
+    before_day, before_worker = _find_phase_entry(before_mapping)
     tracker_events = []
     new_day, warn, info = move_phase_date(
         projects,
@@ -3294,15 +6321,16 @@ def move_phase():
     # scheduled elsewhere. This prevents the phase from jumping to the next
     # available day when the chosen cell has no remaining hours.
     mapping = compute_schedule_map(projects)
-    actual_day = None
-    for w, d, ph, hrs, prt in mapping.get(pid, []):
-        if ph == phase and (part is None or prt == part):
-            actual_day = d
-            break
+    actual_day, actual_worker = _find_phase_entry(mapping)
     if actual_day != date_str:
         projects[:] = original_projects
         save_projects(projects)
         return jsonify({'error': 'Jornada ocupada'}), 409
+
+    if actual_worker == UNPLANNED and manual_flag:
+        manual_bucket_add(pid, phase, part, manual_position)
+    else:
+        manual_bucket_remove(pid, phase, part)
 
     # Build tracker entry with detailed reasoning
     proj = next((p for p in projects if p['id'] == pid), {})
@@ -3316,9 +6344,10 @@ def move_phase():
                 'client': p2.get('client', ''),
                 'phase': ev['phase'],
             })
+    movement_timestamp = local_now().isoformat()
     logs = load_tracker()
     logs.append({
-        'timestamp': local_now().isoformat(),
+        'timestamp': movement_timestamp,
         'project': proj.get('name', ''),
         'client': proj.get('client', ''),
         'phase': phase,
@@ -3326,6 +6355,21 @@ def move_phase():
         'affected': affected_entries,
     })
     save_tracker(logs)
+
+    previous_worker = (before_worker or '').strip() or UNPLANNED
+    current_worker = (actual_worker or '').strip() or UNPLANNED
+    if before_day != actual_day or previous_worker != current_worker:
+        history = load_phase_history()
+        key = phase_history_key(pid, phase, part)
+        entry = {
+            'timestamp': movement_timestamp,
+            'from_day': before_day,
+            'to_day': actual_day,
+            'from_worker': previous_worker,
+            'to_worker': current_worker,
+        }
+        history.setdefault(key, []).append(entry)
+        save_phase_history(history)
 
     blockers = material_blockers_for_project(projects, pid, new_day)
 
@@ -3340,6 +6384,48 @@ def move_phase():
         resp['warning'] = warn
     return jsonify(resp)
 
+
+@app.route('/phase_history')
+def phase_history():
+    pid = request.args.get('pid')
+    phase = request.args.get('phase')
+    part = request.args.get('part')
+    if not pid or not phase:
+        return jsonify({'history': []})
+    if part in (None, '', 'None'):
+        part_value = None
+    else:
+        part_value = part
+    history = load_phase_history()
+    key = phase_history_key(pid, phase, part_value)
+    entries = history.get(key, []) if isinstance(history, dict) else []
+    cleaned = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        ts = item.get('timestamp')
+        if not isinstance(ts, str):
+            continue
+        cleaned.append({
+            'timestamp': ts,
+            'from_day': item.get('from_day'),
+            'to_day': item.get('to_day'),
+            'from_worker': item.get('from_worker'),
+            'to_worker': item.get('to_worker'),
+        })
+    cleaned.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    return jsonify({'history': cleaned})
+
+
+@app.route('/manual_bucket/reorder', methods=['POST'])
+def manual_bucket_reorder_route():
+    data = request.get_json(silent=True) or {}
+    order = data.get('order')
+    if not isinstance(order, list):
+        return jsonify({'error': 'Datos inválidos'}), 400
+    if not manual_bucket_reorder(order):
+        return jsonify({'error': 'Datos inválidos'}), 400
+    return '', 204
 
 
 def remove_project_and_preserve_schedule(projects, pid):
@@ -3357,6 +6443,7 @@ def remove_project_and_preserve_schedule(projects, pid):
     if not removed:
         return None
     projects.remove(removed)
+    _remove_upload_file(removed.get('image'))
     # Drop any persisted conflicts tied to the removed project so stale
     # warnings do not linger in the interface.
     extras = load_extra_conflicts()
@@ -3400,6 +6487,7 @@ def remove_project_and_preserve_schedule(projects, pid):
                     wl.append(None)
                 wl[part] = worker
     save_projects(projects)
+    prune_orphan_uploads(projects)
     return removed
 
 @app.route('/delete_project/<pid>', methods=['POST'])
@@ -3431,7 +6519,7 @@ def clear_conflicts():
     """Mark all current conflicts as dismissed and clear extras."""
     projects = get_projects()
     _, conflicts = schedule_projects(projects)
-    conflicts, _ = split_deadline_conflicts(conflicts)
+    conflicts = [c for c in conflicts if c.get('message') != 'No se cumple la fecha de entrega']
     extras = load_extra_conflicts()
     keys = [c['key'] for c in conflicts] + [e['key'] for e in extras]
     dismissed = load_dismissed()
@@ -3595,12 +6683,21 @@ def kanbanize_webhook():
         if isinstance(fetched, dict):
             card = fetched
 
+    card_tags = _extract_card_tags(card)
+
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
+    if isinstance(column, str):
+        clean_column = column.strip()
+    elif column:
+        clean_column = str(column).strip()
+    else:
+        clean_column = ''
 
     # Retrieve the most recent stored version of this card to detect which
     # fields actually changed in Kanbanize.
     prev_card = last_kanban_card(cid)
+    prev_card_tags = _extract_card_tags(prev_card)
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
@@ -3624,13 +6721,25 @@ def kanbanize_webhook():
             else:
                 new_cards.append(c)
         prev_date = prev.get('stored_title_date') if prev else None
+        prev_last_column = prev.get('last_column') if prev else ''
         title = card.get('title') or ''
         m = re.search(r"\((\d{2})/(\d{2})\)", title)
         if m:
             stored_date = f"{m.group(1)}/{m.group(2)}"
         else:
             stored_date = prev_date
-        new_cards.append({'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date})
+        last_column = clean_column or prev_last_column
+        if not last_column and prev:
+            prev_card_data = prev.get('card') or {}
+            prev_column_value = pick(prev_card_data, 'columnname', 'columnName', 'column')
+            if isinstance(prev_column_value, str):
+                last_column = prev_column_value.strip()
+            elif prev_column_value:
+                last_column = str(prev_column_value).strip()
+        entry = {'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date}
+        if last_column:
+            entry['last_column'] = last_column
+        new_cards.append(entry)
         save_kanban_cards(new_cards)
         broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Tarjeta procesada"}), 200
@@ -3640,14 +6749,19 @@ def kanbanize_webhook():
     if lane_norm not in allowed_lanes_n:
         return jsonify({"mensaje": f"Lane ignorada ({lane})"}), 200
 
+    name_candidates = [
+        pick(card, 'customCardId', 'effectiveCardId'),
+        pick(card, 'title'),
+    ]
+    name_candidates = [n for n in name_candidates if n]
+    if column_norm != 'ready to archive':
+        remove_archived_calendar_entry(
+            kanban_id=str(cid) if cid else None,
+            names=name_candidates,
+        )
+
     if column_norm == 'ready to archive':
         projects = load_projects()
-        name_candidates = [
-            pick(card, 'customCardId', 'effectiveCardId'),
-            pick(card, 'title'),
-        ]
-        name_candidates = [n for n in name_candidates if n]
-
         pid = None
         matched_project = None
         for p in projects:
@@ -3658,18 +6772,76 @@ def kanbanize_webhook():
                 matched_project = p
                 break
         if pid:
+            pid_str = str(pid)
+            snapshot_projects = copy.deepcopy(projects)
+            snapshot_schedule, _ = schedule_projects(snapshot_projects)
+            annotate_schedule_frozen_background(snapshot_schedule)
+            archived_tasks = []
+            for worker, days in snapshot_schedule.items():
+                if worker == UNPLANNED:
+                    continue
+                if not isinstance(days, dict):
+                    continue
+                for day, tasks in days.items():
+                    if not isinstance(tasks, list):
+                        continue
+                    for task in tasks:
+                        if str(task.get('pid')) != pid_str:
+                            continue
+                        task_copy = copy.deepcopy(task)
+                        task_copy['archived_shadow'] = True
+                        task_copy['frozen'] = True
+                        task_copy['color'] = '#d9d9d9'
+                        task_copy['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+                        task_copy['pid'] = pid_str
+                        archived_tasks.append(
+                            {
+                                'worker': worker,
+                                'day': day,
+                                'task': task_copy,
+                            }
+                        )
+
             removed_project = remove_project_and_preserve_schedule(projects, pid)
             save_projects(projects)
 
-            archived_info = removed_project or matched_project or {}
+            archived_source = removed_project or matched_project or {}
+            archived_project = copy.deepcopy(archived_source) if isinstance(archived_source, dict) else {}
+            if archived_project:
+                archived_project['kanban_archived'] = True
+                archived_project['kanban_column'] = (
+                    clean_column or archived_project.get('kanban_column') or 'Ready to Archive'
+                )
+                archived_project['id'] = pid_str
+                if cid and not archived_project.get('kanban_id'):
+                    archived_project['kanban_id'] = cid
+                archived_project['archived_shadow'] = True
+
             if name_candidates:
                 fallback_name = name_candidates[0]
             elif cid:
                 fallback_name = f"Tarjeta {cid}"
             else:
                 fallback_name = 'Proyecto'
-            project_name = archived_info.get('name') or fallback_name
-            client_name = archived_info.get('client') or pick(card, 'client', 'Cliente', 'customer') or ''
+            project_name = archived_project.get('name') or fallback_name
+            client_name = (
+                archived_project.get('client')
+                or pick(card, 'client', 'Cliente', 'customer')
+                or ''
+            )
+
+            store_archived_calendar_entry(
+                {
+                    'pid': pid_str,
+                    'kanban_id': str(cid) if cid else '',
+                    'name': project_name,
+                    'client': client_name,
+                    'lane': lane,
+                    'timestamp': payload_timestamp,
+                    'project': archived_project,
+                    'tasks': archived_tasks,
+                }
+            )
 
             extras = load_extra_conflicts()
             conflict_id = str(uuid.uuid4())
@@ -3705,9 +6877,8 @@ def kanbanize_webhook():
         custom = dict(raw_custom)
     else:
         custom = {}
+    custom.setdefault('CALDERERIA', custom.get('CALDERERÍA'))
     popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
-        custom.pop(k, None)
     card['customFields'] = custom
 
     prev_raw_custom = prev_card.get('customFields') or {}
@@ -3720,8 +6891,8 @@ def kanbanize_webhook():
         prev_custom = dict(prev_raw_custom)
     else:
         prev_custom = {}
-    for k in ['Horas', 'MATERIAL', 'CALDERERÍA']:
-        prev_custom.pop(k, None)
+    prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
+    prev_popup_raw = {field: prev_custom.get(field) for field in KANBAN_POPUP_FIELDS}
 
     deadline_str = card.get('deadline')
     fecha_cli_str = (
@@ -3827,7 +6998,7 @@ def kanbanize_webhook():
         return text or None
 
     display_fields = {}
-    for field in ('LANZAMIENTO', 'MATERIAL', 'PINTADO'):
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
         cleaned = _clean_display_value(popup_raw.get(field))
         if cleaned:
             display_fields[field] = cleaned
@@ -3838,8 +7009,20 @@ def kanbanize_webhook():
         trat_value = _clean_display_value(popup_raw.get('TRATAMIENTO')) or 'Sí'
         display_fields['TRATAMIENTO'] = trat_value
 
+    prev_display_fields = {}
+    for field in ('LANZAMIENTO', 'MATERIAL', 'CALDERERIA', 'PINTADO'):
+        cleaned_prev = _clean_display_value(prev_popup_raw.get(field))
+        if cleaned_prev:
+            prev_display_fields[field] = cleaned_prev
+    if prev_mecan_flag:
+        prev_mecan_value = _clean_display_value(prev_popup_raw.get('MECANIZADO')) or 'Sí'
+        prev_display_fields['MECANIZADO'] = prev_mecan_value
+    if prev_trat_flag:
+        prev_trat_value = _clean_display_value(prev_popup_raw.get('TRATAMIENTO')) or 'Sí'
+        prev_display_fields['TRATAMIENTO'] = prev_trat_value
+
     phase_hours_new_raw = {
-        'recepcionar material': prep_raw,
+        'preparar material': prep_raw,
         'montar': mont_raw,
         'soldar 2º': sold2_raw,
         'soldar': sold_raw,
@@ -3849,7 +7032,7 @@ def kanbanize_webhook():
         'tratamiento': 1 if trat_flag else 0,
     }
     phase_hours_prev = {
-        'recepcionar material': prev_prep_raw,
+        'preparar material': prev_prep_raw,
         'montar': prev_mont_raw,
         'soldar 2º': prev_sold2_raw,
         'soldar': prev_sold_raw,
@@ -3866,14 +7049,16 @@ def kanbanize_webhook():
         and sold_hours <= 0
         and pint_hours <= 0
         and mont2_hours <= 0
+        and not mecan_flag
+        and not trat_flag
     ):
         prep_hours = 1
         auto_prep = True
     fases = []
-    if auto_prep or prep_hours > 0:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours, 'auto': auto_prep})
-    else:
-        fases.append({'nombre': 'recepcionar material', 'duracion': prep_hours})
+    if auto_prep:
+        fases.append({'nombre': 'preparar material', 'duracion': prep_hours, 'auto': True})
+    elif prep_hours > 0:
+        fases.append({'nombre': 'preparar material', 'duracion': prep_hours})
     if mont_hours > 0:
         fases.append({'nombre': 'montar', 'duracion': mont_hours})
     if sold2_hours > 0:
@@ -3949,24 +7134,62 @@ def kanbanize_webhook():
 
     new_phases = {f['nombre']: f['duracion'] for f in fases}
     new_auto = {f['nombre']: True for f in fases if f.get('auto')}
-    if isinstance(column, str):
-        clean_column = column.strip()
-    elif column:
-        clean_column = str(column).strip()
+    prev_column = pick(prev_card, 'columnname', 'columnName', 'column')
+    if isinstance(prev_column, str):
+        prev_clean_column = prev_column.strip()
+    elif prev_column:
+        prev_clean_column = str(prev_column).strip()
     else:
-        clean_column = ''
+        prev_clean_column = ''
+
+    column_changed = clean_column != prev_clean_column
+    attachments_changed = prev_kanban_files != kanban_files
+    display_fields_changed = display_fields != prev_display_fields
+    normalized_tags = sorted(card_tags)
+    prev_normalized_tags = sorted(prev_card_tags)
+    tags_changed = normalized_tags != prev_normalized_tags
+    has_no_planner_tag = 'no planificador' in card_tags
+
+    def _extract_archived_flag(card_data):
+        if not isinstance(card_data, dict):
+            return False
+        for key in ('isArchived', 'IsArchived', 'archived', 'Archived', 'is_archived'):
+            if key in card_data:
+                return bool(card_data.get(key))
+        return False
+
+    is_archived = _extract_archived_flag(card)
+    prev_is_archived = _extract_archived_flag(prev_card)
+
+    if has_no_planner_tag:
+        if existing:
+            removed_project = remove_project_and_preserve_schedule(projects, existing['id'])
+            if removed_project:
+                save_projects(projects)
+        cards = load_kanban_cards()
+        entry_last_column = clean_column or prev_clean_column
+        entry = {'timestamp': payload_timestamp, 'card': card}
+        if entry_last_column:
+            entry['last_column'] = entry_last_column
+        cards.append(entry)
+        save_kanban_cards(cards)
+        broadcast_event({"type": "kanban_update"})
+        return jsonify({"mensaje": "Tarjeta ignorada (tag No planificador)"}), 200
 
     if existing:
         changed = False
-        if existing.get('kanban_column') != clean_column:
+        if column_changed and existing.get('kanban_column') != clean_column:
             existing['kanban_column'] = clean_column
             changed = True
-        if existing.get('kanban_archived'):
-            existing['kanban_archived'] = False
+        archived_changed = is_archived != prev_is_archived
+        if archived_changed and existing.get('kanban_archived') != is_archived:
+            existing['kanban_archived'] = is_archived
             changed = True
-        if existing.get('kanban_id') != task_id:
-            existing['kanban_id'] = task_id
-            changed = True
+        id_changed = task_id and task_id != prev_task_id
+        if task_id and (id_changed or not existing.get('kanban_id')):
+            if existing.get('kanban_id') != task_id:
+                existing['kanban_id'] = task_id
+                changed = True
         if prev_nombre_proyecto != nombre_proyecto and existing.get('name') != nombre_proyecto:
             existing['name'] = nombre_proyecto
             changed = True
@@ -3991,11 +7214,14 @@ def kanbanize_webhook():
         if image_path and existing.get('image') != image_path:
             existing['image'] = image_path
             changed = True
-        if prev_kanban_files != kanban_files and existing.get('kanban_attachments') != kanban_files:
+        if attachments_changed and existing.get('kanban_attachments') != kanban_files:
             existing['kanban_attachments'] = kanban_files
             changed = True
-        if existing.get('kanban_display_fields') != display_fields:
+        if display_fields_changed and existing.get('kanban_display_fields') != display_fields:
             existing['kanban_display_fields'] = display_fields
+            changed = True
+        if tags_changed or existing.get('kanban_tags') != normalized_tags:
+            existing['kanban_tags'] = normalized_tags
             changed = True
 
         existing_phases = existing.setdefault('phases', {})
@@ -4035,9 +7261,22 @@ def kanbanize_webhook():
                 if existing_auto.pop(ph, None) is not None:
                     changed = True
 
+        if _cleanup_auto_receiving_placeholder(existing):
+            changed = True
+
         if changed:
             save_projects(projects)
     else:
+        if column_norm == 'pedidos pendiente generar of':
+            cards = load_kanban_cards()
+            entry_last_column = clean_column or prev_clean_column
+            entry = {'timestamp': payload_timestamp, 'card': card}
+            if entry_last_column:
+                entry['last_column'] = entry_last_column
+            cards.append(entry)
+            save_kanban_cards(cards)
+            broadcast_event({"type": "kanban_update"})
+            return jsonify({"mensaje": "Tarjeta ignorada (columna Pedidos pendiente generar OF)"}), 200
         project = {
             'id': str(uuid.uuid4()),
             'name': nombre_proyecto,
@@ -4052,6 +7291,7 @@ def kanbanize_webhook():
             'image': image_path,
             'kanban_attachments': kanban_files,
             'kanban_display_fields': display_fields,
+            'kanban_tags': normalized_tags,
             'planned': False,
             'source': 'api',
             'kanban_id': task_id,
@@ -4064,7 +7304,11 @@ def kanbanize_webhook():
         save_projects(projects)
 
     cards = load_kanban_cards()
-    cards.append({'timestamp': payload_timestamp, 'card': card})
+    entry_last_column = clean_column or prev_clean_column
+    entry = {'timestamp': payload_timestamp, 'card': card}
+    if entry_last_column:
+        entry['last_column'] = entry_last_column
+    cards.append(entry)
     save_kanban_cards(cards)
 
     if not existing:

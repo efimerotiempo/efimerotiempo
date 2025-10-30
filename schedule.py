@@ -2,6 +2,7 @@ from datetime import date, timedelta, datetime, time
 import json
 import os
 import copy
+import unicodedata
 
 from localtime import local_today
 
@@ -16,11 +17,16 @@ DAILY_HOURS_FILE = os.path.join(DATA_DIR, 'daily_hours.json')
 INACTIVE_WORKERS_FILE = os.path.join(DATA_DIR, 'inactive_workers.json')
 EXTRA_WORKERS_FILE = os.path.join(DATA_DIR, 'extra_workers.json')
 WORKER_ORDER_FILE = os.path.join(DATA_DIR, 'worker_order.json')
+WORKER_RENAMES_FILE = os.path.join(DATA_DIR, 'worker_renames.json')
+WORKER_HOURS_FILE = os.path.join(DATA_DIR, 'worker_hours.json')
+WORKER_DAY_HOURS_FILE = os.path.join(DATA_DIR, 'worker_day_hours.json')
+MANUAL_UNPLANNED_FILE = os.path.join(DATA_DIR, 'manual_unplanned.json')
+PHASE_HISTORY_FILE = os.path.join(DATA_DIR, 'phase_history.json')
 
 PHASE_ORDER = [
     'dibujo',
     'pedidos',
-    'recepcionar material',
+    'preparar material',
     'montar',
     'soldar',
     'montar 2º',
@@ -29,6 +35,16 @@ PHASE_ORDER = [
     'tratamiento',
     'pintar',
 ]
+
+PHASE_DEADLINE_FIELDS = {
+    'montar': 'CALDERERIA',
+    'soldar': 'CALDERERIA',
+    'montar 2º': 'CALDERERIA',
+    'soldar 2º': 'CALDERERIA',
+    'mecanizar': 'MECANIZADO',
+    'tratamiento': 'TRATAMIENTO',
+    'pintar': 'PINTADO',
+}
 
 UNPLANNED = 'Sin planificar'
 
@@ -44,7 +60,7 @@ BASE_WORKERS = {
     'Fabio': ['soldar', 'soldar 2º'],
     'Beltxa': ['soldar', 'soldar 2º', 'montar', 'montar 2º'],
     'Igor': ['soldar', 'soldar 2º'],
-    'Albi': ['recepcionar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
+    'Albi': ['preparar material', 'soldar', 'soldar 2º', 'montar', 'montar 2º'],
     'Eneko': ['pintar', 'montar', 'montar 2º', 'soldar', 'soldar 2º'],
 }
 
@@ -86,13 +102,103 @@ def save_worker_order(order):
         json.dump(order, f)
 
 
-def _build_workers(extra=None, order=None):
+def load_worker_renames():
+    if os.path.exists(WORKER_RENAMES_FILE):
+        with open(WORKER_RENAMES_FILE, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        if isinstance(data, dict):
+            cleaned = {}
+            for key, value in data.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    continue
+                key = key.strip()
+                value = value.strip()
+                if not key or not value or key == value:
+                    continue
+                cleaned[key] = value
+            return cleaned
+    return {}
+
+
+def save_worker_renames(renames):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_RENAMES_FILE, 'w') as f:
+        json.dump(renames or {}, f)
+
+def _normalize_display_key(value):
+    if not isinstance(value, str):
+        return None
+    text = value.strip().upper()
+    if not text:
+        return None
+    decomposed = unicodedata.normalize('NFD', text)
+    return ''.join(ch for ch in decomposed if unicodedata.category(ch) != 'Mn')
+
+
+def _parse_phase_deadline(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        text = str(value).strip()
+    if not text or text == '0':
+        return None
+    try:
+        return date.fromisoformat(text)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return datetime.fromisoformat(text).date()
+    except (ValueError, TypeError):
+        pass
+    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y/%m/%d', '%d-%m-%Y', '%Y.%m.%d'):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+
+def _apply_worker_renames(workers, renames):
+    if not renames:
+        return workers
+    cleaned = {}
+    used_targets = set()
+    for original, target in renames.items():
+        if original not in workers:
+            continue
+        target = target.strip()
+        if not target or target in used_targets:
+            continue
+        cleaned[original] = target
+        used_targets.add(target)
+    if not cleaned:
+        return workers
+    renamed = {}
+    for name, phases in workers.items():
+        target = cleaned.get(name)
+        if target:
+            renamed[target] = phases
+        elif name not in cleaned:
+            renamed[name] = phases
+    return renamed
+
+
+def _build_workers(extra=None, order=None, renames=None):
     workers = BASE_WORKERS.copy()
     if extra is None:
         extra = load_extra_workers()
     for w in extra:
         workers[w] = BASE_WORKERS['Eneko'][:]
     workers.update(TAIL_WORKERS)
+    if renames is None:
+        renames = load_worker_renames()
+    workers = _apply_worker_renames(workers, renames)
     if order is None:
         order = load_worker_order()
     if order:
@@ -121,6 +227,115 @@ HOURS_LIMITS['Tratamiento'] = float('inf')
 HOURS_LIMITS[UNPLANNED] = float('inf')
 WEEKEND = {5, 6}  # Saturday=5, Sunday=6 in weekday()
 
+DEFAULT_HOURS_LIMITS = {worker: limit for worker, limit in HOURS_LIMITS.items()}
+
+
+def _sanitize_worker_hours(data):
+    """Return a mapping of worker -> hours limited to 1..12."""
+
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for worker, value in data.items():
+        if worker not in WORKERS:
+            continue
+        try:
+            hours = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= hours <= 12:
+            cleaned[worker] = hours
+    return cleaned
+
+
+def _apply_worker_hours(overrides):
+    """Update ``HOURS_LIMITS`` with the provided overrides."""
+
+    for worker, default in DEFAULT_HOURS_LIMITS.items():
+        HOURS_LIMITS[worker] = default
+    for worker, hours in overrides.items():
+        if worker in HOURS_LIMITS:
+            HOURS_LIMITS[worker] = hours
+
+
+def load_worker_hours():
+    """Return the persisted worker hour overrides."""
+
+    if os.path.exists(WORKER_HOURS_FILE):
+        with open(WORKER_HOURS_FILE, 'r') as f:
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        return _sanitize_worker_hours(raw)
+    return {}
+
+
+def save_worker_hours(data):
+    """Persist worker hour overrides and refresh the limits map."""
+
+    overrides = _sanitize_worker_hours(data or {})
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_HOURS_FILE, 'w') as f:
+        json.dump(overrides, f)
+    _apply_worker_hours(overrides)
+
+
+_apply_worker_hours(load_worker_hours())
+
+
+def _sanitize_worker_day_hours(data):
+    """Return mapping of worker -> {date -> hours} limited to 1..12."""
+
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for worker, entries in data.items():
+        if worker not in WORKERS:
+            continue
+        if not isinstance(entries, dict):
+            continue
+        worker_map = {}
+        for day, value in entries.items():
+            if not isinstance(day, str):
+                continue
+            try:
+                date.fromisoformat(day)
+            except (TypeError, ValueError):
+                continue
+            try:
+                hours = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hours <= 12:
+                worker_map[day] = hours
+        if worker_map:
+            cleaned[worker] = worker_map
+    return cleaned
+
+
+def load_worker_day_hours():
+    """Return persisted worker/day hour overrides."""
+
+    if os.path.exists(WORKER_DAY_HOURS_FILE):
+        with open(WORKER_DAY_HOURS_FILE, 'r') as f:
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        return _sanitize_worker_day_hours(raw)
+    return {}
+
+
+def save_worker_day_hours(data):
+    """Persist worker/day overrides after sanitizing them."""
+
+    overrides = _sanitize_worker_day_hours(data or {})
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(WORKER_DAY_HOURS_FILE, 'w') as f:
+        json.dump(overrides, f)
+    return overrides
+
 
 def add_worker(name):
     """Add a new worker that behaves like Eneko."""
@@ -141,6 +356,152 @@ def add_worker(name):
     WORKERS.clear()
     WORKERS.update(new_workers)
     HOURS_LIMITS[name] = HOURS_PER_DAY
+    DEFAULT_HOURS_LIMITS[name] = HOURS_PER_DAY
+    _apply_worker_hours(load_worker_hours())
+
+
+def rename_worker(old_name, new_name):
+    """Rename an existing worker and update persisted data."""
+
+    if not isinstance(old_name, str) or not isinstance(new_name, str):
+        return False
+    old_name = old_name.strip()
+    new_name = new_name.strip()
+    if not old_name or not new_name or old_name == new_name:
+        return False
+    if old_name not in WORKERS or new_name in WORKERS or new_name == UNPLANNED:
+        return False
+
+    extras = load_extra_workers()
+    renames = load_worker_renames()
+    renames_changed = False
+
+    if old_name in extras:
+        new_extras = [new_name if w == old_name else w for w in extras]
+        if new_extras != extras:
+            save_extra_workers(new_extras)
+        if renames.pop(old_name, None) is not None:
+            renames_changed = True
+    else:
+        current = renames.get(old_name)
+        if current != new_name:
+            renames = renames.copy()
+            renames[old_name] = new_name
+            renames_changed = True
+        # Ensure no conflicting aliases remain
+        for key, value in list(renames.items()):
+            if key != old_name and value == new_name:
+                renames.pop(key)
+                renames_changed = True
+
+    if renames_changed:
+        save_worker_renames(renames)
+
+    order = load_worker_order()
+    if order:
+        updated_order = [new_name if w == old_name else w for w in order]
+        if updated_order != order:
+            save_worker_order(updated_order)
+
+    inactive = load_inactive_workers()
+    if inactive:
+        updated_inactive = [new_name if w == old_name else w for w in inactive]
+        if updated_inactive != inactive:
+            save_inactive_workers(updated_inactive)
+
+    overrides = load_worker_hours()
+    if old_name in overrides and new_name not in overrides:
+        overrides[new_name] = overrides.pop(old_name)
+        save_worker_hours(overrides)
+    elif old_name in overrides:
+        overrides.pop(old_name, None)
+        save_worker_hours(overrides)
+
+    notes = load_worker_notes()
+    if old_name in notes and new_name not in notes:
+        notes[new_name] = notes.pop(old_name)
+        save_worker_notes(notes)
+    elif old_name in notes:
+        notes.pop(old_name, None)
+        save_worker_notes(notes)
+
+    vacations = load_vacations()
+    vac_changed = False
+    for vac in vacations:
+        if vac.get('worker') == old_name:
+            vac['worker'] = new_name
+            vac_changed = True
+    if vac_changed:
+        save_vacations(vacations)
+
+    manual_entries = load_manual_unplanned()
+    manual_changed = False
+    for entry in manual_entries:
+        if entry.get('worker') == old_name:
+            entry['worker'] = new_name
+            manual_changed = True
+    if manual_changed:
+        save_manual_unplanned(manual_entries)
+
+    projects = load_projects()
+    projects_changed = False
+    for project in projects:
+        assigned = project.get('assigned', {})
+        for phase, worker in list(assigned.items()):
+            if worker == old_name:
+                assigned[phase] = new_name
+                projects_changed = True
+        seg_workers = project.get('segment_workers') or {}
+        if isinstance(seg_workers, dict):
+            for phase, worker_list in list(seg_workers.items()):
+                if not isinstance(worker_list, list):
+                    continue
+                replaced = False
+                new_list = []
+                for worker in worker_list:
+                    if worker == old_name:
+                        worker = new_name
+                        replaced = True
+                    new_list.append(worker)
+                if replaced:
+                    seg_workers[phase] = new_list
+                    projects_changed = True
+        for task in project.get('frozen_tasks', []):
+            if task.get('worker') == old_name:
+                task['worker'] = new_name
+                projects_changed = True
+    if projects_changed:
+        save_projects(projects)
+
+    day_overrides = load_worker_day_hours()
+    day_changed = False
+    if old_name in day_overrides:
+        existing = day_overrides.pop(old_name)
+        if existing:
+            if new_name in day_overrides:
+                merged = day_overrides[new_name]
+                merged.update(existing)
+            else:
+                day_overrides[new_name] = existing
+            day_changed = True
+    if day_changed:
+        save_worker_day_hours(day_overrides)
+
+    new_workers = _build_workers()
+    WORKERS.clear()
+    WORKERS.update(new_workers)
+
+    if old_name in HOURS_LIMITS:
+        HOURS_LIMITS[new_name] = HOURS_LIMITS.pop(old_name)
+    else:
+        HOURS_LIMITS.setdefault(new_name, HOURS_PER_DAY)
+    if old_name in DEFAULT_HOURS_LIMITS:
+        DEFAULT_HOURS_LIMITS[new_name] = DEFAULT_HOURS_LIMITS.pop(old_name)
+    else:
+        DEFAULT_HOURS_LIMITS.setdefault(new_name, HOURS_PER_DAY)
+    _apply_worker_hours(load_worker_hours())
+
+    return True
 
 
 def set_worker_order(order):
@@ -235,20 +596,7 @@ def load_vacations():
             data = json.load(f)
     else:
         data = []
-    today = local_today()
-    filtered = []
-    for v in data:
-        end = v.get('end')
-        if end:
-            try:
-                if date.fromisoformat(end) < today:
-                    continue
-            except ValueError:
-                pass
-        filtered.append(v)
-    if len(filtered) != len(data):
-        save_vacations(filtered)
-    return filtered
+    return data
 
 
 def save_vacations(data):
@@ -282,6 +630,105 @@ def save_daily_hours(data):
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(DAILY_HOURS_FILE, 'w') as f:
         json.dump(data, f)
+
+
+def _sanitize_manual_entries(entries):
+    cleaned = []
+    seen = set()
+    if not isinstance(entries, list):
+        return cleaned
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        pid = item.get('pid')
+        phase = item.get('phase')
+        part = item.get('part')
+        if pid in (None, '') or phase in (None, ''):
+            continue
+        pid_str = str(pid)
+        part_val = None
+        if part not in (None, '', 'None'):
+            try:
+                part_val = int(part)
+            except Exception:
+                continue
+        key = (pid_str, str(phase), part_val)
+        if key in seen:
+            continue
+        seen.add(key)
+        entry = {'pid': pid_str, 'phase': str(phase)}
+        if part_val is not None:
+            entry['part'] = part_val
+        cleaned.append(entry)
+    return cleaned
+
+
+def load_manual_unplanned():
+    if os.path.exists(MANUAL_UNPLANNED_FILE):
+        with open(MANUAL_UNPLANNED_FILE, 'r') as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = []
+        return _sanitize_manual_entries(data)
+    return []
+
+
+def save_manual_unplanned(entries):
+    cleaned = _sanitize_manual_entries(entries)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(MANUAL_UNPLANNED_FILE, 'w') as f:
+        json.dump(cleaned, f)
+    return cleaned
+
+
+def phase_history_key(pid, phase, part=None):
+    part_value = ''
+    if part not in (None, '', 'None'):
+        part_value = str(part)
+    return f"{str(pid)}|{phase}|{part_value}"
+
+
+def load_phase_history():
+    if not os.path.exists(PHASE_HISTORY_FILE):
+        return {}
+    try:
+        with open(PHASE_HISTORY_FILE, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned = {}
+    for key, entries in data.items():
+        if not isinstance(key, str) or not isinstance(entries, list):
+            continue
+        filtered = []
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            ts = item.get('timestamp')
+            if not isinstance(ts, str):
+                continue
+            record = {
+                'timestamp': ts,
+                'from_day': item.get('from_day') if isinstance(item.get('from_day'), str) or item.get('from_day') is None else None,
+                'to_day': item.get('to_day') if isinstance(item.get('to_day'), str) or item.get('to_day') is None else None,
+                'from_worker': item.get('from_worker') if isinstance(item.get('from_worker'), str) or item.get('from_worker') is None else None,
+                'to_worker': item.get('to_worker') if isinstance(item.get('to_worker'), str) or item.get('to_worker') is None else None,
+            }
+            filtered.append(record)
+        if filtered:
+            cleaned[key] = filtered
+    return cleaned
+
+
+def save_phase_history(data):
+    if not isinstance(data, dict):
+        data = {}
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(PHASE_HISTORY_FILE, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def next_workday(d):
@@ -319,6 +766,7 @@ def schedule_projects(projects):
     inactive = set(load_inactive_workers())
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
     hours_map = load_daily_hours()
+    worker_day_map = load_worker_day_hours()
     vac_map = _build_vacation_map()
 
     def preload_frozen(schedule_map):
@@ -418,6 +866,20 @@ def schedule_projects(projects):
             frozen_map.setdefault(t.get('phase'), []).append(t)
         end_date = current
         assigned = project.get('assigned', {})
+        display_fields = project.get('kanban_display_fields') or {}
+        normalized_fields = {}
+        if isinstance(display_fields, dict):
+            for key, value in display_fields.items():
+                normalized_key = _normalize_display_key(key)
+                if not normalized_key:
+                    continue
+                normalized_fields[normalized_key] = value
+        phase_deadlines = {}
+        for phase_name, field_name in PHASE_DEADLINE_FIELDS.items():
+            deadline_value = normalized_fields.get(field_name)
+            deadline_date = _parse_phase_deadline(deadline_value)
+            if deadline_date:
+                phase_deadlines[phase_name] = deadline_date
         for phase in PHASE_ORDER:
             val = project['phases'].get(phase)
             if not val:
@@ -530,12 +992,14 @@ def schedule_projects(projects):
                         project['start_date'],
                         project['id'],
                         hours_map,
+                        worker_day_map,
                         part=idx if isinstance(val, list) else None,
                         manual=manual,
                         project_blocked=project.get('blocked', False),
                         material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
+                        phase_deadline=phase_deadlines.get(phase),
                     )
                     record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
@@ -570,6 +1034,7 @@ def assign_phase(
     start_date,
     pid,
     hours_map,
+    worker_day_map=None,
     part=None,
     *,
     manual=False,
@@ -578,6 +1043,7 @@ def assign_phase(
     material_date=None,
     auto=False,
     due_confirmed=False,
+    phase_deadline=None,
 ):
     # When scheduling 'montar', queue the task right after the worker finishes
     # the mounting phase of their previous project unless an explicit start was
@@ -607,12 +1073,23 @@ def assign_phase(
     first_day = None
     first_hour = 0
     due_dt = None
+    phase_deadline_dt = None
+    if isinstance(phase_deadline, date):
+        phase_deadline_dt = phase_deadline
+    elif phase_deadline is not None:
+        parsed = _parse_phase_deadline(phase_deadline)
+        if parsed:
+            phase_deadline_dt = parsed
+
     if due_date:
         try:
             due_dt = date.fromisoformat(due_date)
         except ValueError:
             due_dt = None
     # Unplanned tasks ignore the daily limit but still split into 8h blocks.
+    if worker_day_map is None:
+        worker_day_map = {}
+
     if worker == UNPLANNED:
         while remaining > 0:
             if day.weekday() in WEEKEND or any(t['phase'] == 'vacaciones' for t in schedule.get(day.isoformat(), [])):
@@ -675,9 +1152,21 @@ def assign_phase(
         tasks = schedule.get(day_str, [])
         tasks.sort(key=lambda t: t.get('start', 0))
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
-        if limit != float('inf') and worker not in ('Irene', 'Mecanizar', 'Tratamiento') and phase not in ('mecanizar', 'tratamiento'):
-            day_limit = hours_map.get(day_str, HOURS_PER_DAY)
-            limit = min(limit, day_limit)
+        worker_overrides = worker_day_map.get(worker) or {}
+        override_limit = worker_overrides.get(day_str)
+        if (
+            limit != float('inf')
+            and worker not in ('Irene', 'Mecanizar', 'Tratamiento')
+            and phase not in ('mecanizar', 'tratamiento')
+        ):
+            day_limit = hours_map.get(day_str)
+            if day_limit is not None:
+                limit = min(limit, day_limit)
+        if override_limit is not None:
+            if limit == float('inf'):
+                limit = override_limit
+            else:
+                limit = min(limit, override_limit)
 
         if phase in ('tratamiento', 'mecanizar'):
             start = 0
@@ -787,6 +1276,14 @@ def assign_phase(
                 task['due_status'] = 'met'
         else:
             task['due_status'] = None
+    if phase_entries:
+        if phase_deadline_dt and last_day:
+            status = 'late' if last_day > phase_deadline_dt else 'met'
+            for task, _ in phase_entries:
+                task['phase_deadline_status'] = status
+        else:
+            for task, _ in phase_entries:
+                task['phase_deadline_status'] = None
     next_day = day
     next_hour = hour
     return next_day, next_hour, last_day, first_day, first_hour

@@ -29,7 +29,9 @@
         <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
         <button type="submit">Filtrar</button>
     </form>
-    <button id="today-btn">HOY</button>
+    <button id="today-btn" type="button">HOY</button>
+    <button id="sort-due-btn" class="order-toggle" type="button">Fecha tope</button>
+    <button id="sort-status-btn" class="order-toggle" type="button">Estado material</button>
 </div>
 <div class="hours-btn-container">
     <button id="hours-btn" type="button">Editar jornada laboral</button>
@@ -82,17 +84,34 @@
         {% set d = c.dates[0] %}
         {% set tasks = days_data.get(d.isoformat(), []) %}
         {% set total = tasks|sum(attribute='hours') %}
+        {% set worker_overrides = worker_day_hours.get(worker, {}) %}
+        {% set base_limit = worker_limits.get(worker) %}
+        {% set override = worker_overrides.get(d.isoformat()) %}
+        {% if override is none %}
         {% set limit = hours.get(d.isoformat(), 8) %}
+        {% else %}
+        {% set limit = override %}
+        {% endif %}
         {% set no_border = (tasks | selectattr('phase','equalto','vacaciones') | list | length > 0) or (tasks | selectattr('phase','equalto','mecanizar') | list | length > 0) or (tasks | selectattr('phase','equalto','tratamiento') | list | length > 0) or (worker in ['Mecanizar', 'Tratamiento']) %}
-        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
+        <td data-date="{{ d.isoformat() }}" class="{% if total < limit and not no_border %}incomplete {% endif %}{% if override is not none and (base_limit is none or override != base_limit) %}hour-override {% endif %}{% if notes.get(d.isoformat()) %}note-day {% endif %}{% if d == today %}today {% endif %}{% if no_border %}vacation-day{% endif %}">
             {% for t in tasks %}
             {% set matches_filter = t.get('filter_match', True) %}
             {% if t.phase == 'vacaciones' %}
             <div class="task vacation{% if filter_active and not matches_filter %} filter-muted{% endif %}" data-worker="{{ worker }}" data-day="{{ d.isoformat() }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">VACACIONES<br><span class="vac-delete" style="display:none;">X</span></div>
             {% else %}
-            <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen else 'true' }}" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}" data-part="{{ t.part }}" data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+            {% set project_info = project_data.get(t.pid|string) %}
+            {% if project_info is none %}
+            {% set project_info = project_data.get(t.pid) %}
+            {% endif %}
+            {% set material_missing = project_info and project_info.material_status == 'missing' %}
+            <div class="task{% if t.frozen %} frozen{% endif %}{% if t.archived_shadow %} archived-shadow{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="{{ 'false' if t.frozen or t.archived_shadow else 'true' }}" style="border-color: {{ t.color }};{% if t.frozen_background %} --frozen-background: {{ t.frozen_background }};{% endif %}" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ d.isoformat() }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-hours="{{ t.hours }}" data-filter-match="{{ 'true' if matches_filter else 'false' }}" data-archived="{{ 'true' if t.archived_shadow else 'false' }}">
                 <span class="task-main">
-                {% if t.due_status == 'after' %}
+                {% set phase_status = t.get('phase_deadline_status') %}
+                {% if phase_status == 'late' %}
+                    <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                {% elif phase_status == 'met' %}
+                    <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                {% elif t.due_status == 'after' %}
                     <span class="due-after">&#10060;</span>
                 {% elif t.due_status == 'before' %}
                     <span class="due-before">&#10060;</span>
@@ -101,7 +120,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                <span class="task-project{% if material_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                 </span>
                 {% if t.hours %}
                 <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -135,17 +154,60 @@
         <div class="unplanned-panel" id="unplanned-panel">
             <div id="unplanned-resizer" class="unplanned-resizer"></div>
             <h3>Fases sin planificar</h3>
-            <div class="unplanned-list" data-worker="Sin planificar">
-            {% for g in unplanned_with %}
+            <div class="manual-group">
+                <div class="manual-header">Arrastrar aquí</div>
+                <div id="manual-dropzone" class="manual-dropzone" data-worker="Sin planificar">
+                    <div class="manual-placeholder"{% if manual_bucket %} style="display:none;"{% endif %}>Suelta aquí las fases que quieras guardar temporalmente.</div>
+                {% for item in manual_bucket %}
+                    {% set matches_filter = item.filter_match %}
+                    {% set status = item.material_status %}
+                    {% set missing = status == 'missing' %}
+                    {% set key = item.pid|string ~ '|' ~ item.phase ~ '|' ~ (item.day) %}
+                    <div class="task manual-task{% if item.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ item.color }};{% if item.frozen_background %} --frozen-background: {{ item.frozen_background }};{% endif %}" data-project="{{ item.project }}" data-client="{{ item.client }}" data-due="{{ item.due_date or '' }}" data-start="{{ item.start_date or '' }}" data-day="{{ item.day or '' }}" data-pid="{{ item.pid }}" data-phase="{{ item.phase }}"{% if item.part is not none %} data-part="{{ item.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                        <span class="task-main">
+                        {% set phase_status = item.phase_deadline_status %}
+                        {% if phase_status == 'late' %}
+                            <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                        {% elif phase_status == 'met' %}
+                            <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                        {% elif item.due_status == 'after' %}
+                            <span class="due-after">&#10060;</span>
+                        {% elif item.due_status == 'before' %}
+                            <span class="due-before">&#10060;</span>
+                        {% elif item.due_status == 'met' %}
+                            <span class="due-ok">&#10004;</span>
+                        {% endif %}
+                        {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
+                        <span class="material-status-flag {{ item.material_css }}">{{ item.material_label }}</span>
+                        <span class="task-project{% if missing %} task-project-missing{% endif %}">{{ item.project }}</span>{% if item.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ item.client|truncate(15, True) }} - {{ item.phase }}{% if item.part is not none %} ({{ item.part|int + 1 }}){% endif %}
+                        </span>
+                        {% if item.hours %}
+                        <span class="task-hours">{% if item.auto and item.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ item.hours }}h</span>{% else %}{{ item.hours }}h{% endif %}</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="status">
+            {% for section in unplanned_groups %}
+            <div class="unplanned-status-group" data-status="{{ section.status }}">
+                <div class="unplanned-status-header"><span class="material-status-flag {{ section.css_class }}">{{ section.label }}</span></div>
+                {% for g in section.projects %}
             {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+            {% set folder_missing = section.status == 'missing' %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ section.status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};{% if t.frozen_background %} --frozen-background: {{ t.frozen_background }};{% endif %}" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if t.due_status == 'after' %}
+                    {% set phase_status = t.get('phase_deadline_status') %}
+                    {% if phase_status == 'late' %}
+                        <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                    {% elif phase_status == 'met' %}
+                        <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                    {% elif t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
                     {% elif t.due_status == 'before' %}
                         <span class="due-before">&#10060;</span>
@@ -154,7 +216,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -163,20 +225,29 @@
                 {% endfor %}
                 </div>
             </div>
+                {% endfor %}
+            </div>
             {% endfor %}
-            {% if unplanned_with and unplanned_without %}
-            <hr class="unplanned-divider" />
-            {% endif %}
-            {% for g in unplanned_without %}
+            </div>
+            <div class="unplanned-list" data-worker="Sin planificar" data-mode="due" style="display:none;">
+            {% for g in unplanned_due %}
             {% set folder_match = g.get('filter_match', True) %}
-            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> {{ g.project }} - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+            {% set status = g.get('material_status', 'complete') %}
+            {% set status_label = material_status_labels.get(status, status|capitalize) %}
+            {% set folder_missing = status == 'missing' %}
+            <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
-                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
+                <div class="task{% if t.frozen %} frozen{% endif %}{% if filter_active and not matches_filter %} filter-muted{% endif %}" draggable="true" style="border-color: {{ t.color }};{% if t.frozen_background %} --frozen-background: {{ t.frozen_background }};{% endif %}" data-project="{{ t.project }}" data-client="{{ t.client }}" data-due="{{ t.due_date }}" data-start="{{ t.start_date }}" data-day="{{ t.day }}" data-pid="{{ t.pid }}" data-phase="{{ t.phase }}"{% if t.part is not none %} data-part="{{ t.part }}"{% endif %} data-filter-match="{{ 'true' if matches_filter else 'false' }}">
                     <span class="task-main">
-                    {% if t.due_status == 'after' %}
+                    {% set phase_status = t.get('phase_deadline_status') %}
+                    {% if phase_status == 'late' %}
+                        <span class="phase-deadline-indicator phase-deadline-late">&#10060;</span>
+                    {% elif phase_status == 'met' %}
+                        <span class="phase-deadline-indicator phase-deadline-met">&#10004;</span>
+                    {% elif t.due_status == 'after' %}
                         <span class="due-after">&#10060;</span>
                     {% elif t.due_status == 'before' %}
                         <span class="due-before">&#10060;</span>
@@ -185,7 +256,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    {{ t.project }}{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto and t.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -200,18 +271,20 @@
 </div>
 <div id="info-popup" class="info-popup"></div>
 <div id="conflict-modal" class="conflict-modal"><div class="conflict-content"><div id="conflict-text"></div><button id="conflict-close">Cerrar</button></div></div>
-<div id="deadline-modal" class="conflict-modal"><div class="conflict-content"><div id="deadline-text" style="color:orange;font-weight:bold"></div><button id="deadline-close">Cerrar</button></div></div>
-<div id="split-modal" class="conflict-modal"><div class="conflict-content"><form id="split-form"><label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br><label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br><button type="submit">Aceptar</button> <button type="button" id="split-cancel">Cancelar</button></form></div></div>
-<div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
-<div id="order-modal" class="conflict-modal order-modal">
-    <div class="conflict-content order-content">
-        <div id="order-text" class="order-warning-text">ESTE MOVIMIENTO NO SIGUE EL ORDEN DE LAS FASES.</div>
-        <div class="order-buttons">
-            <button id="order-ok" type="button">OK</button>
-            <button id="order-cancel" type="button">Cancelar</button>
-        </div>
-    </div>
+<div id="split-modal" class="conflict-modal">
+  <div class="conflict-content">
+    <form id="split-form">
+      <div id="split-total-hours" class="split-total-hours"></div>
+      <div id="split-parts-container" class="split-parts-container"></div>
+      <button type="button" id="split-add-part" class="split-add-part" title="Añadir parte">+</button>
+      <div class="split-actions">
+        <button type="submit">Aceptar</button>
+        <button type="button" id="split-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
 </div>
+<div id="block-modal" class="conflict-modal"><div class="conflict-content"><div id="block-text"></div><button id="block-unfreeze">Descongelar</button> <button id="block-skip">No descongelar</button> <button id="block-cancel">Cancelar</button></div></div>
 <div id="material-modal" class="conflict-modal material-modal">
     <div class="conflict-content material-content">
         <div class="material-title">SIN MATERIAL:</div>
@@ -219,14 +292,28 @@
         <button id="material-close" type="button">Cerrar</button>
     </div>
 </div>
-<div id="obs-modal" class="modal">
-    <div class="modal-content">
-        <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
-        <button id="obs-save" type="button">Guardar</button>
-        <button id="obs-cancel" type="button">Cancelar</button>
+<div id="history-modal" class="history-modal">
+    <div class="history-content">
+        <button type="button" class="history-close" aria-label="Cerrar">&#10005;</button>
+        <h3 id="history-title">Historial</h3>
+        <div id="history-list" class="history-list"></div>
     </div>
 </div>
-
+<div id="day-menu-modal" class="day-menu-modal" aria-hidden="true">
+  <div class="day-menu-content">
+    <button type="button" class="day-menu-close" aria-label="Cerrar">&#10005;</button>
+    <div id="day-menu-title" class="day-menu-title"></div>
+    <button type="button" id="day-menu-vacation" class="day-menu-action">Asignar vacaciones a este día</button>
+    <div class="day-menu-hours">
+      <select id="day-menu-hour-select" class="day-menu-select">
+        {% for n in range(1, 11) %}
+        <option value="{{ n }}">{{ n }}h</option>
+        {% endfor %}
+      </select>
+      <button type="button" id="day-menu-hours-btn" class="day-menu-action">Cambiar jornada de este día</button>
+    </div>
+  </div>
+</div>
 <h3>Conflictos</h3>
 <form method="post" action="{{ url_for('clear_conflicts') }}">
     <button type="submit">Borrar todos</button>
@@ -267,29 +354,352 @@
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
-  const CLEAR_DEADLINE_URL = "{{ url_for('clear_deadline') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
+  const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
+  const HISTORY_URL = "{{ url_for('phase_history') }}";
+  const ASSIGN_VACATION_DAY_URL = "{{ url_for('assign_vacation_day') }}";
+  const UPDATE_WORKER_DAY_HOURS_URL = "{{ url_for('update_worker_day_hours') }}";
+  const WORKER_DAY_HOURS = {{ worker_day_hours|tojson }};
+  const DAILY_HOURS = {{ hours|tojson }};
   const START_DATA = {{ start_map|tojson }};
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
-  const deadlineModal = document.getElementById('deadline-modal');
-  const deadlineText = document.getElementById('deadline-text');
-  const deadlineClose = document.getElementById('deadline-close');
-  const DEADLINE_MSG = 'Fecha cliente soprepasada.';
-  const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
   const splitModal = document.getElementById('split-modal');
   const splitForm = document.getElementById('split-form');
-  const splitPart1 = document.getElementById('split-part1');
-  const splitPart2 = document.getElementById('split-part2');
+  const splitPartsContainer = document.getElementById('split-parts-container');
+  const splitAddPartButton = document.getElementById('split-add-part');
+  const splitTotalDisplay = document.getElementById('split-total-hours');
+  const SPLIT_WORKDAY_HOURS = 8;
+  let splitRemainderInput = null;
+  const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+  const historyModal = document.getElementById('history-modal');
+  const historyList = document.getElementById('history-list');
+  const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
+  const historyTitle = document.getElementById('history-title');
+  const dayMenuModal = document.getElementById('day-menu-modal');
+  const dayMenuClose = dayMenuModal ? dayMenuModal.querySelector('.day-menu-close') : null;
+  const dayMenuTitle = document.getElementById('day-menu-title');
+  const dayMenuVacationBtn = document.getElementById('day-menu-vacation');
+  const dayMenuHoursBtn = document.getElementById('day-menu-hours-btn');
+  const dayMenuHourSelect = document.getElementById('day-menu-hour-select');
+  let dayMenuWorker = null;
+  let dayMenuDate = null;
+  const dayMenuFormatter = typeof Intl !== 'undefined'
+    ? new Intl.DateTimeFormat('es-ES', {
+        timeZone: window.EFIMERO_TZ || 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : null;
+
+  function clampDayHours(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 8;
+    if (num < 1) return 1;
+    if (num > 10) return 10;
+    return Math.round(num);
+  }
+
+  function formatDayMenuLabel(dateText, worker) {
+    if (!dateText) {
+      return worker || '';
+    }
+    if (dayMenuFormatter) {
+      try {
+        const dt = new Date(`${dateText}T00:00:00`);
+        if (!Number.isNaN(dt.valueOf())) {
+          return `${dayMenuFormatter.format(dt)} - ${worker}`;
+        }
+      } catch (err) {
+        // ignore formatting errors
+      }
+    }
+    return `${dateText} - ${worker}`;
+  }
+
+  function getWorkerDayHours(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function openDayMenu(worker, dateText) {
+    if (!dayMenuModal) return;
+    dayMenuWorker = worker;
+    dayMenuDate = dateText;
+    if (dayMenuTitle) {
+      dayMenuTitle.textContent = formatDayMenuLabel(dateText, worker);
+    }
+    if (dayMenuHourSelect) {
+      const hoursValue = clampDayHours(getWorkerDayHours(worker, dateText));
+      dayMenuHourSelect.value = String(hoursValue);
+    }
+    dayMenuModal.classList.add('open');
+    dayMenuModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeDayMenu() {
+    if (!dayMenuModal) return;
+    dayMenuModal.classList.remove('open');
+    dayMenuModal.setAttribute('aria-hidden', 'true');
+    dayMenuWorker = null;
+    dayMenuDate = null;
+  }
+
+  function submitDayMenuAction(url, payload, button, errorMessage) {
+    if (!url) return;
+    if (button) {
+      button.disabled = true;
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(resp => {
+        if (!resp.ok) {
+          throw new Error('request failed');
+        }
+        closeDayMenu();
+        window.location.reload();
+      })
+      .catch(() => {
+        alert(errorMessage);
+      })
+      .finally(() => {
+        if (button) {
+          button.disabled = false;
+        }
+      });
+  }
+
+  function escapeHtml(value) {
+    if (value === undefined || value === null) return '';
+    return value
+      .toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizePartValue(value) {
+    if (value === undefined || value === null) return '';
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const lower = text.toLowerCase();
+    if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
+    return text;
+  }
+
+  function formatPartSuffix(value) {
+    const normalized = normalizePartValue(value);
+    if (!normalized) return '';
+    const num = Number(normalized);
+    if (!Number.isFinite(num)) return '';
+    return ` (${Math.trunc(num) + 1})`;
+  }
+  const historyTimestampFormatter = typeof Intl !== 'undefined'
+    ? new Intl.DateTimeFormat('es-ES', {
+        timeZone: window.EFIMERO_TZ || 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  function formatHistoryTimestamp(value) {
+    if (!value) return '';
+    if (!historyTimestampFormatter) return value;
+    try {
+      const dt = new Date(value);
+      if (Number.isNaN(dt.valueOf())) return value;
+      return historyTimestampFormatter.format(dt);
+    } catch (err) {
+      return value;
+    }
+  }
+
+  function formatHistoryDay(value) {
+    if (!value) return 'Sin planificar';
+    const parts = `${value}`.split('-');
+    if (parts.length < 3) return value;
+    const month = parts[1].split('T')[0].padStart(2, '0');
+    const dayPart = parts[2].split('T')[0];
+    const day = dayPart.padStart(2, '0');
+    return `${day}/${month}`;
+  }
+
+  function formatHistoryWorker(value) {
+    const text = value === undefined || value === null ? '' : `${value}`.trim();
+    return text || 'Sin planificar';
+  }
+
+  function closeHistoryModal() {
+    if (historyModal) {
+      historyModal.classList.remove('open');
+    }
+  }
+
+  function renderHistoryEntries(entries) {
+    if (!historyList) return;
+    if (!Array.isArray(entries) || !entries.length) {
+      historyList.innerHTML = '<div class="history-empty">No hay movimientos registrados.</div>';
+      return;
+    }
+    const html = entries
+      .map(entry => {
+        const ts = formatHistoryTimestamp(entry.timestamp);
+        const fromDay = formatHistoryDay(entry.from_day);
+        const toDay = formatHistoryDay(entry.to_day);
+        const fromWorker = formatHistoryWorker(entry.from_worker);
+        const toWorker = formatHistoryWorker(entry.to_worker);
+        return `
+          <div class="history-entry">
+            <div class="history-entry-time">${ts}</div>
+            <div class="history-entry-body">De <strong>${fromDay}</strong> (${fromWorker}) a <strong>${toDay}</strong> (${toWorker})</div>
+          </div>
+        `;
+      })
+      .join('');
+    historyList.innerHTML = html;
+  }
+
+  function openHistory(pid, phase, part, projectName, clientName) {
+    if (!historyModal || !historyList || !HISTORY_URL) return;
+    const pieces = [];
+    if (projectName) pieces.push(projectName);
+    if (clientName) pieces.push(clientName);
+    const baseTitle = pieces.length ? pieces.join(' - ') : 'Historial';
+    if (historyTitle) {
+      const phaseLabel = phase ? `${phase}${formatPartSuffix(part)}` : '';
+      const suffix = phaseLabel ? ` (${phaseLabel})` : '';
+      historyTitle.textContent = `Historial - ${baseTitle}${suffix}`;
+    }
+    historyModal.classList.add('open');
+    historyList.innerHTML = '<div class="history-loading">Cargando...</div>';
+    const params = new URLSearchParams({ pid, phase });
+    if (part) params.append('part', part);
+    fetch(`${HISTORY_URL}?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+    })
+      .then(resp => (resp.ok ? resp.json() : Promise.reject()))
+      .then(data => {
+        const entries = Array.isArray(data.history) ? data.history : [];
+        renderHistoryEntries(entries);
+      })
+      .catch(() => {
+        if (historyList) {
+          historyList.innerHTML = '<div class="history-error">No se pudo cargar el historial.</div>';
+        }
+      });
+  }
+
+  if (historyClose) {
+    historyClose.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closeHistoryModal();
+    });
+  }
+  if (historyModal) {
+    historyModal.addEventListener('click', ev => {
+      if (ev.target === historyModal) closeHistoryModal();
+    });
+    const historyContent = historyModal.querySelector('.history-content');
+    if (historyContent) {
+      historyContent.addEventListener('click', ev => ev.stopPropagation());
+    }
+  }
+  if (dayMenuClose) {
+    dayMenuClose.addEventListener('click', ev => {
+      ev.preventDefault();
+      closeDayMenu();
+    });
+  }
+  if (dayMenuModal) {
+    dayMenuModal.addEventListener('click', ev => {
+      if (ev.target === dayMenuModal) {
+        closeDayMenu();
+      }
+    });
+    const dayMenuContent = dayMenuModal.querySelector('.day-menu-content');
+    if (dayMenuContent) {
+      dayMenuContent.addEventListener('click', ev => ev.stopPropagation());
+    }
+  }
+  if (dayMenuVacationBtn) {
+    dayMenuVacationBtn.addEventListener('click', () => {
+      if (!dayMenuWorker || !dayMenuDate) return;
+      submitDayMenuAction(
+        ASSIGN_VACATION_DAY_URL,
+        { worker: dayMenuWorker, date: dayMenuDate },
+        dayMenuVacationBtn,
+        'No se pudo asignar las vacaciones.'
+      );
+    });
+  }
+  if (dayMenuHoursBtn) {
+    dayMenuHoursBtn.addEventListener('click', () => {
+      if (!dayMenuWorker || !dayMenuDate || !dayMenuHourSelect) return;
+      const selected = clampDayHours(dayMenuHourSelect.value);
+      submitDayMenuAction(
+        UPDATE_WORKER_DAY_HOURS_URL,
+        { worker: dayMenuWorker, date: dayMenuDate, hours: selected },
+        dayMenuHoursBtn,
+        'No se pudo actualizar la jornada.'
+      );
+    });
+  }
+  if (dayMenuHourSelect) {
+    dayMenuHourSelect.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' && dayMenuHoursBtn) {
+        ev.preventDefault();
+        dayMenuHoursBtn.click();
+      }
+    });
+  }
+  document.querySelectorAll('.schedule').forEach(table => {
+    table.addEventListener('contextmenu', ev => {
+      const cell = ev.target.closest('td[data-date]');
+      if (!cell) {
+        return;
+      }
+      const row = cell.closest('tr[data-worker]');
+      if (!row) {
+        return;
+      }
+      ev.preventDefault();
+      openDayMenu(row.dataset.worker, cell.dataset.date);
+    });
+  });
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+      closeHistoryModal();
+      closeDayMenu();
+    }
+  });
+
   const blockModal = document.getElementById('block-modal');
   const blockText = document.getElementById('block-text');
   const blockUnfreeze = document.getElementById('block-unfreeze');
   const blockSkip = document.getElementById('block-skip');
   const blockCancel = document.getElementById('block-cancel');
-  const orderModal = document.getElementById('order-modal');
-  const orderOk = document.getElementById('order-ok');
-  const orderCancel = document.getElementById('order-cancel');
   const materialModal = document.getElementById('material-modal');
   const materialList = document.getElementById('material-list');
   const materialClose = document.getElementById('material-close');
@@ -300,6 +710,273 @@
     byPid: new Map(),
     byKey: new Map(),
   };
+
+  function parseSplitHours(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function toSplitInputValue(value) {
+    if (!Number.isFinite(value)) return '';
+    const rounded = Math.round(value * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  function formatSplitNumber(value) {
+    if (!Number.isFinite(value)) return '';
+    const rounded = Math.round(value * 100) / 100;
+    if (Number.isInteger(rounded)) return `${rounded}`;
+    return rounded.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function formatSplitDuration(value) {
+    if (!Number.isFinite(value)) return '';
+    const total = value < 0 ? 0 : value;
+    const days = Math.floor(total / SPLIT_WORKDAY_HOURS);
+    const remainderRaw = total - (days * SPLIT_WORKDAY_HOURS);
+    const remainder = Math.round(remainderRaw * 100) / 100;
+    const parts = [];
+    if (days > 0) parts.push(`${days} día${days === 1 ? '' : 's'}`);
+    if (remainder > 0 || parts.length === 0) {
+      const hoursText = formatSplitNumber(remainder);
+      const hoursLabel = remainder === 1 ? 'hora' : 'horas';
+      parts.push(`${hoursText} ${hoursLabel}`);
+    }
+    return parts.join(' y ');
+  }
+
+  function formatSplitHint(value) {
+    const duration = formatSplitDuration(value);
+    return duration ? `(${duration})` : '';
+  }
+
+  function splitOrdinalLabel(index) {
+    if (!Number.isInteger(index) || index < 0) return 'Horas parte';
+    if (index < SPLIT_ORDINAL_WORDS.length) {
+      return `Horas ${SPLIT_ORDINAL_WORDS[index]} parte`;
+    }
+    return `Horas parte ${index + 1}`;
+  }
+
+  function getSplitManualInputs() {
+    if (!splitPartsContainer) return [];
+    return Array.from(
+      splitPartsContainer.querySelectorAll('input.split-part-input[data-manual="true"]')
+    );
+  }
+
+  function ensureSplitRemainderInput() {
+    if (!splitPartsContainer) return null;
+    if (splitRemainderInput && splitRemainderInput.isConnected) {
+      return splitRemainderInput;
+    }
+    const row = document.createElement('div');
+    row.className = 'split-part-row split-remainder-row';
+    const label = document.createElement('label');
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'split-part-label';
+    label.appendChild(labelSpan);
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.readOnly = true;
+    input.tabIndex = -1;
+    input.className = 'split-part-input split-part-remainder';
+    input.dataset.manual = 'false';
+    label.appendChild(input);
+    const hint = document.createElement('span');
+    hint.className = 'split-hours-hint';
+    label.appendChild(hint);
+    row.appendChild(label);
+    splitPartsContainer.appendChild(row);
+    input._hintElement = hint;
+    input._labelElement = labelSpan;
+    splitRemainderInput = input;
+    return splitRemainderInput;
+  }
+
+  function refreshSplitPartLabels() {
+    const manuals = getSplitManualInputs();
+    manuals.forEach((input, idx) => {
+      if (input && input._labelElement) {
+        input._labelElement.textContent = `${splitOrdinalLabel(idx)}:`;
+      }
+    });
+    if (splitRemainderInput && splitRemainderInput._labelElement) {
+      splitRemainderInput._labelElement.textContent = `${splitOrdinalLabel(manuals.length)}:`;
+    }
+  }
+
+  function createSplitPartRow(initialValue, beforeElement) {
+    if (!splitPartsContainer) return null;
+    const row = document.createElement('div');
+    row.className = 'split-part-row';
+    const label = document.createElement('label');
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'split-part-label';
+    label.appendChild(labelSpan);
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.step = '1';
+    input.required = true;
+    input.className = 'split-part-input';
+    input.dataset.manual = 'true';
+    if (initialValue !== null && Number.isFinite(initialValue) && initialValue > 0) {
+      input.value = toSplitInputValue(initialValue);
+    }
+    input.addEventListener('input', () => {
+      input.classList.remove('split-input-error');
+      updateSplitModalDisplay();
+    });
+    label.appendChild(input);
+    const hint = document.createElement('span');
+    hint.className = 'split-hours-hint';
+    label.appendChild(hint);
+    row.appendChild(label);
+    input._hintElement = hint;
+    input._labelElement = labelSpan;
+    if (beforeElement) {
+      splitPartsContainer.insertBefore(row, beforeElement);
+    } else {
+      splitPartsContainer.appendChild(row);
+    }
+    return input;
+  }
+
+  function resetSplitParts(existingParts) {
+    if (!splitPartsContainer) return;
+    splitPartsContainer.innerHTML = '';
+    splitRemainderInput = null;
+    const normalized = Array.isArray(existingParts)
+      ? existingParts
+          .map(value => parseSplitHours(value))
+          .filter(value => Number.isFinite(value) && value > 0)
+      : [];
+    let manualValues = [];
+    let remainderValue = null;
+    if (normalized.length >= 2) {
+      manualValues = normalized.slice(0, normalized.length - 1);
+      remainderValue = normalized[normalized.length - 1];
+    } else if (normalized.length === 1) {
+      manualValues = [normalized[0]];
+    }
+    if (!manualValues.length) {
+      manualValues = [null];
+    }
+    manualValues.forEach(value => {
+      createSplitPartRow(value, null);
+    });
+    const remainder = ensureSplitRemainderInput();
+    if (remainder) {
+      if (remainderValue !== null) {
+        remainder.value = toSplitInputValue(remainderValue);
+      } else {
+        remainder.value = '';
+      }
+    }
+    refreshSplitPartLabels();
+    updateSplitModalDisplay();
+  }
+
+  function updateSplitModalDisplay() {
+    if (!splitModal) return;
+    const total = parseSplitHours(splitModal.dataset.totalHours);
+    if (splitTotalDisplay) {
+      if (total === null) {
+        splitTotalDisplay.textContent = '';
+      } else {
+        const baseNumber = formatSplitNumber(total);
+        const hoursLabel = total === 1 ? 'hora' : 'horas';
+        const duration = formatSplitDuration(total);
+        splitTotalDisplay.textContent = `Total fase: ${baseNumber} ${hoursLabel}${duration ? ` (${duration})` : ''}`;
+      }
+    }
+    const manuals = getSplitManualInputs();
+    let manualSum = 0;
+    manuals.forEach(input => {
+      const value = parseSplitHours(input.value);
+      if (Number.isFinite(value)) {
+        manualSum += value;
+      }
+      if (input._hintElement) {
+        input._hintElement.textContent = Number.isFinite(value) ? formatSplitHint(value) : '';
+      }
+      if (total !== null && Number.isFinite(total)) {
+        input.setAttribute('max', total);
+      } else {
+        input.removeAttribute('max');
+      }
+    });
+    if (splitRemainderInput) {
+      let remainderValue = null;
+      if (total !== null && Number.isFinite(total)) {
+        remainderValue = total - manualSum;
+      }
+      if (Number.isFinite(remainderValue)) {
+        const cleanValue = Math.max(remainderValue, 0);
+        splitRemainderInput.value = toSplitInputValue(cleanValue);
+        splitRemainderInput.classList.toggle('split-input-error', remainderValue <= 0);
+        if (splitRemainderInput._hintElement) {
+          splitRemainderInput._hintElement.textContent = formatSplitHint(cleanValue);
+        }
+      } else {
+        splitRemainderInput.value = '';
+        splitRemainderInput.classList.remove('split-input-error');
+        if (splitRemainderInput._hintElement) {
+          splitRemainderInput._hintElement.textContent = '';
+        }
+      }
+    }
+    refreshSplitPartLabels();
+  }
+
+  function prepareSplitModal(button) {
+    if (!splitModal) return;
+    const totalAttr = button ? parseSplitHours(button.dataset.totalHours) : null;
+    const fallbackAttr = button ? parseSplitHours(button.dataset.hours) : null;
+    let total = totalAttr !== null ? totalAttr : fallbackAttr;
+    let existingParts = [];
+    if (button) {
+      const pid = button.dataset.pid;
+      const phase = button.dataset.phase;
+      if (pid && phase && PROJECT_DATA[pid] && PROJECT_DATA[pid].phases) {
+        const phaseEntry = PROJECT_DATA[pid].phases[phase];
+        if (Array.isArray(phaseEntry)) {
+          existingParts = phaseEntry;
+          const computedTotal = phaseEntry
+            .map(value => parseSplitHours(value))
+            .filter(value => Number.isFinite(value) && value > 0)
+            .reduce((acc, value) => acc + value, 0);
+          if (Number.isFinite(computedTotal) && computedTotal > 0) {
+            total = computedTotal;
+          }
+        }
+      }
+    }
+    if (total !== null && Number.isFinite(total)) {
+      splitModal.dataset.totalHours = total;
+    } else {
+      delete splitModal.dataset.totalHours;
+    }
+    resetSplitParts(existingParts);
+    if (fallbackAttr && Number.isFinite(fallbackAttr)) {
+      const manuals = getSplitManualInputs();
+      if (manuals.length) {
+        const first = manuals[0];
+        const currentValue = parseSplitHours(first.value);
+        if (!(Number.isFinite(currentValue) && Math.abs(currentValue - fallbackAttr) < 1e-6)) {
+          first.value = toSplitInputValue(fallbackAttr);
+        }
+      }
+    }
+    updateSplitModalDisplay();
+    const manuals = getSplitManualInputs();
+    if (manuals.length) {
+      manuals[0].focus();
+    }
+  }
 
   function normalizePedidosKey(value) {
     return (value || '').toString().trim().toLowerCase();
@@ -320,7 +997,6 @@
     normalizeColumnKey('Material Recepcionado'),
     normalizeColumnKey('Material recepcionado'),
     normalizeColumnKey('Pdte. Verificación'),
-    normalizeColumnKey('Pndt. Verificación'),
   ]);
 
   function parseISODate(value) {
@@ -490,19 +1166,11 @@
   ensurePedidosLinks();
 
   let pendingBlock = null;
-  let pendingOrder = null;
-  function showDeadline(text = DEADLINE_MSG, after = null) {
-    deadlineText.innerHTML = text.replace(/\n/g, '<br>');
-    deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
-    deadlineModal.style.display = 'block';
-    deadlineClose.onclick = () => { deadlineModal.style.display = 'none'; if (after) after(); };
-  }
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
     const finalize = () => {
-      if (data.warning) showDeadline(data.warning, () => location.reload());
-      else location.reload();
+      location.reload();
     };
     if (Object.prototype.hasOwnProperty.call(data, 'material_blockers')) {
       const directBlockers = Array.isArray(data.material_blockers)
@@ -536,22 +1204,6 @@
   const CLIENT_FILTER = {{ client_filter|tojson }};
   const FILTER_ACTIVE = {{ filter_active|tojson }};
 
-  for (const [pid, proj] of Object.entries(PROJECT_DATA)) {
-    if (proj.due_warning) {
-      const msg = proj.due_confirmed ? CLIENT_DEADLINE_MSG : DEADLINE_MSG;
-      const text = `${msg}\n${proj.name} - ${proj.client} - ${proj.due_date}`;
-      showDeadline(text, () => {
-        fetch(CLEAR_DEADLINE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ pid })
-        });
-      });
-      break;
-    }
-  }
-
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
     el.addEventListener('mousedown', e => {
@@ -559,8 +1211,8 @@
       const rect = el.getBoundingClientRect();
       startX = e.clientX;
       startY = e.clientY;
-      startLeft = rect.left;
-      startTop = rect.top;
+      startLeft = rect.left + window.scrollX;
+      startTop = rect.top + window.scrollY;
       el.style.position = 'absolute';
       el.style.margin = '0';
       el.style.left = startLeft + 'px';
@@ -577,31 +1229,10 @@
       document.addEventListener('mouseup', onUp);
     });
   }
-  document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
-
-  function adjustWorkerNoteFont(area) {
-    const textLength = (area.value || '').replace(/\s+/g, ' ').trim().length;
-    const minSize = 1.2;
-    const maxSize = 3.0;
-    const minChars = 10;
-    const maxChars = 60;
-    let size;
-    if (!textLength || textLength <= minChars) {
-      size = maxSize;
-    } else if (textLength >= maxChars) {
-      size = minSize;
-    } else {
-      const ratio = (textLength - minChars) / (maxChars - minChars);
-      size = maxSize - (maxSize - minSize) * ratio;
-    }
-    area.style.fontSize = size + 'em';
-  }
+  document.querySelectorAll('.modal-content, .conflict-content, .info-popup, .history-content').forEach(makeDraggable);
 
   document.querySelectorAll('.worker-note').forEach(area => {
-    adjustWorkerNoteFont(area);
-    area.addEventListener('input', () => adjustWorkerNoteFont(area));
     area.addEventListener('change', () => {
-      adjustWorkerNoteFont(area);
       fetch(WORKER_NOTE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -684,81 +1315,74 @@
   });
 
   const todayBtn = document.getElementById('today-btn');
-  todayBtn.addEventListener('click', () => {
-    const todayCell = document.querySelector('th.today');
-    if (todayCell) {
-      todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
-    }
-  });
+  if (todayBtn) {
+    todayBtn.addEventListener('click', () => {
+      const todayCell = document.querySelector('th.today');
+      if (todayCell) {
+        todayCell.scrollIntoView({behavior: 'smooth', inline: 'center'});
+      }
+    });
+  }
+
+  const sortDueBtn = document.getElementById('sort-due-btn');
+  const sortStatusBtn = document.getElementById('sort-status-btn');
+  const orderLists = document.querySelectorAll('.unplanned-list[data-mode]');
+  const ORDER_KEY = 'unplannedOrderMode';
+  const ORDER_STATUS = 'status';
+  const ORDER_DUE = 'due';
+
+  function applyUnplannedOrder(mode) {
+    const selected = mode === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+    orderLists.forEach((list) => {
+      const active = list.dataset.mode === selected;
+      list.style.display = active ? 'block' : 'none';
+      list.classList.toggle('active', active);
+    });
+    if (sortDueBtn) sortDueBtn.classList.toggle('active', selected === ORDER_DUE);
+    if (sortStatusBtn) sortStatusBtn.classList.toggle('active', selected === ORDER_STATUS);
+    localStorage.setItem(ORDER_KEY, selected);
+  }
+
+  const savedOrder = localStorage.getItem(ORDER_KEY);
+  const initialOrder = savedOrder === ORDER_DUE ? ORDER_DUE : ORDER_STATUS;
+  if (sortDueBtn) {
+    sortDueBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_DUE));
+  }
+  if (sortStatusBtn) {
+    sortStatusBtn.addEventListener('click', () => applyUnplannedOrder(ORDER_STATUS));
+  }
+  if (orderLists.length) {
+    applyUnplannedOrder(initialOrder);
+  }
 
 const tasks = document.querySelectorAll('.task');
 const folders = document.querySelectorAll('.unplanned-folder');
 const popup = document.getElementById('info-popup');
-
-const normalizeKanbanLabel = (label) => {
-  return (label || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
-};
-
-function extractKanbanValue(info, labels) {
-  if (!info) return '';
-  const fields = info.kanban_display_fields || {};
-  const options = Array.isArray(labels) ? labels : [labels];
-  for (const label of options) {
-    const value = fields[label];
-    if (value === null || value === undefined) continue;
-    const text = `${value}`.trim();
-    if (text) {
-      return text;
-    }
-  }
-  const normalizedMap = {};
-  Object.entries(fields).forEach(([key, value]) => {
-    const normalized = normalizeKanbanLabel(key);
-    if (!(normalized in normalizedMap)) {
-      normalizedMap[normalized] = value;
-    }
-  });
-  for (const label of options) {
-    const normalized = normalizeKanbanLabel(label);
-    if (!(normalized in normalizedMap)) continue;
-    const raw = normalizedMap[normalized];
-    if (raw === null || raw === undefined) continue;
-    const text = `${raw}`.trim();
-    if (text) {
-      return text;
-    }
-  }
-  return '';
-}
-
-function formatKanbanDateValue(value) {
-  if (value === null || value === undefined) return '';
-  const text = `${value}`.trim();
-  if (!text) return '';
-  const iso = madridDateISO(text);
-  if (!iso) return text;
-  const parts = iso.split('-');
-  if (parts.length !== 3) return text;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
 let lastDrag = null;
 let dragInfo = null;
+let draggedTaskElement = null;
   tasks.forEach(t => {
     t.addEventListener('dragstart', e => {
+      if (t.dataset.archived === 'true') {
+        e.preventDefault();
+        return;
+      }
       popup.style.display = 'none';
       const row = t.closest('[data-worker]');
+      const partValue = normalizePartValue(t.dataset.part);
+      const manualSource = !!t.closest('#manual-dropzone');
       lastDrag = {
         pid: t.dataset.pid,
         phase: t.dataset.phase,
         date: t.dataset.day,
         worker: row ? row.dataset.worker : '',
-        part: t.dataset.part
+        part: partValue
       };
-      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part };
-      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: t.dataset.part}));
+      dragInfo = { pid: t.dataset.pid, phase: t.dataset.phase, part: partValue, manual: manualSource };
+      draggedTaskElement = t;
+      e.dataTransfer.setData('text/plain', JSON.stringify({pid: t.dataset.pid, phase: t.dataset.phase, part: partValue}));
     });
-    t.addEventListener('dragend', () => { dragInfo = null; });
+    t.addEventListener('dragend', () => { dragInfo = null; draggedTaskElement = null; });
     t.addEventListener('click', (e) => {
       e.stopPropagation();
       const proj = t.dataset.project;
@@ -778,82 +1402,81 @@ let dragInfo = null;
           f.classList.add('dim');
         }
       });
-      const info = PROJECT_DATA[t.dataset.pid];
-      if (!info) return;
-      const headerParts = [];
-      if (info.name) {
-        let title = info.name;
-        if (info.blocked) {
-          title += ' <span class="blocked-sign">\u{1F6AB}</span>';
+      const infoRaw = PROJECT_DATA[t.dataset.pid] || {};
+      const info = (infoRaw && typeof infoRaw === 'object') ? infoRaw : {};
+      const isArchivedShadow = t.dataset.archived === 'true' || !!info.archived_shadow;
+      const normalizedPart = normalizePartValue(t.dataset.part);
+      const phasePartSuffix = formatPartSuffix(t.dataset.part);
+      const displayName = info.name || t.dataset.project;
+      const displayClient = info.client || t.dataset.client;
+      const blockedBadge = info.blocked ? ' <span class="blocked-sign">\u{1F6AB}</span>' : '';
+      let html = `<div class="popup-section popup-header"><strong>${displayName}${blockedBadge} - ${displayClient} - ${t.dataset.phase}${phasePartSuffix}</strong></div>`;
+      const startMap = START_DATA[t.dataset.pid] || {};
+      const startVal = startMap[t.dataset.phase] || '';
+      const metaLines = [];
+      const status = (info.material_status || '').toString();
+      if (status === 'missing') {
+        const missingTitles = Array.isArray(info.material_missing_titles)
+          ? info.material_missing_titles.filter(title => title && `${title}`.trim() !== '')
+          : [];
+        if (missingTitles.length) {
+          const items = missingTitles
+            .map(title => `<li>${escapeHtml(title)}</li>`)
+            .join('');
+          metaLines.push(`<div class="material-status-missing-block"><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong><ul class="material-status-missing-list">${items}</ul></div>`);
+        } else {
+          metaLines.push('<div><strong class="material-status-flag material-status-missing">FALTA MATERIAL</strong></div>');
         }
-        headerParts.push(title);
+      } else if (status === 'pending') {
+        metaLines.push('<div><strong class="material-status-flag material-status-pending">MATERIAL POR PEDIR</strong></div>');
+      } else if (status === 'verify') {
+        metaLines.push('<div><strong class="material-status-flag material-status-verify">SOLO FALTA VERIFICAR MATERIAL</strong></div>');
+      } else if (status === 'archived' || isArchivedShadow) {
+        metaLines.push('<div><strong class="material-status-flag material-status-archived">MATERIAL ARCHIVADO</strong></div>');
+      } else if (status) {
+        metaLines.push('<div><strong class="material-status-flag material-status-complete">MATERIAL COMPLETO</strong></div>');
       }
-      if (info.client) headerParts.push(info.client);
-      if (t.dataset.phase) headerParts.push(t.dataset.phase);
-      let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
-      const formatDateValue = (value) => {
-        if (value === null || value === undefined) return '';
-        if (Array.isArray(value)) {
-          const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
-          return formatted.join(', ');
-        }
-        const text = `${value}`.trim();
-        if (!text || text === '0') return '';
-        return formatKanbanDateValue(text);
-      };
-      const dateFieldLines = [];
-      const addDateField = (label, rawValues) => {
-        const values = Array.isArray(rawValues) ? rawValues : [rawValues];
-        for (const raw of values) {
-          const formatted = formatDateValue(raw);
-          if (formatted) {
-            dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
-            return;
-          }
-        }
-      };
-      addDateField('Límite', [
-        extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
-        info.deadline_start,
-        info.due_date,
-        extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
-      ]);
-      addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
-      addDateField('MATERIAL', [
-        extractKanbanValue(info, 'MATERIAL'),
-        info.material_confirmed_date
-      ]);
-      addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
-      addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
-      addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
-      addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
-      if (dateFieldLines.length) {
-        html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+      if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
+      if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
+      if (!metaLines.length && isArchivedShadow) {
+        metaLines.push('<div><strong class="material-status-flag material-status-archived">MATERIAL ARCHIVADO</strong></div>');
       }
-      const segmentLines = [];
-      const segments = info.segment_starts || {};
-      ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach(segment => {
-        const value = formatDateValue(segments[segment]);
-        if (value) {
-          segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
-        }
-      });
-      if (segmentLines.length) {
-        html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
+      if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
+      const kanbanFields = info.kanban_display_fields || {};
+      const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+      if (kanbanEntries.length) {
+        let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
+        kanbanEntries.forEach(([label, value]) => {
+          const displayValue = `${value}`;
+          kanbanHtml += `<div>${label}: ${displayValue}</div>`;
+        });
+        kanbanHtml += '</div>';
+        html += kanbanHtml;
       }
+      const previousPhases = Array.isArray(info.kanban_previous_phases)
+        ? new Set(info.kanban_previous_phases)
+        : new Set();
+      const projectPhases = info.phases || {};
+      const assignedMap = info.assigned || {};
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
-        const val = info.phases[ph];
+        const val = projectPhases[ph];
         let total = 0;
         if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
         else total = parseInt(val) || 0;
         if (total > 0) {
-          const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-          const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
-          let line = `<div${cls}>${ph}: ${total}h`;
-          if (ph === t.dataset.phase) {
-            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+          const assigned = assignedMap[ph] || 'Sin planificar';
+          const classes = ['phase-entry'];
+          classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+          if (previousPhases.has(ph)) classes.push('phase-previous');
+          const isActivePhase = ph === t.dataset.phase;
+          const partSuffix = isActivePhase ? phasePartSuffix : '';
+          let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
+          if (isActivePhase && !isArchivedShadow) {
+            const partValue = normalizedPart;
+            const partAttr = partValue ? ` data-part="${partValue}"` : '';
+            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
           }
           line += `</div>`;
           phaseLines.push(line);
@@ -862,55 +1485,90 @@ let dragInfo = null;
       let phaseSection = '';
       if (phaseLines.length) phaseSection += phaseLines.join('');
       if (t.dataset.phase === 'pedidos') {
-        const acopio = info.phases['pedidos'];
+        const acopio = projectPhases['pedidos'];
         if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
       }
       if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
-      const actionMain = [];
-      let deleteButton = '';
-      const startVal = (START_DATA[t.dataset.pid] && START_DATA[t.dataset.pid][t.dataset.phase]) || '';
-      if (t.dataset.phase) {
-        actionMain.push(`<div class="popup-action-line">Inicio de la fase: <form id="start-form" class="popup-inline-form"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
-        actionMain.push(`<div class="popup-action-line"><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" class="freeze-btn">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
-        let splitLine = `<div class="popup-action-line"><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}">Dividir fase aquí</button>`;
-        if (Array.isArray(info.phases[t.dataset.phase])) {
+      const actionLines = [];
+      const historyPartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+      actionLines.push(`<div><button type="button" class="history-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${historyPartAttr}>Historial</button></div>`);
+      if (!isArchivedShadow) {
+        actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Cambiar</button></form></div>`);
+        actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+        const phaseHoursEntry = (info.phases && info.phases[t.dataset.phase]) || null;
+        let totalPhaseHours = null;
+        if (Array.isArray(phaseHoursEntry)) {
+          totalPhaseHours = phaseHoursEntry
+            .map(v => Number(v) || 0)
+            .reduce((acc, val) => acc + val, 0);
+        } else if (phaseHoursEntry !== undefined && phaseHoursEntry !== null && `${phaseHoursEntry}`.trim() !== '') {
+          const parsed = Number(phaseHoursEntry);
+          if (Number.isFinite(parsed)) totalPhaseHours = parsed;
+        } else if (t.dataset.hours) {
+          const parsed = Number(t.dataset.hours);
+          if (Number.isFinite(parsed)) totalPhaseHours = parsed;
+        }
+        const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
+        const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
+        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
+        if (Array.isArray(projectPhases[t.dataset.phase])) {
           splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
         }
         splitLine += `</div>`;
-        actionMain.push(splitLine);
-        deleteButton = `<button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button>`;
+        actionLines.push(splitLine);
+        actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
+        const unplanPart = normalizedPart;
+        const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
+        actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${unplanAttr}>Sin planificar</button></div>`);
+        const obsValue = info && info.observations !== undefined && info.observations !== null
+          ? `${info.observations}`
+          : '';
+        const safeObsValue = escapeHtml(obsValue);
+        actionLines.push(`
+          <div class="popup-observations">
+            <label for="obs-text">Observaciones</label>
+            <textarea id="obs-text" data-pid="${t.dataset.pid}" class="popup-observations-text">${safeObsValue}</textarea>
+            <div class="popup-observations-actions">
+              <button type="button" id="obs-save" data-pid="${t.dataset.pid}">Guardar</button>
+            </div>
+          </div>
+        `);
+      } else {
+        if (info && info.observations) {
+          const safeObsValue = escapeHtml(`${info.observations}`);
+          actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
+        }
+        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones deshabilitadas.</div>');
       }
-      actionMain.push(`<div class="popup-action-line"><button id="obs-btn" data-pid="${t.dataset.pid}" class="obs-btn">Observaciones</button></div>`);
-      if (actionMain.length || deleteButton) {
-        const left = actionMain.join('');
-        const right = deleteButton ? `<div class="popup-actions-delete">${deleteButton}</div>` : '';
-        html += `<div class="popup-section popup-actions"><div class="popup-actions-main">${left}</div>${right}</div>`;
-      }
-      const attachmentItems = [];
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
-        attachmentItems.push(`<div class="attachment-item"><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" class="attachment-thumb" alt="Imagen del proyecto"></a></div>`);
+        actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
       }
       if (info.kanban_attachments && info.kanban_attachments.length) {
         info.kanban_attachments.forEach(att => {
           const url = att.url;
-          const name = att.name || '';
-          const lower = name.toLowerCase();
-          if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) {
-            attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" class="attachment-thumb"></a></div>`);
+          const name = (att.name || '').toLowerCase();
+          if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+            actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
           } else {
-            attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank">${name || url}</a></div>`);
+            actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
           }
         });
       }
-      if (attachmentItems.length) {
-        html += `<div class="popup-section popup-attachments"><div class="attachment-list">${attachmentItems.join('')}</div></div>`;
-      }
+      if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
       popup.innerHTML = html;
       const rect = t.getBoundingClientRect();
       popup.style.left = (rect.left + window.scrollX + 5) + 'px';
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
+      const historyBtn = popup.querySelector('.history-btn');
+      if (historyBtn) {
+        historyBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const partValue = normalizePartValue(historyBtn.dataset.part);
+          openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, displayName, displayClient);
+        });
+      }
       const del = document.getElementById('del-btn');
       if (del) {
         del.addEventListener('click', ev => {
@@ -925,14 +1583,67 @@ let dragInfo = null;
           }
         });
       }
-      const obsBtn = document.getElementById('obs-btn');
-      if (obsBtn && obsModal) {
-        obsBtn.addEventListener('click', ev => {
+      const unplan = document.getElementById('unplan-btn');
+      if (unplan) {
+        unplan.addEventListener('click', ev => {
           ev.stopPropagation();
-          const pid = obsBtn.dataset.pid;
-          obsModal.dataset.pid = pid;
-          obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
-          obsModal.style.display = 'block';
+          const today = madridDateISO();
+          const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+          const partValue = normalizePartValue(unplan.dataset.part);
+          if (partValue) body.part = partValue;
+          fetch(MOVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+          })
+            .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                alert(data.error || 'Error');
+                return;
+              }
+              afterMove(data, today);
+            });
+        });
+      }
+      const obsSave = document.getElementById('obs-save');
+      const obsText = document.getElementById('obs-text');
+      if (obsSave && obsText) {
+        obsSave.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const pid = obsSave.dataset.pid;
+          const txt = obsText.value;
+          const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+          const originalLabel = obsSave.textContent;
+          obsSave.disabled = true;
+          obsSave.textContent = 'Guardando...';
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ observations: txt })
+          })
+            .then(resp => {
+              if (resp.ok) {
+                return resp.text().catch(() => '');
+              }
+              return resp.json().catch(() => ({})).then(data => {
+                throw new Error(data.error || 'Error guardando observaciones');
+              });
+            })
+            .then(() => {
+              if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+              obsSave.textContent = 'Guardado';
+              setTimeout(() => { obsSave.textContent = originalLabel; }, 1500);
+            })
+            .catch(err => {
+              alert(err.message || 'Error guardando observaciones');
+              obsSave.textContent = originalLabel;
+            })
+            .finally(() => {
+              obsSave.disabled = false;
+            });
         });
       }
       const split = document.getElementById('split-btn');
@@ -942,8 +1653,7 @@ let dragInfo = null;
           splitModal.dataset.pid = split.dataset.pid;
           splitModal.dataset.phase = split.dataset.phase;
           splitModal.dataset.date = split.dataset.date;
-          splitPart1.value = '';
-          splitPart2.value = '';
+          prepareSplitModal(split);
           splitModal.style.display = 'block';
         });
       }
@@ -961,26 +1671,77 @@ let dragInfo = null;
           }
         });
       }
-      if (splitForm) {
+      if (splitForm && !splitForm.dataset.enhanced) {
         splitForm.addEventListener('submit', ev => {
           ev.preventDefault();
           ev.stopPropagation();
+          if (!splitModal) return;
+          const manuals = getSplitManualInputs();
+          if (!manuals.length) {
+            alert('Debes indicar al menos una parte.');
+            return;
+          }
+          const parts = [];
+          let invalid = false;
+          manuals.forEach(input => {
+            const value = parseSplitHours(input.value);
+            if (!Number.isInteger(value) || value <= 0) {
+              input.classList.add('split-input-error');
+              invalid = true;
+              return;
+            }
+            parts.push(value);
+          });
+          const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
+          const total = parseSplitHours(splitModal.dataset.totalHours);
+          let remainderInt = null;
+          if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
+            invalid = true;
+          } else {
+            remainderInt = remainderValue;
+            parts.push(remainderInt);
+          }
+          const sumParts = parts.reduce((acc, value) => acc + value, 0);
+          if (total !== null && Number.isFinite(total) && sumParts !== total) {
+            invalid = true;
+          }
+          if (invalid) {
+            alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
+            updateSplitModalDisplay();
+            return;
+          }
+          const payload = {
+            pid: splitModal.dataset.pid,
+            phase: splitModal.dataset.phase,
+            date: splitModal.dataset.date,
+            parts,
+          };
           fetch(SPLIT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({
-              pid: splitModal.dataset.pid,
-              phase: splitModal.dataset.phase,
-              date: splitModal.dataset.date,
-              part1: splitPart1.value,
-              part2: splitPart2.value
-            })
+            body: JSON.stringify(payload)
           }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
         });
+        splitForm.dataset.enhanced = 'true';
       }
-      if (splitCancel) {
-        splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
+      if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
+        splitAddPartButton.addEventListener('click', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
+          const input = createSplitPartRow(null, remainderRow);
+          ensureSplitRemainderInput();
+          updateSplitModalDisplay();
+          if (input) {
+            input.focus();
+          }
+        });
+        splitAddPartButton.dataset.bound = 'true';
+      }
+      if (splitCancel && !splitCancel.dataset.bound) {
+        splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
+        splitCancel.dataset.bound = 'true';
       }
       const freeze = document.getElementById('freeze-btn');
       if (freeze) {
@@ -1024,11 +1785,16 @@ let dragInfo = null;
           ev.stopPropagation();
           const btn = hoursForm.querySelector('button');
           const val = document.getElementById('phase-hours-input').value;
-         fetch(PHASE_HOURS_URL, {
+          const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+          const partValue = normalizePartValue(btn.dataset.part);
+          if (partValue) {
+            payload.part = partValue;
+          }
+          fetch(PHASE_HOURS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+            body: JSON.stringify(payload)
           }).then(resp => {
             if (resp.ok) {
               const url = new URL(location);
@@ -1114,8 +1880,7 @@ let dragInfo = null;
           .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
           .then(({ ok, data }) => {
             if (!ok) {
-              if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-              else alert(data.error || 'Error');
+              alert(data.error || 'Error');
               return;
             }
             sessionStorage.removeItem('undoMove');
@@ -1158,7 +1923,9 @@ let dragInfo = null;
     let hours = 0;
     const tasks = Array.from(cell.querySelectorAll('.task'));
     for (const t of tasks) {
-      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && (t.dataset.part || '') === (dragInfo.part || '')) continue;
+      const currentPart = normalizePartValue(t.dataset.part);
+      const draggingPart = dragInfo ? normalizePartValue(dragInfo.part) : '';
+      if (dragInfo && t.dataset.pid === dragInfo.pid && t.dataset.phase === dragInfo.phase && currentPart === draggingPart) continue;
       const rect = t.getBoundingClientRect();
       if (y < rect.top + rect.height / 2) break;
       hours += parseFloat(t.dataset.hours || '0');
@@ -1182,78 +1949,7 @@ let dragInfo = null;
       attemptMove(moveData, 'split', beforeMaterial);
     });
   });
-  function getPhaseSequence(pid) {
-    const info = PROJECT_DATA[pid];
-    if (info && Array.isArray(info.phase_sequence) && info.phase_sequence.length) {
-      return info.phase_sequence;
-    }
-    return PHASES;
-  }
-
-  function getNextPhaseStart(pid, phase) {
-    if (!pid || !phase) return null;
-    const sequence = getPhaseSequence(pid);
-    const orderIndex = sequence.indexOf(phase);
-    if (orderIndex === -1) return null;
-    const phaseStarts = START_DATA[pid];
-    if (!phaseStarts) return null;
-    for (let i = orderIndex + 1; i < sequence.length; i++) {
-      const nextPhase = sequence[i];
-      const nextStart = phaseStarts[nextPhase];
-      if (nextStart && nextStart !== '0') {
-        return nextStart;
-      }
-    }
-    return null;
-  }
-
-  function getPrevPhaseStart(pid, phase) {
-    if (!pid || !phase) return null;
-    const sequence = getPhaseSequence(pid);
-    const orderIndex = sequence.indexOf(phase);
-    if (orderIndex <= 0) return null;
-    const phaseStarts = START_DATA[pid];
-    if (!phaseStarts) return null;
-    for (let i = orderIndex - 1; i >= 0; i--) {
-      const prevPhase = sequence[i];
-      const prevStart = phaseStarts[prevPhase];
-      if (prevStart && prevStart !== '0') {
-        return prevStart;
-      }
-    }
-    return null;
-  }
-
-  function violatesPhaseOrder(moveData) {
-    if (!moveData || !moveData.date) return false;
-    const target = new Date(moveData.date);
-    if (Number.isNaN(target.getTime())) return false;
-
-    const prevStart = getPrevPhaseStart(moveData.pid, moveData.phase);
-    if (prevStart) {
-      const prev = new Date(prevStart);
-      if (!Number.isNaN(prev.getTime()) && target < prev) {
-        return true;
-      }
-    }
-
-    const nextStart = getNextPhaseStart(moveData.pid, moveData.phase);
-    if (nextStart) {
-      const next = new Date(nextStart);
-      if (!Number.isNaN(next.getTime()) && target > next) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   function attemptMove(moveData, mode, beforeMaterial) {
-    if (violatesPhaseOrder(moveData) && orderModal) {
-      pendingOrder = { moveData, mode, beforeMaterial };
-      orderModal.style.display = 'block';
-      return;
-    }
     doMove(moveData, mode, beforeMaterial);
   }
   function doMove(moveData, mode, beforeMaterial) {
@@ -1273,8 +1969,7 @@ let dragInfo = null;
           blockModal.style.display = 'block';
           return;
         }
-        if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-        else alert(data.error || 'Error');
+        alert(data.error || 'Error');
         return;
       }
       afterMove(data, moveData.date);
@@ -1306,26 +2001,7 @@ let dragInfo = null;
       pendingBlock = null;
     });
   }
-  if (orderOk) {
-    orderOk.addEventListener('click', () => {
-      if (pendingOrder) {
-        const { moveData, mode, beforeMaterial } = pendingOrder;
-        pendingOrder = null;
-        orderModal.style.display = 'none';
-        doMove(moveData, mode, beforeMaterial);
-      } else {
-        orderModal.style.display = 'none';
-      }
-    });
-  }
-  if (orderCancel) {
-    orderCancel.addEventListener('click', () => {
-      pendingOrder = null;
-      orderModal.style.display = 'none';
-    });
-  }
-  const unplanList = document.querySelector('.unplanned-list');
-  if (unplanList) {
+  document.querySelectorAll('.unplanned-list').forEach((unplanList) => {
     unplanList.addEventListener('dragover', e => { e.preventDefault(); });
     unplanList.addEventListener('drop', e => {
       e.preventDefault();
@@ -1343,11 +2019,142 @@ let dragInfo = null;
         .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
         .then(({ ok, data }) => {
           if (!ok) {
-            if (data.error === DEADLINE_MSG || data.error === CLIENT_DEADLINE_MSG) showDeadline(data.error);
-            else alert(data.error || 'Error');
+            alert(data.error || 'Error');
             return;
           }
           afterMove(data, today);
+        });
+    });
+  });
+  const manualZone = document.getElementById('manual-dropzone');
+
+  function manualDropIndex(zone, clientY) {
+    if (!zone) return 0;
+    const items = Array.from(zone.querySelectorAll('.manual-task'));
+    const filtered = draggedTaskElement ? items.filter(el => el !== draggedTaskElement) : items;
+    let index = filtered.length;
+    for (let i = 0; i < filtered.length; i += 1) {
+      const rect = filtered[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        index = i;
+        break;
+      }
+    }
+    return index;
+  }
+
+  function refreshManualPlaceholder() {
+    if (!manualZone) return;
+    const placeholder = manualZone.querySelector('.manual-placeholder');
+    if (!placeholder) return;
+    const hasTask = manualZone.querySelector('.manual-task');
+    placeholder.style.display = hasTask ? 'none' : 'block';
+  }
+
+  function persistManualOrder() {
+    if (!manualZone) return;
+    const order = Array.from(manualZone.querySelectorAll('.manual-task')).map((el) => {
+      const rawPart = normalizePartValue(el.dataset.part);
+      let part = null;
+      if (rawPart) {
+        const num = Number(rawPart);
+        part = Number.isFinite(num) ? num : null;
+      }
+      return {
+        pid: el.dataset.pid,
+        phase: el.dataset.phase,
+        part,
+      };
+    });
+    fetch(MANUAL_REORDER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ order }),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          return resp
+            .json()
+            .catch(() => ({}))
+            .then((d) => {
+              throw new Error(d.error || 'Error');
+            });
+        }
+        return null;
+      })
+      .catch((err) => {
+        alert(err.message || 'Error');
+      });
+  }
+
+  refreshManualPlaceholder();
+
+  if (manualZone) {
+    manualZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.add('drag-over');
+    });
+    manualZone.addEventListener('dragleave', (e) => {
+      if (e.target === manualZone || !manualZone.contains(e.relatedTarget)) {
+        manualZone.classList.remove('drag-over');
+      }
+    });
+    manualZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      manualZone.classList.remove('drag-over');
+      let data = null;
+      try {
+        data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      } catch (err) {
+        data = null;
+      }
+      if (!data) return;
+      const index = manualDropIndex(manualZone, e.clientY);
+      if (dragInfo && dragInfo.manual) {
+        const el = draggedTaskElement;
+        if (el) {
+          const siblings = Array.from(manualZone.querySelectorAll('.manual-task')).filter((item) => item !== el);
+          if (index >= siblings.length) {
+            manualZone.appendChild(el);
+          } else {
+            manualZone.insertBefore(el, siblings[index]);
+          }
+          persistManualOrder();
+          refreshManualPlaceholder();
+        }
+        return;
+      }
+      const today = madridDateISO();
+      if (lastDrag) {
+        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+      }
+      const payload = {
+        pid: data.pid,
+        phase: data.phase,
+        date: today,
+        worker: 'Sin planificar',
+        part: data.part,
+        manual_bucket: true,
+        manual_position: index,
+      };
+      const placeholder = manualZone.querySelector('.manual-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then((resp) => resp.json().then((d) => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data: moveData }) => {
+          if (!ok) {
+            alert(moveData.error || 'Error');
+            return;
+          }
+          afterMove(moveData, today);
         });
     });
   }
@@ -1416,31 +2223,12 @@ let dragInfo = null;
       btn.innerHTML = hidden ? '&#8722;' : '&#43;';
     });
   });
-  const obsModal = document.getElementById('obs-modal');
-  const obsText = document.getElementById('obs-text');
-  const obsSave = document.getElementById('obs-save');
-  const obsCancel = document.getElementById('obs-cancel');
-  if (obsModal) {
-    obsCancel.addEventListener('click', () => { obsModal.style.display = 'none'; });
-    obsModal.addEventListener('click', e => { if (e.target === obsModal) obsModal.style.display = 'none'; });
-    obsSave.addEventListener('click', () => {
-      const pid = obsModal.dataset.pid;
-      const txt = obsText.value;
-      fetch(`/update_observations/${encodeURIComponent(pid)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ observations: txt })
-      }).then(() => { PROJECT_DATA[pid].observations = txt; obsModal.style.display = 'none'; });
-    });
-  }
 const CONFLICTS = {{ conflicts|tojson }};
-const DEADLINE_CONFLICTS = {{ deadline_conflicts|tojson }};
 const conflictModal = document.getElementById("conflict-modal");
 const conflictText = document.getElementById("conflict-text");
 const conflictClose = document.getElementById("conflict-close");
 const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = [...CONFLICTS, ...DEADLINE_CONFLICTS].filter(
+const NEW_CONFLICTS = CONFLICTS.filter(
   c => !seen[c.key]
 );
 let conflictIndex = 0;
@@ -1466,11 +2254,9 @@ if (NEW_CONFLICTS.length) {
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (deadlineModal.style.display === 'block') deadlineClose.click();
     if (conflictModal.style.display === 'block') conflictClose.click();
     if (splitModal.style.display === 'block') splitCancel.click();
     if (blockModal.style.display === 'block') blockCancel.click();
-    if (obsModal && obsModal.style.display === 'block') obsCancel.click();
   }
 });
 </script>

@@ -12,11 +12,9 @@
   <input id="filter_project" type="text" placeholder="Filtrar por proyecto" />
   <input id="filter_client" type="text" placeholder="Filtrar por cliente" />
 </div>
-<div class="gantt-wrapper">
+  <div class="gantt-wrapper">
   <div id="gantt_summary" class="gantt-summary">
-    <div id="summary_header_row" class="summary-header-row"></div>
-    <div id="gantt_summary_body" class="summary-body"></div>
-    <div id="summary-resizer" class="summary-resizer"></div>
+    <div id="gantt_summary_columns" class="summary-columns"></div>
   </div>
   <div id="gantt_main" class="gantt-main">
     <div id="gantt_header" class="gantt-header"></div>
@@ -24,54 +22,61 @@
   </div>
 </div>
 <div id="info-popup" class="info-popup"></div>
-<div id="deadline-modal" class="conflict-modal">
-  <div class="conflict-content">
-    <div id="deadline-text" style="color:orange;font-weight:bold"></div>
-    <button id="deadline-close">Cerrar</button>
-  </div>
-</div>
 <div id="split-modal" class="conflict-modal">
   <div class="conflict-content">
     <form id="split-form">
-      <label>Horas primera parte: <input type="number" id="split-part1" min="0" required></label><br>
-      <label>Horas segunda parte: <input type="number" id="split-part2" min="0" required></label><br>
-      <button type="submit">Aceptar</button>
-      <button type="button" id="split-cancel">Cancelar</button>
+      <div id="split-total-hours" class="split-total-hours"></div>
+      <div id="split-parts-container" class="split-parts-container"></div>
+      <button type="button" id="split-add-part" class="split-add-part" title="Añadir parte">+</button>
+      <div class="split-actions">
+        <button type="submit">Aceptar</button>
+        <button type="button" id="split-cancel">Cancelar</button>
+      </div>
     </form>
-  </div>
-</div>
-<div id="obs-modal" class="modal">
-  <div class="modal-content">
-    <textarea id="obs-text" style="width:100%;height:100px;"></textarea><br>
-    <button id="obs-save" type="button">Guardar</button>
-    <button id="obs-cancel" type="button">Cancelar</button>
   </div>
 </div>
 <style>
   .gantt-wrapper { display:flex; }
-  .gantt-summary { width:450px; overflow:auto; border:1px solid #ddd; border-right:0; height:80vh; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-summary { display:flex; flex-direction:row; overflow-x:auto; overflow-y:visible; border:1px solid #ddd; border-right:0; position:relative; box-sizing:border-box; background:#fff; }
   .gantt-summary::-webkit-scrollbar { display:none; }
   .gantt-summary { -ms-overflow-style:none; scrollbar-width:none; }
-  .summary-header-row { position:sticky; top:0; display:flex; background:#fff; border-bottom:1px solid #ddd; z-index:2; }
-  .summary-header-cell { display:flex; align-items:center; font-weight:bold; color:#000; padding:0 8px 0 4px; box-sizing:border-box; border-right:1px solid #eee; position:relative; height:30px; line-height:30px; white-space:nowrap; overflow:hidden; }
-  .summary-body { position:relative; }
-  .summary-row { display:flex; height:30px; border-bottom:1px solid #ddd; color:#000; }
-  .summary-cell { display:flex; align-items:center; padding:0 8px 0 4px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-right:1px solid #f0f0f0; }
-  .summary-cell[data-column='summary'] { font-weight:bold; cursor:pointer; }
-  .summary-row.phase-row .summary-cell[data-column='summary'] { font-weight:normal; cursor:default; padding-left:20px; }
-  .summary-row.phase-row .summary-cell { font-weight:normal; }
-  .summary-cell[data-column='summary'].clickable { cursor:pointer; }
-  .column-resizer { position:absolute; right:0; top:0; bottom:0; width:6px; cursor:col-resize; }
-  .column-resizer::after { content:''; position:absolute; left:2px; top:25%; bottom:25%; width:2px; background:#bbb; }
-  .gantt-row.phase-row { opacity:0.5; }
-  .gantt-main { flex:1; overflow:auto; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; height:80vh; }
+  .summary-columns { display:flex; flex:1; }
+  .summary-group-wrapper { display:flex; flex-direction:row; position:relative; flex:0 0 auto; }
+  .summary-column-group { display:flex; overflow:hidden; background:#fff; flex:0 0 auto; border-right:1px solid #ddd; }
+  .summary-column-group .summary-column { border-right:1px solid #ddd; }
+  .summary-column-group .summary-column:last-child { border-right:0; }
+  .summary-column { position:relative; display:flex; flex-direction:column; border-right:1px solid #ddd; flex:0 0 auto; background:#fff; }
+  .summary-column:last-child { border-right:0; }
+  .summary-header { position:sticky; top:0; background:#fff; border-bottom:1px solid #ddd; text-align:center; height:30px; line-height:30px; font-weight:bold; color:#000; z-index:2; padding:0 6px; box-sizing:border-box; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:0; }
+  .summary-body { flex:1; }
+  .summary-row { height:30px; line-height:30px; border-bottom:1px solid #ddd; padding:0 6px; box-sizing:border-box; color:#000; white-space:nowrap; display:flex; align-items:center; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .summary-column.summary-main .summary-row.project-row { cursor:pointer; font-weight:bold; }
+  .summary-column.summary-main .summary-row.phase-row { padding-left:16px; }
+  .summary-column:not(.summary-main) .summary-row { justify-content:center; font-size:12px; }
+  .summary-row.summary-group-title-row { font-weight:bold; justify-content:center; background:#f9f9f9; pointer-events:none; }
+  .summary-column.summary-main .summary-row.summary-group-title-row { background:#fff; font-weight:normal; }
+  .column-resizer { position:absolute; top:0; right:0; bottom:0; width:4px; cursor:col-resize; }
+  .column-resizer:hover, .summary-column.resizing .column-resizer { background:rgba(0,0,0,0.1); }
+  .column-group-resizer { width:6px; flex:0 0 6px; cursor:col-resize; }
+  .column-group-resizer:hover, .column-group-resizer.active { background:rgba(0,0,0,0.1); }
+  .gantt-main { flex:1; overflow-x:auto; overflow-y:visible; position:relative; border:1px solid #ddd; -ms-overflow-style:none; scrollbar-width:none; }
   .gantt-main::-webkit-scrollbar { display:none; }
-  .gantt-header { position:sticky; top:0; height:20px; border-bottom:1px solid #ddd; background:#fff; }
-  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:20px; }
+  .gantt-header { position:sticky; top:0; height:30px; line-height:30px; border-bottom:1px solid #ddd; background:#fff; box-sizing:border-box; }
+  .day-cell { position:absolute; top:0; border-right:1px solid #ddd; text-align:center; font-size:12px; color:#000; line-height:30px; height:30px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .gantt-body { position:relative; }
-  .gantt-row { height:29px; border-bottom:1px solid #ddd; position:relative; }
-  .gantt-task { position:absolute; top:0; height:100%; line-height:29px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
-  .project-bar { cursor:pointer; }
+  .gantt-row { height:30px; border-bottom:1px solid #ddd; position:relative; box-sizing:border-box; background:#fff; }
+  .gantt-row.summary-group-title-row { background:#f9f9f9; pointer-events:none; position:relative; z-index:1; }
+  .gantt-task { position:absolute; top:0; height:100%; line-height:30px; color:#000; font-size:12px; padding:0 4px; box-sizing:border-box; border-radius:2px; overflow:visible; white-space:nowrap; display:flex; align-items:center; }
+  .project-bar { cursor:pointer; background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
+  .project-bar.project-unplanned { color:#ff8c00; }
+  .phase-bar { background:transparent; border:2px solid #0b3c6f; color:#0b3c6f; box-sizing:border-box; z-index:2; }
+  .phase-bar { pointer-events:auto; }
+  .phase-milestone-bar { position:absolute; top:0; height:100%; background:#dbe9ff; border:none; border-radius:2px; pointer-events:none; z-index:1; display:flex; align-items:center; justify-content:center; font-style:italic; color:#0b3c6f; font-weight:500; }
+  body.orders-gantt-mode .phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; z-index:auto; }
+  .order-project-bar { background:#d9d9d9; border:1px solid #bdbdbd; color:#000; }
+  .order-project-bar.order-project-unplanned { color:#ff8c00; }
+  .order-phase-bar { background:#fff; border:1px solid #bdbdbd; color:#000; }
+  .order-phase-bar.order-phase-warning { background:#dbe9ff; border-color:#0b3c6f; border-width:2px; box-shadow:0 0 0 1px rgba(11,60,111,0.25); color:#0b3c6f; }
   .gantt-row .deadline-highlight {
     position:absolute;
     top:-2px;
@@ -87,63 +92,55 @@
   .day-cell.today { background-color: rgba(255,0,0,0.3); }
   .today-column { position:absolute; top:0; bottom:0; background-color: rgba(255,0,0,0.1); pointer-events:none; }
   .gantt-controls input { margin-left:8px; padding:4px; }
+  body.orders-gantt-mode .summary-column .summary-row,
+  body.orders-gantt-mode .summary-column .summary-header {
+    border-left:1px solid #d0d0d0;
+  }
+  body.orders-gantt-mode .summary-column:first-child .summary-row,
+  body.orders-gantt-mode .summary-column:first-child .summary-header {
+    border-left:0;
+  }
 </style>
 <script>
-let allProjects = {{ projects|safe }};
-let PROJECT_DATA = {{ project_data|tojson }};
-let START_DATA = {{ start_map|tojson }};
+const allProjects = {{ projects|safe }};
+const PROJECT_DATA = {{ project_data|tojson }};
+const START_DATA = {{ start_map|tojson }};
 const PHASES = {{ phases|tojson }};
 const STATIC_URL = "{{ url_for('static', filename='') }}";
+const MOVE_URL = "{{ url_for('move_phase') }}";
 const DELETE_URL = "{{ url_for('delete_phase') }}";
 const START_URL = "{{ url_for('update_phase_start') }}";
 const SPLIT_URL = "{{ url_for('split_phase_route') }}";
 const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
 const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
 const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
-const DEADLINE_MSG = 'Fecha cliente soprepasada.';
-const CLIENT_DEADLINE_MSG = 'FECHA TOPE SOBREPASADA.';
 const LAST_KEY = 'lastMoved';
 const SCROLL_KEY2 = 'scrollDate';
-const GANTT_DATA_URL = "{{ url_for('gantt_data_api') }}";
-const SUMMARY_COLUMNS = [
-  { id: 'summary', label: 'Resumen', defaultWidth: 260 },
-  { id: 'due', label: 'Fecha límite', defaultWidth: 150 },
-  { id: 'lanzamiento', label: 'LANZAMIENTO', defaultWidth: 150 },
-  { id: 'material', label: 'MATERIAL', defaultWidth: 150 },
-  { id: 'caldereria', label: 'CALDERERÍA', defaultWidth: 150 },
-  { id: 'mecanizado', label: 'MECANIZADO', defaultWidth: 150 },
-  { id: 'tratamiento', label: 'TRATAMIENTO', defaultWidth: 150 },
-  { id: 'pintar', label: 'PINTAR', defaultWidth: 150 },
-  { id: 'phase_start', label: 'Fecha de inicio planificada de la fase', defaultWidth: 210 },
-  { id: 'phase_end', label: 'Fecha fin planificada de la fase', defaultWidth: 210 },
-];
-const COLUMN_WIDTHS_KEY = 'ganttSummaryColumns';
-let columnWidths = {};
-try {
-  columnWidths = JSON.parse(localStorage.getItem(COLUMN_WIDTHS_KEY) || '{}') || {};
-} catch (err) {
-  columnWidths = {};
+const GANTT_MODE = "{{ gantt_mode|default('phases') }}";
+const ENABLE_PHASE_ACTIONS = {{ 'true' if phase_actions_enabled else 'false' }};
+const IS_ORDER_GANTT = GANTT_MODE === 'orders';
+if (IS_ORDER_GANTT) {
+  document.body.classList.add('orders-gantt-mode');
 }
 let projects = allProjects.slice();
 const summaryContainer = document.getElementById('gantt_summary');
-const summaryHeaderRow = document.getElementById('summary_header_row');
-const summaryBody = document.getElementById('gantt_summary_body');
+const summaryColumnsContainer = document.getElementById('gantt_summary_columns');
+const SUMMARY_COL_WIDTH_PREFIX = 'ganttSummaryColWidth-';
+const summaryColumnDefs = [];
+const DATE_GROUP_NAME = 'dates';
+const DATE_GROUP_WIDTH_KEY = 'ganttDateGroupWidth';
+let dateGroupContainerEl = null;
 const main = document.getElementById('gantt_main');
 const header = document.getElementById('gantt_header');
 const body = document.getElementById('gantt_body');
 const popup = document.getElementById('info-popup');
-const deadlineModal = document.getElementById('deadline-modal');
-const deadlineText = document.getElementById('deadline-text');
-const deadlineClose = document.getElementById('deadline-close');
 const splitModal = document.getElementById('split-modal');
 const splitForm = document.getElementById('split-form');
-const splitPart1 = document.getElementById('split-part1');
-const splitPart2 = document.getElementById('split-part2');
+const splitPartsContainer = document.getElementById('split-parts-container');
+const splitAddPartButton = document.getElementById('split-add-part');
+const splitTotalDisplay = document.getElementById('split-total-hours');
 const splitCancel = document.getElementById('split-cancel');
-const obsModal = document.getElementById('obs-modal');
-const obsText = document.getElementById('obs-text');
-const obsSave = document.getElementById('obs-save');
-const obsCancel = document.getElementById('obs-cancel');
+let splitRemainderInput = null;
 const collapsed = JSON.parse(localStorage.getItem('ganttCollapsed') || '{}');
 let zoom = parseFloat(localStorage.getItem('ganttZoom') || '1');
 let pxPerDay = 40 * zoom;
@@ -152,6 +149,46 @@ let initialScroll = true;
 const BAR_HEIGHT = 30;
 let currentSort = localStorage.getItem('ganttSort') || null;
 const DAY_MS = 24*60*60*1000;
+const SPLIT_WORKDAY_HOURS = 8;
+const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+
+function toStartOfDay(value){
+  const raw = (value ?? '').toString().trim();
+  if(!raw){
+    return new Date(NaN);
+  }
+  const normalized = raw.replace(' ', 'T');
+  const base = normalized.split('T')[0];
+  return new Date(base + 'T00:00:00');
+}
+
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return value
+    .toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizePartValue(value) {
+  if (value === undefined || value === null) return '';
+  const text = `${value}`.trim();
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower === 'none' || lower === 'null' || lower === 'undefined') return '';
+  return text;
+}
+
+function formatPartSuffix(value) {
+  const normalized = normalizePartValue(value);
+  if (!normalized) return '';
+  const num = Number(normalized);
+  if (!Number.isFinite(num)) return '';
+  return ` (${Math.trunc(num) + 1})`;
+}
 let timelineMinStart = null;
 let timelinePxPerDay = pxPerDay;
 
@@ -165,148 +202,940 @@ const savedClientFilter = localStorage.getItem(FILTER_CLIENT_KEY) || '';
 projectFilterInput.value = savedProjectFilter;
 clientFilterInput.value = savedClientFilter;
 
-document.addEventListener('click', () => {
-  if (popup) popup.style.display = 'none';
+const ORDER_POPUP_HIDDEN_LABELS = new Set(['Columna', 'Lane', 'Código', 'ID Kanban', 'Fecha pedido', 'Fecha Pedido', 'FECHA PEDIDO']);
+const ORDER_PROJECT_DEADLINE_KEYS = [
+  'Fecha tope',
+  'Fecha Tope',
+  'FECHA TOPE',
+  'Fecha tope cliente',
+  'Fecha Tope Cliente',
+  'Fecha tope proyecto',
+  'Fecha Tope Proyecto'
+];
+
+const PHASE_MILESTONES = [
+  {
+    id: 'caldereria',
+    label: 'CALDERERIA',
+    tokens: ['caldereria'],
+    phaseTokens: ['montar'],
+    excludePhaseTokens: ['montar 2'],
+    fieldKeys: ['CALDERERÍA', 'CALDERERIA']
+  },
+  {
+    id: 'mecanizado',
+    label: 'MECANIZADO',
+    tokens: ['mecanizado'],
+    phaseTokens: ['mecanizado', 'mecanizar'],
+    fieldKeys: ['MECANIZADO']
+  },
+  {
+    id: 'tratamiento',
+    label: 'TRATAMIENTO',
+    tokens: ['tratamiento'],
+    phaseTokens: ['tratamiento'],
+    fieldKeys: ['TRATAMIENTO']
+  },
+  {
+    id: 'pintar',
+    label: 'PINTAR',
+    tokens: ['pintar'],
+    phaseTokens: ['pintar', 'pintado'],
+    fieldKeys: ['PINTAR', 'PINTADO']
+  },
+];
+
+const PHASE_MILESTONES_BY_ID = {};
+PHASE_MILESTONES.forEach((cfg, index) => {
+  cfg.index = index;
+  cfg.normalizedTokens = Array.isArray(cfg.tokens)
+    ? cfg.tokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedPhaseTokens = Array.isArray(cfg.phaseTokens)
+    ? cfg.phaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  cfg.normalizedExcludePhaseTokens = Array.isArray(cfg.excludePhaseTokens)
+    ? cfg.excludePhaseTokens.map(token => normalizePhaseName(token)).filter(Boolean)
+    : [];
+  PHASE_MILESTONES_BY_ID[cfg.id] = cfg;
 });
-if (popup) {
-  popup.addEventListener('click', (e) => e.stopPropagation());
+
+const PROJECT_MILESTONE_CACHE = {};
+
+function parseSplitHours(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
-function getColumnWidth(columnId) {
-  const config = SUMMARY_COLUMNS.find(c => c.id === columnId);
-  const stored = columnWidths[columnId];
-  const width = Number.isFinite(stored) ? stored : (config ? config.defaultWidth : 150);
-  return Math.max(80, width);
+function toSplitInputValue(value) {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return `${rounded}`;
+  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
-function applyColumnWidth(columnId) {
-  const width = getColumnWidth(columnId);
-  const selector = `[data-column="${columnId}"]`;
-  summaryContainer.querySelectorAll(selector).forEach(cell => {
-    cell.style.width = width + 'px';
-    cell.style.flex = `0 0 ${width}px`;
-  });
+function formatSplitNumber(value) {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return `${rounded}`;
+  return rounded.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-function applyAllColumnWidths() {
-  SUMMARY_COLUMNS.forEach(col => applyColumnWidth(col.id));
+function formatSplitDuration(value) {
+  if (!Number.isFinite(value)) return '';
+  const total = value < 0 ? 0 : value;
+  const days = Math.floor(total / SPLIT_WORKDAY_HOURS);
+  const remainderRaw = total - (days * SPLIT_WORKDAY_HOURS);
+  const remainder = Math.round(remainderRaw * 100) / 100;
+  const parts = [];
+  if (days > 0) parts.push(`${days} día${days === 1 ? '' : 's'}`);
+  if (remainder > 0 || parts.length === 0) {
+    const hoursText = formatSplitNumber(remainder);
+    const hoursLabel = remainder === 1 ? 'hora' : 'horas';
+    parts.push(`${hoursText} ${hoursLabel}`);
+  }
+  return parts.join(' y ');
 }
 
-function setColumnWidth(columnId, width, persist = true) {
-  columnWidths[columnId] = Math.max(80, width);
-  applyColumnWidth(columnId);
-  if (persist) {
-    try {
-      localStorage.setItem(COLUMN_WIDTHS_KEY, JSON.stringify(columnWidths));
-    } catch (err) {
-      // ignore storage issues
+function formatSplitHint(value) {
+  const duration = formatSplitDuration(value);
+  return duration ? `(${duration})` : '';
+}
+
+function splitOrdinalLabel(index) {
+  if (!Number.isInteger(index) || index < 0) return 'Horas parte';
+  if (index < SPLIT_ORDINAL_WORDS.length) {
+    return `Horas ${SPLIT_ORDINAL_WORDS[index]} parte`;
+  }
+  return `Horas parte ${index + 1}`;
+}
+
+function getSplitManualInputs() {
+  if (!splitPartsContainer) return [];
+  return Array.from(
+    splitPartsContainer.querySelectorAll('input.split-part-input[data-manual="true"]')
+  );
+}
+
+function ensureSplitRemainderInput() {
+  if (!splitPartsContainer) return null;
+  if (splitRemainderInput && splitRemainderInput.isConnected) {
+    return splitRemainderInput;
+  }
+  const row = document.createElement('div');
+  row.className = 'split-part-row split-remainder-row';
+  const label = document.createElement('label');
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'split-part-label';
+  label.appendChild(labelSpan);
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.readOnly = true;
+  input.tabIndex = -1;
+  input.className = 'split-part-input split-part-remainder';
+  input.dataset.manual = 'false';
+  label.appendChild(input);
+  const hint = document.createElement('span');
+  hint.className = 'split-hours-hint';
+  label.appendChild(hint);
+  row.appendChild(label);
+  splitPartsContainer.appendChild(row);
+  input._hintElement = hint;
+  input._labelElement = labelSpan;
+  splitRemainderInput = input;
+  return splitRemainderInput;
+}
+
+function refreshSplitPartLabels() {
+  const manuals = getSplitManualInputs();
+  manuals.forEach((input, idx) => {
+    if (input && input._labelElement) {
+      input._labelElement.textContent = `${splitOrdinalLabel(idx)}:`;
     }
+  });
+  if (splitRemainderInput && splitRemainderInput._labelElement) {
+    splitRemainderInput._labelElement.textContent = `${splitOrdinalLabel(manuals.length)}:`;
   }
 }
 
-function initColumnResize(event, columnId) {
-  event.preventDefault();
-  event.stopPropagation();
-  const startX = event.clientX;
-  const startWidth = getColumnWidth(columnId);
-  const onMouseMove = ev => {
-    const delta = ev.clientX - startX;
-    setColumnWidth(columnId, startWidth + delta, false);
-  };
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    setColumnWidth(columnId, getColumnWidth(columnId), true);
-  };
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-}
-
-function buildSummaryHeader() {
-  if (!summaryHeaderRow) return;
-  summaryHeaderRow.innerHTML = '';
-  SUMMARY_COLUMNS.forEach(col => {
-    const headerCell = document.createElement('div');
-    headerCell.className = 'summary-header-cell';
-    headerCell.dataset.column = col.id;
-    headerCell.textContent = col.label;
-    const resizer = document.createElement('div');
-    resizer.className = 'column-resizer';
-    resizer.addEventListener('mousedown', ev => initColumnResize(ev, col.id));
-    headerCell.appendChild(resizer);
-    summaryHeaderRow.appendChild(headerCell);
+function createSplitPartRow(initialValue, beforeElement) {
+  if (!splitPartsContainer) return null;
+  const row = document.createElement('div');
+  row.className = 'split-part-row';
+  const label = document.createElement('label');
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'split-part-label';
+  label.appendChild(labelSpan);
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '1';
+  input.step = '1';
+  input.required = true;
+  input.className = 'split-part-input';
+  input.dataset.manual = 'true';
+  if (initialValue !== null && Number.isFinite(initialValue) && initialValue > 0) {
+    input.value = toSplitInputValue(initialValue);
+  }
+  input.addEventListener('input', () => {
+    input.classList.remove('split-input-error');
+    updateSplitModalDisplay();
   });
-  applyAllColumnWidths();
+  label.appendChild(input);
+  const hint = document.createElement('span');
+  hint.className = 'split-hours-hint';
+  label.appendChild(hint);
+  row.appendChild(label);
+  input._hintElement = hint;
+  input._labelElement = labelSpan;
+  if (beforeElement) {
+    splitPartsContainer.insertBefore(row, beforeElement);
+  } else {
+    splitPartsContainer.appendChild(row);
+  }
+  return input;
 }
 
-function extractKanbanValue(info, labels) {
-  if (!info) return '';
+function resetSplitParts(existingParts) {
+  if (!splitPartsContainer) return;
+  splitPartsContainer.innerHTML = '';
+  splitRemainderInput = null;
+  const normalized = Array.isArray(existingParts)
+    ? existingParts
+        .map(value => parseSplitHours(value))
+        .filter(value => Number.isFinite(value) && value > 0)
+    : [];
+  let manualValues = [];
+  let remainderValue = null;
+  if (normalized.length >= 2) {
+    manualValues = normalized.slice(0, normalized.length - 1);
+    remainderValue = normalized[normalized.length - 1];
+  } else if (normalized.length === 1) {
+    manualValues = [normalized[0]];
+  }
+  if (!manualValues.length) {
+    manualValues = [null];
+  }
+  manualValues.forEach(value => {
+    createSplitPartRow(value, null);
+  });
+  const remainder = ensureSplitRemainderInput();
+  if (remainder) {
+    if (remainderValue !== null) {
+      remainder.value = toSplitInputValue(remainderValue);
+    } else {
+      remainder.value = '';
+    }
+  }
+  refreshSplitPartLabels();
+  updateSplitModalDisplay();
+}
+
+function updateSplitModalDisplay() {
+  if (!splitModal) return;
+  const total = parseSplitHours(splitModal.dataset.totalHours);
+  if (splitTotalDisplay) {
+    if (total === null) {
+      splitTotalDisplay.textContent = '';
+    } else {
+      const baseNumber = formatSplitNumber(total);
+      const hoursLabel = total === 1 ? 'hora' : 'horas';
+      const duration = formatSplitDuration(total);
+      splitTotalDisplay.textContent = `Total fase: ${baseNumber} ${hoursLabel}${duration ? ` (${duration})` : ''}`;
+    }
+  }
+  const manuals = getSplitManualInputs();
+  let manualSum = 0;
+  manuals.forEach(input => {
+    const value = parseSplitHours(input.value);
+    if (Number.isFinite(value)) {
+      manualSum += value;
+    }
+    if (input._hintElement) {
+      input._hintElement.textContent = Number.isFinite(value) ? formatSplitHint(value) : '';
+    }
+    if (total !== null && Number.isFinite(total)) {
+      input.setAttribute('max', total);
+    } else {
+      input.removeAttribute('max');
+    }
+  });
+  if (splitRemainderInput) {
+    let remainderValue = null;
+    if (total !== null && Number.isFinite(total)) {
+      remainderValue = total - manualSum;
+    }
+    if (Number.isFinite(remainderValue)) {
+      const cleanValue = Math.max(remainderValue, 0);
+      splitRemainderInput.value = toSplitInputValue(cleanValue);
+      splitRemainderInput.classList.toggle('split-input-error', remainderValue <= 0);
+      if (splitRemainderInput._hintElement) {
+        splitRemainderInput._hintElement.textContent = formatSplitHint(cleanValue);
+      }
+    } else {
+      splitRemainderInput.value = '';
+      splitRemainderInput.classList.remove('split-input-error');
+      if (splitRemainderInput._hintElement) {
+        splitRemainderInput._hintElement.textContent = '';
+      }
+    }
+  }
+  refreshSplitPartLabels();
+}
+
+function prepareSplitModal(button) {
+  if (!splitModal) return;
+  const totalAttr = button ? parseSplitHours(button.dataset.totalHours) : null;
+  const fallbackAttr = button ? parseSplitHours(button.dataset.hours) : null;
+  let total = totalAttr !== null ? totalAttr : fallbackAttr;
+  let existingParts = [];
+  if (button) {
+    const pid = button.dataset.pid;
+    const phase = button.dataset.phase;
+    if (pid && phase && PROJECT_DATA[pid] && PROJECT_DATA[pid].phases) {
+      const phaseEntry = PROJECT_DATA[pid].phases[phase];
+      if (Array.isArray(phaseEntry)) {
+        existingParts = phaseEntry;
+        const computedTotal = phaseEntry
+          .map(value => parseSplitHours(value))
+          .filter(value => Number.isFinite(value) && value > 0)
+          .reduce((acc, value) => acc + value, 0);
+        if (Number.isFinite(computedTotal) && computedTotal > 0) {
+          total = computedTotal;
+        }
+      }
+    }
+  }
+  if (total !== null && Number.isFinite(total)) {
+    splitModal.dataset.totalHours = total;
+  } else {
+    delete splitModal.dataset.totalHours;
+  }
+  resetSplitParts(existingParts);
+  if (fallbackAttr && Number.isFinite(fallbackAttr)) {
+    const manuals = getSplitManualInputs();
+    if (manuals.length) {
+      const first = manuals[0];
+      const currentValue = parseSplitHours(first.value);
+      if (!(Number.isFinite(currentValue) && Math.abs(currentValue - fallbackAttr) < 1e-6)) {
+        first.value = toSplitInputValue(fallbackAttr);
+      }
+    }
+  }
+  updateSplitModalDisplay();
+  const manuals = getSplitManualInputs();
+  if (manuals.length) {
+    manuals[0].focus();
+  }
+}
+
+const PHASE_SUMMARY_COLUMNS = [
+  { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
+  { key: 'deadline', title: 'Fecha límite', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['Fecha límite'], getProjectDeadlineFallback) },
+  { key: 'launch', title: 'LANZAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['LANZAMIENTO']) },
+  { key: 'material', title: 'MATERIAL', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildProjectFieldCell(row, ['MATERIAL']) },
+  { key: 'caldereria', title: 'CALDERERÍA', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'caldereria') },
+  { key: 'mecanizado', title: 'MECANIZADO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'mecanizado') },
+  { key: 'tratamiento', title: 'TRATAMIENTO', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'tratamiento') },
+  { key: 'pintar', title: 'PINTAR', group: DATE_GROUP_NAME, defaultWidth: 150, minWidth: 120, classes: ['summary-date'], renderCell: row => buildMilestoneFieldCell(row, 'pintar') },
+  { key: 'phase_start', title: 'Fecha de inicio planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedStart) },
+  { key: 'phase_end', title: 'Fecha fin planificada de la fase', group: DATE_GROUP_NAME, defaultWidth: 240, minWidth: 160, classes: ['summary-date'], renderCell: row => buildPhaseFieldCell(row, getPhasePlannedEnd) },
+];
+
+const ORDER_SUMMARY_COLUMNS = [
+  { key: 'main', title: 'Resumen', defaultWidth: 260, minWidth: 180, classes: ['summary-main'], renderCell: buildMainSummaryCell },
+  { key: 'order_date', title: 'Fecha pedido', defaultWidth: 200, minWidth: 160, classes: ['summary-date'], renderCell: buildOrderDateCell },
+  { key: 'planned_start', title: 'Fecha inicio planificada', defaultWidth: 220, minWidth: 160, classes: ['summary-date'], renderCell: buildOrderProjectStartCell },
+];
+
+const BASE_SUMMARY_COLUMNS = IS_ORDER_GANTT ? ORDER_SUMMARY_COLUMNS : PHASE_SUMMARY_COLUMNS;
+
+initializeSummaryColumns();
+
+function getStoredColumnWidth(key, fallback){
+  const raw = parseFloat(localStorage.getItem(SUMMARY_COL_WIDTH_PREFIX + key));
+  if(!Number.isNaN(raw) && raw > 60) return raw;
+  return fallback;
+}
+
+function setStoredColumnWidth(key, width){
+  localStorage.setItem(SUMMARY_COL_WIDTH_PREFIX + key, String(width));
+}
+
+function getStoredGroupWidth(fallback){
+  const raw = parseFloat(localStorage.getItem(DATE_GROUP_WIDTH_KEY));
+  if(!Number.isNaN(raw) && raw >= 0) return raw;
+  return fallback;
+}
+
+function setStoredGroupWidth(width){
+  localStorage.setItem(DATE_GROUP_WIDTH_KEY, String(Math.max(0, width)));
+}
+
+function setColumnWidth(element, width){
+  if(!element) return;
+  element.style.width = width + 'px';
+  element.style.flex = '0 0 ' + width + 'px';
+}
+
+function findDateCandidate(text){
+  if(!text) return '';
+  const iso = text.match(/\d{4}-\d{2}-\d{2}/);
+  if(iso) return iso[0];
+  const slash = text.match(/\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}/);
+  if(slash) return slash[0];
+  return '';
+}
+
+function parseDateString(text){
+  if(!text) return null;
+  let trimmed = text.trim();
+  if(!trimmed) return null;
+  const isoMatch = trimmed.match(/\d{4}-\d{2}-\d{2}/);
+  if(isoMatch){
+    trimmed = isoMatch[0];
+    const isoDate = new Date(trimmed + 'T00:00:00');
+    if(!Number.isNaN(isoDate.getTime())) return isoDate;
+  }
+  const slashMatch = trimmed.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if(slashMatch){
+    const day = parseInt(slashMatch[1], 10);
+    const month = parseInt(slashMatch[2], 10) - 1;
+    let year = parseInt(slashMatch[3], 10);
+    if(year < 100) year += 2000;
+    const candidate = new Date(year, month, day);
+    if(candidate.getFullYear() === year && candidate.getMonth() === month && candidate.getDate() === day) return candidate;
+  }
+  const direct = new Date(trimmed);
+  if(!Number.isNaN(direct.getTime())) return direct;
+  return null;
+}
+
+function formatKanbanDate(value){
+  if(value === null || value === undefined) return '';
+  const text = String(value).trim();
+  if(!text) return '';
+  const candidate = findDateCandidate(text) || text;
+  const parsed = parseDateString(candidate);
+  if(parsed) return parsed.toLocaleDateString('es-ES');
+  return text;
+}
+
+function normalizePhaseName(name){
+  return (name || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getProjectInfo(projectId){
+  return PROJECT_DATA[projectId] || {};
+}
+
+function getKanbanFields(projectId){
+  const info = getProjectInfo(projectId);
+  return info.kanban_display_fields || {};
+}
+
+function getProjectFieldValue(info, keys){
   const fields = info.kanban_display_fields || {};
-  const options = Array.isArray(labels) ? labels : [labels];
-  for (const label of options) {
-    const value = fields[label];
-    if (value === null || value === undefined) continue;
-    const text = `${value}`.trim();
-    if (text) {
-      return text;
+  for(const key of keys){
+    if(key in fields){
+      const value = fields[key];
+      if(value !== null && value !== undefined && String(value).trim() !== '') return value;
     }
   }
   return '';
 }
 
-function formatKanbanDateValue(value) {
-  if (value === null || value === undefined) return '';
-  const text = `${value}`.trim();
-  if (!text) return '';
-  const iso = madridDateISO(text);
-  return iso || text;
+function getProjectMilestoneCache(projectId){
+  if(!projectId) return null;
+  if(!PROJECT_MILESTONE_CACHE[projectId]) PROJECT_MILESTONE_CACHE[projectId] = {};
+  return PROJECT_MILESTONE_CACHE[projectId];
 }
 
-function summaryValueFor(columnId, row) {
-  const info = PROJECT_DATA[row.project.id] || {};
-  switch (columnId) {
-    case 'summary': {
-      if (row.type === 'project') {
-        const client = row.project.client ? ` - ${row.project.client}` : '';
-        return `${row.project.name}${client}`;
-      }
-      const worker = row.phase.worker ? ` - ${row.phase.worker}` : '';
-      return `${row.phase.name}${worker}`;
+function matchesPhaseMilestone(config, phaseName){
+  if(!config || !phaseName) return false;
+  const normalized = normalizePhaseName(phaseName);
+  if(!normalized) return false;
+  if(Array.isArray(config.normalizedExcludePhaseTokens) && config.normalizedExcludePhaseTokens.length){
+    if(config.normalizedExcludePhaseTokens.some(token => token && normalized.includes(token))){
+      return false;
     }
-    case 'due': {
-      if (row.type !== 'project') return '';
-      const kanbanValue = extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']);
-      const base = kanbanValue || row.project.deadline_start || row.project.due_date || extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente']);
-      return formatKanbanDateValue(base);
-    }
-    case 'lanzamiento':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'LANZAMIENTO')) : '';
-    case 'material':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MATERIAL')) : '';
-    case 'caldereria':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['CALDERERÍA', 'CALDERERIA'])) : '';
-    case 'mecanizado':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'MECANIZADO')) : '';
-    case 'tratamiento':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, 'TRATAMIENTO')) : '';
-    case 'pintar':
-      return row.type === 'project' ? formatKanbanDateValue(extractKanbanValue(info, ['PINTAR', 'PINTADO'])) : '';
-    case 'phase_start': {
-      if (row.type === 'phase') {
-        const planned = (START_DATA[row.project.id] && START_DATA[row.project.id][row.phase.name]) || row.phase.start;
-        return formatKanbanDateValue(planned);
-      }
-      return '';
-    }
-    case 'phase_end': {
-      if (row.type === 'phase') {
-        return formatKanbanDateValue(row.phase.end);
-      }
-      return '';
-    }
-    default:
-      return '';
   }
+  if(Array.isArray(config.normalizedPhaseTokens) && config.normalizedPhaseTokens.length){
+    return config.normalizedPhaseTokens.some(token => token && normalized.includes(token));
+  }
+  if(Array.isArray(config.normalizedTokens) && config.normalizedTokens.length){
+    return config.normalizedTokens.every(token => token && normalized.includes(token));
+  }
+  return false;
+}
+
+function resolveMilestoneData(projectId, config){
+  if(!config || !projectId) return null;
+  const cache = getProjectMilestoneCache(projectId);
+  if(cache && Object.prototype.hasOwnProperty.call(cache, config.id)) return cache[config.id];
+  const info = getProjectInfo(projectId);
+  if(!info){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  const rawValue = getProjectFieldValue(info, config.fieldKeys);
+  if(rawValue === null || rawValue === undefined){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  let primary = rawValue;
+  if(typeof primary === 'object'){
+    if(primary && typeof primary.date !== 'undefined') primary = primary.date;
+    else primary = '';
+  }
+  const text = primary === undefined || primary === null ? '' : String(primary).trim();
+  if(!text){
+    if(cache) cache[config.id] = null;
+    return null;
+  }
+  const formatted = formatKanbanDate(text) || text;
+  let iso = '';
+  const candidate = findDateCandidate(text) || text;
+  const parsed = parseDateString(candidate);
+  if(parsed) iso = madridDateISO(parsed);
+  const result = { raw: text, formatted, iso };
+  if(cache) cache[config.id] = result;
+  return result;
+}
+
+function getNextMilestoneIso(projectId, currentConfig){
+  if(!currentConfig) return '';
+  for(let i=currentConfig.index + 1; i<PHASE_MILESTONES.length; i+=1){
+    const candidateConfig = PHASE_MILESTONES[i];
+    const data = resolveMilestoneData(projectId, candidateConfig);
+    if(data && data.iso) return data.iso;
+  }
+  return '';
+}
+
+function findPhaseMilestoneMatch(projectId, phaseName){
+  if(!phaseName) return null;
+  for(const config of PHASE_MILESTONES){
+    if(matchesPhaseMilestone(config, phaseName)){
+      const data = resolveMilestoneData(projectId, config);
+      if(data) return { config, data };
+      return { config, data: null };
+    }
+  }
+  return null;
+}
+
+function buildPhaseMilestoneBar(row, minStartMs, maxEndMs, dayMs, pxPerDay){
+  if(IS_ORDER_GANTT || !row || row.type !== 'phase') return null;
+  const match = findPhaseMilestoneMatch(row.project.id, row.phase.name);
+  if(!match || !match.data || !match.data.iso) return null;
+  const startDate = toStartOfDay(match.data.iso);
+  const startMs = startDate.getTime();
+  if(Number.isNaN(startMs)) return null;
+  let endMs = startMs;
+  const nextIso = getNextMilestoneIso(row.project.id, match.config);
+  if(nextIso){
+    const nextDate = toStartOfDay(nextIso);
+    const nextMs = nextDate.getTime();
+    if(!Number.isNaN(nextMs)) endMs = nextMs;
+  }
+  if(endMs < startMs) endMs = startMs;
+  const effectiveStart = Math.max(startMs, minStartMs);
+  const timelineMax = Number.isFinite(maxEndMs) ? maxEndMs : endMs;
+  let effectiveEnd = Math.max(endMs, startMs);
+  if(Number.isFinite(timelineMax)) effectiveEnd = Math.min(effectiveEnd, timelineMax);
+  if(effectiveEnd < effectiveStart) effectiveEnd = effectiveStart;
+  let widthDays = Math.round((effectiveEnd - effectiveStart)/dayMs) + 1;
+  if(!Number.isFinite(widthDays) || widthDays < 1) widthDays = 1;
+  const bar = document.createElement('div');
+  bar.className = 'gantt-task phase-milestone-bar';
+  if(match.config && match.config.label){
+    bar.textContent = match.config.label;
+  }
+  const leftPx = Math.max(0, ((effectiveStart - minStartMs)/dayMs) * pxPerDay);
+  bar.style.left = leftPx + 'px';
+  bar.style.width = (widthDays * pxPerDay) + 'px';
+  bar.style.zIndex = '1';
+  const title = match.data.formatted || match.data.raw;
+  if(title) bar.title = title;
+  return bar;
+}
+
+function buildMainSummaryCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'project'){
+    const pieces = [row.project.name, row.project.client].filter(Boolean);
+    cell.textContent = pieces.join(' - ');
+    cell.addEventListener('click', () => toggleProject(row.project.id));
+  } else {
+    if(IS_ORDER_GANTT){
+      cell.textContent = row.phase.name || '';
+    } else {
+      cell.textContent = row.phase.name + (row.phase.worker ? ` - ${row.phase.worker}` : '');
+    }
+  }
+  return cell;
+}
+
+function getProjectDeadlineFallback(row){
+  if(row.type !== 'project') return '';
+  const info = getProjectInfo(row.project.id);
+  const candidates = [
+    info.due_date,
+    info.client_date,
+    info.client_due_date,
+    info.customer_date,
+    row.project.due_date,
+    row.project.deadline_start
+  ];
+  for(const value of candidates){
+    if(value && String(value).trim()) return value;
+  }
+  return '';
+}
+
+function buildProjectFieldCell(row, keys, fallbackFn){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  let raw = '';
+  if(row.type === 'project'){
+    const info = getProjectInfo(row.project.id);
+    raw = getProjectFieldValue(info, keys);
+    if(!raw && typeof fallbackFn === 'function'){
+      raw = fallbackFn(row) || '';
+    }
+  }
+  const formatted = formatKanbanDate(raw);
+  cell.textContent = row.type === 'project' ? formatted : '';
+  if(formatted && raw && formatted !== raw) cell.title = raw;
+  else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function buildMilestoneFieldCell(row, milestoneId){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  const config = PHASE_MILESTONES_BY_ID[milestoneId];
+  if(!config) return cell;
+  if(row.type !== 'phase') return cell;
+  const data = resolveMilestoneData(row.project.id, config);
+  if(data && matchesPhaseMilestone(config, row.phase.name)){
+    const display = data.formatted || data.raw;
+    if(display){
+      cell.textContent = display;
+      if(data.raw && display !== data.raw) cell.title = data.raw;
+      else cell.title = display;
+    }
+  }
+  return cell;
+}
+
+function extractPhaseDate(raw, phaseName){
+  if(!raw) return '';
+  const target = normalizePhaseName(phaseName);
+  if(!target) return '';
+  if(typeof raw === 'object' && !Array.isArray(raw)){
+    for(const [key, value] of Object.entries(raw)){
+      if(normalizePhaseName(key) === target){
+        if(value && typeof value === 'object' && 'date' in value) return value.date;
+        return value;
+      }
+    }
+    return '';
+  }
+  const text = String(raw);
+  if(!text.trim()) return '';
+  const segments = text.split(/[\n;,]+/);
+  for(const segment of segments){
+    const normalizedSegment = normalizePhaseName(segment);
+    if(!normalizedSegment) continue;
+    if(normalizedSegment.includes(target)){
+      const candidate = findDateCandidate(segment);
+      if(candidate) return candidate;
+    }
+  }
+  if(normalizePhaseName(text) === target){
+    const candidate = findDateCandidate(text);
+    if(candidate) return candidate;
+  }
+  return '';
+}
+
+function getPhaseKanbanDate(row, key){
+  if(row.type !== 'phase') return '';
+  const fields = getKanbanFields(row.project.id);
+  return extractPhaseDate(fields[key], row.phase.name);
+}
+
+function getPhasePlannedStart(row){
+  if(row.type !== 'phase') return '';
+  const kanbanValue = getPhaseKanbanDate(row, 'Fecha de inicio planificada de la fase');
+  if(kanbanValue) return kanbanValue;
+  const map = START_DATA[row.project.id] || {};
+  if(row.phase.name in map) return map[row.phase.name];
+  const normalized = normalizePhaseName(row.phase.name);
+  for(const [phaseName, value] of Object.entries(map)){
+    if(normalizePhaseName(phaseName) === normalized) return value;
+  }
+  return row.phase.start || '';
+}
+
+function getPhasePlannedEnd(row){
+  if(row.type !== 'phase') return '';
+  const kanbanValue = getPhaseKanbanDate(row, 'Fecha fin planificada de la fase');
+  if(kanbanValue) return kanbanValue;
+  return row.phase.end || '';
+}
+
+function normalizeSegmentPart(part){
+  if(part === undefined || part === null || part === '') return null;
+  const num = Number(part);
+  if(Number.isFinite(num)) return num;
+  return part;
+}
+
+function getPhaseSegmentsData(phase){
+  if(!phase) return [];
+  const baseWorker = phase.worker || '';
+  const rawSegments = Array.isArray(phase.segments) ? phase.segments.filter(seg => seg && (seg.start || seg.end)) : [];
+  if(!rawSegments.length){
+    return [{
+      start: phase.start,
+      end: phase.end,
+      worker: baseWorker,
+      part: normalizeSegmentPart(phase.part),
+      highlight: Boolean(phase.order_highlight),
+    }];
+  }
+  return rawSegments.map(seg => ({
+    start: seg.start || phase.start,
+    end: seg.end || seg.start || phase.end,
+    worker: seg.worker || baseWorker,
+    part: normalizeSegmentPart(seg.part),
+    highlight: Boolean(seg.order_highlight !== undefined ? seg.order_highlight : phase.order_highlight),
+  }));
+}
+
+function formatSegmentLabel(name, part){
+  const base = name || '';
+  if(part === null || part === undefined || part === '') return base;
+  if(typeof part === 'number' && Number.isFinite(part)) return `${base} (parte ${part + 1})`;
+  const parsed = Number(part);
+  if(Number.isFinite(parsed)) return `${base} (parte ${parsed + 1})`;
+  return `${base} (${part})`;
+}
+
+function buildPhaseFieldCell(row, extractor){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  let raw = '';
+  if(row.type === 'phase'){
+    raw = extractor(row) || '';
+  }
+  const formatted = formatKanbanDate(raw);
+  cell.textContent = row.type === 'phase' ? formatted : '';
+  if(formatted && raw && formatted !== raw) cell.title = raw;
+  else if(formatted) cell.title = formatted;
+  return cell;
+}
+
+function buildOrderMetaCell(row, key){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'phase'){
+    const value = row.phase && row.phase[key] ? String(row.phase[key]).trim() : '';
+    cell.textContent = value;
+    if(value) cell.title = value;
+  }
+  return cell;
+}
+
+function buildOrderDateCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'phase'){
+    const kanbanRaw = row.phase && row.phase.order_kanban_date ? String(row.phase.order_kanban_date).trim() : '';
+    const primaryRaw = kanbanRaw || (row.phase && row.phase.order_date ? String(row.phase.order_date).trim() : '');
+    const formatted = formatKanbanDate(primaryRaw);
+    cell.textContent = formatted;
+    if(formatted && kanbanRaw && formatted !== kanbanRaw) cell.title = kanbanRaw;
+    else if(formatted && primaryRaw && formatted !== primaryRaw) cell.title = primaryRaw;
+    else if(formatted) cell.title = formatted;
+    else if(primaryRaw) cell.title = primaryRaw;
+  }
+  return cell;
+}
+
+function buildOrderProjectStartCell(row){
+  const cell = document.createElement('div');
+  cell.className = 'summary-row ' + (row.type === 'project' ? 'project-row' : 'phase-row');
+  if(row.type === 'project'){
+    const raw = row.project && row.project.planned_start ? String(row.project.planned_start).trim() : '';
+    const formatted = formatKanbanDate(raw);
+    cell.textContent = formatted;
+    if(formatted && raw && formatted !== raw) cell.title = raw;
+    else if(formatted) cell.title = formatted;
+    else if(raw) cell.title = raw;
+  }
+  return cell;
+}
+
+function setupColumnResizer(def, element, resizer){
+  if(!resizer || !element) return;
+  resizer.addEventListener('mousedown', event => {
+    event.preventDefault();
+    let startX = event.clientX;
+    const startWidth = element.getBoundingClientRect().width;
+    let currentWidth = startWidth;
+    element.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    const onMove = ev => {
+      const delta = ev.clientX - startX;
+      currentWidth = Math.max(def.minWidth || 100, startWidth + delta);
+      setColumnWidth(element, currentWidth);
+      def.width = currentWidth;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      element.classList.remove('resizing');
+      document.body.style.cursor = '';
+      def.width = currentWidth;
+      setStoredColumnWidth(def.key, currentWidth);
+      if(def.group === DATE_GROUP_NAME && dateGroupContainerEl && dateGroupContainerEl.contains(element)){
+        const max = dateGroupContainerEl.scrollWidth;
+        let applied = parseFloat(dateGroupContainerEl.style.width);
+        if(Number.isNaN(applied) || applied < 0) applied = dateGroupContainerEl.getBoundingClientRect().width;
+        if(applied > max){
+          const clamped = Math.max(0, max);
+          dateGroupContainerEl.style.width = clamped + 'px';
+          setStoredGroupWidth(clamped);
+        }
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function initializeSummaryColumns(){
+  if(!summaryColumnsContainer) return;
+  summaryColumnsContainer.innerHTML = '';
+  summaryColumnDefs.length = 0;
+  dateGroupContainerEl = null;
+  const groupColumns = [];
+  let groupContainer = null;
+  BASE_SUMMARY_COLUMNS.forEach(def => {
+    const column = document.createElement('div');
+    const extra = Array.isArray(def.classes) && def.classes.length ? ' ' + def.classes.join(' ') : '';
+    column.className = 'summary-column' + extra;
+    const headerEl = document.createElement('div');
+    headerEl.className = 'summary-header';
+    headerEl.textContent = def.title;
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'summary-body';
+    column.appendChild(headerEl);
+    column.appendChild(bodyEl);
+    const resizer = document.createElement('div');
+    resizer.className = 'column-resizer';
+    column.appendChild(resizer);
+    if(def.minWidth) column.style.minWidth = def.minWidth + 'px';
+    const storedWidth = getStoredColumnWidth(def.key, def.defaultWidth);
+    const width = Math.max(def.minWidth || 0, storedWidth);
+    setColumnWidth(column, width);
+    const storedDef = { ...def, element: column, body: bodyEl, resizer, width };
+    setupColumnResizer(storedDef, column, resizer);
+    if(def.group === DATE_GROUP_NAME){
+      if(!groupContainer){
+        groupContainer = document.createElement('div');
+        groupContainer.className = 'summary-column-group';
+      }
+      groupContainer.appendChild(column);
+      groupColumns.push(storedDef);
+    } else {
+      summaryColumnsContainer.appendChild(column);
+    }
+    summaryColumnDefs.push(storedDef);
+  });
+  if(groupContainer){
+    dateGroupContainerEl = groupContainer;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'summary-group-wrapper';
+    wrapper.appendChild(groupContainer);
+    const groupResizer = document.createElement('div');
+    groupResizer.className = 'column-group-resizer';
+    wrapper.appendChild(groupResizer);
+    summaryColumnsContainer.appendChild(wrapper);
+    const contentWidth = groupColumns.reduce((sum, def) => sum + (def.width || 0), 0);
+    const storedWidth = getStoredGroupWidth(contentWidth);
+    const appliedWidth = Math.max(0, Math.min(storedWidth, contentWidth));
+    groupContainer.style.width = appliedWidth + 'px';
+    if(storedWidth !== appliedWidth) setStoredGroupWidth(appliedWidth);
+    setupGroupResizer(groupContainer, groupResizer);
+  }
+}
+
+function setupGroupResizer(container, resizer){
+  if(!container || !resizer) return;
+  resizer.addEventListener('mousedown', event => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const rect = container.getBoundingClientRect();
+    let currentWidth = parseFloat(container.style.width);
+    if(Number.isNaN(currentWidth) || currentWidth < 0) currentWidth = rect.width;
+    const startWidth = currentWidth;
+    resizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    const onMove = ev => {
+      const delta = ev.clientX - startX;
+      let width = startWidth + delta;
+      const max = container.scrollWidth;
+      if(max > 0) width = Math.min(width, max);
+      if(width < 0) width = 0;
+      container.style.width = width + 'px';
+      currentWidth = width;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      resizer.classList.remove('active');
+      const max = container.scrollWidth;
+      const finalWidth = Math.max(0, Math.min(currentWidth, max || currentWidth));
+      container.style.width = finalWidth + 'px';
+      setStoredGroupWidth(finalWidth);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function insertDateGroupTitleRow(){
+  if(IS_ORDER_GANTT) return false;
+  const hasGroup = summaryColumnDefs.some(def => def.group === DATE_GROUP_NAME);
+  if(!hasGroup) return false;
+  summaryColumnDefs.forEach(def => {
+    if(!def.body) return;
+    const cell = document.createElement('div');
+    cell.className = 'summary-row summary-group-title-row';
+    cell.textContent = def.group === DATE_GROUP_NAME ? def.title : '';
+    def.body.appendChild(cell);
+  });
+  return true;
+}
+
+document.addEventListener('click', () => {
+  if (popup) popup.style.display = 'none';
+});
+if (popup) {
+  popup.addEventListener('click', (e) => e.stopPropagation());
 }
 
 function makeDraggable(el) {
@@ -336,55 +1165,54 @@ function makeDraggable(el) {
 
 document.querySelectorAll('.modal-content, .conflict-content, .info-popup').forEach(makeDraggable);
 
-function showDeadline(text = DEADLINE_MSG, after = null) {
-  if (!deadlineModal || !deadlineText || !deadlineClose) return;
-  deadlineText.innerHTML = text.replace(/\n/g, '<br>');
-  deadlineText.style.color = text.startsWith(CLIENT_DEADLINE_MSG) ? 'black' : 'orange';
-  deadlineModal.style.display = 'block';
-  deadlineClose.onclick = () => {
-    deadlineModal.style.display = 'none';
-    if (after) after();
-  };
-}
-
 function afterMove(data, originalDate) {
   localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
   if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
-  if (data.warning) showDeadline(data.warning, () => location.reload());
-  else location.reload();
-}
-
-if (obsCancel) {
-  obsCancel.addEventListener('click', () => { if (obsModal) obsModal.style.display = 'none'; });
-}
-if (obsModal) {
-  obsModal.addEventListener('click', (e) => { if (e.target === obsModal) obsModal.style.display = 'none'; });
-}
-if (obsSave) {
-  obsSave.addEventListener('click', () => {
-    if (!obsModal) return;
-    const pid = obsModal.dataset.pid;
-    const txt = obsText.value;
-    const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ observations: txt })
-    }).then(() => {
-      if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
-      obsModal.style.display = 'none';
-    });
-  });
+  location.reload();
 }
 
 if (splitCancel) {
   splitCancel.addEventListener('click', () => { if (splitModal) splitModal.style.display = 'none'; });
 }
-if (splitForm) {
+if (splitForm && !splitForm.dataset.enhanced) {
   splitForm.addEventListener('submit', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
+    if (!splitModal) return;
+    const manuals = getSplitManualInputs();
+    if (!manuals.length) {
+      alert('Debes indicar al menos una parte.');
+      return;
+    }
+    const parts = [];
+    let invalid = false;
+    manuals.forEach(input => {
+      const value = parseSplitHours(input.value);
+      if (!Number.isInteger(value) || value <= 0) {
+        input.classList.add('split-input-error');
+        invalid = true;
+        return;
+      }
+      parts.push(value);
+    });
+    const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
+    const total = parseSplitHours(splitModal.dataset.totalHours);
+    let remainderInt = null;
+    if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
+      invalid = true;
+    } else {
+      remainderInt = remainderValue;
+      parts.push(remainderInt);
+    }
+    const sumParts = parts.reduce((acc, value) => acc + value, 0);
+    if (total !== null && Number.isFinite(total) && sumParts !== total) {
+      invalid = true;
+    }
+    if (invalid) {
+      alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
+      updateSplitModalDisplay();
+      return;
+    }
     fetch(SPLIT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -393,11 +1221,24 @@ if (splitForm) {
         pid: splitModal.dataset.pid,
         phase: splitModal.dataset.phase,
         date: splitModal.dataset.date,
-        part1: splitPart1.value,
-        part2: splitPart2.value
+        parts,
       })
     }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
   });
+  splitForm.dataset.enhanced = 'true';
+}
+
+if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
+  splitAddPartButton.addEventListener('click', ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
+    const input = createSplitPartRow(null, remainderRow);
+    ensureSplitRemainderInput();
+    updateSplitModalDisplay();
+    if (input) input.focus();
+  });
+  splitAddPartButton.dataset.bound = 'true';
 }
 
 function buildPhaseSection(info, context) {
@@ -410,10 +1251,15 @@ function buildPhaseSection(info, context) {
     else total = parseInt(raw) || 0;
     if (total > 0) {
       const assigned = (info.assigned && info.assigned[ph]) || 'Sin planificar';
-      const cls = assigned === 'Sin planificar' ? ' class="unplanned"' : ' class="planned"';
-      let line = `<div${cls}>${ph}: ${total}h`;
-      if (ph === context.phase) {
-        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}">Cambiar horas</button></form>`;
+      const classes = ['phase-entry'];
+      classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+      const isActivePhase = ph === context.phase;
+      const partSuffix = isActivePhase ? formatPartSuffix(context.part) : '';
+      let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
+      if (isActivePhase) {
+        const partValue = normalizePartValue(context.part);
+        const partAttr = partValue ? ` data-part="${partValue}"` : '';
+        line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" data-pid="${context.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
       }
       line += `</div>`;
       phaseLines.push(line);
@@ -435,99 +1281,125 @@ function openPhasePopup(context, anchorRect) {
   const headerParts = [info.name];
   if (info.blocked) headerParts[0] += ' <span class="blocked-sign">\u{1F6AB}</span>';
   headerParts.push(info.client || '');
-  if (context.phase) headerParts.push(context.phase);
+  if (context.phase) headerParts.push(`${context.phase}${formatPartSuffix(context.part)}`);
   let html = `<div class="popup-section popup-header"><strong>${headerParts.filter(Boolean).join(' - ')}</strong></div>`;
-  const formatDateValue = (value) => {
-    if (value === null || value === undefined) return '';
-    if (Array.isArray(value)) {
-      const formatted = value.map(v => formatDateValue(v)).filter(Boolean);
-      return formatted.join(', ');
-    }
-    const text = `${value}`.trim();
-    if (!text || text === '0') return '';
-    return formatKanbanDateValue(text);
-  };
-  const dateFieldLines = [];
-  const addDateField = (label, rawValues) => {
-    const values = Array.isArray(rawValues) ? rawValues : [rawValues];
-    for (const raw of values) {
-      const formatted = formatDateValue(raw);
-      if (formatted) {
-        dateFieldLines.push(`<div class="popup-field-line"><span class="popup-label">${label}:</span> ${formatted}</div>`);
-        return;
+  const metaLines = [];
+  if (IS_ORDER_GANTT) {
+    if (context.order) {
+      const orderLimitRaw = context.order.kanban_date || context.order.date || '';
+      const orderLimit = formatKanbanDate(orderLimitRaw) || orderLimitRaw;
+      if (orderLimit) metaLines.push(`<div>Límite: ${orderLimit}</div>`);
+    } else {
+      const kanbanLimitRaw = getProjectFieldValue(info, ORDER_PROJECT_DEADLINE_KEYS);
+      let kanbanLimit = formatKanbanDate(kanbanLimitRaw) || kanbanLimitRaw;
+      if (!kanbanLimit) {
+        const fallbackRow = context && context.pid ? { type: 'project', project: { id: context.pid } } : null;
+        const fallback = fallbackRow ? (getProjectDeadlineFallback(fallbackRow) || '') : '';
+        kanbanLimit = formatKanbanDate(fallback) || fallback;
       }
+      if (kanbanLimit) metaLines.push(`<div>Límite: ${kanbanLimit}</div>`);
     }
-  };
-  addDateField('Límite', [
-    extractKanbanValue(info, ['Fecha límite', 'Fecha limite', 'FECHA LÍMITE']),
-    info.deadline_start,
-    info.due_date,
-    extractKanbanValue(info, ['Fecha Cliente', 'Fecha cliente'])
-  ]);
-  addDateField('LANZAMIENTO', extractKanbanValue(info, 'LANZAMIENTO'));
-  addDateField('MATERIAL', extractKanbanValue(info, 'MATERIAL'));
-  addDateField('CALDERERIA', extractKanbanValue(info, ['CALDERERIA', 'CALDERERÍA']));
-  addDateField('MECANIZADO', extractKanbanValue(info, 'MECANIZADO'));
-  addDateField('TRATAMIENTO', extractKanbanValue(info, 'TRATAMIENTO'));
-  addDateField('PINTADO', extractKanbanValue(info, ['PINTADO', 'PINTAR']));
-  if (dateFieldLines.length) {
-    html += `<div class="popup-section popup-field-section">${dateFieldLines.join('')}</div>`;
+  } else {
+    if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
   }
-  const segmentLines = [];
-  const segments = info.segment_starts || {};
-  ['montar', 'soldar', 'mecanizar', 'tratamiento', 'pintar'].forEach((segment) => {
-    const value = formatDateValue(segments[segment]);
-    if (value) {
-      segmentLines.push(`<div class="popup-field-line"><span class="popup-label">${segment}:</span> ${value}</div>`);
+  if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
+  if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
+  const kanbanFields = info.kanban_display_fields || {};
+  let kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+  if (IS_ORDER_GANTT) {
+    kanbanEntries = kanbanEntries.filter(([label]) => !ORDER_POPUP_HIDDEN_LABELS.has(label));
+  }
+  if (kanbanEntries.length) {
+    let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
+    kanbanEntries.forEach(([label, value]) => {
+      kanbanHtml += `<div>${label}: ${value}</div>`;
+    });
+    kanbanHtml += '</div>';
+    html += kanbanHtml;
+  }
+  if (!IS_ORDER_GANTT) {
+    const phaseSection = buildPhaseSection(info, context);
+    if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
+  }
+  if (IS_ORDER_GANTT && context.order) {
+    const order = context.order;
+    const orderLines = [];
+    if (order.column && !ORDER_POPUP_HIDDEN_LABELS.has('Columna')) orderLines.push(`<div>Columna: ${order.column}</div>`);
+    if (order.lane && !ORDER_POPUP_HIDDEN_LABELS.has('Lane')) orderLines.push(`<div>Lane: ${order.lane}</div>`);
+    if (order.client) orderLines.push(`<div>Cliente pedido: ${order.client}</div>`);
+    if (order.code && !ORDER_POPUP_HIDDEN_LABELS.has('Código')) orderLines.push(`<div>Código: ${order.code}</div>`);
+    if (order.cid && !ORDER_POPUP_HIDDEN_LABELS.has('ID Kanban')) orderLines.push(`<div>ID Kanban: ${order.cid}</div>`);
+    if (order.prev_date) {
+      const formattedPrev = formatKanbanDate(order.prev_date) || order.prev_date;
+      orderLines.push(`<div>Fecha anterior: ${formattedPrev}</div>`);
     }
-  });
-  if (segmentLines.length) {
-    html += `<div class="popup-section popup-segment-section">${segmentLines.join('')}</div>`;
+    if (!metaLines.length) {
+      const orderLimitRaw = order.kanban_date || order.date || '';
+      const orderLimit = formatKanbanDate(orderLimitRaw) || orderLimitRaw;
+      if (orderLimit) metaLines.push(`<div>Límite: ${orderLimit}</div>`);
+    }
+    if (orderLines.length) html += `<div class="popup-section">${orderLines.join('')}</div>`;
   }
-  const phaseSection = buildPhaseSection(info, context);
-  if (phaseSection) html += `<div class="popup-section">${phaseSection}</div>`;
   const actionLines = [];
-  const actionMain = [];
-  let deleteButton = '';
-  if (context.phase) {
+  const allowPhaseActions = ENABLE_PHASE_ACTIONS && !IS_ORDER_GANTT;
+  if (allowPhaseActions && context.phase) {
     const startVal = (START_DATA[context.pid] && START_DATA[context.pid][context.phase]) || '';
-    actionMain.push(`<div class="popup-action-line">Inicio de la fase: <form id="start-form" class="popup-inline-form"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
-    actionMain.push(`<div class="popup-action-line"><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" class="freeze-btn">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
-    let splitLine = `<div class="popup-action-line"><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day}">Dividir fase aquí</button>`;
+    actionLines.push(`<div>Inicio de la fase: <form id="start-form" style="display:inline"><input type="date" id="start-input" value="${startVal}" required><button type="submit" id="start-btn" data-pid="${context.pid}" data-phase="${context.phase}">Cambiar</button></form></div>`);
+    actionLines.push(`<div><button id="freeze-btn" data-pid="${context.pid}" data-phase="${context.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(context.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
+    const phaseHoursEntry = info.phases ? info.phases[context.phase] : null;
+    let totalPhaseHours = null;
+    if (Array.isArray(phaseHoursEntry)) {
+      totalPhaseHours = phaseHoursEntry
+        .map(v => Number(v) || 0)
+        .reduce((acc, val) => acc + val, 0);
+    } else if (phaseHoursEntry !== undefined && phaseHoursEntry !== null && `${phaseHoursEntry}`.trim() !== '') {
+      const parsedPhase = Number(phaseHoursEntry);
+      if (Number.isFinite(parsedPhase)) totalPhaseHours = parsedPhase;
+    }
+    const partHoursAttr = totalPhaseHours !== null ? ` data-hours="${totalPhaseHours}"` : '';
+    const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
+    let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
     if (info.phases && Array.isArray(info.phases[context.phase])) {
       splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
     }
     splitLine += `</div>`;
-    actionMain.push(splitLine);
-    deleteButton = `<button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button>`;
+    actionLines.push(splitLine);
+    actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
+    const unplanPart = normalizePartValue(context.part);
+    const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
+    actionLines.push(`<div><button id="unplan-btn" data-pid="${context.pid}" data-phase="${context.phase}"${unplanAttr}>Sin planificar</button></div>`);
   }
-  actionMain.push(`<div class="popup-action-line"><button id="obs-btn" data-pid="${context.pid}" class="obs-btn">Observaciones</button></div>`);
-  if (actionMain.length || deleteButton) {
-    const left = actionMain.join('');
-    const right = deleteButton ? `<div class="popup-actions-delete">${deleteButton}</div>` : '';
-    actionLines.push(`<div class="popup-actions-main">${left}</div>${right}`);
-    html += `<div class="popup-section popup-actions">${actionLines.join('')}</div>`;
+  if (context.pid) {
+    const obsValue = info && info.observations !== undefined && info.observations !== null
+      ? `${info.observations}`
+      : '';
+    const safeObsValue = escapeHtml(obsValue);
+    actionLines.push(`
+      <div class="popup-observations">
+        <label for="obs-text">Observaciones</label>
+        <textarea id="obs-text" data-pid="${context.pid}" class="popup-observations-text">${safeObsValue}</textarea>
+        <div class="popup-observations-actions">
+          <button type="button" id="obs-save" data-pid="${context.pid}">Guardar</button>
+        </div>
+      </div>
+    `);
   }
-  const attachmentItems = [];
   if (info.image) {
     const imgUrl = `${STATIC_URL}${info.image}`;
-    attachmentItems.push(`<div class="attachment-item"><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" class="attachment-thumb" alt="Imagen del proyecto"></a></div>`);
+    actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
   }
   if (info.kanban_attachments && info.kanban_attachments.length) {
     info.kanban_attachments.forEach(att => {
       const url = att.url;
-      const name = att.name || '';
-      const lower = name.toLowerCase();
-      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lower)) {
-        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" class="attachment-thumb"></a></div>`);
+      const name = (att.name || '').toLowerCase();
+      if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+        actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
       } else {
-        attachmentItems.push(`<div class="attachment-item"><a href="${url}" target="_blank">${name || url}</a></div>`);
+        actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
       }
     });
   }
-  if (attachmentItems.length) {
-    html += `<div class="popup-section popup-attachments"><div class="attachment-list">${attachmentItems.join('')}</div></div>`;
-  }
+  if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
   popup.innerHTML = html;
   popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
   popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
@@ -547,14 +1419,67 @@ function openPhasePopup(context, anchorRect) {
       }
     });
   }
-  const obsBtn = document.getElementById('obs-btn');
-  if (obsBtn && obsModal) {
-    obsBtn.addEventListener('click', ev => {
+  const unplan = document.getElementById('unplan-btn');
+  if (unplan) {
+    unplan.addEventListener('click', ev => {
       ev.stopPropagation();
-      const pid = obsBtn.dataset.pid;
-      obsModal.dataset.pid = pid;
-      obsText.value = (PROJECT_DATA[pid] && PROJECT_DATA[pid].observations) || '';
-      obsModal.style.display = 'block';
+      const today = madridDateISO();
+      const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+      const partValue = normalizePartValue(unplan.dataset.part);
+      if (partValue) body.part = partValue;
+      fetch(MOVE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
+      })
+        .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (!ok) {
+            alert(data.error || 'Error');
+            return;
+          }
+          afterMove(data, today);
+        });
+    });
+  }
+  const obsSave = document.getElementById('obs-save');
+  const obsText = document.getElementById('obs-text');
+  if (obsSave && obsText) {
+    obsSave.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const pid = obsSave.dataset.pid;
+      const txt = obsText.value;
+      const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+      const originalLabel = obsSave.textContent;
+      obsSave.disabled = true;
+      obsSave.textContent = 'Guardando...';
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ observations: txt })
+      })
+        .then(resp => {
+          if (resp.ok) {
+            return resp.text().catch(() => '');
+          }
+          return resp.json().catch(() => ({})).then(data => {
+            throw new Error(data.error || 'Error guardando observaciones');
+          });
+        })
+        .then(() => {
+          if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+          obsSave.textContent = 'Guardado';
+          setTimeout(() => { obsSave.textContent = originalLabel; }, 1500);
+        })
+        .catch(err => {
+          alert(err.message || 'Error guardando observaciones');
+          obsSave.textContent = originalLabel;
+        })
+        .finally(() => {
+          obsSave.disabled = false;
+        });
     });
   }
   const splitBtn = document.getElementById('split-btn');
@@ -564,8 +1489,7 @@ function openPhasePopup(context, anchorRect) {
       splitModal.dataset.pid = splitBtn.dataset.pid;
       splitModal.dataset.phase = splitBtn.dataset.phase;
       splitModal.dataset.date = splitBtn.dataset.date;
-      splitPart1.value = '';
-      splitPart2.value = '';
+      prepareSplitModal(splitBtn);
       splitModal.style.display = 'block';
     });
   }
@@ -624,11 +1548,16 @@ function openPhasePopup(context, anchorRect) {
       ev.stopPropagation();
       const btn = hoursForm.querySelector('button');
       const val = document.getElementById('phase-hours-input').value;
+      const payload = { pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val };
+      const partValue = normalizePartValue(btn.dataset.part);
+      if (partValue) {
+        payload.part = partValue;
+      }
       fetch(PHASE_HOURS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ pid: btn.dataset.pid, phase: btn.dataset.phase, hours: val })
+        body: JSON.stringify(payload)
       }).then(resp => {
         if (resp.ok) {
           const url = new URL(location);
@@ -640,30 +1569,6 @@ function openPhasePopup(context, anchorRect) {
       });
     });
   }
-}
-
-const summaryResizer = document.getElementById('summary-resizer');
-const SUMMARY_WIDTH_KEY = 'ganttSummaryWidth';
-const savedSummaryWidth = localStorage.getItem(SUMMARY_WIDTH_KEY);
-if(savedSummaryWidth){ summaryContainer.style.width = savedSummaryWidth + 'px'; }
-if(summaryResizer){
-  let startX, startWidth;
-  const onMouseMove = e => {
-    const dx = e.clientX - startX;
-    const newWidth = Math.max(150, startWidth + dx);
-    summaryContainer.style.width = newWidth + 'px';
-  };
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    localStorage.setItem(SUMMARY_WIDTH_KEY, summaryContainer.offsetWidth);
-  };
-  summaryResizer.addEventListener('mousedown', e => {
-    startX = e.clientX;
-    startWidth = summaryContainer.offsetWidth;
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  });
 }
 
 function sortProjects(type, store=true){
@@ -713,31 +1618,36 @@ function applyFilters(store=true){
 }
 
 function render(){
-  summaryBody.innerHTML = '';
+  summaryColumnDefs.forEach(def => {
+    if(def.body) def.body.innerHTML = '';
+  });
   body.innerHTML = '';
   header.innerHTML = '';
-  buildSummaryHeader();
-  if(!projects.length){return;}
+  const hasGroupTitleRow = insertDateGroupTitleRow();
+  if(hasGroupTitleRow){
+    const spacerRow = document.createElement('div');
+    spacerRow.className = 'gantt-row summary-group-title-row';
+    body.appendChild(spacerRow);
+  }
+  if(!projects.length){
+    const totalHeight = (hasGroupTitleRow ? 1 : 0) * BAR_HEIGHT;
+    summaryColumnDefs.forEach(def => {
+      if(def.body) def.body.style.height = totalHeight + 'px';
+    });
+    body.style.height = totalHeight + 'px';
+    return;
+  }
   const dayMs = DAY_MS;
-  const startOfDay = d => {
-    const raw = (d ?? '').toString().trim();
-    if(!raw){
-      return new Date(NaN);
-    }
-    const normalized = raw.replace(' ', 'T');
-    const base = normalized.split('T')[0];
-    return new Date(base + 'T00:00:00');
-  };
   const allStarts = [];
   const allEnds = [];
   projects.forEach(p=>{
-    const ps = startOfDay(p.start);
-    const pe = startOfDay(p.end);
+    const ps = toStartOfDay(p.start);
+    const pe = toStartOfDay(p.end);
     allStarts.push(ps.getTime());
     allEnds.push(pe.getTime());
     p.phases.forEach(ph=>{
-      const s = startOfDay(ph.start);
-      const e = startOfDay(ph.end);
+      const s = toStartOfDay(ph.start);
+      const e = toStartOfDay(ph.end);
       allStarts.push(s.getTime());
       allEnds.push(e.getTime());
     });
@@ -785,38 +1695,40 @@ function render(){
   });
 
   rows.forEach(r=>{
-    const summaryRow = document.createElement('div');
-    summaryRow.className = 'summary-row ' + (r.type==='project'?'project-row':'phase-row');
-    SUMMARY_COLUMNS.forEach(col => {
-      const cell = document.createElement('div');
-      cell.className = 'summary-cell summary-' + col.id;
-      cell.dataset.column = col.id;
-      const value = summaryValueFor(col.id, r) || '';
-      cell.textContent = value;
-      if(col.id === 'summary' && r.type==='project'){
-        cell.classList.add('clickable');
-        cell.addEventListener('click', ()=>toggleProject(r.project.id));
-      }
-      summaryRow.appendChild(cell);
+    summaryColumnDefs.forEach(def => {
+      if(!def.body || typeof def.renderCell !== 'function') return;
+      const cell = def.renderCell(r);
+      if(cell) def.body.appendChild(cell);
     });
-    summaryBody.appendChild(summaryRow);
-
     const rowDiv = document.createElement('div');
     rowDiv.className = 'gantt-row ' + (r.type==='project'?'project-row':'phase-row');
-    const bar = document.createElement('div');
-    bar.className = 'gantt-task ' + (r.type==='project'?'project-bar':'phase-bar');
-    const startMs = startOfDay(r.type==='project'?r.project.start:r.phase.start).getTime();
-    const endMs = startOfDay(r.type==='project'?r.project.end:r.phase.end).getTime();
-    bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
-    bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
-    bar.style.background = r.type==='project'?(r.project.color || '#3a87ad'):(r.phase.color || r.project.color || '#6c9ec1');
-    if(r.type==='project'){
-      const clientSuffix = r.project.client ? ` - ${r.project.client}` : '';
-      bar.textContent = `${r.project.name}${clientSuffix}`;
-    } else {
-      bar.textContent = r.phase.name;
-    }
-    if(r.type==='project'){
+    if(r.type === 'project'){
+      const bar = document.createElement('div');
+      const barClasses = ['gantt-task', 'project-bar'];
+      if (IS_ORDER_GANTT) {
+        barClasses.push('order-project-bar');
+        const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
+        if (allPhasesUnplanned) {
+          barClasses.push('order-project-unplanned');
+        }
+      } else {
+        const allPhasesUnplanned = Boolean(r.project && r.project.all_phases_unplanned);
+        if (allPhasesUnplanned) {
+          barClasses.push('project-unplanned');
+        }
+      }
+      bar.className = barClasses.join(' ');
+      const startMs = toStartOfDay(r.project.start).getTime();
+      const endMs = toStartOfDay(r.project.end).getTime();
+      bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+      bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
+      if(!IS_ORDER_GANTT){
+        bar.style.background = '#d9d9d9';
+        bar.style.border = '1px solid #bdbdbd';
+        bar.style.color = '#000';
+      }
+      const label = [r.project.name, r.project.client].filter(Boolean).join(' - ');
+      bar.textContent = label;
       const deadlineSources = [
         r.project.deadline_start,
         r.project.due_date,
@@ -825,7 +1737,7 @@ function render(){
       ];
       const seenDeadlines = new Set();
       deadlineSources.forEach(raw => {
-        const deadlineDate = startOfDay(raw);
+        const deadlineDate = toStartOfDay(raw);
         const deadlineMs = deadlineDate.getTime();
         if(Number.isNaN(deadlineMs) || seenDeadlines.has(deadlineMs)) return;
         seenDeadlines.add(deadlineMs);
@@ -855,15 +1767,19 @@ function render(){
         let chosen = null;
         let minDist = Infinity;
         phases.forEach(ph => {
-          const phStart = startOfDay(ph.start).getTime();
-          const phEnd = startOfDay(ph.end).getTime();
-          let dist = 0;
-          if(clickedMs < phStart) dist = phStart - clickedMs;
-          else if(clickedMs > phEnd) dist = clickedMs - phEnd;
-          if(dist < minDist){
-            minDist = dist;
-            chosen = { data: ph, start: phStart, end: phEnd };
-          }
+          const segs = getPhaseSegmentsData(ph);
+          segs.forEach(segment => {
+            const segStartMs = toStartOfDay(segment.start || ph.start).getTime();
+            const segEndMs = toStartOfDay(segment.end || segment.start || ph.end).getTime();
+            if(Number.isNaN(segStartMs) || Number.isNaN(segEndMs)) return;
+            let dist = 0;
+            if(clickedMs < segStartMs) dist = segStartMs - clickedMs;
+            else if(clickedMs > segEndMs) dist = clickedMs - segEndMs;
+            if(dist < minDist){
+              minDist = dist;
+              chosen = { data: ph, segment, start: segStartMs, end: segEndMs };
+            }
+          });
         });
         if(chosen){
           if(clickedMs < chosen.start) clickedMs = chosen.start;
@@ -873,41 +1789,106 @@ function render(){
           if(clickedMs > endMs) clickedMs = endMs;
         }
         const isoDay = madridDateISO(clickedMs);
-        openPhasePopup({
+        const contextData = {
           pid: r.project.id,
           phase: chosen ? chosen.data.name : '',
           day: isoDay,
-          worker: chosen && chosen.data.worker ? chosen.data.worker : '',
-          part: ''
-        }, bar.getBoundingClientRect());
+          worker: chosen && (chosen.segment.worker || chosen.data.worker) ? (chosen.segment.worker || chosen.data.worker) : '',
+          part: chosen && chosen.segment && chosen.segment.part !== null && chosen.segment.part !== undefined ? chosen.segment.part : ''
+        };
+        if (IS_ORDER_GANTT && chosen && chosen.data) {
+          contextData.order = {
+            column: chosen.data.order_column || '',
+            lane: chosen.data.order_lane || '',
+            client: chosen.data.order_client || '',
+            code: chosen.data.order_code || '',
+            cid: chosen.data.order_cid || '',
+            prev_date: chosen.data.order_prev_date || '',
+            date: chosen.data.order_date || '',
+            kanban_date: chosen.data.order_kanban_date || ''
+          };
+        }
+        openPhasePopup(contextData, bar.getBoundingClientRect());
       });
+      rowDiv.appendChild(bar);
     } else {
-      bar.addEventListener('click', evt => {
-        evt.stopPropagation();
-        const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
-        const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
-        let dayOffset = Math.floor(relativePx / pxPerDay);
-        if(dayOffset > totalDays) dayOffset = totalDays;
-        let clickedMs = startMs + dayOffset * dayMs;
-        if(clickedMs > endMs) clickedMs = endMs;
-        const isoDay = madridDateISO(clickedMs);
-        openPhasePopup({
-          pid: r.project.id,
-          phase: r.phase.name,
-          day: isoDay,
-          worker: r.phase.worker || '',
-          part: ''
-        }, bar.getBoundingClientRect());
+      const milestoneBar = buildPhaseMilestoneBar(r, minStart, maxEnd, dayMs, pxPerDay);
+      if(milestoneBar) rowDiv.appendChild(milestoneBar);
+      const segments = getPhaseSegmentsData(r.phase);
+      segments.forEach(segment => {
+        const bar = document.createElement('div');
+        const barClasses = ['gantt-task', 'phase-bar'];
+        if (IS_ORDER_GANTT) {
+          barClasses.push('order-phase-bar');
+          if (segment.highlight || (r.phase && r.phase.order_highlight)) {
+            barClasses.push('order-phase-warning');
+          }
+        }
+        bar.className = barClasses.join(' ');
+        const segStartValue = segment.start || r.phase.start;
+        const segEndValue = segment.end || segment.start || r.phase.end || segStartValue;
+        const segmentStart = toStartOfDay(segStartValue);
+        const segmentEnd = toStartOfDay(segEndValue);
+        const startMs = segmentStart.getTime();
+        const endMs = segmentEnd.getTime();
+        if(Number.isNaN(startMs) || Number.isNaN(endMs)) return;
+        bar.style.left = ((startMs - minStart)/dayMs*pxPerDay) + 'px';
+        bar.style.width = (((endMs - startMs)/dayMs + 1)*pxPerDay) + 'px';
+        if(!IS_ORDER_GANTT){
+          bar.style.background = 'transparent';
+          bar.style.border = '2px solid #0b3c6f';
+          bar.style.color = '#0b3c6f';
+          bar.style.zIndex = '2';
+        }
+        const label = formatSegmentLabel(r.phase.name, segment.part);
+        bar.textContent = label;
+        const titleParts = [];
+        const formattedStart = formatKanbanDate(segment.start || '') || (segment.start || '');
+        const formattedEnd = formatKanbanDate(segment.end || '') || (segment.end || '');
+        if(formattedStart) titleParts.push(`Inicio: ${formattedStart}`);
+        if(formattedEnd) titleParts.push(`Fin: ${formattedEnd}`);
+        if(titleParts.length) bar.title = titleParts.join(' · ');
+        bar.addEventListener('click', evt => {
+          evt.stopPropagation();
+          const relativePx = Math.max(0, Math.min((evt.offsetX ?? 0), bar.clientWidth));
+          const totalDays = Math.max(0, Math.round((endMs - startMs)/dayMs));
+          let dayOffset = Math.floor(relativePx / pxPerDay);
+          if(dayOffset > totalDays) dayOffset = totalDays;
+          let clickedMs = startMs + dayOffset * dayMs;
+          if(clickedMs > endMs) clickedMs = endMs;
+          const isoDay = madridDateISO(clickedMs);
+          const contextData = {
+            pid: r.project.id,
+            phase: r.phase.name,
+            day: isoDay,
+            worker: segment.worker || r.phase.worker || '',
+            part: segment.part === null || segment.part === undefined ? '' : segment.part,
+          };
+          if (IS_ORDER_GANTT) {
+            contextData.order = {
+              column: r.phase.order_column || '',
+              lane: r.phase.order_lane || '',
+              client: r.phase.order_client || '',
+              code: r.phase.order_code || '',
+              cid: r.phase.order_cid || '',
+              prev_date: r.phase.order_prev_date || '',
+              date: r.phase.order_date || '',
+              kanban_date: r.phase.order_kanban_date || ''
+            };
+          }
+          openPhasePopup(contextData, bar.getBoundingClientRect());
+        });
+        rowDiv.appendChild(bar);
       });
     }
-    rowDiv.appendChild(bar);
     body.appendChild(rowDiv);
   });
 
-  applyAllColumnWidths();
-
-  const totalHeight = rows.length * BAR_HEIGHT;
-  summaryBody.style.height = totalHeight + 'px';
+  const extraRows = hasGroupTitleRow ? 1 : 0;
+  const totalHeight = (rows.length + extraRows) * BAR_HEIGHT;
+  summaryColumnDefs.forEach(def => {
+    if(def.body) def.body.style.height = totalHeight + 'px';
+  });
   body.style.height = totalHeight + 'px';
   if(initialScroll){ scrollToToday(); initialScroll=false; }
 }
@@ -943,40 +1924,6 @@ function syncScroll(source, target){
 
 main.addEventListener('scroll',()=>syncScroll(main, summaryContainer));
 summaryContainer.addEventListener('scroll',()=>syncScroll(summaryContainer, main));
-
-function refreshGanttData(){
-  fetch(GANTT_DATA_URL, { credentials: 'same-origin' })
-    .then(resp => resp.ok ? resp.json() : null)
-    .then(data => {
-      if(!data) return;
-      allProjects = Array.isArray(data.projects) ? data.projects : [];
-      PROJECT_DATA = data.project_map || {};
-      START_DATA = data.start_map || {};
-      applyFilters(false);
-    })
-    .catch(err => console.error('Error actualizando Gantt', err));
-}
-
-try {
-  const source = new EventSource("{{ url_for('event_stream') }}", { withCredentials: true });
-  source.onmessage = evt => {
-    if(!evt || !evt.data){
-      return;
-    }
-    let payload = null;
-    try {
-      payload = JSON.parse(evt.data);
-    } catch (err) {
-      payload = null;
-    }
-    if(!payload || !payload.type || payload.type === 'kanban_update'){
-      refreshGanttData();
-    }
-  };
-} catch (err) {
-  console.error('Error iniciando las actualizaciones en tiempo real', err);
-}
-
 applyFilters(false);
 </script>
 {% endblock %}
