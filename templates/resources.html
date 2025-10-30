@@ -14,13 +14,16 @@
     <tbody id="resource-list">
       {% for w in workers %}
       {% set limit = worker_limits.get(w, 'inf') %}
-      <tr data-worker="{{ w }}">
+      <tr data-worker="{{ w }}" data-original-worker="{{ w }}">
         <td class="resource-move">
           <button type="button" class="move-btn" data-move="up" aria-label="Mover {{ w }} hacia arriba">▲</button>
           <button type="button" class="move-btn" data-move="down" aria-label="Mover {{ w }} hacia abajo">▼</button>
           <input type="hidden" name="order" value="{{ w }}">
         </td>
-        <td class="resource-name">{{ w }}</td>
+        <td class="resource-name">
+          <input type="text" name="worker_name__{{ loop.index0 }}" value="{{ w }}" aria-label="Renombrar {{ w }}">
+          <input type="hidden" name="worker_original__{{ loop.index0 }}" value="{{ w }}">
+        </td>
         <td class="resource-visible"><input type="checkbox" name="worker" value="{{ w }}" {% if w not in inactive %}checked{% endif %}></td>
         <td class="resource-hours">
           <select name="hours__{{ loop.index0 }}" data-original="{{ 'inf' if limit == 'inf' else limit }}">
@@ -91,6 +94,37 @@
       const current = select.value || 'inf';
       const original = select.dataset.original || 'inf';
       changed.value = current === original ? '0' : '1';
+    });
+    list.addEventListener('input', (event) => {
+      const input = event.target.closest('input[name^="worker_name__"]');
+      if (!input) {
+        return;
+      }
+      const row = input.closest('tr[data-worker]');
+      if (!row) {
+        return;
+      }
+      const match = input.name.match(/^worker_name__(\d+)$/);
+      if (!match) {
+        return;
+      }
+      const index = match[1];
+      const originalField = row.querySelector(`input[name="worker_original__${index}"]`);
+      const original = originalField ? originalField.value : '';
+      const newName = input.value.trim() || original;
+      row.dataset.worker = newName;
+      const orderField = row.querySelector('input[name="order"]');
+      if (orderField) {
+        orderField.value = newName;
+      }
+      const checkbox = row.querySelector('input[name="worker"][type="checkbox"]');
+      if (checkbox) {
+        checkbox.value = newName;
+      }
+      const hoursWorker = row.querySelector(`input[name="hours_worker__${index}"]`);
+      if (hoursWorker) {
+        hoursWorker.value = newName;
+      }
     });
   });
 </script>
