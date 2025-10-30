@@ -84,6 +84,7 @@
         <h2>Calendario</h2>
         <div class="controls">
             <form id="filter-form" method="get">
+                <input type="hidden" name="project_id" value="{{ project_id_filter }}">
                 <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
                 <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
                 <button type="submit">Filtrar</button>
@@ -1105,6 +1106,13 @@
   const PROJECT_FILTER = {{ project_filter|tojson }};
   const CLIENT_FILTER = {{ client_filter|tojson }};
   const FILTER_ACTIVE = {{ filter_active|tojson }};
+  const projectFilterInput = filterForm ? filterForm.querySelector('input[name="project"]') : null;
+  const projectIdField = filterForm ? filterForm.querySelector('input[name="project_id"]') : null;
+  if (projectFilterInput && projectIdField) {
+    projectFilterInput.addEventListener('input', () => {
+      projectIdField.value = '';
+    });
+  }
 
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;

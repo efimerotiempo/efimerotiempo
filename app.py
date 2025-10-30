@@ -5422,11 +5422,25 @@ def complete():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
-    filter_active = bool(project_filter or client_filter)
+    project_id_filter = request.args.get('project_id', '').strip()
+    project_name_from_id = ''
+    if project_id_filter:
+        for p in projects:
+            pid = p.get('id')
+            if pid is not None and str(pid) == project_id_filter:
+                project_name_from_id = (p.get('name') or '').strip()
+                break
+    if project_name_from_id and not project_filter:
+        project_filter = project_name_from_id
+    filter_active = bool(project_filter or client_filter or project_id_filter)
 
-    def matches_filters(name, client):
+    def matches_filters(name, client, pid=None):
         project_name = (name or '').lower()
         client_name = (client or '').lower()
+        if project_id_filter:
+            pid_text = '' if pid is None else str(pid)
+            if pid_text != project_id_filter:
+                return False
         if project_filter and project_filter.lower() not in project_name:
             return False
         if client_filter and client_filter.lower() not in client_name:
@@ -5437,17 +5451,17 @@ def complete():
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
                 for t in tasks:
-                    t['filter_match'] = matches_filters(t['project'], t['client'])
+                    t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
         filtered_projects = [
             p
             for p in projects
-            if matches_filters(p['name'], p['client'])
+            if matches_filters(p['name'], p['client'], p.get('id'))
         ]
         for g in unplanned_list:
-            match = matches_filters(g['project'], g['client'])
+            match = matches_filters(g['project'], g['client'], g.get('pid'))
             g['filter_match'] = match
             for t in g['tasks']:
-                t['filter_match'] = matches_filters(t['project'], t['client'])
+                t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
     else:
         filtered_projects = projects
 
@@ -5609,6 +5623,10 @@ def complete():
         project_map[pid] = info
         project_map[str(pid)] = info
     start_map = phase_start_map(projects)
+    if project_id_filter and not project_filter:
+        info = project_map.get(project_id_filter)
+        if info:
+            project_filter = (info.get('name') or '').strip()
 
     return render_template(
         'complete.html',
@@ -5619,6 +5637,7 @@ def complete():
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
+        project_id_filter=project_id_filter,
         filter_active=filter_active,
         projects=filtered_projects,
         sort_option=sort_option,

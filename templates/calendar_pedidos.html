@@ -906,10 +906,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ev.stopPropagation();
         try {
           const url = new URL(COMPLETE_URL, window.location.origin);
+          const pidValue = viewCalendarBtn.dataset.pid || '';
+          if (pidValue) {
+            url.searchParams.set('project_id', pidValue);
+            url.searchParams.set('highlight', pidValue);
+          }
           const projectName = viewCalendarBtn.dataset.project || '';
           if (projectName) url.searchParams.set('project', projectName);
-          const pidValue = viewCalendarBtn.dataset.pid || '';
-          if (pidValue) url.searchParams.set('highlight', pidValue);
           window.open(url.toString(), '_blank');
         } catch (error) {
           console.error('No se pudo abrir el calendario de planificación:', error);
