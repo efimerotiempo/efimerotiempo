@@ -912,7 +912,11 @@ document.addEventListener('DOMContentLoaded', () => {
             url.searchParams.set('highlight', pidValue);
           }
           const projectName = viewCalendarBtn.dataset.project || '';
-          if (projectName) url.searchParams.set('project', projectName);
+          if (projectName) {
+            const ofMatch = projectName.match(/\bOF\s*(\d{4})\b/i);
+            const filterValue = ofMatch ? ofMatch[1] : projectName;
+            url.searchParams.set('project', filterValue);
+          }
           window.open(url.toString(), '_blank');
         } catch (error) {
           console.error('No se pudo abrir el calendario de planificación:', error);
