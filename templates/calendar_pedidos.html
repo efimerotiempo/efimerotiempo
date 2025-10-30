@@ -1140,22 +1140,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function normalizeFilterValue(value) {
+    return (value === undefined || value === null) ? '' : `${value}`.toLowerCase();
+  }
+
+  function elementTextIncludes(element, query) {
+    if (!query) return true;
+    if (!element) return false;
+    return element.textContent.toLowerCase().includes(query);
+  }
+
   const filterInput = document.getElementById('filter-input');
   filterInput.addEventListener('input', () => {
-    const q = filterInput.value.toLowerCase();
+    const q = normalizeFilterValue(filterInput.value.trim());
     document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
-      const proj = (t.dataset.project || '').toLowerCase();
-      const cli = (t.dataset.client || '').toLowerCase();
-      const code = (t.dataset.code || '').toLowerCase();
-      t.style.display = (!q || proj.includes(q) || cli.includes(q) || code.includes(q)) ? '' : 'none';
+      const proj = normalizeFilterValue(t.dataset.project);
+      const cli = normalizeFilterValue(t.dataset.client);
+      const code = normalizeFilterValue(t.dataset.code);
+      const text = normalizeFilterValue(t.textContent);
+      const showTask = !q || proj.includes(q) || cli.includes(q) || code.includes(q) || text.includes(q);
+      t.style.display = showTask ? '' : 'none';
     });
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const proj = (row.dataset.project || '').toLowerCase();
-      const title = (row.dataset.title || '').toLowerCase();
-      const cli = (row.dataset.client || '').toLowerCase();
-      const display = (row.dataset.display || '').toLowerCase();
-      const code = (row.dataset.code || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
+      const proj = normalizeFilterValue(row.dataset.project);
+      const title = normalizeFilterValue(row.dataset.title);
+      const cli = normalizeFilterValue(row.dataset.client);
+      const display = normalizeFilterValue(row.dataset.display);
+      const code = normalizeFilterValue(row.dataset.code);
+      const rowTextMatches = elementTextIncludes(row, q);
+      let linkMatches = false;
+      if (q) {
+        linkMatches = Array.from(row.querySelectorAll('.link-title')).some(link => {
+          const linkTitle = normalizeFilterValue(link.dataset.title);
+          const linkLane = normalizeFilterValue(link.dataset.lane);
+          const linkColumn = normalizeFilterValue(link.dataset.column);
+          const linkText = normalizeFilterValue(link.textContent);
+          return linkTitle.includes(q) || linkLane.includes(q) || linkColumn.includes(q) || linkText.includes(q);
+        });
+      }
+      const show = !q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q) || rowTextMatches || linkMatches;
       row.style.display = show ? '' : 'none';
     });
   });
