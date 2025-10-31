@@ -229,11 +229,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const splitTotalDisplay = document.getElementById('split-total-hours');
   const splitCancel = document.getElementById('split-cancel');
   let splitRemainderInput = null;
+  let startDayHighlightCell = null;
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
   const pageParams = new URLSearchParams(window.location.search);
   const initialFilterValue = pageParams.get('filter');
   const initialHighlightPid = pageParams.get('highlight');
+  const START_DAY_HIGHLIGHT_CLASS = 'start-day-highlight';
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -663,6 +665,68 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     return null;
+  }
+
+  function clearStartDayHighlight() {
+    if (startDayHighlightCell && startDayHighlightCell.isConnected) {
+      startDayHighlightCell.classList.remove(START_DAY_HIGHLIGHT_CLASS);
+    }
+    startDayHighlightCell = null;
+  }
+
+  function applyStartDayHighlight(dateValue) {
+    const iso = normalizeDateToIso(dateValue);
+    clearStartDayHighlight();
+    if (!iso) return;
+    const cell = document.querySelector(`.pedidos-calendar td[data-date='${iso}']`);
+    if (cell) {
+      cell.classList.add(START_DAY_HIGHLIGHT_CLASS);
+      startDayHighlightCell = cell;
+    }
+  }
+
+  function resolvePlannedStartByPid(pid) {
+    if (!pid) return '';
+    const candidates = new Set();
+    const startEntry = START_DATA && START_DATA[pid];
+    if (startEntry && typeof startEntry === 'object') {
+      Object.values(startEntry).forEach(value => {
+        const iso = normalizeDateToIso(value);
+        if (iso) candidates.add(iso);
+      });
+    }
+    const info = PROJECT_DATA && PROJECT_DATA[pid];
+    if (info) {
+      ['plan_start', 'montar_start', 'start', 'start_date'].forEach(key => {
+        const iso = normalizeDateToIso(info && info[key]);
+        if (iso) candidates.add(iso);
+      });
+      if (info.segment_starts && typeof info.segment_starts === 'object') {
+        Object.values(info.segment_starts).forEach(value => {
+          const iso = normalizeDateToIso(value);
+          if (iso) candidates.add(iso);
+        });
+      }
+    }
+    if (!candidates.size) return '';
+    return Array.from(candidates).sort()[0];
+  }
+
+  function resolvePlannedStartFromRow(row) {
+    if (!row) return '';
+    const direct = normalizeDateToIso(row.dataset.plan);
+    if (direct) return direct;
+    const pid = resolveRowPid(row);
+    if (!pid) return '';
+    return resolvePlannedStartByPid(pid);
+  }
+
+  function highlightProjectStartByPid(pid) {
+    applyStartDayHighlight(resolvePlannedStartByPid(pid));
+  }
+
+  function highlightProjectStartByRow(row) {
+    applyStartDayHighlight(resolvePlannedStartFromRow(row));
   }
 
   function afterMove(data, originalDate) {
@@ -1238,6 +1302,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.round((laterUtc - earlierUtc) / 86400000);
   }
 
+  function normalizeDateToIso(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    const euroMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (euroMatch) {
+      return `${euroMatch[3]}-${euroMatch[2]}-${euroMatch[1]}`;
+    }
+    return '';
+  }
+
   function formatDueDisplay(value) {
     const parts = parseISODateParts(value);
     if (!parts) return '';
@@ -1545,6 +1627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyHighlight(null);
     currentHighlightState = null;
     currentHighlightKey = null;
+    clearStartDayHighlight();
   }
 
   function reapplyHighlight() {
@@ -1577,6 +1660,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const title = t.dataset.title;
         if (!title) return;
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && t.dataset.pid) {
+          highlightProjectStartByPid(t.dataset.pid);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
     const column = document.querySelector('.columna-1');
@@ -1586,7 +1674,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!el) return;
         const title = el.dataset.title;
         if (!title) return;
+        const row = el.closest('.project-row');
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && row) {
+          highlightProjectStartByRow(row);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
   }
@@ -1614,6 +1708,7 @@ document.addEventListener('DOMContentLoaded', () => {
           clearHighlight();
         }
       }
+      highlightProjectStartByRow(row);
       const pid = resolveRowPid(row);
       if (!pid || !PROJECT_DATA[pid]) return;
       e.stopPropagation();
@@ -1632,7 +1727,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         highlightRow.classList.add('highlight');
       }
+      highlightProjectStartByRow(highlightRow);
       highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      highlightProjectStartByPid(initialHighlightPid);
     }
     const highlightTasks = Array.from(document.querySelectorAll(`.pedidos-calendar .task[data-pid='${initialHighlightPid}']`));
     if (highlightTasks.length) {
