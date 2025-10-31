@@ -479,6 +479,7 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
@@ -1467,6 +1468,11 @@ let draggedTaskElement = null;
           </div>
         `);
       } else {
+        const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
         if (info && info.observations) {
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
@@ -1516,6 +1522,55 @@ let draggedTaskElement = null;
           } catch (error) {
             console.error('No se pudo abrir Calendario pedidos:', error);
           }
+        });
+      }
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  taskEl.remove();
+                }
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
       }
       const del = document.getElementById('del-btn');

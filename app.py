@@ -6623,6 +6623,102 @@ def toggle_freeze(pid, phase):
     return redirect(request.referrer or url_for('calendar_view'))
 
 
+@app.route('/remove_archived_phase', methods=['POST'])
+def remove_archived_phase():
+    data = request.get_json(silent=True) or {}
+    pid = str(data.get('pid') or '').strip()
+    phase = str(data.get('phase') or '').strip()
+    if not pid or not phase:
+        return jsonify({'error': 'Datos incompletos'}), 400
+
+    target_phase = phase.lower()
+    entries = load_archived_calendar_entries()
+    if not entries:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    updated_entries = []
+    removed_count = 0
+
+    def _phase_matches(value):
+        text = str(value or '').strip()
+        return text.lower() == target_phase if text else False
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            updated_entries.append(entry)
+            continue
+
+        entry_pid = str(entry.get('pid') or '').strip()
+        if entry_pid != pid:
+            updated_entries.append(entry)
+            continue
+
+        tasks = entry.get('tasks')
+        if not isinstance(tasks, list):
+            # Nothing usable, keep entry as-is
+            updated_entries.append(entry)
+            continue
+
+        kept_tasks = []
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            payload = item.get('task')
+            if not isinstance(payload, dict):
+                continue
+            payload_phase = payload.get('phase')
+            if _phase_matches(payload_phase):
+                removed_count += 1
+                continue
+            kept_tasks.append(item)
+
+        if kept_tasks:
+            entry['tasks'] = kept_tasks
+            project_info = entry.get('project')
+            if isinstance(project_info, dict):
+                phases = project_info.get('phases')
+                if isinstance(phases, dict):
+                    for key in list(phases.keys()):
+                        if _phase_matches(key):
+                            phases.pop(key, None)
+                assigned = project_info.get('assigned')
+                if isinstance(assigned, dict):
+                    for key in list(assigned.keys()):
+                        if _phase_matches(key):
+                            assigned.pop(key, None)
+                auto_hours = project_info.get('auto_hours')
+                if isinstance(auto_hours, dict):
+                    for key in list(auto_hours.keys()):
+                        if _phase_matches(key):
+                            auto_hours.pop(key, None)
+                frozen_tasks = project_info.get('frozen_tasks')
+                if isinstance(frozen_tasks, list):
+                    project_info['frozen_tasks'] = [
+                        t
+                        for t in frozen_tasks
+                        if not _phase_matches((t or {}).get('phase'))
+                    ]
+                sequence = project_info.get('phase_sequence')
+                if isinstance(sequence, list):
+                    project_info['phase_sequence'] = [
+                        item
+                        for item in sequence
+                        if not _phase_matches(item)
+                    ]
+            updated_entries.append(entry)
+        else:
+            # No tasks remain for this archived project; drop the entry entirely
+            if removed_count == 0:
+                # We attempted to remove but found no matching tasks
+                updated_entries.append(entry)
+
+    if removed_count == 0:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    save_archived_calendar_entries(updated_entries)
+    return jsonify({'removed': removed_count})
+
+
 @app.route('/toggle_block/<pid>', methods=['POST'])
 def toggle_block(pid):
     """Toggle blocked state on a project."""
