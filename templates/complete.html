@@ -84,6 +84,7 @@
         <h2>Calendario</h2>
         <div class="controls">
             <form id="filter-form" method="get">
+                <input type="hidden" name="project_id" value="{{ project_id_filter }}">
                 <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
                 <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
                 <button type="submit">Filtrar</button>
@@ -478,12 +479,14 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
+  const CALENDAR_PEDIDOS_URL = "{{ url_for('calendar_pedidos') }}";
   const HISTORY_URL = "{{ url_for('phase_history') }}";
   const ASSIGN_VACATION_DAY_URL = "{{ url_for('assign_vacation_day') }}";
   const UPDATE_WORKER_DAY_HOURS_URL = "{{ url_for('update_worker_day_hours') }}";
@@ -1104,6 +1107,13 @@
   const PROJECT_FILTER = {{ project_filter|tojson }};
   const CLIENT_FILTER = {{ client_filter|tojson }};
   const FILTER_ACTIVE = {{ filter_active|tojson }};
+  const projectFilterInput = filterForm ? filterForm.querySelector('input[name="project"]') : null;
+  const projectIdField = filterForm ? filterForm.querySelector('input[name="project_id"]') : null;
+  if (projectFilterInput && projectIdField) {
+    projectFilterInput.addEventListener('input', () => {
+      projectIdField.value = '';
+    });
+  }
 
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
@@ -1350,15 +1360,37 @@ let draggedTaskElement = null;
       if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
       const kanbanFields = info.kanban_display_fields || {};
       const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+      let addedPedidosButton = false;
       if (kanbanEntries.length) {
         let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
         kanbanEntries.forEach(([label, value]) => {
           const displayValue = `${value}`;
           kanbanHtml += `<div>${label}: ${displayValue}</div>`;
-          });
-          kanbanHtml += '</div>';
-          html += kanbanHtml;
+          if (!addedPedidosButton) {
+            const normalizedLabel = (label || '').toString().trim().toLowerCase();
+            if (normalizedLabel === 'estado pedidos' || normalizedLabel === 'estado de los pedidos') {
+              const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+              const safePidAttr = escapeHtml(t.dataset.pid || '');
+              kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+              addedPedidosButton = true;
+            }
+          }
+        });
+        if (!addedPedidosButton) {
+          const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+          const safePidAttr = escapeHtml(t.dataset.pid || '');
+          kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+          addedPedidosButton = true;
         }
+        kanbanHtml += '</div>';
+        html += kanbanHtml;
+      }
+      if (!addedPedidosButton) {
+        const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+        const safePidAttr = escapeHtml(t.dataset.pid || '');
+        html += `<div class="popup-section kanban-extra-fields"><div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div></div>`;
+        addedPedidosButton = true;
+      }
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
       const phaseLines = [];
@@ -1436,6 +1468,11 @@ let draggedTaskElement = null;
           </div>
         `);
       } else {
+        const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
         if (info && info.observations) {
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
@@ -1464,11 +1501,76 @@ let draggedTaskElement = null;
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
       const historyBtn = popup.querySelector('.history-btn');
+      const viewPedidosBtn = popup.querySelector('.view-pedidos-btn');
       if (historyBtn) {
         historyBtn.addEventListener('click', ev => {
           ev.stopPropagation();
           const partValue = normalizePartValue(historyBtn.dataset.part);
           openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, displayName, displayClient);
+        });
+      }
+      if (viewPedidosBtn) {
+        viewPedidosBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          try {
+            const url = new URL(CALENDAR_PEDIDOS_URL, window.location.origin);
+            const projectName = viewPedidosBtn.dataset.project || '';
+            if (projectName) url.searchParams.set('filter', projectName);
+            const pidValue = viewPedidosBtn.dataset.pid || '';
+            if (pidValue) url.searchParams.set('highlight', pidValue);
+            window.open(url.toString(), '_blank');
+          } catch (error) {
+            console.error('No se pudo abrir Calendario pedidos:', error);
+          }
+        });
+      }
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  taskEl.remove();
+                }
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
       }
       const del = document.getElementById('del-btn');
