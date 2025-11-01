@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ergo Estudio de Arquitectura</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="hero">
+    <h1>Ergo</h1>
+    <p>Estudio de Arquitectura</p>
+    <nav>
+      <ul>
+        <li><a href="#about">Sobre Nosotros</a></li>
+        <li><a href="#projects">Proyectos</a></li>
+        <li><a href="#contact">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <section id="about" class="about">
+    <h2>Diseñamos espacios que inspiran</h2>
+    <p>En Ergo creamos arquitectura contemporánea con un enfoque sostenible y estético. Nuestro equipo combina creatividad y tecnología para desarrollar proyectos únicos que mejoran la vida urbana.</p>
+  </section>
+
+  <section id="projects" class="projects">
+    <h2>Proyectos Destacados</h2>
+    <div class="project-grid">
+      <div class="project-card">
+        <img src="https://source.unsplash.com/random/300x200?architecture" alt="Proyecto 1">
+        <h3>Centro Cultural</h3>
+      </div>
+      <div class="project-card">
+        <img src="https://source.unsplash.com/random/300x201?building" alt="Proyecto 2">
+        <h3>Edificio Corporativo</h3>
+      </div>
+      <div class="project-card">
+        <img src="https://source.unsplash.com/random/300x202?modern-house" alt="Proyecto 3">
+        <h3>Residencia Sustentable</h3>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact">
+    <h2>Hablemos de tu proyecto</h2>
+    <form>
+      <label for="name">Nombre</label>
+      <input type="text" id="name" name="name" required>
+
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required>
+
+      <label for="message">Mensaje</label>
+      <textarea id="message" name="message" rows="4" required></textarea>
+
+      <button type="submit">Enviar</button>
+    </form>
+  </section>
+
+  <footer class="footer">
+    <p>&copy; 2024 Ergo Estudio de Arquitectura</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
