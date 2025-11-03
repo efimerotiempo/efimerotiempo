@@ -5422,11 +5422,25 @@ def complete():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
-    filter_active = bool(project_filter or client_filter)
+    project_id_filter = request.args.get('project_id', '').strip()
+    project_name_from_id = ''
+    if project_id_filter:
+        for p in projects:
+            pid = p.get('id')
+            if pid is not None and str(pid) == project_id_filter:
+                project_name_from_id = (p.get('name') or '').strip()
+                break
+    if project_name_from_id and not project_filter:
+        project_filter = project_name_from_id
+    filter_active = bool(project_filter or client_filter or project_id_filter)
 
-    def matches_filters(name, client):
+    def matches_filters(name, client, pid=None):
         project_name = (name or '').lower()
         client_name = (client or '').lower()
+        if project_id_filter:
+            pid_text = '' if pid is None else str(pid)
+            if pid_text != project_id_filter:
+                return False
         if project_filter and project_filter.lower() not in project_name:
             return False
         if client_filter and client_filter.lower() not in client_name:
@@ -5437,17 +5451,17 @@ def complete():
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
                 for t in tasks:
-                    t['filter_match'] = matches_filters(t['project'], t['client'])
+                    t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
         filtered_projects = [
             p
             for p in projects
-            if matches_filters(p['name'], p['client'])
+            if matches_filters(p['name'], p['client'], p.get('id'))
         ]
         for g in unplanned_list:
-            match = matches_filters(g['project'], g['client'])
+            match = matches_filters(g['project'], g['client'], g.get('pid'))
             g['filter_match'] = match
             for t in g['tasks']:
-                t['filter_match'] = matches_filters(t['project'], t['client'])
+                t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
     else:
         filtered_projects = projects
 
@@ -5609,6 +5623,10 @@ def complete():
         project_map[pid] = info
         project_map[str(pid)] = info
     start_map = phase_start_map(projects)
+    if project_id_filter and not project_filter:
+        info = project_map.get(project_id_filter)
+        if info:
+            project_filter = (info.get('name') or '').strip()
 
     return render_template(
         'complete.html',
@@ -5619,6 +5637,7 @@ def complete():
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
+        project_id_filter=project_id_filter,
         filter_active=filter_active,
         projects=filtered_projects,
         sort_option=sort_option,
@@ -6602,6 +6621,102 @@ def toggle_freeze(pid, phase):
     if request.is_json:
         return '', 204
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/remove_archived_phase', methods=['POST'])
+def remove_archived_phase():
+    data = request.get_json(silent=True) or {}
+    pid = str(data.get('pid') or '').strip()
+    phase = str(data.get('phase') or '').strip()
+    if not pid or not phase:
+        return jsonify({'error': 'Datos incompletos'}), 400
+
+    target_phase = phase.lower()
+    entries = load_archived_calendar_entries()
+    if not entries:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    updated_entries = []
+    removed_count = 0
+
+    def _phase_matches(value):
+        text = str(value or '').strip()
+        return text.lower() == target_phase if text else False
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            updated_entries.append(entry)
+            continue
+
+        entry_pid = str(entry.get('pid') or '').strip()
+        if entry_pid != pid:
+            updated_entries.append(entry)
+            continue
+
+        tasks = entry.get('tasks')
+        if not isinstance(tasks, list):
+            # Nothing usable, keep entry as-is
+            updated_entries.append(entry)
+            continue
+
+        kept_tasks = []
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            payload = item.get('task')
+            if not isinstance(payload, dict):
+                continue
+            payload_phase = payload.get('phase')
+            if _phase_matches(payload_phase):
+                removed_count += 1
+                continue
+            kept_tasks.append(item)
+
+        if kept_tasks:
+            entry['tasks'] = kept_tasks
+            project_info = entry.get('project')
+            if isinstance(project_info, dict):
+                phases = project_info.get('phases')
+                if isinstance(phases, dict):
+                    for key in list(phases.keys()):
+                        if _phase_matches(key):
+                            phases.pop(key, None)
+                assigned = project_info.get('assigned')
+                if isinstance(assigned, dict):
+                    for key in list(assigned.keys()):
+                        if _phase_matches(key):
+                            assigned.pop(key, None)
+                auto_hours = project_info.get('auto_hours')
+                if isinstance(auto_hours, dict):
+                    for key in list(auto_hours.keys()):
+                        if _phase_matches(key):
+                            auto_hours.pop(key, None)
+                frozen_tasks = project_info.get('frozen_tasks')
+                if isinstance(frozen_tasks, list):
+                    project_info['frozen_tasks'] = [
+                        t
+                        for t in frozen_tasks
+                        if not _phase_matches((t or {}).get('phase'))
+                    ]
+                sequence = project_info.get('phase_sequence')
+                if isinstance(sequence, list):
+                    project_info['phase_sequence'] = [
+                        item
+                        for item in sequence
+                        if not _phase_matches(item)
+                    ]
+            updated_entries.append(entry)
+        else:
+            # No tasks remain for this archived project; drop the entry entirely
+            if removed_count == 0:
+                # We attempted to remove but found no matching tasks
+                updated_entries.append(entry)
+
+    if removed_count == 0:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    save_archived_calendar_entries(updated_entries)
+    return jsonify({'removed': removed_count})
 
 
 @app.route('/toggle_block/<pid>', methods=['POST'])

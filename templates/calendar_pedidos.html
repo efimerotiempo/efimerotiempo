@@ -217,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const COMPLETE_URL = "{{ url_for('complete') }}";
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
   const COLUMN_WIDTHS_KEY = 'columna1ColumnWidths';
@@ -228,8 +229,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const splitTotalDisplay = document.getElementById('split-total-hours');
   const splitCancel = document.getElementById('split-cancel');
   let splitRemainderInput = null;
+  let startDayHighlightCell = null;
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+  const pageParams = new URLSearchParams(window.location.search);
+  const initialFilterValue = pageParams.get('filter');
+  const initialHighlightPid = pageParams.get('highlight');
+  const START_DAY_HIGHLIGHT_CLASS = 'start-day-highlight';
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -661,6 +667,68 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  function clearStartDayHighlight() {
+    if (startDayHighlightCell && startDayHighlightCell.isConnected) {
+      startDayHighlightCell.classList.remove(START_DAY_HIGHLIGHT_CLASS);
+    }
+    startDayHighlightCell = null;
+  }
+
+  function applyStartDayHighlight(dateValue) {
+    const iso = normalizeDateToIso(dateValue);
+    clearStartDayHighlight();
+    if (!iso) return;
+    const cell = document.querySelector(`.pedidos-calendar td[data-date='${iso}']`);
+    if (cell) {
+      cell.classList.add(START_DAY_HIGHLIGHT_CLASS);
+      startDayHighlightCell = cell;
+    }
+  }
+
+  function resolvePlannedStartByPid(pid) {
+    if (!pid) return '';
+    const candidates = new Set();
+    const startEntry = START_DATA && START_DATA[pid];
+    if (startEntry && typeof startEntry === 'object') {
+      Object.values(startEntry).forEach(value => {
+        const iso = normalizeDateToIso(value);
+        if (iso) candidates.add(iso);
+      });
+    }
+    const info = PROJECT_DATA && PROJECT_DATA[pid];
+    if (info) {
+      ['plan_start', 'montar_start', 'start', 'start_date'].forEach(key => {
+        const iso = normalizeDateToIso(info && info[key]);
+        if (iso) candidates.add(iso);
+      });
+      if (info.segment_starts && typeof info.segment_starts === 'object') {
+        Object.values(info.segment_starts).forEach(value => {
+          const iso = normalizeDateToIso(value);
+          if (iso) candidates.add(iso);
+        });
+      }
+    }
+    if (!candidates.size) return '';
+    return Array.from(candidates).sort()[0];
+  }
+
+  function resolvePlannedStartFromRow(row) {
+    if (!row) return '';
+    const direct = normalizeDateToIso(row.dataset.plan);
+    if (direct) return direct;
+    const pid = resolveRowPid(row);
+    if (!pid) return '';
+    return resolvePlannedStartByPid(pid);
+  }
+
+  function highlightProjectStartByPid(pid) {
+    applyStartDayHighlight(resolvePlannedStartByPid(pid));
+  }
+
+  function highlightProjectStartByRow(row) {
+    applyStartDayHighlight(resolvePlannedStartFromRow(row));
+  }
+
   function afterMove(data, originalDate) {
     localStorage.setItem(LAST_KEY, JSON.stringify({pid: data.pid, phase: data.phase, part: data.part, date: data.date}));
     if (data.date !== originalDate) localStorage.setItem(SCROLL_KEY2, data.date);
@@ -816,6 +884,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const metaLines = [];
     const clientDate = pickClientDate(info);
     if (clientDate) metaLines.push(`<div>Fecha cliente: ${clientDate}</div>`);
+    const safeProjectAttr = escapeHtml(context.project || info.name || '');
+    const safePidAttr = escapeHtml(context.pid || '');
+    metaLines.push(`<div><button type="button" class="view-calendar-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver calendario</button></div>`);
     if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
     if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
     if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
@@ -892,6 +963,30 @@ document.addEventListener('DOMContentLoaded', () => {
     popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
     popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
     popup.style.display = 'block';
+
+    const viewCalendarBtn = popup.querySelector('.view-calendar-btn');
+    if (viewCalendarBtn) {
+      viewCalendarBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        try {
+          const url = new URL(COMPLETE_URL, window.location.origin);
+          const pidValue = viewCalendarBtn.dataset.pid || '';
+          if (pidValue) {
+            url.searchParams.set('project_id', pidValue);
+            url.searchParams.set('highlight', pidValue);
+          }
+          const projectName = viewCalendarBtn.dataset.project || '';
+          if (projectName) {
+            const ofMatch = projectName.match(/\bOF\s*(\d{4})\b/i);
+            const filterValue = ofMatch ? ofMatch[1] : projectName;
+            url.searchParams.set('project', filterValue);
+          }
+          window.open(url.toString(), '_blank');
+        } catch (error) {
+          console.error('No se pudo abrir el calendario de planificación:', error);
+        }
+      });
+    }
 
     const del = document.getElementById('del-btn');
     if (del) {
@@ -1140,25 +1235,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function normalizeFilterValue(value) {
+    return (value === undefined || value === null) ? '' : `${value}`.toLowerCase();
+  }
+
+  function elementTextIncludes(element, query) {
+    if (!query) return true;
+    if (!element) return false;
+    return element.textContent.toLowerCase().includes(query);
+  }
+
   const filterInput = document.getElementById('filter-input');
   filterInput.addEventListener('input', () => {
-    const q = filterInput.value.toLowerCase();
+    const q = normalizeFilterValue(filterInput.value.trim());
     document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
-      const proj = (t.dataset.project || '').toLowerCase();
-      const cli = (t.dataset.client || '').toLowerCase();
-      const code = (t.dataset.code || '').toLowerCase();
-      t.style.display = (!q || proj.includes(q) || cli.includes(q) || code.includes(q)) ? '' : 'none';
+      const proj = normalizeFilterValue(t.dataset.project);
+      const cli = normalizeFilterValue(t.dataset.client);
+      const code = normalizeFilterValue(t.dataset.code);
+      const text = normalizeFilterValue(t.textContent);
+      const showTask = !q || proj.includes(q) || cli.includes(q) || code.includes(q) || text.includes(q);
+      t.style.display = showTask ? '' : 'none';
     });
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const proj = (row.dataset.project || '').toLowerCase();
-      const title = (row.dataset.title || '').toLowerCase();
-      const cli = (row.dataset.client || '').toLowerCase();
-      const display = (row.dataset.display || '').toLowerCase();
-      const code = (row.dataset.code || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
+      const proj = normalizeFilterValue(row.dataset.project);
+      const title = normalizeFilterValue(row.dataset.title);
+      const cli = normalizeFilterValue(row.dataset.client);
+      const display = normalizeFilterValue(row.dataset.display);
+      const code = normalizeFilterValue(row.dataset.code);
+      const rowTextMatches = elementTextIncludes(row, q);
+      let linkMatches = false;
+      if (q) {
+        linkMatches = Array.from(row.querySelectorAll('.link-title')).some(link => {
+          const linkTitle = normalizeFilterValue(link.dataset.title);
+          const linkLane = normalizeFilterValue(link.dataset.lane);
+          const linkColumn = normalizeFilterValue(link.dataset.column);
+          const linkText = normalizeFilterValue(link.textContent);
+          return linkTitle.includes(q) || linkLane.includes(q) || linkColumn.includes(q) || linkText.includes(q);
+        });
+      }
+      const show = !q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q) || rowTextMatches || linkMatches;
       row.style.display = show ? '' : 'none';
     });
   });
+
+  if (filterInput && initialFilterValue !== null) {
+    filterInput.value = initialFilterValue;
+    filterInput.dispatchEvent(new Event('input'));
+  }
 
   function parseISODateParts(value) {
     const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
@@ -1177,6 +1300,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const laterUtc = Date.UTC(laterParts.year, laterParts.month, laterParts.day);
     const earlierUtc = Date.UTC(earlierParts.year, earlierParts.month, earlierParts.day);
     return Math.round((laterUtc - earlierUtc) / 86400000);
+  }
+
+  function normalizeDateToIso(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    const euroMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (euroMatch) {
+      return `${euroMatch[3]}-${euroMatch[2]}-${euroMatch[1]}`;
+    }
+    return '';
   }
 
   function formatDueDisplay(value) {
@@ -1486,6 +1627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyHighlight(null);
     currentHighlightState = null;
     currentHighlightKey = null;
+    clearStartDayHighlight();
   }
 
   function reapplyHighlight() {
@@ -1518,6 +1660,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const title = t.dataset.title;
         if (!title) return;
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && t.dataset.pid) {
+          highlightProjectStartByPid(t.dataset.pid);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
     const column = document.querySelector('.columna-1');
@@ -1527,7 +1674,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!el) return;
         const title = el.dataset.title;
         if (!title) return;
+        const row = el.closest('.project-row');
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && row) {
+          highlightProjectStartByRow(row);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
   }
@@ -1555,12 +1708,37 @@ document.addEventListener('DOMContentLoaded', () => {
           clearHighlight();
         }
       }
+      highlightProjectStartByRow(row);
       const pid = resolveRowPid(row);
       if (!pid || !PROJECT_DATA[pid]) return;
       e.stopPropagation();
       const rect = trigger.getBoundingClientRect();
-      openPhasePopup({ pid }, rect);
+      const projectName = row.dataset.project || '';
+      openPhasePopup({ pid, project: projectName }, rect);
     });
+  }
+
+  if (initialHighlightPid) {
+    const highlightRow = Array.from(document.querySelectorAll('.columna-1 .project-row')).find(row => row.dataset.pid === initialHighlightPid);
+    if (highlightRow) {
+      const highlightTitles = Array.from(highlightRow.querySelectorAll('.link-title')).map(link => link.dataset.title).filter(Boolean);
+      if (highlightTitles.length) {
+        toggleHighlight({ titles: highlightTitles });
+      } else {
+        highlightRow.classList.add('highlight');
+      }
+      highlightProjectStartByRow(highlightRow);
+      highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      highlightProjectStartByPid(initialHighlightPid);
+    }
+    const highlightTasks = Array.from(document.querySelectorAll(`.pedidos-calendar .task[data-pid='${initialHighlightPid}']`));
+    if (highlightTasks.length) {
+      highlightTasks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    const updatedUrl = new URL(window.location.href);
+    updatedUrl.searchParams.delete('highlight');
+    history.replaceState(null, '', updatedUrl);
   }
 
   const source = new EventSource("{{ url_for('event_stream') }}");
