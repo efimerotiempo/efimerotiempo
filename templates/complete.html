@@ -530,6 +530,67 @@
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
 
+  const NO_BORDER_WORKERS = new Set(['Mecanizar', 'Tratamiento']);
+  const NO_BORDER_PHASES = new Set(['vacaciones', 'mecanizar', 'tratamiento']);
+
+  function getWorkerDayLimit(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function findWorkerRow(worker) {
+    if (!worker) return null;
+    return Array.from(document.querySelectorAll('tr[data-worker]')).find(row => row.dataset.worker === worker) || null;
+  }
+
+  function findWorkerDayCell(worker, dateText) {
+    if (!worker || !dateText) return null;
+    const row = findWorkerRow(worker);
+    if (!row) return null;
+    return Array.from(row.querySelectorAll('td[data-date]')).find(td => td.dataset.date === dateText) || null;
+  }
+
+  function recomputeWorkerDayCell(worker, dateText) {
+    const cell = findWorkerDayCell(worker, dateText);
+    if (!cell) return;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    let total = 0;
+    let hasNoBorderPhase = NO_BORDER_WORKERS.has(worker);
+    tasks.forEach(task => {
+      const phase = (task.dataset.phase || '').toLowerCase();
+      if (NO_BORDER_PHASES.has(phase)) {
+        hasNoBorderPhase = true;
+      }
+      const hoursVal = Number(task.dataset.hours);
+      if (Number.isFinite(hoursVal)) {
+        total += hoursVal;
+      }
+    });
+    const limit = getWorkerDayLimit(worker, dateText);
+    if (hasNoBorderPhase) {
+      cell.classList.add('vacation-day');
+      cell.classList.remove('incomplete');
+      return;
+    }
+    cell.classList.remove('vacation-day');
+    if (total < limit) {
+      cell.classList.add('incomplete');
+    } else {
+      cell.classList.remove('incomplete');
+    }
+  }
+
   function clampDayHours(value) {
     const num = Number(value);
     if (!Number.isFinite(num)) return 8;
@@ -1543,10 +1604,21 @@ let draggedTaskElement = null;
               }
               const targetPid = removeArchivedBtn.dataset.pid;
               const targetPhase = removeArchivedBtn.dataset.phase;
+              const affectedCells = new Set();
               document.querySelectorAll('.task').forEach(taskEl => {
                 if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  const row = taskEl.closest('tr[data-worker]');
+                  const worker = row ? row.dataset.worker : null;
+                  const date = taskEl.dataset.day || null;
                   taskEl.remove();
+                  if (worker && date) {
+                    affectedCells.add(`${worker}|||${date}`);
+                  }
                 }
+              });
+              affectedCells.forEach(key => {
+                const [worker, date] = key.split('|||');
+                recomputeWorkerDayCell(worker, date);
               });
               const projectInfo = PROJECT_DATA[targetPid];
               if (projectInfo && typeof projectInfo === 'object') {
@@ -1564,6 +1636,9 @@ let draggedTaskElement = null;
                 }
                 if (Array.isArray(projectInfo.frozen_tasks)) {
                   projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_phases)) {
+                  projectInfo.frozen_phases = projectInfo.frozen_phases.filter(ph => ph !== targetPhase);
                 }
               }
               popup.style.display = 'none';

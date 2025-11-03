@@ -352,6 +352,7 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
@@ -395,6 +396,67 @@
         year: 'numeric',
       })
     : null;
+
+  const NO_BORDER_WORKERS = new Set(['Mecanizar', 'Tratamiento']);
+  const NO_BORDER_PHASES = new Set(['vacaciones', 'mecanizar', 'tratamiento']);
+
+  function getWorkerDayLimit(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function findWorkerRow(worker) {
+    if (!worker) return null;
+    return Array.from(document.querySelectorAll('tr[data-worker]')).find(row => row.dataset.worker === worker) || null;
+  }
+
+  function findWorkerDayCell(worker, dateText) {
+    if (!worker || !dateText) return null;
+    const row = findWorkerRow(worker);
+    if (!row) return null;
+    return Array.from(row.querySelectorAll('td[data-date]')).find(td => td.dataset.date === dateText) || null;
+  }
+
+  function recomputeWorkerDayCell(worker, dateText) {
+    const cell = findWorkerDayCell(worker, dateText);
+    if (!cell) return;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    let total = 0;
+    let hasNoBorderPhase = NO_BORDER_WORKERS.has(worker);
+    tasks.forEach(task => {
+      const phase = (task.dataset.phase || '').toLowerCase();
+      if (NO_BORDER_PHASES.has(phase)) {
+        hasNoBorderPhase = true;
+      }
+      const hoursVal = Number(task.dataset.hours);
+      if (Number.isFinite(hoursVal)) {
+        total += hoursVal;
+      }
+    });
+    const limit = getWorkerDayLimit(worker, dateText);
+    if (hasNoBorderPhase) {
+      cell.classList.add('vacation-day');
+      cell.classList.remove('incomplete');
+      return;
+    }
+    cell.classList.remove('vacation-day');
+    if (total < limit) {
+      cell.classList.add('incomplete');
+    } else {
+      cell.classList.remove('incomplete');
+    }
+  }
 
   function clampDayHours(value) {
     const num = Number(value);
@@ -1414,6 +1476,7 @@ let draggedTaskElement = null;
       let html = `<div class="popup-section popup-header"><strong>${displayName}${blockedBadge} - ${displayClient} - ${t.dataset.phase}${phasePartSuffix}</strong></div>`;
       const startMap = START_DATA[t.dataset.pid] || {};
       const startVal = startMap[t.dataset.phase] || '';
+      const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
       const metaLines = [];
       const status = (info.material_status || '').toString();
       if (status === 'missing') {
@@ -1557,6 +1620,10 @@ let draggedTaskElement = null;
           </div>
         `);
       } else {
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
         if (info && info.observations) {
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
@@ -1606,6 +1673,69 @@ let draggedTaskElement = null;
           } catch (error) {
             console.error('No se pudo abrir Calendario pedidos:', error);
           }
+        });
+      }
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              const affectedCells = new Set();
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  const row = taskEl.closest('tr[data-worker]');
+                  const worker = row ? row.dataset.worker : null;
+                  const date = taskEl.dataset.day || null;
+                  taskEl.remove();
+                  if (worker && date) {
+                    affectedCells.add(`${worker}|||${date}`);
+                  }
+                }
+              });
+              affectedCells.forEach(key => {
+                const [worker, date] = key.split('|||');
+                recomputeWorkerDayCell(worker, date);
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_phases)) {
+                  projectInfo.frozen_phases = projectInfo.frozen_phases.filter(ph => ph !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
       }
       const del = document.getElementById('del-btn');
