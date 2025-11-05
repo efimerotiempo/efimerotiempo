@@ -748,6 +748,14 @@
         return;
       }
       ev.preventDefault();
+      if (skipNextDayMenu) {
+        skipNextDayMenu = false;
+        if (skipDayMenuReset) {
+          clearTimeout(skipDayMenuReset);
+          skipDayMenuReset = null;
+        }
+        return;
+      }
       openDayMenu(row.dataset.worker, cell.dataset.date);
     });
   });
@@ -1382,14 +1390,28 @@
   let dragStartScroll = 0;
   let dragWithRightButton = false;
   let suppressContextMenu = false;
+  let dragMoved = false;
+  let skipNextDayMenu = false;
+  let skipDayMenuReset = null;
 
   function stopDragScroll() {
     if (!isDragScrolling && !suppressContextMenu) return;
+    if (dragWithRightButton && dragMoved) {
+      skipNextDayMenu = true;
+      if (skipDayMenuReset) {
+        clearTimeout(skipDayMenuReset);
+      }
+      skipDayMenuReset = setTimeout(() => {
+        skipNextDayMenu = false;
+        skipDayMenuReset = null;
+      }, 200);
+    }
     isDragScrolling = false;
     if (suppressContextMenu) {
       setTimeout(() => { suppressContextMenu = false; }, 0);
     }
     dragWithRightButton = false;
+    dragMoved = false;
     wrapper.classList.remove('dragging');
   }
 
@@ -1402,6 +1424,12 @@
     isDragScrolling = true;
     dragWithRightButton = wantsRightDrag;
     suppressContextMenu = wantsRightDrag;
+    dragMoved = false;
+    if (wantsRightDrag && skipDayMenuReset) {
+      clearTimeout(skipDayMenuReset);
+      skipDayMenuReset = null;
+      skipNextDayMenu = false;
+    }
     wrapper.classList.add('dragging');
     e.preventDefault();
   });
@@ -1414,6 +1442,9 @@
       return;
     }
     const delta = e.clientX - dragStartX;
+    if (!dragMoved && Math.abs(delta) > 2) {
+      dragMoved = true;
+    }
     wrapper.scrollLeft = dragStartScroll - delta;
   });
 
@@ -1426,8 +1457,9 @@
   window.addEventListener('blur', stopDragScroll);
 
   wrapper.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
     if (suppressContextMenu || isDragScrolling) {
-      e.preventDefault();
+      return;
     }
   });
 
