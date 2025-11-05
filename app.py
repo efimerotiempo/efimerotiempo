@@ -422,6 +422,40 @@ def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
             skip_phase=skip_phase,
             skip_part=skip_part,
         )
+        preserved_starts = {}
+        if project_pid == pid_str:
+            for item in entry.get('tasks') or []:
+                if not isinstance(item, dict):
+                    continue
+                day_value = item.get('day')
+                payload = item.get('task')
+                if not day_value or not isinstance(payload, dict):
+                    continue
+                phase_value = str(payload.get('phase') or '').strip().lower()
+                if phase_value != phase_key:
+                    continue
+                part_value = _normalize_part_index(payload.get('part'))
+                if part_index is not None and part_value != part_index:
+                    continue
+                try:
+                    day_obj = date.fromisoformat(str(day_value)[:10])
+                    day_iso = day_obj.isoformat()
+                except Exception:
+                    continue
+                try:
+                    start_val = int(payload.get('start', 0) or 0)
+                except Exception:
+                    start_val = 0
+                key = part_value if part_value is not None else None
+                existing = preserved_starts.get(key)
+                if existing:
+                    existing_day = existing[0]
+                    existing_start = existing[1]
+                    if day_obj > existing_day:
+                        continue
+                    if day_obj == existing_day and start_val >= existing_start:
+                        continue
+                preserved_starts[key] = (day_obj, start_val, day_iso)
         if project_pid == pid_str:
             seg_starts = project_copy.get('segment_starts')
             if isinstance(seg_starts, dict):
@@ -447,6 +481,20 @@ def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
                         hours_list = seg_hours.get(key)
                         if isinstance(hours_list, list) and part_index < len(hours_list):
                             hours_list[part_index] = 0
+            if preserved_starts:
+                seg_starts_map = project_copy.setdefault('segment_starts', {})
+                hour_starts_map = project_copy.setdefault('segment_start_hours', {})
+                seg_list = seg_starts_map.setdefault(phase, [])
+                hour_list = hour_starts_map.setdefault(phase, [])
+                for part_key, info in preserved_starts.items():
+                    _, start_hour, day_iso = info
+                    idx = part_key if part_key is not None else 0
+                    while len(seg_list) <= idx:
+                        seg_list.append(None)
+                    while len(hour_list) <= idx:
+                        hour_list.append(0)
+                    seg_list[idx] = day_iso
+                    hour_list[idx] = start_hour
         project_copy['archived_shadow'] = True
         project_copy['kanban_archived'] = True
         project_copy['kanban_column'] = project_copy.get('kanban_column') or 'Ready to Archive'
