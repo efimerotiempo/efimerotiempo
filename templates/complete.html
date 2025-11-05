@@ -1530,7 +1530,7 @@ let draggedTaskElement = null;
           const isActivePhase = ph === t.dataset.phase;
           const partSuffix = isActivePhase ? phasePartSuffix : '';
           let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
-          if (isActivePhase && !isArchivedShadow) {
+          if (isActivePhase) {
             const partValue = normalizedPart;
             const partAttr = partValue ? ` data-part="${partValue}"` : '';
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
@@ -1600,7 +1600,7 @@ let draggedTaskElement = null;
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
         }
-        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones deshabilitadas.</div>');
+        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones limitadas.</div>');
       }
       if (info.image) {
           const imgUrl = `${STATIC_URL}${info.image}`;
