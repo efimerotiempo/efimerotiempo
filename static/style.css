@@ -629,6 +629,25 @@ tr.collapsed td:not(:first-child) { display: none; }
     background: #fff;
     z-index: 10;
 }
+.projects-table thead th.sortable {
+    cursor: pointer;
+}
+.projects-table thead th.sorted-asc::after,
+.projects-table thead th.sorted-desc::after {
+    content: '';
+    display: inline-block;
+    margin-left: 6px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+}
+.projects-table thead th.sorted-asc::after {
+    border-bottom: 7px solid #333;
+    transform: translateY(-2px);
+}
+.projects-table thead th.sorted-desc::after {
+    border-top: 7px solid #333;
+    transform: translateY(2px);
+}
 
 .project-form {
     border-collapse: collapse;
