@@ -380,6 +380,64 @@
   const historyList = document.getElementById('history-list');
   const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
   const historyTitle = document.getElementById('history-title');
+  let detachHistoryViewport = null;
+  let historyPositionFrame = null;
+
+  function centerHistoryModalNow() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    const content = historyModal.querySelector('.history-content');
+    if (!content) return;
+    const viewport = window.visualViewport || null;
+    let viewportWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 0;
+    let viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+    let offsetLeft = 0;
+    let offsetTop = 0;
+    if (viewport) {
+      viewportWidth = viewport.width;
+      viewportHeight = viewport.height;
+      offsetLeft = viewport.offsetLeft || viewport.pageLeft || viewport.left || 0;
+      offsetTop = viewport.offsetTop || viewport.pageTop || viewport.top || 0;
+    }
+    const contentWidth = content.offsetWidth;
+    const contentHeight = content.offsetHeight;
+    const safePadding = 16;
+    const targetLeft = offsetLeft + Math.max((viewportWidth - contentWidth) / 2, safePadding);
+    const targetTop = offsetTop + Math.max((viewportHeight - contentHeight) / 2, safePadding);
+    content.style.position = 'fixed';
+    content.style.left = `${Math.round(targetLeft)}px`;
+    content.style.top = `${Math.round(targetTop)}px`;
+  }
+
+  function scheduleHistoryModalCenter() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    if (historyPositionFrame !== null) return;
+    historyPositionFrame = requestAnimationFrame(() => {
+      historyPositionFrame = null;
+      centerHistoryModalNow();
+    });
+  }
+
+  function bindHistoryViewportTracking() {
+    if (!historyModal || detachHistoryViewport) return;
+    const viewport = window.visualViewport || null;
+    const handler = () => scheduleHistoryModalCenter();
+    window.addEventListener('resize', handler);
+    window.addEventListener('scroll', handler, { passive: true });
+    if (viewport) {
+      viewport.addEventListener('resize', handler);
+      viewport.addEventListener('scroll', handler);
+    }
+    detachHistoryViewport = () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('scroll', handler);
+      if (viewport) {
+        viewport.removeEventListener('resize', handler);
+        viewport.removeEventListener('scroll', handler);
+      }
+      detachHistoryViewport = null;
+    };
+  }
+
   const dayMenuModal = document.getElementById('day-menu-modal');
   const dayMenuClose = dayMenuModal ? dayMenuModal.querySelector('.day-menu-close') : null;
   const dayMenuTitle = document.getElementById('day-menu-title');
@@ -614,8 +672,20 @@
   }
 
   function closeHistoryModal() {
-    if (historyModal) {
-      historyModal.classList.remove('open');
+    if (!historyModal) return;
+    historyModal.classList.remove('open');
+    if (historyPositionFrame !== null) {
+      cancelAnimationFrame(historyPositionFrame);
+      historyPositionFrame = null;
+    }
+    if (detachHistoryViewport) {
+      detachHistoryViewport();
+    }
+    const content = historyModal.querySelector('.history-content');
+    if (content) {
+      content.style.left = '';
+      content.style.top = '';
+      content.style.position = '';
     }
   }
 
@@ -623,6 +693,7 @@
     if (!historyList) return;
     if (!Array.isArray(entries) || !entries.length) {
       historyList.innerHTML = '<div class="history-empty">No hay movimientos registrados.</div>';
+      scheduleHistoryModalCenter();
       return;
     }
     const html = entries
@@ -641,6 +712,7 @@
       })
       .join('');
     historyList.innerHTML = html;
+    scheduleHistoryModalCenter();
   }
 
   function openHistory(pid, phase, part, projectName, clientName) {
@@ -655,7 +727,9 @@
       historyTitle.textContent = `Historial - ${baseTitle}${suffix}`;
     }
     historyModal.classList.add('open');
+    bindHistoryViewportTracking();
     historyList.innerHTML = '<div class="history-loading">Cargando...</div>';
+    scheduleHistoryModalCenter();
     const params = new URLSearchParams({ pid, phase });
     if (part) params.append('part', part);
     fetch(`${HISTORY_URL}?${params.toString()}`, {
@@ -666,11 +740,13 @@
       .then(data => {
         const entries = Array.isArray(data.history) ? data.history : [];
         renderHistoryEntries(entries);
+        scheduleHistoryModalCenter();
       })
       .catch(() => {
         if (historyList) {
           historyList.innerHTML = '<div class="history-error">No se pudo cargar el historial.</div>';
         }
+        scheduleHistoryModalCenter();
       });
   }
 
