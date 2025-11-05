@@ -179,6 +179,119 @@ def _cleanup_auto_receiving_placeholder(project):
             return _remove_phase_references(project, AUTO_RECEIVING_PHASE)
     return False
 
+
+def _normalize_part_index(value):
+    """Return the integer index stored for a segmented phase part."""
+
+    if value in (None, '', 'None'):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and float(value).is_integer():
+        return int(value)
+    try:
+        text = str(value).strip()
+    except Exception:
+        return None
+    if not text or text.lower() == 'none':
+        return None
+    try:
+        return int(text)
+    except Exception:
+        return None
+
+
+def _rebalance_archived_phase_hours(entry, pid, phase, new_total, *, part_index=None):
+    """Update archived calendar tasks so their hours add up to ``new_total``."""
+
+    if not entry or new_total is None:
+        return
+    tasks = entry.get('tasks')
+    if not isinstance(tasks, list):
+        return
+    pid_str = str(pid or '').strip()
+    phase_key = str(phase or '').strip().lower()
+    if not pid_str or not phase_key:
+        return
+    try:
+        target_total = int(new_total)
+    except Exception:
+        try:
+            target_total = int(float(new_total))
+        except Exception:
+            return
+    if target_total < 0:
+        target_total = 0
+    matched_payloads = []
+    for item in tasks:
+        if not isinstance(item, dict):
+            continue
+        payload = item.get('task')
+        if not isinstance(payload, dict):
+            continue
+        payload_pid = str(payload.get('pid') or '').strip()
+        if payload_pid != pid_str:
+            continue
+        payload_phase = str(payload.get('phase') or '').strip().lower()
+        if payload_phase != phase_key:
+            continue
+        payload_part = _normalize_part_index(payload.get('part'))
+        if part_index is not None:
+            if payload_part != part_index:
+                continue
+        else:
+            if payload_part is not None:
+                continue
+        matched_payloads.append(payload)
+    if not matched_payloads:
+        return
+    previous_total = sum(max(_phase_total_hours(p.get('hours')), 0) for p in matched_payloads)
+    if previous_total <= 0:
+        matched_payloads[0]['hours'] = target_total
+        for payload in matched_payloads[1:]:
+            payload['hours'] = 0
+        return
+    scaled = []
+    floor_sum = 0
+    for payload in matched_payloads:
+        current = max(_phase_total_hours(payload.get('hours')), 0)
+        scaled_value = (current * target_total) / previous_total if previous_total else 0
+        floor_value = int(scaled_value)
+        fractional = scaled_value - floor_value
+        scaled.append([payload, floor_value, fractional, current])
+        floor_sum += floor_value
+    remainder = target_total - floor_sum
+    if remainder > 0:
+        scaled.sort(key=lambda item: (-item[2], -item[3]))
+        idx = 0
+        while remainder > 0 and scaled:
+            payload, value, frac, current = scaled[idx]
+            scaled[idx][1] = value + 1
+            remainder -= 1
+            idx = (idx + 1) % len(scaled)
+    elif remainder < 0:
+        scaled.sort(key=lambda item: (item[2], item[3]))
+        idx = 0
+        attempts = 0
+        max_attempts = len(scaled) * 4 if scaled else 0
+        while remainder < 0 and scaled and attempts < max_attempts:
+            payload, value, frac, current = scaled[idx]
+            if value > 0:
+                scaled[idx][1] = value - 1
+                remainder += 1
+            idx = (idx + 1) % len(scaled)
+            attempts += 1
+        if remainder < 0:
+            for i in range(len(scaled)):
+                if remainder >= 0:
+                    break
+                if scaled[i][1] > 0:
+                    scaled[i][1] -= 1
+                    remainder += 1
+    for payload, value, _fractional, _current in scaled:
+        payload['hours'] = max(int(value), 0)
+
+
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
@@ -5834,6 +5947,8 @@ def update_phase_hours():
     archived_entry = None
     is_archived = False
     active_project_id = proj.get('id') if proj else None
+    archived_update_hours = None
+    archived_update_part = None
     if not proj:
         archived_entries = load_archived_calendar_entries()
         for entry in archived_entries:
@@ -5920,7 +6035,8 @@ def update_phase_hours():
                 return jsonify({'error': 'Horas inválidas registradas en la fase'}), 400
 
             diff = hours - prev_total
-            new_value = current_parts[part_index] + diff
+            previous_part_value = current_parts[part_index]
+            new_value = previous_part_value + diff
             if new_value <= 0:
                 return jsonify({'error': 'La parte resultante debe ser mayor que cero'}), 400
 
@@ -5943,6 +6059,8 @@ def update_phase_hours():
                 worker_list = worker_map[phase]
                 if worker_list is not None and len(worker_list) < len(current_parts):
                     worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(current_parts) - len(worker_list)))
+            archived_update_hours = new_value
+            archived_update_part = part_index
         else:
             proj['phases'][phase] = hours
             if prev_total <= 0:
@@ -5962,6 +6080,8 @@ def update_phase_hours():
                     proj['segment_workers'].pop(phase, None)
                     if not proj['segment_workers']:
                         proj.pop('segment_workers')
+            archived_update_hours = hours
+            archived_update_part = None
         if phase == AUTO_RECEIVING_PHASE:
             proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
         else:
@@ -5970,6 +6090,14 @@ def update_phase_hours():
                     t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
                 ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
+    if is_archived and archived_entry and archived_update_hours is not None:
+        _rebalance_archived_phase_hours(
+            archived_entry,
+            pid,
+            phase,
+            archived_update_hours,
+            part_index=archived_update_part,
+        )
     if is_archived and archived_entries is not None:
         save_archived_calendar_entries(archived_entries)
     else:
