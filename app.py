@@ -5808,13 +5808,14 @@ def update_start_date():
 def update_phase_hours():
     """Modify hours for a specific phase."""
     data = request.get_json() or request.form
-    pid = data.get('pid')
+    pid_value = data.get('pid')
     phase = data.get('phase')
     hours_val = data.get('hours')
     part_val = data.get('part')
     next_url = data.get('next') or request.args.get('next') or url_for('project_list')
-    if not pid or not phase or hours_val is None:
+    if not pid_value or not phase or hours_val is None:
         return jsonify({'error': 'Datos incompletos'}), 400
+    pid = str(pid_value)
     try:
         hours = int(hours_val)
     except Exception:
@@ -5828,15 +5829,55 @@ def update_phase_hours():
         if part_index < 0:
             return jsonify({'error': 'Parte inválida'}), 400
     projects = get_projects()
-    proj = next((p for p in projects if p['id'] == pid), None)
+    proj = next((p for p in projects if str(p.get('id')) == pid), None)
+    archived_entries = None
+    archived_entry = None
+    is_archived = False
+    active_project_id = proj.get('id') if proj else None
+    if not proj:
+        archived_entries = load_archived_calendar_entries()
+        for entry in archived_entries:
+            entry_pid = str((entry or {}).get('pid') or '')
+            if entry_pid != pid:
+                continue
+            info = entry.get('project')
+            if not isinstance(info, dict):
+                continue
+            proj = info
+            archived_entry = entry
+            is_archived = True
+            active_project_id = proj.get('id') or pid
+            break
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
     proj.setdefault('auto_hours', {})
     if hours <= 0:
         removed = _remove_phase_references(proj, phase)
+        if removed and is_archived and archived_entry:
+            phase_lower = phase.lower()
+            tasks_list = archived_entry.get('tasks')
+            if isinstance(tasks_list, list):
+                archived_entry['tasks'] = [
+                    item
+                    for item in tasks_list
+                    if not (
+                        isinstance(item, dict)
+                        and isinstance(item.get('task'), dict)
+                        and str(item['task'].get('pid') or '').strip() == pid
+                        and str(item['task'].get('phase') or '').strip().lower() == phase_lower
+                    )
+                ]
         if not proj.get('phases'):
-            remove_project_and_preserve_schedule(projects, pid)
+            if is_archived and archived_entries is not None:
+                archived_entries = [e for e in archived_entries if e is not archived_entry]
+                save_archived_calendar_entries(archived_entries)
+                if request.is_json:
+                    return '', 204
+                return redirect(next_url)
+            remove_project_and_preserve_schedule(
+                projects, active_project_id if active_project_id is not None else pid_value
+            )
             if request.is_json:
                 return '', 204
             return redirect(next_url)
@@ -5929,8 +5970,11 @@ def update_phase_hours():
                     t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
                 ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
-    schedule_projects(projects)
-    save_projects(projects)
+    if is_archived and archived_entries is not None:
+        save_archived_calendar_entries(archived_entries)
+    else:
+        schedule_projects(projects)
+        save_projects(projects)
     if request.is_json:
         return '', 204
     return redirect(next_url)
