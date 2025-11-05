@@ -17,11 +17,8 @@
     <tr>
         <th>Nombre</th>
         <th>Cliente</th>
-        <th>Fecha inicio</th>
         <th>Fecha límite</th>
-        <th>Fecha material confirmado</th>
-        <th>En plazo</th>
-        <th>Planificado</th>
+        <th>Estado material</th>
         {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
             <th>{{ ph }}</th>
         {% endfor %}
@@ -32,34 +29,14 @@
     </thead>
     <tbody>
     {% for p in projects %}
-    <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
+    <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}">
         <td>{{ p.name }}{% if p.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %}</td>
         <td>{{ p.client }}</td>
-        <td>
-            {{ p.start_date }}
-            <form class="proj-start-form" method="post" action="{{ url_for('update_start_date') }}">
-                <input type="hidden" name="pid" value="{{ p.id }}">
-                <input type="hidden" name="next" value="{{ url_for('project_list') }}">
-                <input type="date" name="start_date" value="{{ p.start_date }}">
-            </form>
-        </td>
         <td>{{ p.due_date }}</td>
-        <td>{{ p.material_confirmed_date }}</td>
+        {% set status = p.material_status if p.material_status is defined and p.material_status else 'complete' %}
+        {% set status_label = material_status_labels.get(status, status|capitalize) %}
         <td>
-            {% if p.met %}
-                <span class="ok">&#10004;</span>
-            {% else %}
-                <span class="late">&#10060;</span>
-            {% endif %}
-        </td>
-        <td class="plan-col">
-            {% if p.plan_state == 'all' %}
-                <span class="ok">&#9679;</span>
-            {% elif p.plan_state == 'partial' %}
-                <span class="unplanned">&#9679;</span>
-            {% else %}
-                <span class="late">&#9679;</span>
-            {% endif %}
+            <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span>
         </td>
         {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
             <td>

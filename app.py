@@ -3517,6 +3517,12 @@ def calendar_view():
         material_status_map[str(archived_pid)] = 'archived'
         material_missing_map.setdefault(str(archived_pid), [])
 
+    for row in filtered_projects:
+        pid = row.get('id')
+        if pid is None:
+            continue
+        row['material_status'] = material_status_map.get(str(pid), 'complete')
+
     manual_index = {}
     manual_bucket_items = []
     if manual_entries:
@@ -4837,7 +4843,18 @@ def project_list():
         projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
     start_map = phase_start_map(projects)
     hours_map = load_daily_hours()
+    material_status_map, _ = compute_material_status_map(projects)
+    for proj in projects:
+        pid = proj.get('id')
+        if pid is None:
+            continue
+        proj['material_status'] = material_status_map.get(str(pid), 'complete')
     projects = expand_for_display(projects)
+    for proj in projects:
+        pid = proj.get('id')
+        if pid is None:
+            continue
+        proj['material_status'] = material_status_map.get(str(pid), 'complete')
     return render_template(
         'projects.html',
         projects=projects,
@@ -4849,6 +4866,7 @@ def project_list():
         start_map=start_map,
         hours=hours_map,
         palette=COLORS,
+        material_status_labels=MATERIAL_STATUS_LABELS,
     )
 
 
@@ -5623,6 +5641,11 @@ def complete():
         project_map[pid] = info
         project_map[str(pid)] = info
     start_map = phase_start_map(projects)
+    for row in filtered_projects:
+        pid = row.get('id')
+        if pid is None:
+            continue
+        row['material_status'] = material_status_map.get(str(pid), 'complete')
     if project_id_filter and not project_filter:
         info = project_map.get(project_id_filter)
         if info:
