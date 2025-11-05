@@ -211,6 +211,12 @@ table.schedule td.weekend-cell {
 
 .calendar-flex { display: flex; align-items: flex-start; position: relative; width: 100%; }
 .schedule-wrapper { flex: 1; overflow-x: auto; }
+
+.schedule-wrapper.dragging,
+.schedule-wrapper.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
 .unplanned-panel {
     width: 2500px;
     border-left: 1px solid #ccc;

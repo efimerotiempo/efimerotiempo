@@ -1377,6 +1377,60 @@
     wrapper.scrollLeft += e.deltaY;
   });
 
+  let isDragScrolling = false;
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragWithRightButton = false;
+  let suppressContextMenu = false;
+
+  function stopDragScroll() {
+    if (!isDragScrolling && !suppressContextMenu) return;
+    isDragScrolling = false;
+    if (suppressContextMenu) {
+      setTimeout(() => { suppressContextMenu = false; }, 0);
+    }
+    dragWithRightButton = false;
+    wrapper.classList.remove('dragging');
+  }
+
+  wrapper.addEventListener('mousedown', (e) => {
+    const wantsShiftDrag = e.button === 0 && e.shiftKey;
+    const wantsRightDrag = e.button === 2;
+    if (!wantsShiftDrag && !wantsRightDrag) return;
+    dragStartX = e.clientX;
+    dragStartScroll = wrapper.scrollLeft;
+    isDragScrolling = true;
+    dragWithRightButton = wantsRightDrag;
+    suppressContextMenu = wantsRightDrag;
+    wrapper.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragScrolling) return;
+    const requiredButton = dragWithRightButton ? 2 : 1;
+    if ((e.buttons & requiredButton) === 0) {
+      stopDragScroll();
+      return;
+    }
+    const delta = e.clientX - dragStartX;
+    wrapper.scrollLeft = dragStartScroll - delta;
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isDragScrolling) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    stopDragScroll();
+  });
+
+  window.addEventListener('blur', stopDragScroll);
+
+  wrapper.addEventListener('contextmenu', (e) => {
+    if (suppressContextMenu || isDragScrolling) {
+      e.preventDefault();
+    }
+  });
+
   const todayBtn = document.getElementById('today-btn');
   if (todayBtn) {
     todayBtn.addEventListener('click', () => {
