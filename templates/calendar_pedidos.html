@@ -114,7 +114,7 @@
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
               data-plan="{{ plan_value or '' }}">
-            <td class="proj-title-cell">
+            <td class="proj-title-cell" data-sort="{{ (title_value or project_value)|default('', true)|lower }}">
               {% if code_value %}
               <span class="proj-code proj-code-badge"
                     data-project="{{ project_value }}"
@@ -124,17 +124,36 @@
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
             </td>
-            <td class="due-cell">
+            <td class="due-cell" data-sort="{{ item.due or '' }}" data-sort-type="date">
             {% if due_display %}
               <span class="proj-due">{{ due_display }}</span>
             {% endif %}
             </td>
-            <td class="start-cell">
+            <td class="start-cell" data-sort="{{ plan_value or '' }}" data-sort-type="date">
             {% if start_display %}
               <span class="proj-start">{{ start_display }}</span>
             {% endif %}
             </td>
-            <td class="order-date-cell">
+            {% set order_meta = namespace(first=None) %}
+            {% set count_meta = namespace(value=None) %}
+            {% set link_meta = namespace(value=None) %}
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_value = detail.order_date %}
+                {% if order_value %}
+                    {% if order_meta.first is none or order_value < order_meta.first %}
+                        {% set order_meta.first = order_value %}
+                    {% endif %}
+                {% endif %}
+                {% set order_days = detail.order_days %}
+                {% if order_days is not none and count_meta.value is none %}
+                    {% set count_meta.value = order_days %}
+                {% endif %}
+                {% if link_meta.value is none and link %}
+                    {% set link_meta.value = link|lower %}
+                {% endif %}
+            {% endfor %}
+            <td class="order-date-cell" data-sort="{{ order_meta.first or '' }}" data-sort-type="date">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set order_value = detail.order_date %}
@@ -151,7 +170,7 @@
               </div>
             {% endfor %}
             </td>
-            <td class="order-count-cell">
+            <td class="order-count-cell" data-sort="{{ count_meta.value if count_meta.value is not none else '' }}" data-sort-type="number">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set order_days = detail.order_days %}
@@ -165,7 +184,7 @@
               </div>
             {% endfor %}
             </td>
-            <td class="links-cell">
+            <td class="links-cell" data-sort="{{ link_meta.value or '' }}">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set column_value = detail.column|default('', true) %}
@@ -215,6 +234,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const TABLE_COLLATOR = typeof Intl !== 'undefined'
+    ? new Intl.Collator('es', { sensitivity: 'base', numeric: true })
+    : null;
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const COMPLETE_URL = "{{ url_for('complete') }}";
@@ -236,6 +258,113 @@ document.addEventListener('DOMContentLoaded', () => {
   const initialFilterValue = pageParams.get('filter');
   const initialHighlightPid = pageParams.get('highlight');
   const START_DAY_HIGHLIGHT_CLASS = 'start-day-highlight';
+
+  function parseSortableCell(cell) {
+    if (!cell) {
+      return { blank: true, value: '', type: 'text' };
+    }
+    const raw = cell.dataset.sort !== undefined ? cell.dataset.sort : cell.textContent.trim();
+    const type = cell.dataset.sortType || 'text';
+    const rawString = raw === undefined || raw === null ? '' : `${raw}`;
+    const isBlank = rawString.trim() === '';
+    if (type === 'number') {
+      const num = Number(rawString);
+      return { blank: isBlank, value: Number.isNaN(num) ? 0 : num, type };
+    }
+    if (type === 'date') {
+      if (isBlank) {
+        return { blank: true, value: 0, type };
+      }
+      let time = Number.NaN;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawString)) {
+        time = Date.parse(rawString);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawString)) {
+        const [day, month, year] = rawString.split('/').map(Number);
+        if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+          time = Date.UTC(year, month - 1, day);
+        }
+      } else {
+        time = Date.parse(rawString);
+      }
+      if (Number.isNaN(time)) {
+        return { blank: true, value: 0, type };
+      }
+      return { blank: false, value: time, type };
+    }
+    return { blank: isBlank, value: rawString.toLowerCase(), type: 'text' };
+  }
+
+  function applyColumna1Sort(table, th, order) {
+    if (!table || !th) return;
+    const tbody = table.tBodies[0];
+    if (!tbody) return;
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const index = headers.indexOf(th);
+    if (index === -1) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+      const aCell = a.children[index];
+      const bCell = b.children[index];
+      const aVal = parseSortableCell(aCell);
+      const bVal = parseSortableCell(bCell);
+      if (aVal.blank && bVal.blank) return 0;
+      if (aVal.blank !== bVal.blank) {
+        return aVal.blank ? 1 : -1;
+      }
+      let comparison = 0;
+      if (aVal.type === 'number' && bVal.type === 'number') {
+        comparison = aVal.value - bVal.value;
+      } else if (aVal.type === 'date' && bVal.type === 'date') {
+        comparison = aVal.value - bVal.value;
+      } else if (TABLE_COLLATOR) {
+        comparison = TABLE_COLLATOR.compare(aVal.value, bVal.value);
+      } else {
+        comparison = aVal.value < bVal.value ? -1 : aVal.value > bVal.value ? 1 : 0;
+      }
+      if (comparison === 0) return 0;
+      return order === 'asc' ? (comparison < 0 ? -1 : 1) : (comparison < 0 ? 1 : -1);
+    });
+    rows.forEach((row) => tbody.appendChild(row));
+  }
+
+  function updateColumna1HeaderState(headers, active, order) {
+    headers.forEach((header) => {
+      if (header === active) {
+        header.dataset.sortOrder = order;
+        header.classList.toggle('sorted-asc', order === 'asc');
+        header.classList.toggle('sorted-desc', order === 'desc');
+      } else {
+        header.dataset.sortOrder = '';
+        header.classList.remove('sorted-asc', 'sorted-desc');
+      }
+    });
+  }
+
+  function reapplyColumna1Sort(table) {
+    if (!table) return;
+    const active = table.querySelector('thead th.sorted-asc, thead th.sorted-desc');
+    if (!active) return;
+    const order = active.dataset.sortOrder || (active.classList.contains('sorted-desc') ? 'desc' : 'asc');
+    applyColumna1Sort(table, active, order || 'asc');
+  }
+
+  function initColumna1Sorting(root = document) {
+    root.querySelectorAll('.columna-1-table').forEach((table) => {
+      const tbody = table.tBodies[0];
+      if (!tbody) return;
+      const headers = Array.from(table.querySelectorAll('thead th'));
+      headers.forEach((th, index) => {
+        if (th.dataset.sortableInit === '1') return;
+        th.dataset.sortableInit = '1';
+        th.classList.add('sortable');
+        th.addEventListener('click', () => {
+          const order = th.dataset.sortOrder === 'asc' ? 'desc' : 'asc';
+          updateColumna1HeaderState(headers, th, order);
+          applyColumna1Sort(table, th, order);
+        });
+      });
+    });
+  }
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -1687,6 +1816,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   attachHighlightHandlers();
   updateDueWarnings();
+  initColumna1Sorting();
   initColumnResizing();
 
   const projectList = document.querySelector('.columna-1');
@@ -1784,6 +1914,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const titleCell = document.createElement('td');
           titleCell.className = 'proj-title-cell';
+          const titleSortValue = (resolvedTitle || projectValue || '').toLocaleLowerCase('es-ES');
+          titleCell.dataset.sort = titleSortValue;
           if (code) {
             const codeSpan = document.createElement('span');
             codeSpan.className = 'proj-code proj-code-badge';
@@ -1802,6 +1934,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const dueCell = document.createElement('td');
           dueCell.className = 'due-cell';
+          dueCell.dataset.sortType = 'date';
+          dueCell.dataset.sort = item.due ? String(item.due).trim() : '';
           if (dueDisplay) {
             const dueSpan = document.createElement('span');
             dueSpan.className = 'proj-due';
@@ -1812,6 +1946,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const startCell = document.createElement('td');
           startCell.className = 'start-cell';
+          startCell.dataset.sortType = 'date';
+          startCell.dataset.sort = planValue;
           if (startDisplay) {
             const startSpan = document.createElement('span');
             startSpan.className = 'proj-start';
@@ -1822,14 +1958,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const orderCell = document.createElement('td');
           orderCell.className = 'order-date-cell';
+          orderCell.dataset.sortType = 'date';
 
           const countCell = document.createElement('td');
           countCell.className = 'order-count-cell';
+          countCell.dataset.sortType = 'number';
 
           const linksCell = document.createElement('td');
           linksCell.className = 'links-cell';
+          linksCell.dataset.sort = '';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
           const links = Array.isArray(item.links) ? item.links : [];
+          let earliestOrder = '';
+          let firstCount = '';
+          let firstLinkSort = '';
           links.forEach((link, idx) => {
             const detail = linkDetails[idx] || {};
             const orderDiv = document.createElement('div');
@@ -1840,6 +1982,9 @@ document.addEventListener('DOMContentLoaded', () => {
               orderDiv.dataset.order = orderValue;
               orderDiv.textContent = formatDueDisplay(orderValue);
               if (!orderDiv.textContent) orderDiv.textContent = orderValue;
+              if (!earliestOrder || orderValue < earliestOrder) {
+                earliestOrder = orderValue;
+              }
             } else if (orderRaw) {
               orderDiv.textContent = orderRaw;
             } else {
@@ -1854,6 +1999,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Number.isFinite(daysNumber)) {
               countDiv.dataset.days = `${daysNumber}`;
               countDiv.textContent = `${daysNumber}`;
+              if (!firstCount) {
+                firstCount = `${daysNumber}`;
+              }
             } else {
               countDiv.appendChild(document.createTextNode('\u00a0'));
             }
@@ -1874,8 +2022,14 @@ document.addEventListener('DOMContentLoaded', () => {
             linkDiv.dataset.column = columnValue;
             if (tooltip) linkDiv.title = tooltip;
             linkDiv.textContent = link;
+            if (!firstLinkSort && link) {
+              firstLinkSort = link.toLocaleLowerCase('es-ES');
+            }
             linksCell.appendChild(linkDiv);
           });
+          orderCell.dataset.sort = earliestOrder;
+          countCell.dataset.sort = firstCount;
+          linksCell.dataset.sort = firstLinkSort;
           row.appendChild(orderCell);
           row.appendChild(countCell);
           row.appendChild(linksCell);
@@ -1883,6 +2037,8 @@ document.addEventListener('DOMContentLoaded', () => {
           resolveRowPid(row);
           container.appendChild(row);
         });
+        const columnaTable = document.querySelector('.columna-1-table');
+        reapplyColumna1Sort(columnaTable);
         filterInput.dispatchEvent(new Event('input'));
         reapplyHighlight();
         updateDueWarnings();
