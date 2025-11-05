@@ -292,6 +292,206 @@ def _rebalance_archived_phase_hours(entry, pid, phase, new_total, *, part_index=
         payload['hours'] = max(int(value), 0)
 
 
+def _build_archived_frozen_tasks(entry, *, skip_phase=None, skip_part=None):
+    """Return frozen-task payloads for an archived calendar entry."""
+
+    if not isinstance(entry, dict):
+        return []
+
+    skip_phase_key = (skip_phase or '').strip().lower()
+    skip_has_phase = bool(skip_phase_key)
+    skip_part_index = _normalize_part_index(skip_part)
+    project = entry.get('project') or {}
+    pid = str(project.get('id') or entry.get('pid') or '').strip()
+    if not pid:
+        return []
+
+    frozen = []
+    for item in entry.get('tasks') or []:
+        if not isinstance(item, dict):
+            continue
+        worker = item.get('worker')
+        day = item.get('day')
+        payload = item.get('task')
+        if not worker or not day or not isinstance(payload, dict):
+            continue
+        phase = str(payload.get('phase') or '').strip().lower()
+        part_value = _normalize_part_index(payload.get('part'))
+        if skip_has_phase and phase == skip_phase_key:
+            if skip_part_index is None:
+                if part_value is None:
+                    continue
+            elif part_value == skip_part_index:
+                continue
+        hours = _phase_total_hours(payload.get('hours'))
+        if hours <= 0:
+            continue
+        start = payload.get('start') or 0
+        try:
+            start = int(start)
+        except Exception:
+            start = 0
+        frozen_task = copy.deepcopy(payload)
+        frozen_task['pid'] = pid
+        frozen_task['phase'] = payload.get('phase')
+        frozen_task['hours'] = max(int(hours), 0)
+        frozen_task['start'] = max(start, 0)
+        frozen_task['worker'] = worker
+        frozen_task['day'] = day
+        frozen.append(frozen_task)
+
+    frozen.sort(
+        key=lambda t: (
+            str(t.get('day') or ''),
+            t.get('start', 0),
+            str(t.get('worker') or ''),
+        )
+    )
+    return frozen
+
+
+def _extract_archived_tasks_from_schedule(schedule, pid):
+    """Return archived task payloads for ``pid`` from ``schedule``."""
+
+    pid_str = str(pid or '').strip()
+    if not pid_str:
+        return []
+
+    tasks = []
+    for worker, days in schedule.items():
+        if not isinstance(days, dict):
+            continue
+        for day, entries in days.items():
+            if not isinstance(entries, list):
+                continue
+            for task in entries:
+                if str(task.get('pid') or '').strip() != pid_str:
+                    continue
+                task_copy = copy.deepcopy(task)
+                task_copy['archived_shadow'] = True
+                task_copy['frozen'] = True
+                task_copy['color'] = '#d9d9d9'
+                task_copy['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+                task_copy['pid'] = pid_str
+                tasks.append({
+                    'worker': worker,
+                    'day': day,
+                    'task': task_copy,
+                })
+
+    tasks.sort(
+        key=lambda item: (
+            str(item.get('day') or ''),
+            (item.get('task') or {}).get('start', 0),
+            str(item.get('worker') or ''),
+        )
+    )
+    return tasks
+
+
+def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
+    """Reschedule archived tasks after updating ``phase`` hours."""
+
+    if not entries:
+        return False
+
+    pid_str = str(pid or '').strip()
+    phase_key = (phase or '').strip().lower()
+    if not pid_str or not phase_key:
+        return False
+
+    dataset = []
+    entry_map = {}
+    for entry in entries:
+        project = entry.get('project')
+        if not isinstance(project, dict):
+            continue
+        project_pid = str(project.get('id') or entry.get('pid') or '').strip()
+        if not project_pid:
+            continue
+        project_copy = copy.deepcopy(project)
+        project_copy['id'] = project_pid
+        project_copy.setdefault('phases', {})
+        project_copy.setdefault('assigned', {})
+        project_copy.setdefault('auto_hours', {})
+        project_copy.setdefault('frozen_tasks', [])
+        skip_phase = phase if project_pid == pid_str else None
+        skip_part = part_index if project_pid == pid_str else None
+        project_copy['frozen_tasks'] = _build_archived_frozen_tasks(
+            entry,
+            skip_phase=skip_phase,
+            skip_part=skip_part,
+        )
+        if project_pid == pid_str:
+            seg_starts = project_copy.get('segment_starts')
+            if isinstance(seg_starts, dict):
+                for key in list(seg_starts.keys()):
+                    normalized = str(key).strip().lower()
+                    if normalized != phase_key:
+                        continue
+                    if part_index is None:
+                        seg_starts.pop(key, None)
+                    else:
+                        parts = seg_starts.get(key)
+                        if isinstance(parts, list) and part_index < len(parts):
+                            parts[part_index] = None
+            seg_hours = project_copy.get('segment_start_hours')
+            if isinstance(seg_hours, dict):
+                for key in list(seg_hours.keys()):
+                    normalized = str(key).strip().lower()
+                    if normalized != phase_key:
+                        continue
+                    if part_index is None:
+                        seg_hours.pop(key, None)
+                    else:
+                        hours_list = seg_hours.get(key)
+                        if isinstance(hours_list, list) and part_index < len(hours_list):
+                            hours_list[part_index] = 0
+        project_copy['archived_shadow'] = True
+        project_copy['kanban_archived'] = True
+        project_copy['kanban_column'] = project_copy.get('kanban_column') or 'Ready to Archive'
+        project_copy.setdefault('material_status', 'archived')
+        project_copy.setdefault('material_missing_titles', [])
+        dataset.append(project_copy)
+        entry_map[project_pid] = {
+            'entry': entry,
+            'project_ref': project,
+            'project_copy': project_copy,
+        }
+
+    if pid_str not in entry_map:
+        return False
+
+    try:
+        schedule_map, _conflicts = schedule_projects(dataset)
+    except Exception:
+        return False
+
+    for project_pid, info in entry_map.items():
+        entry = info['entry']
+        project_copy = info['project_copy']
+        project_ref = info['project_ref']
+        tasks = _extract_archived_tasks_from_schedule(schedule_map, project_pid)
+        entry['tasks'] = tasks
+        frozen_payloads = []
+        for item in tasks:
+            payload = copy.deepcopy(item.get('task') or {})
+            payload['worker'] = item.get('worker')
+            payload['day'] = item.get('day')
+            frozen_payloads.append(payload)
+        project_copy['frozen_tasks'] = frozen_payloads
+        project_ref.clear()
+        project_ref.update(project_copy)
+        project_ref['id'] = project_pid
+        project_ref['archived_shadow'] = True
+        project_ref['kanban_archived'] = True
+        project_ref['kanban_column'] = project_ref.get('kanban_column') or 'Ready to Archive'
+        project_ref.setdefault('material_status', 'archived')
+        project_ref.setdefault('material_missing_titles', [])
+
+    return True
+
+
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
@@ -6090,15 +6290,23 @@ def update_phase_hours():
                     t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
                 ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
-    if is_archived and archived_entry and archived_update_hours is not None:
-        _rebalance_archived_phase_hours(
-            archived_entry,
-            pid,
-            phase,
-            archived_update_hours,
-            part_index=archived_update_part,
-        )
+    rescheduled = False
     if is_archived and archived_entries is not None:
+        if archived_entry and archived_update_hours is not None:
+            rescheduled = _reschedule_archived_phase_hours(
+                archived_entries,
+                pid,
+                phase,
+                part_index=archived_update_part,
+            )
+            if not rescheduled:
+                _rebalance_archived_phase_hours(
+                    archived_entry,
+                    pid,
+                    phase,
+                    archived_update_hours,
+                    part_index=archived_update_part,
+                )
         save_archived_calendar_entries(archived_entries)
     else:
         schedule_projects(projects)
