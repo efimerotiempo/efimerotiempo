@@ -352,6 +352,7 @@
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
@@ -379,6 +380,64 @@
   const historyList = document.getElementById('history-list');
   const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
   const historyTitle = document.getElementById('history-title');
+  let detachHistoryViewport = null;
+  let historyPositionFrame = null;
+
+  function centerHistoryModalNow() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    const content = historyModal.querySelector('.history-content');
+    if (!content) return;
+    const viewport = window.visualViewport || null;
+    let viewportWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 0;
+    let viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+    let offsetLeft = 0;
+    let offsetTop = 0;
+    if (viewport) {
+      viewportWidth = viewport.width;
+      viewportHeight = viewport.height;
+      offsetLeft = viewport.offsetLeft || viewport.pageLeft || viewport.left || 0;
+      offsetTop = viewport.offsetTop || viewport.pageTop || viewport.top || 0;
+    }
+    const contentWidth = content.offsetWidth;
+    const contentHeight = content.offsetHeight;
+    const safePadding = 16;
+    const targetLeft = offsetLeft + Math.max((viewportWidth - contentWidth) / 2, safePadding);
+    const targetTop = offsetTop + Math.max((viewportHeight - contentHeight) / 2, safePadding);
+    content.style.position = 'fixed';
+    content.style.left = `${Math.round(targetLeft)}px`;
+    content.style.top = `${Math.round(targetTop)}px`;
+  }
+
+  function scheduleHistoryModalCenter() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    if (historyPositionFrame !== null) return;
+    historyPositionFrame = requestAnimationFrame(() => {
+      historyPositionFrame = null;
+      centerHistoryModalNow();
+    });
+  }
+
+  function bindHistoryViewportTracking() {
+    if (!historyModal || detachHistoryViewport) return;
+    const viewport = window.visualViewport || null;
+    const handler = () => scheduleHistoryModalCenter();
+    window.addEventListener('resize', handler);
+    window.addEventListener('scroll', handler, { passive: true });
+    if (viewport) {
+      viewport.addEventListener('resize', handler);
+      viewport.addEventListener('scroll', handler);
+    }
+    detachHistoryViewport = () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('scroll', handler);
+      if (viewport) {
+        viewport.removeEventListener('resize', handler);
+        viewport.removeEventListener('scroll', handler);
+      }
+      detachHistoryViewport = null;
+    };
+  }
+
   const dayMenuModal = document.getElementById('day-menu-modal');
   const dayMenuClose = dayMenuModal ? dayMenuModal.querySelector('.day-menu-close') : null;
   const dayMenuTitle = document.getElementById('day-menu-title');
@@ -395,6 +454,67 @@
         year: 'numeric',
       })
     : null;
+
+  const NO_BORDER_WORKERS = new Set(['Mecanizar', 'Tratamiento']);
+  const NO_BORDER_PHASES = new Set(['vacaciones', 'mecanizar', 'tratamiento']);
+
+  function getWorkerDayLimit(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function findWorkerRow(worker) {
+    if (!worker) return null;
+    return Array.from(document.querySelectorAll('tr[data-worker]')).find(row => row.dataset.worker === worker) || null;
+  }
+
+  function findWorkerDayCell(worker, dateText) {
+    if (!worker || !dateText) return null;
+    const row = findWorkerRow(worker);
+    if (!row) return null;
+    return Array.from(row.querySelectorAll('td[data-date]')).find(td => td.dataset.date === dateText) || null;
+  }
+
+  function recomputeWorkerDayCell(worker, dateText) {
+    const cell = findWorkerDayCell(worker, dateText);
+    if (!cell) return;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    let total = 0;
+    let hasNoBorderPhase = NO_BORDER_WORKERS.has(worker);
+    tasks.forEach(task => {
+      const phase = (task.dataset.phase || '').toLowerCase();
+      if (NO_BORDER_PHASES.has(phase)) {
+        hasNoBorderPhase = true;
+      }
+      const hoursVal = Number(task.dataset.hours);
+      if (Number.isFinite(hoursVal)) {
+        total += hoursVal;
+      }
+    });
+    const limit = getWorkerDayLimit(worker, dateText);
+    if (hasNoBorderPhase) {
+      cell.classList.add('vacation-day');
+      cell.classList.remove('incomplete');
+      return;
+    }
+    cell.classList.remove('vacation-day');
+    if (total < limit) {
+      cell.classList.add('incomplete');
+    } else {
+      cell.classList.remove('incomplete');
+    }
+  }
 
   function clampDayHours(value) {
     const num = Number(value);
@@ -552,8 +672,20 @@
   }
 
   function closeHistoryModal() {
-    if (historyModal) {
-      historyModal.classList.remove('open');
+    if (!historyModal) return;
+    historyModal.classList.remove('open');
+    if (historyPositionFrame !== null) {
+      cancelAnimationFrame(historyPositionFrame);
+      historyPositionFrame = null;
+    }
+    if (detachHistoryViewport) {
+      detachHistoryViewport();
+    }
+    const content = historyModal.querySelector('.history-content');
+    if (content) {
+      content.style.left = '';
+      content.style.top = '';
+      content.style.position = '';
     }
   }
 
@@ -561,6 +693,7 @@
     if (!historyList) return;
     if (!Array.isArray(entries) || !entries.length) {
       historyList.innerHTML = '<div class="history-empty">No hay movimientos registrados.</div>';
+      scheduleHistoryModalCenter();
       return;
     }
     const html = entries
@@ -579,6 +712,7 @@
       })
       .join('');
     historyList.innerHTML = html;
+    scheduleHistoryModalCenter();
   }
 
   function openHistory(pid, phase, part, projectName, clientName) {
@@ -593,7 +727,9 @@
       historyTitle.textContent = `Historial - ${baseTitle}${suffix}`;
     }
     historyModal.classList.add('open');
+    bindHistoryViewportTracking();
     historyList.innerHTML = '<div class="history-loading">Cargando...</div>';
+    scheduleHistoryModalCenter();
     const params = new URLSearchParams({ pid, phase });
     if (part) params.append('part', part);
     fetch(`${HISTORY_URL}?${params.toString()}`, {
@@ -604,11 +740,13 @@
       .then(data => {
         const entries = Array.isArray(data.history) ? data.history : [];
         renderHistoryEntries(entries);
+        scheduleHistoryModalCenter();
       })
       .catch(() => {
         if (historyList) {
           historyList.innerHTML = '<div class="history-error">No se pudo cargar el historial.</div>';
         }
+        scheduleHistoryModalCenter();
       });
   }
 
@@ -686,6 +824,14 @@
         return;
       }
       ev.preventDefault();
+      if (skipNextDayMenu) {
+        skipNextDayMenu = false;
+        if (skipDayMenuReset) {
+          clearTimeout(skipDayMenuReset);
+          skipDayMenuReset = null;
+        }
+        return;
+      }
       openDayMenu(row.dataset.worker, cell.dataset.date);
     });
   });
@@ -1315,6 +1461,84 @@
     wrapper.scrollLeft += e.deltaY;
   });
 
+  let isDragScrolling = false;
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragWithRightButton = false;
+  let suppressContextMenu = false;
+  let dragMoved = false;
+  let skipNextDayMenu = false;
+  let skipDayMenuReset = null;
+
+  function stopDragScroll() {
+    if (!isDragScrolling && !suppressContextMenu) return;
+    if (dragWithRightButton && dragMoved) {
+      skipNextDayMenu = true;
+      if (skipDayMenuReset) {
+        clearTimeout(skipDayMenuReset);
+      }
+      skipDayMenuReset = setTimeout(() => {
+        skipNextDayMenu = false;
+        skipDayMenuReset = null;
+      }, 200);
+    }
+    isDragScrolling = false;
+    if (suppressContextMenu) {
+      setTimeout(() => { suppressContextMenu = false; }, 0);
+    }
+    dragWithRightButton = false;
+    dragMoved = false;
+    wrapper.classList.remove('dragging');
+  }
+
+  wrapper.addEventListener('mousedown', (e) => {
+    const wantsShiftDrag = e.button === 0 && e.shiftKey;
+    const wantsRightDrag = e.button === 2;
+    if (!wantsShiftDrag && !wantsRightDrag) return;
+    dragStartX = e.clientX;
+    dragStartScroll = wrapper.scrollLeft;
+    isDragScrolling = true;
+    dragWithRightButton = wantsRightDrag;
+    suppressContextMenu = wantsRightDrag;
+    dragMoved = false;
+    if (wantsRightDrag && skipDayMenuReset) {
+      clearTimeout(skipDayMenuReset);
+      skipDayMenuReset = null;
+      skipNextDayMenu = false;
+    }
+    wrapper.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragScrolling) return;
+    const requiredButton = dragWithRightButton ? 2 : 1;
+    if ((e.buttons & requiredButton) === 0) {
+      stopDragScroll();
+      return;
+    }
+    const delta = e.clientX - dragStartX;
+    if (!dragMoved && Math.abs(delta) > 2) {
+      dragMoved = true;
+    }
+    wrapper.scrollLeft = dragStartScroll - delta;
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isDragScrolling) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    stopDragScroll();
+  });
+
+  window.addEventListener('blur', stopDragScroll);
+
+  wrapper.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (suppressContextMenu || isDragScrolling) {
+      return;
+    }
+  });
+
   const todayBtn = document.getElementById('today-btn');
   if (todayBtn) {
     todayBtn.addEventListener('click', () => {
@@ -1414,6 +1638,7 @@ let draggedTaskElement = null;
       let html = `<div class="popup-section popup-header"><strong>${displayName}${blockedBadge} - ${displayClient} - ${t.dataset.phase}${phasePartSuffix}</strong></div>`;
       const startMap = START_DATA[t.dataset.pid] || {};
       const startVal = startMap[t.dataset.phase] || '';
+      const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
       const metaLines = [];
       const status = (info.material_status || '').toString();
       if (status === 'missing') {
@@ -1496,7 +1721,7 @@ let draggedTaskElement = null;
           const isActivePhase = ph === t.dataset.phase;
           const partSuffix = isActivePhase ? phasePartSuffix : '';
           let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
-          if (isActivePhase && !isArchivedShadow) {
+          if (isActivePhase) {
             const partValue = normalizedPart;
             const partAttr = partValue ? ` data-part="${partValue}"` : '';
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
@@ -1557,11 +1782,15 @@ let draggedTaskElement = null;
           </div>
         `);
       } else {
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
         if (info && info.observations) {
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
         }
-        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones deshabilitadas.</div>');
+        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones limitadas.</div>');
       }
       if (info.image) {
         const imgUrl = `${STATIC_URL}${info.image}`;
@@ -1606,6 +1835,69 @@ let draggedTaskElement = null;
           } catch (error) {
             console.error('No se pudo abrir Calendario pedidos:', error);
           }
+        });
+      }
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              const affectedCells = new Set();
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  const row = taskEl.closest('tr[data-worker]');
+                  const worker = row ? row.dataset.worker : null;
+                  const date = taskEl.dataset.day || null;
+                  taskEl.remove();
+                  if (worker && date) {
+                    affectedCells.add(`${worker}|||${date}`);
+                  }
+                }
+              });
+              affectedCells.forEach(key => {
+                const [worker, date] = key.split('|||');
+                recomputeWorkerDayCell(worker, date);
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_phases)) {
+                  projectInfo.frozen_phases = projectInfo.frozen_phases.filter(ph => ph !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
       }
       const del = document.getElementById('del-btn');
