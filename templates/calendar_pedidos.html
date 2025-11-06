@@ -1,6 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario pedidos</h2>
+<form id="quick-card-form" class="quick-card-form">
+  <label class="quick-card-field" for="quick-card-date">
+    <span>Fecha</span>
+    <input type="date" id="quick-card-date" name="date" required>
+  </label>
+  <label class="quick-card-field" for="quick-card-title">
+    <span>Título</span>
+    <input type="text" id="quick-card-title" name="title" placeholder="Título del pedido" required>
+  </label>
+  <button type="submit">Crear tarjeta</button>
+</form>
 <input type="text" id="filter-input" placeholder="Filtrar por título o cliente">
 <div class="pedidos-wrapper">
 <div class="pedidos-calendar-container">
@@ -258,6 +269,61 @@ document.addEventListener('DOMContentLoaded', () => {
   const initialFilterValue = pageParams.get('filter');
   const initialHighlightPid = pageParams.get('highlight');
   const START_DAY_HIGHLIGHT_CLASS = 'start-day-highlight';
+  const quickCardForm = document.getElementById('quick-card-form');
+  const quickCardDate = document.getElementById('quick-card-date');
+  const quickCardTitle = document.getElementById('quick-card-title');
+
+  function recalcCalendarHeights() {
+    const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
+    if (!cells.length) return;
+    cells.forEach(cell => { cell.style.height = ''; });
+    let maxHeight = 0;
+    cells.forEach(cell => {
+      if (cell.offsetHeight > maxHeight) {
+        maxHeight = cell.offsetHeight;
+      }
+    });
+    cells.forEach(cell => { cell.style.height = maxHeight + 'px'; });
+  }
+
+  if (quickCardForm) {
+    quickCardForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const dateValue = quickCardDate ? quickCardDate.value : '';
+      const titleValue = quickCardTitle ? quickCardTitle.value.trim() : '';
+      if (!dateValue || !titleValue) {
+        return;
+      }
+      const targetCell = document.querySelector(`.pedidos-calendar td.day-cell[data-date="${dateValue}"]`);
+      if (!targetCell) {
+        alert('La fecha seleccionada no está visible en el calendario.');
+        return;
+      }
+      const newTask = document.createElement('div');
+      newTask.className = 'task quick-card';
+      newTask.setAttribute('draggable', 'true');
+      newTask.dataset.project = titleValue;
+      newTask.dataset.title = titleValue;
+      newTask.dataset.client = '';
+      newTask.dataset.code = '';
+      newTask.dataset.day = dateValue;
+      newTask.dataset.due = dateValue;
+      const main = document.createElement('span');
+      main.className = 'task-main';
+      main.textContent = titleValue;
+      newTask.appendChild(main);
+      targetCell.appendChild(newTask);
+      recalcCalendarHeights();
+      const filterField = document.getElementById('filter-input');
+      if (filterField && filterField.value) {
+        filterField.dispatchEvent(new Event('input'));
+      }
+      if (quickCardForm) {
+        quickCardForm.reset();
+      }
+      newTask.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    });
+  }
 
   function parseSortableCell(cell) {
     if (!cell) {
@@ -1282,10 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
-  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
-  let maxH = 0;
-  cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
-  cells.forEach(c => c.style.height = maxH + 'px');
+  recalcCalendarHeights();
 
   let dragged = null;
   const tasks = document.querySelectorAll('.pedidos-calendar .task');

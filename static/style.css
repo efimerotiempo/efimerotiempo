@@ -43,6 +43,43 @@ table.schedule td.weekend-cell {
 .due-before { color: #e6b800; }
 .due-after { color: red; }
 
+.quick-card-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+.quick-card-form label {
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.quick-card-form label span {
+    font-size: 0.85rem;
+}
+.quick-card-form input[type="date"],
+.quick-card-form input[type="text"] {
+    padding: 4px 8px;
+    border: 1px solid #b3b3b3;
+    border-radius: 4px;
+    min-height: 32px;
+}
+.quick-card-form button {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    background: #2b3a67;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+.quick-card-form button:hover,
+.quick-card-form button:focus {
+    background: #1f2a49;
+}
+
 .phase-deadline-indicator {
   margin-right: 2px;
   font-weight: bold;
@@ -64,12 +101,17 @@ table.schedule td.weekend-cell {
     font-weight: bold;
     margin-right: 2px;
 }
-.task {
+.task { 
     margin-bottom: 2px;
     cursor: grab;
     display: flex;
     border: 3px solid transparent;
     background: #fff;
+}
+.task.quick-card {
+    background: #f5f5f5;
+    border-color: #000;
+    color: #000;
 }
 .task.frozen {
     background: var(--frozen-background, rgba(204, 229, 255, 0.45));
