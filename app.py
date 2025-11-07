@@ -8,8 +8,6 @@ import copy
 import json
 import re
 import unicodedata
-from io import BytesIO
-import base64
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
 import urllib.parse
@@ -17,7 +15,6 @@ import sys
 import importlib.util
 import random
 from queue import Queue
-from html.parser import HTMLParser
 
 from localtime import local_today, local_now
 
@@ -106,236 +103,6 @@ MATERIAL_STATUS_LABELS = {
     'archived': 'MATERIAL ARCHIVADO',
     'complete': 'MATERIAL COMPLETO',
 }
-
-
-_SUMMARY_TABS = [
-    ('Completo', 'complete'),
-    ('Calendario pedidos', 'calendar_pedidos'),
-    ('Orden carpetas', 'orden_carpetas_view'),
-    ('Gantt', 'gantt_view'),
-    ('Gantt pedidos', 'gantt_orders_view'),
-    ('Notas', 'note_list'),
-    ('Observaciones', 'observation_list'),
-    ('Vacaciones', 'vacation_list'),
-    ('Recursos', 'resources'),
-    ('Añadir proyecto', 'add_project'),
-]
-
-
-class _SummaryHTMLStripper(HTMLParser):
-    """Extrae texto legible desde fragmentos HTML sin depender de bibliotecas externas."""
-
-    _BLOCK_TAGS = {
-        'p', 'div', 'section', 'article', 'header', 'footer', 'li', 'ul', 'ol', 'table',
-        'thead', 'tbody', 'tfoot', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
-    }
-
-    def __init__(self):
-        super().__init__()
-        self._parts = []
-        self._skip = 0
-        self._nav = 0
-
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag in ('script', 'style'):
-            self._skip += 1
-            return
-        if tag == 'nav':
-            self._nav += 1
-            return
-        if self._skip or self._nav:
-            return
-        if tag in self._BLOCK_TAGS:
-            self._append_line_break()
-        elif tag == 'br':
-            self._parts.append('\n')
-        elif tag in ('td', 'th'):
-            self._parts.append('\t')
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if tag in ('script', 'style'):
-            if self._skip:
-                self._skip -= 1
-            return
-        if tag == 'nav':
-            if self._nav:
-                self._nav -= 1
-            return
-        if self._skip or self._nav:
-            return
-        if tag in self._BLOCK_TAGS:
-            self._append_line_break()
-
-    def handle_data(self, data):
-        if self._skip or self._nav:
-            return
-        if data:
-            self._parts.append(data)
-
-    def _append_line_break(self):
-        if not self._parts:
-            return
-        if not self._parts[-1].endswith('\n'):
-            self._parts.append('\n')
-
-    def get_text(self):
-        text = ''.join(self._parts)
-        text = text.replace('\r', '')
-        text = text.replace('\t', ' ')
-        text = re.sub(r' +', ' ', text)
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        lines = [line.rstrip() for line in text.split('\n')]
-        cleaned = '\n'.join(lines).strip()
-        return cleaned
-
-
-def _html_to_text_for_pdf(html):
-    parser = _SummaryHTMLStripper()
-    parser.feed(html)
-    return parser.get_text()
-
-
-def _normalize_tab_sections(text):
-    if not text:
-        return []
-    blocks = []
-    for block in text.split('\n\n'):
-        cleaned = block.strip()
-        if cleaned:
-            blocks.append(cleaned)
-    return blocks
-
-
-def _escape_pdf_text(text):
-    if text is None:
-        return ''
-    escaped = text.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
-    return escaped
-
-
-def _chunk_lines(lines, max_lines):
-    page = []
-    for line in lines:
-        if len(page) == max_lines:
-            yield page
-            page = []
-        page.append(line)
-    if page:
-        yield page
-
-
-def _build_plaintext_pdf(lines, title, now):
-    if not lines:
-        lines = ['Sin contenido disponible.']
-    max_lines = 55
-    pages = list(_chunk_lines(lines, max_lines)) or [['Sin contenido disponible.']]
-    objects = []
-
-    def add_object(payload):
-        if isinstance(payload, str):
-            payload_bytes = payload.encode('latin-1', 'replace')
-        else:
-            payload_bytes = payload
-        objects.append(payload_bytes)
-        return len(objects)
-
-    def add_stream(stream_bytes):
-        header = f"<< /Length {len(stream_bytes)} >>\nstream\n".encode('latin-1')
-        footer = b"\nendstream"
-        return add_object(header + stream_bytes + footer)
-
-    font_obj_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
-    content_ids = []
-    page_ids = []
-    page_width = 595
-    page_height = 842
-    left_margin = 40
-    top_margin = 40
-    line_height = 14
-    start_y = page_height - top_margin
-
-    for page_lines in pages:
-        commands = [
-            "BT",
-            "/F1 11 Tf",
-            f"1 0 0 1 {left_margin} {start_y} Tm",
-            f"{line_height} TL",
-        ]
-        for line in page_lines:
-            line = line.rstrip()
-            if line:
-                commands.append(f"({_escape_pdf_text(line)}) Tj")
-            commands.append("T*")
-        commands.append("ET")
-        stream_bytes = "\n".join(commands).encode('latin-1', 'replace')
-        content_id = add_stream(stream_bytes)
-        content_ids.append(content_id)
-        page_dict = (
-            "<< /Type /Page /Parent {parent} 0 R /MediaBox [0 0 {w} {h}] "
-            "/Resources << /Font << /F1 {font} 0 R >> >> /Contents {content} 0 R >>"
-        ).format(
-            parent='{pages}',
-            w=page_width,
-            h=page_height,
-            font=font_obj_id,
-            content=content_id,
-        )
-        page_ids.append(add_object(page_dict))
-
-    kids = ' '.join(f"{pid} 0 R" for pid in page_ids)
-    pages_obj_id = add_object(
-        f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>" if page_ids else "<< /Type /Pages /Count 0 >>"
-    )
-
-    # Rebind parent references now that we know the /Pages object id
-    def rebuild_page_object(pid, content_id):
-        page_dict = (
-            f"<< /Type /Page /Parent {pages_obj_id} 0 R /MediaBox [0 0 {page_width} {page_height}] "
-            f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> /Contents {content_id} 0 R >>"
-        )
-        objects[pid - 1] = page_dict.encode('latin-1')
-
-    for pid, content_id in zip(page_ids, content_ids):
-        rebuild_page_object(pid, content_id)
-
-    catalog_obj_id = add_object(f"<< /Type /Catalog /Pages {pages_obj_id} 0 R >>")
-    creation_date = now.strftime('%Y%m%d%H%M%S')
-    info_obj_id = add_object(
-        "<< /Producer (efimerotiempo) /Title ({title}) /CreationDate (D:{date}) >>".format(
-            title=_escape_pdf_text(title),
-            date=creation_date,
-        )
-    )
-
-    output = BytesIO()
-    output.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    offsets = []
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(output.tell())
-        output.write(f"{index} 0 obj\n".encode('latin-1'))
-        output.write(obj)
-        if not obj.endswith(b"\n"):
-            output.write(b"\n")
-        output.write(b"endobj\n")
-
-    xref_pos = output.tell()
-    output.write(f"xref\n0 {len(objects) + 1}\n".encode('latin-1'))
-    output.write(b"0000000000 65535 f \n")
-    for offset in offsets:
-        output.write(f"{offset:010d} 00000 n \n".encode('latin-1'))
-    output.write(b"trailer\n")
-    trailer = "<< /Size {size} /Root {root} 0 R /Info {info} 0 R >>\n".format(
-        size=len(objects) + 1,
-        root=catalog_obj_id,
-        info=info_obj_id,
-    )
-    output.write(trailer.encode('latin-1'))
-    output.write(b"startxref\n")
-    output.write(f"{xref_pos}\n".encode('latin-1'))
-    output.write(b"%%EOF")
-    return output.getvalue()
 
 
 def _phase_total_hours(value):
@@ -6277,56 +6044,720 @@ def complete():
     )
 
 
-@app.route('/complete/pdf', methods=['GET'])
-def complete_pdf():
-    now = local_now()
-    sections = []
-    for title, endpoint in _SUMMARY_TABS:
-        try:
-            path = url_for(endpoint)
-        except Exception:
-            continue
-        sections.append((title, path))
-    lines = [
-        'Resumen global de pestañas',
-        f"Generado el {now.strftime('%d/%m/%Y %H:%M:%S')}",
-        '',
-    ]
-    auth_header = None
-    if AUTH_USER or AUTH_PASS:
-        token = base64.b64encode(f"{AUTH_USER}:{AUTH_PASS}".encode('utf-8')).decode('ascii')
-        auth_header = {'Authorization': f'Basic {token}'}
-    with app.test_client() as client:
-        for title, path in sections:
-            lines.append(title)
-            lines.append('')
-            request_kwargs = {}
-            if auth_header:
-                request_kwargs['headers'] = auth_header
-            response = client.get(path, **request_kwargs)
-            if response.status_code != 200:
-                error_text = f"No se pudo cargar la pestaña (estado {response.status_code})."
-                lines.append(error_text)
-                lines.append('')
-                continue
-            text = _html_to_text_for_pdf(response.get_data(as_text=True))
-            blocks = _normalize_tab_sections(text)
-            if not blocks:
-                lines.append('Sin contenido disponible.')
-                lines.append('')
-                continue
-            for block in blocks:
-                lines.extend(block.split('\n'))
-                lines.append('')
-    lines = [line.rstrip() for line in lines]
-    pdf_bytes = _build_plaintext_pdf(lines, 'Resumen global de pestañas', now)
-    filename = now.strftime('%Y%m%d_%H%M%S') + '.pdf'
-    headers = {
-        'Content-Disposition': f'attachment; filename="{filename}"',
-        'X-Filename': filename,
+@app.route('/update_worker_note', methods=['POST'])
+def update_worker_note():
+    data = request.get_json() or {}
+    worker = data.get('worker')
+    text = data.get('text', '')
+    if not worker:
+        return jsonify({'error': 'Falta recurso'}), 400
+    notes = load_worker_notes()
+    notes[worker] = {
+        'text': text,
+        'edited': local_now().isoformat(timespec='minutes'),
     }
-    return Response(pdf_bytes, mimetype='application/pdf', headers=headers)
+    save_worker_notes(notes)
+    dt = datetime.fromisoformat(notes[worker]['edited'])
+    return jsonify({'edited': dt.strftime('%H:%M %d/%m')})
 
+
+@app.route('/update_pedido_date', methods=['POST'])
+def update_pedido_date():
+    data = request.get_json() or {}
+    cid = data.get('cid')
+    date_str = data.get('date')
+    if not cid:
+        return '', 400
+    if date_str:
+        try:
+            d = date.fromisoformat(date_str)
+        except Exception:
+            return '', 400
+        stored = f"{d.day:02d}/{d.month:02d}"
+    else:
+        stored = None
+    cards = load_kanban_cards()
+    cid = str(cid)
+    updated = False
+    for entry in cards:
+        card = entry.get('card') or {}
+        existing = card.get('taskid') or card.get('cardId') or card.get('id')
+        if str(existing) == cid:
+            if stored is not None:
+                entry['stored_title_date'] = stored
+                entry.pop('previous_title_date', None)
+            else:
+                prev = entry.get('stored_title_date')
+                if not prev:
+                    title = (card.get('title') or '').strip()
+                    m = re.search(r"\((\d{2})/(\d{2})\)", title)
+                    if m:
+                        prev = f"{int(m.group(1)):02d}/{int(m.group(2)):02d}"
+                    else:
+                        d_dead = parse_kanban_date(card.get('deadline'))
+                        if d_dead:
+                            prev = f"{d_dead.day:02d}/{d_dead.month:02d}"
+                entry['previous_title_date'] = prev
+                entry['stored_title_date'] = None
+                card['deadline'] = None
+            updated = True
+            break
+    if updated:
+        save_kanban_cards(cards)
+        broadcast_event({'type': 'kanban_update'})
+        return jsonify({'stored_date': stored})
+    return '', 404
+
+
+@app.route('/observaciones')
+def observation_list():
+    projects = [p for p in get_visible_projects() if p.get('observations')]
+    return render_template('observations.html', projects=projects)
+
+
+@app.route('/vacations', methods=['GET', 'POST'])
+def vacation_list():
+    vacations = load_vacations()
+    error = None
+
+    def includes_year(raw_value):
+        raw_value = (raw_value or '').strip()
+        if not raw_value:
+            return False
+        normalized = raw_value.replace('/', '-').replace('.', '-').replace(' ', '')
+        parts = [p for p in normalized.split('-') if p]
+        if len(parts) < 3:
+            return False
+        return any(len(part) == 4 for part in parts)
+
+    if request.method == 'POST':
+        start_raw = request.form['start']
+        end_raw = request.form['end']
+
+        if not (includes_year(start_raw) and includes_year(end_raw)):
+            error = 'Las fechas deben incluir el año (dd/mm/aaaa).'
+        else:
+            start = parse_input_date(start_raw)
+            end = parse_input_date(end_raw)
+            if not start or not end:
+                error = 'Introduce fechas de inicio y fin válidas.'
+            else:
+                vacations.append({
+                    'id': str(uuid.uuid4()),
+                    'worker': request.form['worker'],
+                    'start': start.isoformat(),
+                    'end': end.isoformat(),
+                })
+                save_vacations(vacations)
+                return redirect(url_for('vacation_list'))
+    today = local_today()
+
+    def parse_iso(value):
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+
+    def vacation_sort_key(vacation):
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        reference = start_date or end_date or today
+        effective_end = end_date or start_date or reference
+        is_past = effective_end < today
+        ref_ord = reference.toordinal()
+        if not is_past:
+            return (0, ref_ord)
+        return (1, -ref_ord)
+
+    ordered_vacations = sorted(vacations, key=vacation_sort_key)
+
+    formatted_vacations = []
+    for vacation in ordered_vacations:
+        entry = dict(vacation)
+        start_date = parse_iso(vacation.get('start'))
+        end_date = parse_iso(vacation.get('end'))
+        entry['start_display'] = start_date.strftime('%d/%m/%Y') if start_date else ''
+        entry['end_display'] = end_date.strftime('%d/%m/%Y') if end_date else ''
+        formatted_vacations.append(entry)
+
+    return render_template(
+        'vacations.html',
+        vacations=formatted_vacations,
+        workers=active_workers(),
+        today=today.isoformat(),
+        error=error,
+    )
+
+
+@app.route('/delete_vacation/<vid>', methods=['POST'])
+def delete_vacation(vid):
+    vacations = load_vacations()
+    vacations = [v for v in vacations if v.get('id') != vid]
+    save_vacations(vacations)
+    return redirect(url_for('vacation_list'))
+
+
+@app.route('/remove_vacation', methods=['POST'])
+def remove_vacation():
+    worker = request.form['worker']
+    day = date.fromisoformat(request.form['date'])
+    vacations = load_vacations()
+    new_list = []
+    for v in vacations:
+        if v['worker'] != worker:
+            new_list.append(v)
+            continue
+        start = date.fromisoformat(v['start'])
+        end = date.fromisoformat(v['end'])
+        if day < start or day > end:
+            new_list.append(v)
+            continue
+        if start == end == day:
+            continue
+        if start == day:
+            v['start'] = (day + timedelta(days=1)).isoformat()
+            new_list.append(v)
+        elif end == day:
+            v['end'] = (day - timedelta(days=1)).isoformat()
+            new_list.append(v)
+        else:
+            before = v.copy()
+            after = v.copy()
+            before['end'] = (day - timedelta(days=1)).isoformat()
+            after['start'] = (day + timedelta(days=1)).isoformat()
+            before['id'] = str(uuid.uuid4())
+            after['id'] = str(uuid.uuid4())
+            new_list.extend([before, after])
+    save_vacations(new_list)
+    return ('', 204)
+
+
+@app.route('/assign_vacation_day', methods=['POST'])
+def assign_vacation_day():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    vacations = load_vacations()
+    already_marked = False
+    for entry in vacations:
+        if entry.get('worker') != worker:
+            continue
+        try:
+            start = date.fromisoformat(entry.get('start'))
+            end = date.fromisoformat(entry.get('end'))
+        except (TypeError, ValueError):
+            continue
+        if start <= day <= end:
+            already_marked = True
+            break
+    if not already_marked:
+        vacations.append(
+            {
+                'id': str(uuid.uuid4()),
+                'worker': worker,
+                'start': day.isoformat(),
+                'end': day.isoformat(),
+            }
+        )
+        save_vacations(vacations)
+    return ('', 204)
+
+
+@app.route('/update_worker_day_hours', methods=['POST'])
+def update_worker_day_hours():
+    data = request.get_json() or request.form
+    worker = (data.get('worker') or '').strip()
+    day_text = data.get('date')
+    hours_value = data.get('hours')
+    if not worker or worker not in WORKERS:
+        return jsonify({'error': 'Trabajador no válido'}), 400
+    try:
+        day = date.fromisoformat(day_text)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Fecha no válida'}), 400
+    try:
+        hours = int(hours_value)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Horas no válidas'}), 400
+    if hours < 1 or hours > 10:
+        return jsonify({'error': 'Horas fuera de rango'}), 400
+    overrides = load_worker_day_hours()
+    worker_map = overrides.get(worker, {})
+    worker_map[day.isoformat()] = hours
+    overrides[worker] = worker_map
+    save_worker_day_hours(overrides)
+    return ('', 204)
+
+
+@app.route('/resources', methods=['GET', 'POST'])
+def resources():
+    workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+    current_order_snapshot = list(workers)
+    inactive = set(load_inactive_workers())
+    worker_overrides = load_worker_hours()
+    if request.method == 'POST':
+        if 'add_worker' in request.form:
+            new_worker = request.form.get('new_worker', '').strip()
+            if new_worker and new_worker not in WORKERS:
+                _schedule_mod.add_worker(new_worker)
+            return redirect(url_for('resources'))
+        rename_pairs = []
+        seen_targets = set()
+        for key in request.form.keys():
+            if not key.startswith('worker_name__'):
+                continue
+            idx = key.split('__', 1)[-1]
+            original = request.form.get(f'worker_original__{idx}', '').strip()
+            new_value = request.form.get(key, '').strip()
+            if not original or not new_value or original == new_value:
+                continue
+            if new_value in seen_targets:
+                continue
+            rename_pairs.append((original, new_value))
+            seen_targets.add(new_value)
+        rename_map = {}
+        for original, new_value in rename_pairs:
+            if rename_worker(original, new_value):
+                rename_map[original] = new_value
+        if rename_map:
+            workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+            current_order_snapshot = list(workers)
+            inactive = set(load_inactive_workers())
+            worker_overrides = load_worker_hours()
+        active = request.form.getlist('worker')
+        if rename_map:
+            active = [rename_map.get(w, w) for w in active]
+        new_inactive = [w for w in workers if w not in active]
+        if set(new_inactive) != inactive:
+            save_inactive_workers(new_inactive)
+            inactive = set(new_inactive)
+        order = request.form.getlist('order')
+        if rename_map and order:
+            order = [rename_map.get(w, w) for w in order]
+        if order:
+            cleaned_order = []
+            seen = set()
+            for name in order:
+                if name in workers and name not in seen:
+                    cleaned_order.append(name)
+                    seen.add(name)
+            for name in workers:
+                if name not in seen:
+                    cleaned_order.append(name)
+            if cleaned_order != current_order_snapshot:
+                set_worker_order(cleaned_order)
+                workers = [w for w in WORKERS.keys() if w != UNPLANNED]
+                current_order_snapshot = list(workers)
+        hours_modified = False
+        for key, changed in request.form.items():
+            if not key.startswith('hours_changed__'):
+                continue
+            if changed != '1':
+                continue
+            idx = key.split('__', 1)[-1]
+            worker = request.form.get(f'hours_worker__{idx}')
+            if rename_map and worker:
+                worker = rename_map.get(worker, worker)
+            if not worker:
+                continue
+            value = request.form.get(f'hours__{idx}', '').strip()
+            if value == 'inf' or not value:
+                if worker in worker_overrides:
+                    worker_overrides.pop(worker, None)
+                    hours_modified = True
+                continue
+            try:
+                hours_val = int(value)
+            except ValueError:
+                continue
+            if 1 <= hours_val <= 12:
+                if worker_overrides.get(worker) != hours_val:
+                    worker_overrides[worker] = hours_val
+                    hours_modified = True
+        if hours_modified:
+            save_worker_hours(worker_overrides)
+        get_projects()
+        return redirect(url_for('resources'))
+    worker_limits = {}
+    for w in workers:
+        limit = HOURS_LIMITS.get(w)
+        if isinstance(limit, (int, float)) and limit == float('inf'):
+            worker_limits[w] = 'inf'
+        elif isinstance(limit, (int, float)):
+            worker_limits[w] = int(limit)
+        else:
+            worker_limits[w] = HOURS_PER_DAY
+    hour_options = list(range(1, 13))
+    return render_template(
+        'resources.html',
+        workers=workers,
+        inactive=inactive,
+        worker_limits=worker_limits,
+        hour_options=hour_options,
+    )
+
+
+@app.route('/complete')
+def complete():
+    projects = get_visible_projects()
+    schedule, conflicts = schedule_projects(projects)
+    annotate_schedule_frozen_background(schedule)
+    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
+    today = local_today()
+    worker_notes_raw = load_worker_notes()
+    manual_entries = load_manual_bucket_entries()
+    visible = set(active_workers(today))
+    unplanned_raw = []
+    if UNPLANNED in schedule:
+        for day, tasks in schedule.pop(UNPLANNED).items():
+            for t in tasks:
+                item = t.copy()
+                item['day'] = day
+                unplanned_raw.append(item)
+    groups = {}
+    for item in unplanned_raw:
+        pid = item['pid']
+        phase = item['phase']
+        part = item.get('part')
+        proj = groups.setdefault(
+            pid,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'material_date': item.get('material_date'),
+                'due_date': item.get('due_date'),
+                'phases': {},
+            },
+        )
+        phase_key = (phase, part) if part is not None else (phase, None)
+        ph = proj['phases'].setdefault(
+            phase_key,
+            {
+                'project': item['project'],
+                'client': item['client'],
+                'pid': pid,
+                'phase': phase,
+                'part': part,
+                'color': item.get('color'),
+                'due_date': item.get('due_date'),
+                'start_date': item.get('start_date'),
+                'day': item.get('day'),
+                'hours': 0,
+                'late': item.get('late', False),
+                'due_status': item.get('due_status'),
+                'blocked': item.get('blocked', False),
+                'frozen': item.get('frozen', False),
+                'frozen_background': item.get('frozen_background'),
+                'auto': item.get('auto', False),
+            },
+        )
+        ph['hours'] += item.get('hours', 0)
+        if item.get('day') and (ph['day'] is None or item['day'] < ph['day']):
+            ph['day'] = item['day']
+        if item.get('start_date') and (
+            ph['start_date'] is None or item['start_date'] < ph['start_date']
+        ):
+            ph['start_date'] = item['start_date']
+        if item.get('due_date') and (
+            ph['due_date'] is None or item['due_date'] < ph['due_date']
+        ):
+            ph['due_date'] = item['due_date']
+        if item.get('late'):
+            ph['late'] = True
+        if item.get('blocked'):
+            ph['blocked'] = True
+        if item.get('frozen'):
+            ph['frozen'] = True
+            bg = item.get('frozen_background')
+            if bg:
+                ph['frozen_background'] = bg
+        if item.get('auto'):
+            ph['auto'] = True
+    unplanned_list = []
+    for pid, data in groups.items():
+        unplanned_list.append(
+            {
+                'pid': pid,
+                'project': data['project'],
+                'client': data['client'],
+                'material_date': data.get('material_date'),
+                'due_date': data.get('due_date'),
+                'tasks': list(data['phases'].values()),
+            }
+        )
+    schedule = {w: d for w, d in schedule.items() if w in visible}
+    for p in projects:
+        if p.get('due_date'):
+            try:
+                p['met'] = date.fromisoformat(p['end_date']) <= date.fromisoformat(p['due_date'])
+            except ValueError:
+                p['met'] = False
+        else:
+            p['met'] = False
+    notes = load_notes()
+    extra = load_extra_conflicts()
+    conflicts.extend(extra)
+    dismissed = load_dismissed()
+    conflicts = [
+        c
+        for c in conflicts
+        if c['key'] not in dismissed and c.get('message') != 'No se cumple la fecha de entrega'
+    ]
+
+    sort_option = request.args.get('sort', 'created')
+    orig_order = {p['id']: idx for idx, p in enumerate(projects)}
+
+    project_filter = request.args.get('project', '').strip()
+    client_filter = request.args.get('client', '').strip()
+    project_id_filter = request.args.get('project_id', '').strip()
+    project_name_from_id = ''
+    if project_id_filter:
+        for p in projects:
+            pid = p.get('id')
+            if pid is not None and str(pid) == project_id_filter:
+                project_name_from_id = (p.get('name') or '').strip()
+                break
+    if project_name_from_id and not project_filter:
+        project_filter = project_name_from_id
+    filter_active = bool(project_filter or client_filter or project_id_filter)
+
+    def matches_filters(name, client, pid=None):
+        project_name = (name or '').lower()
+        client_name = (client or '').lower()
+        if project_id_filter:
+            pid_text = '' if pid is None else str(pid)
+            if pid_text != project_id_filter:
+                return False
+        if project_filter and project_filter.lower() not in project_name:
+            return False
+        if client_filter and client_filter.lower() not in client_name:
+            return False
+        return True
+
+    if filter_active:
+        for worker, days_data in schedule.items():
+            for day, tasks in days_data.items():
+                for t in tasks:
+                    t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
+        filtered_projects = [
+            p
+            for p in projects
+            if matches_filters(p['name'], p['client'], p.get('id'))
+        ]
+        for g in unplanned_list:
+            match = matches_filters(g['project'], g['client'], g.get('pid'))
+            g['filter_match'] = match
+            for t in g['tasks']:
+                t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
+    else:
+        filtered_projects = projects
+
+    # Order phases within each day: started ones first
+    _sort_cell_tasks(schedule)
+
+    if sort_option == 'name':
+        filtered_projects.sort(key=lambda p: p['name'].lower())
+    else:
+        filtered_projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
+
+    filtered_projects = expand_for_display(filtered_projects)
+
+    unplanned_list.sort(key=lambda g: g.get('material_date') or '9999-12-31')
+
+    points = split_markers(schedule)
+
+    today = local_today()
+    start = today - timedelta(days=90)
+    end = today + timedelta(days=180)
+    days, cols, week_spans = build_calendar(start, end)
+    hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
+    worker_limits_map = {
+        worker: HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        for worker in WORKERS
+    }
+    note_map = {}
+    for n in notes:
+        note_map.setdefault(n['date'], []).append(n['description'])
+    worker_note_map = {}
+    for w, info in worker_notes_raw.items():
+        text = info.get('text', '')
+        ts = info.get('edited')
+        fmt = ''
+        if ts:
+            try:
+                fmt = datetime.fromisoformat(ts).strftime('%H:%M %d/%m')
+            except ValueError:
+                fmt = ''
+        worker_note_map[w] = {'text': text, 'edited': fmt}
+    material_status_map, material_missing_map = compute_material_status_map(
+        projects, include_missing_titles=True
+    )
+    for archived_pid in archived_project_map.keys():
+        material_status_map[str(archived_pid)] = 'archived'
+        material_missing_map.setdefault(str(archived_pid), [])
+
+    manual_index = {}
+    manual_bucket_items = []
+    if manual_entries:
+        manual_index = {
+            (entry['pid'], entry['phase'], entry.get('part')): idx
+            for idx, entry in enumerate(manual_entries)
+        }
+        manual_bucket_items = [None] * len(manual_entries)
+        for group in list(unplanned_list):
+            remaining_tasks = []
+            for task in group['tasks']:
+                key = (str(group['pid']), task['phase'], task.get('part'))
+                idx = manual_index.get(key)
+                if idx is None:
+                    remaining_tasks.append(task)
+                    continue
+                status = material_status_map.get(str(group['pid']), 'complete')
+                due_text = task.get('due_date') or group.get('due_date')
+                matches_filter = (
+                    task.get('filter_match', True)
+                    and group.get('filter_match', True)
+                )
+                manual_bucket_items[idx] = {
+                    'pid': group['pid'],
+                    'project': group['project'],
+                    'client': group['client'],
+                    'phase': task['phase'],
+                    'part': task.get('part'),
+                    'color': task.get('color'),
+                    'due_date': due_text,
+                    'start_date': task.get('start_date'),
+                    'day': task.get('day'),
+                    'hours': task.get('hours'),
+                    'late': task.get('late', False),
+                    'due_status': task.get('due_status'),
+                    'phase_deadline_status': task.get('phase_deadline_status'),
+                    'blocked': task.get('blocked', False),
+                    'frozen': task.get('frozen', False),
+                    'frozen_background': task.get('frozen_background'),
+                    'auto': task.get('auto', False),
+                    'material_status': status,
+                    'material_label': material_status_label(status),
+                    'material_css': f"material-status-{status}",
+                    'filter_match': matches_filter,
+                }
+            group['tasks'] = remaining_tasks
+            if not remaining_tasks:
+                unplanned_list.remove(group)
+        cleaned_entries = []
+        cleaned_bucket = []
+        for idx, item in enumerate(manual_bucket_items):
+            if item:
+                cleaned_bucket.append(item)
+                entry = manual_entries[idx]
+                new_entry = {'pid': entry['pid'], 'phase': entry['phase']}
+                if entry.get('part') is not None:
+                    new_entry['part'] = entry['part']
+                cleaned_entries.append(new_entry)
+        if cleaned_entries != manual_entries:
+            save_manual_unplanned(cleaned_entries)
+            manual_entries = cleaned_entries
+            manual_bucket_items = cleaned_bucket
+        else:
+            manual_bucket_items = cleaned_bucket
+    else:
+        manual_bucket_items = []
+
+    unplanned_groups = group_unplanned_by_status(unplanned_list, material_status_map)
+
+    def _due_sort_value(entry):
+        due_text = (entry.get('due_date') or '').strip()
+        if due_text and due_text != '0':
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(due_text, fmt).date()
+                except ValueError:
+                    continue
+        return date.max
+
+    unplanned_due = sorted(
+        unplanned_list,
+        key=lambda item: (
+            _due_sort_value(item),
+            (item.get('project') or '').lower(),
+            (item.get('client') or '').lower(),
+        ),
+    )
+
+    project_map = {}
+    for p in projects:
+        p.setdefault('kanban_attachments', [])
+        p.setdefault('kanban_display_fields', {})
+        entry = {
+            **p,
+            'frozen_phases': sorted({t['phase'] for t in p.get('frozen_tasks', [])}),
+            'phase_sequence': list((p.get('phases') or {}).keys()),
+            'kanban_previous_phases': compute_previous_kanban_phases(p.get('kanban_column')),
+        }
+        pid = p.get('id')
+        if pid:
+            pid_key = str(pid)
+            entry['material_status'] = material_status_map.get(pid_key, 'complete')
+            entry['material_missing_titles'] = material_missing_map.get(pid_key, [])
+            project_map[pid_key] = entry
+        project_map[p['id']] = entry
+    for pid, info in archived_project_map.items():
+        info.setdefault('kanban_display_fields', {})
+        info.setdefault('kanban_attachments', [])
+        info['material_status'] = material_status_map.get(str(pid), 'archived')
+        info['material_missing_titles'] = material_missing_map.get(str(pid), [])
+        project_map[pid] = info
+        project_map[str(pid)] = info
+    start_map = phase_start_map(projects)
+    for row in filtered_projects:
+        pid = row.get('id')
+        if pid is None:
+            continue
+        row['material_status'] = material_status_map.get(str(pid), 'complete')
+    if project_id_filter and not project_filter:
+        info = project_map.get(project_id_filter)
+        if info:
+            project_filter = (info.get('name') or '').strip()
+
+    return render_template(
+        'complete.html',
+        schedule=schedule,
+        cols=cols,
+        week_spans=week_spans,
+        conflicts=conflicts,
+        workers=WORKERS,
+        project_filter=project_filter,
+        client_filter=client_filter,
+        project_id_filter=project_id_filter,
+        filter_active=filter_active,
+        projects=filtered_projects,
+        sort_option=sort_option,
+        today=today,
+        phases=PHASE_ORDER,
+        all_workers=active_workers(today),
+        notes=note_map,
+        project_data=project_map,
+        start_map=start_map,
+        hours=hours_map,
+        split_points=points,
+        palette=COLORS,
+        unplanned_groups=unplanned_groups,
+        unplanned_due=unplanned_due,
+        manual_bucket=manual_bucket_items,
+        worker_notes=worker_note_map,
+        material_status_labels=MATERIAL_STATUS_LABELS,
+        worker_day_hours=worker_day_overrides,
+        worker_limits=worker_limits_map,
+    )
 
 
 @app.route('/update_worker/<pid>/<phase>', methods=['POST'])

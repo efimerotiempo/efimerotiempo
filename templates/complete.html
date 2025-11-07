@@ -47,7 +47,7 @@
     </div>
     <div class="hours-btn-container">
         <button id="hours-btn" type="button">Editar jornada laboral</button>
-        <button id="summary-pdf-btn" type="button" data-download-url="{{ url_for('complete_pdf') }}">Resumen en PDF</button>
+        <button id="summary-pdf-btn" type="button">Resumen en PDF</button>
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
@@ -450,7 +450,10 @@
         </table>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-Ic4cj2L/95B2S/bRMyCV2wE8p8nH3UX0YPD+s/COM24kTx5cDIeEJD7BqXc9EjoP" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-J0xOeGZ5ER5YjZL+QkNo4fU6Y4ZCkxzgv2Fne5+5ZTCDxbFzNw2K6JqqPiFZUvJ0" crossorigin="anonymous"></script>
 <script>
+  window.addEventListener('DOMContentLoaded', () => {
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
@@ -1366,29 +1369,45 @@
   const summaryPdfBtn = document.getElementById('summary-pdf-btn');
   if (summaryPdfBtn) {
     summaryPdfBtn.addEventListener('click', async () => {
-      const url = summaryPdfBtn.dataset.downloadUrl;
-      if (!url) {
+      const html2canvasFn = window.html2canvas;
+      const jspdfNS = window.jspdf || {};
+      const { jsPDF } = jspdfNS;
+      if (typeof html2canvasFn !== 'function' || typeof jsPDF !== 'function') {
+        alert('No se pudo cargar el generador de PDF. Recarga la página e inténtalo de nuevo.');
         return;
       }
       const originalLabel = summaryPdfBtn.textContent;
       summaryPdfBtn.disabled = true;
       summaryPdfBtn.textContent = 'Generando…';
       try {
-        const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error('Respuesta no válida');
-        }
-        const blob = await response.blob();
-        const filename = response.headers.get('X-Filename') || 'resumen.pdf';
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        requestAnimationFrame(() => {
-          URL.revokeObjectURL(link.href);
-          link.remove();
+        const target = document.body;
+        const canvas = await html2canvasFn(target, {
+          scale: 2,
+          useCORS: true,
+          scrollY: -window.scrollY,
+          windowWidth: document.documentElement.scrollWidth,
+          windowHeight: document.documentElement.scrollHeight
         });
+        const imageData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pageWidth;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        let position = 0;
+        let heightLeft = imgHeight;
+        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const filename = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.pdf`;
+        pdf.save(filename);
       } catch (error) {
         console.error('Error generando el PDF', error);
         alert('No se pudo generar el PDF. Inténtalo de nuevo más tarde.');
@@ -2685,41 +2704,42 @@ let draggedTaskElement = null;
       });
     });
   });
-const CONFLICTS = {{ conflicts|tojson }};
-const conflictModal = document.getElementById("conflict-modal");
-const conflictText = document.getElementById("conflict-text");
-const conflictClose = document.getElementById("conflict-close");
-const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = CONFLICTS.filter(
-  c => !seen[c.key]
-);
-let conflictIndex = 0;
-function showNextConflict() {
-  if (conflictIndex < NEW_CONFLICTS.length) {
-    const c = NEW_CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
-    conflictModal.style.display = "block";
-  } else {
-    conflictModal.style.display = "none";
+  const CONFLICTS = {{ conflicts|tojson }};
+  const conflictModal = document.getElementById("conflict-modal");
+  const conflictText = document.getElementById("conflict-text");
+  const conflictClose = document.getElementById("conflict-close");
+  const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+  const NEW_CONFLICTS = CONFLICTS.filter(
+    c => !seen[c.key]
+  );
+  let conflictIndex = 0;
+  function showNextConflict() {
+    if (conflictIndex < NEW_CONFLICTS.length) {
+      const c = NEW_CONFLICTS[conflictIndex];
+      conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
+      conflictModal.style.display = "block";
+    } else {
+      conflictModal.style.display = "none";
+    }
   }
-}
-if (NEW_CONFLICTS.length) {
-  showNextConflict();
-  conflictClose.addEventListener("click", () => {
-    const c = NEW_CONFLICTS[conflictIndex];
-    seen[c.key] = true;
-    localStorage.setItem('seenConflicts', JSON.stringify(seen));
-    conflictIndex++;
+  if (NEW_CONFLICTS.length) {
     showNextConflict();
-  });
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    if (conflictModal.style.display === 'block') conflictClose.click();
-    if (splitModal.style.display === 'block') splitCancel.click();
-    if (blockModal.style.display === 'block') blockCancel.click();
+    conflictClose.addEventListener("click", () => {
+      const c = NEW_CONFLICTS[conflictIndex];
+      seen[c.key] = true;
+      localStorage.setItem('seenConflicts', JSON.stringify(seen));
+      conflictIndex++;
+      showNextConflict();
+    });
   }
-});
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (conflictModal && conflictClose && conflictModal.style.display === 'block') conflictClose.click();
+      if (splitModal && splitModal.style.display === 'block') splitCancel.click();
+      if (blockModal && blockModal.style.display === 'block') blockCancel.click();
+    }
+  });
+  });
 </script>
 {% endblock %}
