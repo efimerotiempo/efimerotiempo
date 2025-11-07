@@ -1711,9 +1711,9 @@
         for (const target of targets) {
           const canvas = await captureWithRetry(
             () => captureDocumentCanvas(iframeDoc, html2canvasFn, target),
-            2,
+            3,
             400,
-            20000
+            22000
           );
           if (canvas) {
             return canvas;
@@ -1830,26 +1830,85 @@
       if (!canvas || !canvas.width || !canvas.height) {
         return true;
       }
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const totalPixels = width * height;
+      const WHITE_THRESHOLD = 245;
+      const ALPHA_THRESHOLD = 16;
+      const MAX_PREVIEW_PIXELS = 40000; // ~200x200
+
+      try {
+        const scale = totalPixels > MAX_PREVIEW_PIXELS
+          ? Math.sqrt(MAX_PREVIEW_PIXELS / totalPixels)
+          : 1;
+        const previewWidth = Math.max(1, Math.round(width * scale));
+        const previewHeight = Math.max(1, Math.round(height * scale));
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = previewWidth;
+        previewCanvas.height = previewHeight;
+        const previewCtx = previewCanvas.getContext('2d');
+        if (previewCtx) {
+          previewCtx.imageSmoothingEnabled = true;
+          previewCtx.drawImage(canvas, 0, 0, previewWidth, previewHeight);
+          const data = previewCtx.getImageData(0, 0, previewWidth, previewHeight).data;
+          for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            if (alpha > ALPHA_THRESHOLD) {
+              if (data[i] < WHITE_THRESHOLD || data[i + 1] < WHITE_THRESHOLD || data[i + 2] < WHITE_THRESHOLD) {
+                return false;
+              }
+            }
+          }
+        }
+      } catch (previewError) {
+        console.warn('No se pudo analizar la miniatura del canvas', previewError);
+      }
+
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         return true;
       }
-      const sampleCols = Math.min(canvas.width, 6);
-      const sampleRows = Math.min(canvas.height, 6);
-      for (let row = 0; row < sampleRows; row += 1) {
-        for (let col = 0; col < sampleCols; col += 1) {
-          const x = sampleCols === 1
-            ? 0
-            : Math.round((col / (sampleCols - 1)) * (canvas.width - 1));
-          const y = sampleRows === 1
-            ? 0
-            : Math.round((row / (sampleRows - 1)) * (canvas.height - 1));
-          const pixel = ctx.getImageData(x, y, 1, 1).data;
-          const alpha = pixel[3];
-          if (alpha > 16) {
-            if (pixel[0] < 245 || pixel[1] < 245 || pixel[2] < 245) {
-              return false;
-            }
+
+      const targetSamples = Math.min(2500, Math.max(100, Math.floor(totalPixels / 4000)));
+      const step = Math.max(1, Math.floor(Math.sqrt(totalPixels / targetSamples)));
+
+      const samplePositions = [];
+      const pushSample = (x, y) => {
+        const clampedX = Math.min(width - 1, Math.max(0, Math.round(x)));
+        const clampedY = Math.min(height - 1, Math.max(0, Math.round(y)));
+        samplePositions.push([clampedX, clampedY]);
+      };
+
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          pushSample(x, y);
+          if (step > 4) {
+            pushSample(x + Math.floor(step / 2), y + Math.floor(step / 2));
+          }
+        }
+      }
+
+      pushSample(width / 2, height / 2);
+      pushSample(width / 4, height / 4);
+      pushSample((3 * width) / 4, height / 4);
+      pushSample(width / 4, (3 * height) / 4);
+      pushSample((3 * width) / 4, (3 * height) / 4);
+      pushSample(width - 1, height - 1);
+
+      const seen = new Set();
+      for (let i = 0; i < samplePositions.length; i += 1) {
+        const [sx, sy] = samplePositions[i];
+        const key = `${sx},${sy}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const pixel = ctx.getImageData(sx, sy, 1, 1).data;
+        const alpha = pixel[3];
+        if (alpha > ALPHA_THRESHOLD) {
+          if (pixel[0] < WHITE_THRESHOLD || pixel[1] < WHITE_THRESHOLD || pixel[2] < WHITE_THRESHOLD) {
+            return false;
           }
         }
       }
@@ -1880,7 +1939,10 @@
           await wait(delayMs);
         }
       }
-      return (lastCanvas && !isCanvasMostlyBlank(lastCanvas)) ? lastCanvas : null;
+      if (lastCanvas && isCanvasMostlyBlank(lastCanvas)) {
+        console.warn('La captura parece vacía tras varios intentos; usando el último resultado disponible.');
+      }
+      return lastCanvas;
     }
 
     function scaleCanvasForPdf(canvas) {
