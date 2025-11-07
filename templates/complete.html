@@ -1368,6 +1368,225 @@
   });
   const summaryPdfBtn = document.getElementById('summary-pdf-btn');
   if (summaryPdfBtn) {
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    function documentDimensions(doc) {
+      const { body, documentElement: html } = doc;
+      const width = Math.max(
+        body.scrollWidth,
+        body.offsetWidth,
+        html.scrollWidth,
+        html.offsetWidth,
+        html.clientWidth
+      );
+      const height = Math.max(
+        body.scrollHeight,
+        body.offsetHeight,
+        html.scrollHeight,
+        html.offsetHeight,
+        html.clientHeight
+      );
+      return { width, height };
+    }
+
+    function adjustScrollableAreas(doc) {
+      const HostHTMLElement = (doc.defaultView && doc.defaultView.HTMLElement) || window.HTMLElement;
+      const cleanups = [];
+      const candidates = Array.from(doc.querySelectorAll('*'));
+      candidates.push(doc.body, doc.documentElement);
+      candidates.forEach((el) => {
+        if (!el || typeof el !== 'object') {
+          return;
+        }
+        if (!(el instanceof HostHTMLElement) || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') {
+          return;
+        }
+        const needsWidth = el.scrollWidth > el.clientWidth;
+        const needsHeight = el.scrollHeight > el.clientHeight;
+        if (!needsWidth && !needsHeight) {
+          return;
+        }
+        const computed = doc.defaultView ? doc.defaultView.getComputedStyle(el) : null;
+        if (computed && computed.display === 'inline') {
+          return;
+        }
+        const prev = {
+          overflow: el.style.overflow,
+          overflowX: el.style.overflowX,
+          overflowY: el.style.overflowY,
+          maxWidth: el.style.maxWidth,
+          maxHeight: el.style.maxHeight,
+          width: el.style.width,
+          height: el.style.height,
+          scrollLeft: el.scrollLeft,
+          scrollTop: el.scrollTop
+        };
+        cleanups.push(() => {
+          el.style.overflow = prev.overflow;
+          el.style.overflowX = prev.overflowX;
+          el.style.overflowY = prev.overflowY;
+          el.style.maxWidth = prev.maxWidth;
+          el.style.maxHeight = prev.maxHeight;
+          el.style.width = prev.width;
+          el.style.height = prev.height;
+          el.scrollLeft = prev.scrollLeft;
+          el.scrollTop = prev.scrollTop;
+        });
+        el.style.overflow = 'visible';
+        el.style.overflowX = 'visible';
+        el.style.overflowY = 'visible';
+        el.style.maxWidth = 'none';
+        el.style.maxHeight = 'none';
+        if (needsWidth) {
+          el.style.width = `${el.scrollWidth}px`;
+          el.scrollLeft = 0;
+        }
+        if (needsHeight) {
+          el.style.height = `${el.scrollHeight}px`;
+          el.scrollTop = 0;
+        }
+      });
+      return () => {
+        while (cleanups.length) {
+          const restore = cleanups.pop();
+          try {
+            restore();
+          } catch (err) {
+            console.error('Error restaurando estilos tras captura', err);
+          }
+        }
+      };
+    }
+
+    async function captureDocumentCanvas(doc, html2canvasFn) {
+      const cleanup = adjustScrollableAreas(doc);
+      try {
+        const dims = documentDimensions(doc);
+        const view = doc.defaultView || window;
+        return await html2canvasFn(doc.body, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          windowWidth: dims.width,
+          windowHeight: dims.height,
+          scrollX: -(view?.scrollX || 0),
+          scrollY: -(view?.scrollY || 0)
+        });
+      } finally {
+        cleanup();
+      }
+    }
+
+    async function captureCurrentPage(html2canvasFn) {
+      const originalScroll = { x: window.scrollX, y: window.scrollY };
+      window.scrollTo(0, 0);
+      try {
+        return await captureDocumentCanvas(document, html2canvasFn);
+      } finally {
+        window.scrollTo(originalScroll.x, originalScroll.y);
+      }
+    }
+
+    async function captureExternalPage(url, html2canvasFn) {
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-100000px';
+      iframe.style.top = '0';
+      iframe.style.width = '1400px';
+      iframe.style.height = '900px';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      iframe.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(iframe);
+      try {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout cargando pestaña'));
+          }, 20000);
+          iframe.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          iframe.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Error cargando pestaña'));
+          };
+        });
+        const iframeWindow = iframe.contentWindow;
+        const iframeDoc = iframeWindow.document;
+        iframeWindow.scrollTo(0, 0);
+        await wait(1000);
+        return await captureDocumentCanvas(iframeDoc, html2canvasFn);
+      } finally {
+        iframe.remove();
+      }
+    }
+
+    function collectPlannerPages() {
+      const navLinks = Array.from(document.querySelectorAll('nav a'));
+      const seen = new Set();
+      const pages = [];
+      const currentPath = window.location.pathname;
+      navLinks.forEach((link) => {
+        const url = new URL(link.href, window.location.href);
+        if (seen.has(url.pathname)) {
+          return;
+        }
+        seen.add(url.pathname);
+        pages.push({
+          title: link.textContent.trim() || url.pathname,
+          url: url.href,
+          pathname: url.pathname,
+          isCurrent: url.pathname === currentPath
+        });
+      });
+      pages.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return 0;
+      });
+      return pages;
+    }
+
+    function createProgressBanner() {
+      const banner = document.createElement('div');
+      banner.className = 'pdf-progress-banner';
+      banner.textContent = 'Preparando PDF…';
+      document.body.appendChild(banner);
+      return banner;
+    }
+
+    function updateProgress(banner, index, total, title) {
+      if (!banner) return;
+      banner.textContent = `Generando PDF (${index}/${total}) · ${title}`;
+    }
+
+    function appendCanvasToPdf(pdf, canvas, isFirstPage) {
+      if (!canvas.width || !canvas.height) {
+        return isFirstPage;
+      }
+      const imageData = canvas.toDataURL('image/png');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = canvas.height * imgWidth / canvas.width;
+      let remainingHeight = imgHeight;
+      let position = 0;
+      let sliceIndex = 0;
+      while (remainingHeight > 0) {
+        if (sliceIndex > 0 || !isFirstPage) {
+          pdf.addPage();
+        }
+        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
+        remainingHeight -= pageHeight;
+        position -= pageHeight;
+        sliceIndex += 1;
+        isFirstPage = false;
+      }
+      return false;
+    }
+
     summaryPdfBtn.addEventListener('click', async () => {
       const html2canvasFn = window.html2canvas;
       const jspdfNS = window.jspdf || {};
@@ -1376,33 +1595,28 @@
         alert('No se pudo cargar el generador de PDF. Recarga la página e inténtalo de nuevo.');
         return;
       }
+      const pages = collectPlannerPages();
+      if (!pages.length) {
+        alert('No se encontraron pestañas para generar el PDF.');
+        return;
+      }
       const originalLabel = summaryPdfBtn.textContent;
       summaryPdfBtn.disabled = true;
-      summaryPdfBtn.textContent = 'Generando…';
+      const progressBanner = createProgressBanner();
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      let firstPage = true;
       try {
-        const target = document.body;
-        const canvas = await html2canvasFn(target, {
-          scale: 2,
-          useCORS: true,
-          scrollY: -window.scrollY,
-          windowWidth: document.documentElement.scrollWidth,
-          windowHeight: document.documentElement.scrollHeight
-        });
-        const imageData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = pageWidth;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        let position = 0;
-        let heightLeft = imgHeight;
-        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
-          pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
+        for (let i = 0; i < pages.length; i += 1) {
+          const page = pages[i];
+          summaryPdfBtn.textContent = `Generando… (${i + 1}/${pages.length})`;
+          updateProgress(progressBanner, i + 1, pages.length, page.title);
+          const canvas = page.isCurrent
+            ? await captureCurrentPage(html2canvasFn)
+            : await captureExternalPage(page.url, html2canvasFn);
+          if (!canvas) {
+            throw new Error(`No se pudo capturar la pestaña "${page.title}"`);
+          }
+          firstPage = appendCanvasToPdf(pdf, canvas, firstPage);
         }
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
@@ -1414,6 +1628,9 @@
       } finally {
         summaryPdfBtn.disabled = false;
         summaryPdfBtn.textContent = originalLabel;
+        if (progressBanner) {
+          progressBanner.remove();
+        }
       }
     });
   }

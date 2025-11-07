@@ -198,6 +198,21 @@ table.schedule td.weekend-cell {
 }
 .history-close:hover { color: #c00; }
 .history-list { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.pdf-progress-banner {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    padding: 10px 16px;
+    background: rgba(17, 25, 40, 0.9);
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 4000;
+    pointer-events: none;
+}
 .history-entry { border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; color: #333; }
 .history-entry:last-child { border-bottom: none; padding-bottom: 0; }
 .history-entry-time { font-weight: 600; margin-bottom: 4px; }
