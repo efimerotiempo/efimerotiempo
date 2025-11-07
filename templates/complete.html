@@ -47,6 +47,7 @@
     </div>
     <div class="hours-btn-container">
         <button id="hours-btn" type="button">Editar jornada laboral</button>
+        <button id="summary-pdf-btn" type="button" data-download-url="{{ url_for('complete_pdf') }}">Resumen en PDF</button>
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
@@ -1362,6 +1363,41 @@
       });
     });
   });
+  const summaryPdfBtn = document.getElementById('summary-pdf-btn');
+  if (summaryPdfBtn) {
+    summaryPdfBtn.addEventListener('click', async () => {
+      const url = summaryPdfBtn.dataset.downloadUrl;
+      if (!url) {
+        return;
+      }
+      const originalLabel = summaryPdfBtn.textContent;
+      summaryPdfBtn.disabled = true;
+      summaryPdfBtn.textContent = 'Generando…';
+      try {
+        const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('Respuesta no válida');
+        }
+        const blob = await response.blob();
+        const filename = response.headers.get('X-Filename') || 'resumen.pdf';
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        requestAnimationFrame(() => {
+          URL.revokeObjectURL(link.href);
+          link.remove();
+        });
+      } catch (error) {
+        console.error('Error generando el PDF', error);
+        alert('No se pudo generar el PDF. Inténtalo de nuevo más tarde.');
+      } finally {
+        summaryPdfBtn.disabled = false;
+        summaryPdfBtn.textContent = originalLabel;
+      }
+    });
+  }
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');

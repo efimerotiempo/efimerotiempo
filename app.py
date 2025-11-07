@@ -8,6 +8,8 @@ import copy
 import json
 import re
 import unicodedata
+from io import BytesIO
+import base64
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
 import urllib.parse
@@ -17,6 +19,12 @@ import random
 from queue import Queue
 
 from localtime import local_today, local_now
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+from xml.sax.saxutils import escape
+from bs4 import BeautifulSoup
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -103,6 +111,49 @@ MATERIAL_STATUS_LABELS = {
     'archived': 'MATERIAL ARCHIVADO',
     'complete': 'MATERIAL COMPLETO',
 }
+
+
+_SUMMARY_TABS = [
+    ('Completo', 'complete'),
+    ('Calendario pedidos', 'calendar_pedidos'),
+    ('Orden carpetas', 'orden_carpetas_view'),
+    ('Gantt', 'gantt_view'),
+    ('Gantt pedidos', 'gantt_orders_view'),
+    ('Notas', 'note_list'),
+    ('Observaciones', 'observation_list'),
+    ('Vacaciones', 'vacation_list'),
+    ('Recursos', 'resources'),
+    ('Añadir proyecto', 'add_project'),
+]
+
+
+def _html_to_text_for_pdf(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    for element in soup(['script', 'style']):
+        element.decompose()
+    body = soup.body or soup
+    if body:
+        nav = body.find('nav')
+        if nav:
+            nav.decompose()
+        for hr in body.find_all('hr'):
+            hr.decompose()
+    text = body.get_text(separator='\n', strip=True) if body else soup.get_text(separator='\n', strip=True)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Quitar espacios en blanco repetidos al inicio de las líneas
+    cleaned_lines = [line.rstrip() for line in text.splitlines()]
+    return '\n'.join(cleaned_lines).strip()
+
+
+def _normalize_tab_sections(text):
+    if not text:
+        return []
+    blocks = []
+    for block in text.split('\n\n'):
+        cleaned = block.strip()
+        if cleaned:
+            blocks.append(cleaned)
+    return blocks
 
 
 def _phase_total_hours(value):
@@ -6042,6 +6093,80 @@ def complete():
         worker_day_hours=worker_day_overrides,
         worker_limits=worker_limits_map,
     )
+
+
+@app.route('/complete/pdf', methods=['GET'])
+def complete_pdf():
+    now = local_now()
+    sections = []
+    for title, endpoint in _SUMMARY_TABS:
+        try:
+            path = url_for(endpoint)
+        except Exception:
+            continue
+        sections.append((title, path))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+    )
+    styles = getSampleStyleSheet()
+    heading_style = styles['Heading2']
+    body_style = styles['BodyText']
+    body_style.fontSize = 9
+    body_style.leading = 11
+    elements = []
+    intro_title = styles['Heading1']
+    intro_body = styles['Normal']
+    intro_body.fontSize = 10
+    intro_body.leading = 12
+    elements.append(Paragraph('Resumen global de pestañas', intro_title))
+    elements.append(
+        Paragraph(
+            escape(f"Generado el {now.strftime('%d/%m/%Y %H:%M:%S')}"),
+            intro_body,
+        )
+    )
+    elements.append(Spacer(1, 12))
+    auth_header = None
+    if AUTH_USER or AUTH_PASS:
+        token = base64.b64encode(f"{AUTH_USER}:{AUTH_PASS}".encode('utf-8')).decode('ascii')
+        auth_header = {'Authorization': f'Basic {token}'}
+    with app.test_client() as client:
+        for index, (title, path) in enumerate(sections):
+            if index > 0:
+                elements.append(PageBreak())
+            elements.append(Paragraph(escape(title), heading_style))
+            request_kwargs = {}
+            if auth_header:
+                request_kwargs['headers'] = auth_header
+            response = client.get(path, **request_kwargs)
+            if response.status_code != 200:
+                error_text = f"No se pudo cargar la pestaña (estado {response.status_code})."
+                elements.append(Paragraph(escape(error_text), body_style))
+                continue
+            text = _html_to_text_for_pdf(response.get_data(as_text=True))
+            blocks = _normalize_tab_sections(text)
+            if not blocks:
+                elements.append(Paragraph(escape('Sin contenido disponible.'), body_style))
+                continue
+            for block in blocks:
+                safe_block = escape(block).replace('\n', '<br/>')
+                elements.append(Paragraph(safe_block, body_style))
+                elements.append(Spacer(1, 6))
+    doc.build(elements)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    filename = now.strftime('%Y%m%d_%H%M%S') + '.pdf'
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"',
+        'X-Filename': filename,
+    }
+    return Response(pdf_bytes, mimetype='application/pdf', headers=headers)
 
 
 
