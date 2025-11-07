@@ -1163,10 +1163,7 @@ def assign_phase(
             if day_limit is not None:
                 limit = min(limit, day_limit)
         if override_limit is not None:
-            if limit == float('inf'):
-                limit = override_limit
-            else:
-                limit = min(limit, override_limit)
+            limit = override_limit
 
         if phase in ('tratamiento', 'mecanizar'):
             start = 0
