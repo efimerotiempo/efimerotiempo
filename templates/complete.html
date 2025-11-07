@@ -1370,6 +1370,29 @@
   if (summaryPdfBtn) {
     const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+    async function waitForDocumentFonts(doc, timeoutMs = 8000, label = 'documento') {
+      if (!doc || !doc.fonts || typeof doc.fonts.ready !== 'object' || typeof doc.fonts.ready.then !== 'function') {
+        return;
+      }
+      let timedOut = false;
+      try {
+        await Promise.race([
+          doc.fonts.ready,
+          new Promise((resolve) => {
+            setTimeout(() => {
+              timedOut = true;
+              resolve();
+            }, timeoutMs);
+          })
+        ]);
+      } catch (err) {
+        console.warn(`Error esperando a las fuentes (${label}) antes de la captura`, err);
+      }
+      if (timedOut) {
+        console.warn(`Continuando sin esperar más por las fuentes (${label}) tras ${timeoutMs} ms`);
+      }
+    }
+
     function elementDimensions(element) {
       if (!element) {
         return { width: 0, height: 0 };
@@ -1490,13 +1513,7 @@
       const originalScroll = { x: window.scrollX, y: window.scrollY };
       window.scrollTo(0, 0);
       try {
-        if (document.fonts && typeof document.fonts.ready === 'object') {
-          try {
-            await document.fonts.ready;
-          } catch (err) {
-            console.warn('No se pudieron cargar las fuentes antes de la captura', err);
-          }
-        }
+        await waitForDocumentFonts(document, 8000, 'pestaña actual');
         const targets = [];
         if (document.documentElement) targets.push(document.documentElement);
         if (document.body && document.body !== document.documentElement) targets.push(document.body);
@@ -1544,13 +1561,7 @@
         const iframeDoc = iframeWindow.document;
         iframeWindow.scrollTo(0, 0);
         await wait(1000);
-        if (iframeDoc.fonts && typeof iframeDoc.fonts.ready === 'object') {
-          try {
-            await iframeDoc.fonts.ready;
-          } catch (err) {
-            console.warn('No se pudieron cargar las fuentes en la pestaña remota', err);
-          }
-        }
+        await waitForDocumentFonts(iframeDoc, 8000, 'pestaña remota');
         const targets = [];
         if (iframeDoc.documentElement) targets.push(iframeDoc.documentElement);
         if (iframeDoc.body && iframeDoc.body !== iframeDoc.documentElement) targets.push(iframeDoc.body);
