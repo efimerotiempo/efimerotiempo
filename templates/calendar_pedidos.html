@@ -1,6 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Calendario pedidos</h2>
+<form id="quick-card-form" class="quick-card-form">
+  <label class="quick-card-field" for="quick-card-date">
+    <span>Fecha</span>
+    <input type="date" id="quick-card-date" name="date" required>
+  </label>
+  <label class="quick-card-field" for="quick-card-title">
+    <span>Título</span>
+    <input type="text" id="quick-card-title" name="title" placeholder="Título del pedido" required>
+  </label>
+  <button type="submit">Crear tarjeta</button>
+</form>
 <input type="text" id="filter-input" placeholder="Filtrar por título o cliente">
 <div class="pedidos-wrapper">
 <div class="pedidos-calendar-container">
@@ -85,6 +96,7 @@
           <col data-col-key="order-date" data-default-width="160">
           <col data-col-key="order-count" data-default-width="120">
           <col data-col-key="links" data-default-width="360">
+          <col data-col-key="observations" data-default-width="320">
         </colgroup>
         <thead>
           <tr>
@@ -94,6 +106,7 @@
             <th scope="col">Fecha pedido</th>
             <th scope="col">Conteo</th>
             <th scope="col">Fases</th>
+            <th scope="col">Observaciones</th>
           </tr>
         </thead>
         <tbody class="columna-1-content">
@@ -105,6 +118,9 @@
             {% set due_display = (item.due|format_due_date)|trim %}
             {% set start_display = (plan_value|format_due_date)|trim %}
             {% set details = item.link_details or [] %}
+            {% set pid_value = item.pid|string if item.pid is not none else '' %}
+            {% set project_entry = project_data.get(pid_value) or project_data.get(item.pid) %}
+            {% set obs_value = project_entry.observations if project_entry and project_entry.observations is not none else '' %}
           <tr class="project-row"
               data-pid="{{ item.pid or '' }}"
               data-project="{{ project_value }}"
@@ -114,7 +130,7 @@
               data-code="{{ code_value }}"
               data-due="{{ item.due or '' }}"
               data-plan="{{ plan_value or '' }}">
-            <td class="proj-title-cell">
+            <td class="proj-title-cell" data-sort="{{ (title_value or project_value)|default('', true)|lower }}">
               {% if code_value %}
               <span class="proj-code proj-code-badge"
                     data-project="{{ project_value }}"
@@ -124,17 +140,36 @@
                       data-project="{{ project_value }}"
                       data-code="{{ code_value }}">{{ title_value or project_value }}</strong>
             </td>
-            <td class="due-cell">
+            <td class="due-cell" data-sort="{{ item.due or '' }}" data-sort-type="date">
             {% if due_display %}
               <span class="proj-due">{{ due_display }}</span>
             {% endif %}
             </td>
-            <td class="start-cell">
+            <td class="start-cell" data-sort="{{ plan_value or '' }}" data-sort-type="date">
             {% if start_display %}
               <span class="proj-start">{{ start_display }}</span>
             {% endif %}
             </td>
-            <td class="order-date-cell">
+            {% set order_meta = namespace(first=None) %}
+            {% set count_meta = namespace(value=None) %}
+            {% set link_meta = namespace(value=None) %}
+            {% for link in item.links %}
+                {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
+                {% set order_value = detail.order_date %}
+                {% if order_value %}
+                    {% if order_meta.first is none or order_value < order_meta.first %}
+                        {% set order_meta.first = order_value %}
+                    {% endif %}
+                {% endif %}
+                {% set order_days = detail.order_days %}
+                {% if order_days is not none and count_meta.value is none %}
+                    {% set count_meta.value = order_days %}
+                {% endif %}
+                {% if link_meta.value is none and link %}
+                    {% set link_meta.value = link|lower %}
+                {% endif %}
+            {% endfor %}
+            <td class="order-date-cell" data-sort="{{ order_meta.first or '' }}" data-sort-type="date">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set order_value = detail.order_date %}
@@ -151,7 +186,7 @@
               </div>
             {% endfor %}
             </td>
-            <td class="order-count-cell">
+            <td class="order-count-cell" data-sort="{{ count_meta.value if count_meta.value is not none else '' }}" data-sort-type="number">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set order_days = detail.order_days %}
@@ -165,7 +200,7 @@
               </div>
             {% endfor %}
             </td>
-            <td class="links-cell">
+            <td class="links-cell" data-sort="{{ link_meta.value or '' }}">
             {% for link in item.links %}
                 {% set detail = details[loop.index0] if loop.index0 < details|length else {} %}
                 {% set column_value = detail.column|default('', true) %}
@@ -182,6 +217,15 @@
                    data-column="{{ column_value }}"
                    {% if tooltip %}title="{{ tooltip }}"{% endif %}>{{ link }}</div>
             {% endfor %}
+            </td>
+            <td class="observations-cell" data-sort="{{ obs_value|lower }}">
+              {% if pid_value %}
+              <textarea class="observations-input" data-pid="{{ pid_value }}" placeholder="Añade observaciones">{{ obs_value }}</textarea>
+              <div class="observations-status" aria-live="polite"></div>
+              {% else %}
+              <textarea class="observations-input" disabled placeholder="Sin proyecto vinculado"></textarea>
+              <div class="observations-status" aria-live="polite"></div>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -215,8 +259,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const START_URL = "{{ url_for('update_phase_start') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const TABLE_COLLATOR = typeof Intl !== 'undefined'
+    ? new Intl.Collator('es', { sensitivity: 'base', numeric: true })
+    : null;
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
+  const COMPLETE_URL = "{{ url_for('complete') }}";
   const LAST_KEY = 'lastMoved';
   const SCROLL_KEY2 = 'scrollDate';
   const COLUMN_WIDTHS_KEY = 'columna1ColumnWidths';
@@ -228,8 +276,660 @@ document.addEventListener('DOMContentLoaded', () => {
   const splitTotalDisplay = document.getElementById('split-total-hours');
   const splitCancel = document.getElementById('split-cancel');
   let splitRemainderInput = null;
+  let startDayHighlightCell = null;
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+  const pageParams = new URLSearchParams(window.location.search);
+  const initialFilterValue = pageParams.get('filter');
+  const initialHighlightPid = pageParams.get('highlight');
+  const START_DAY_HIGHLIGHT_CLASS = 'start-day-highlight';
+  const quickCardForm = document.getElementById('quick-card-form');
+  const quickCardDate = document.getElementById('quick-card-date');
+  const quickCardTitle = document.getElementById('quick-card-title');
+  const QUICK_CARD_STORAGE_KEY = 'pedidosQuickCards';
+  const QUICK_CARD_ORDER_STORAGE_KEY = 'pedidosQuickCardOrder';
+  const FILTER_STORAGE_KEY = 'pedidosCalendarFilter';
+  const UNCONFIRMED_ORDER_KEY = '__unconfirmed__';
+  const quickCardStorageEnabled = (() => {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return false;
+      }
+      const probeKey = '__quickCardProbe__';
+      window.localStorage.setItem(probeKey, '1');
+      window.localStorage.removeItem(probeKey);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  })();
+  let quickCardStore = [];
+  let taskOrderMap = {};
+
+  function loadTaskOrderFromStorage() {
+    if (!quickCardStorageEnabled) {
+      return {};
+    }
+    try {
+      const raw = window.localStorage.getItem(QUICK_CARD_ORDER_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      return Object.keys(parsed).reduce((acc, key) => {
+        const value = parsed[key];
+        if (Array.isArray(value)) {
+          acc[key] = value.filter(id => typeof id === 'string' && id);
+        }
+        return acc;
+      }, {});
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function persistTaskOrder() {
+    if (!quickCardStorageEnabled) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(QUICK_CARD_ORDER_STORAGE_KEY, JSON.stringify(taskOrderMap));
+    } catch (error) {
+      // Ignore persistence issues
+    }
+  }
+
+  function removeTaskIdFromOrder(id) {
+    if (!id) return;
+    let changed = false;
+    Object.keys(taskOrderMap).forEach((key) => {
+      const current = taskOrderMap[key];
+      if (!Array.isArray(current)) {
+        return;
+      }
+      const filtered = current.filter(value => value !== id);
+      if (filtered.length !== current.length) {
+        changed = true;
+        if (filtered.length) {
+          taskOrderMap[key] = filtered;
+        } else {
+          delete taskOrderMap[key];
+        }
+      }
+    });
+    if (changed) {
+      persistTaskOrder();
+    }
+  }
+
+  function pruneTaskOrder(validQuickCardIds) {
+    if (validQuickCardIds && !(validQuickCardIds instanceof Set)) {
+      return;
+    }
+    let changed = false;
+    Object.keys(taskOrderMap).forEach((key) => {
+      const current = taskOrderMap[key];
+      if (!Array.isArray(current)) {
+        delete taskOrderMap[key];
+        changed = true;
+        return;
+      }
+      const filtered = current.filter(id => {
+        if (!validQuickCardIds) {
+          return true;
+        }
+        if (id.startsWith('phase:') || id.startsWith('cid:')) {
+          return true;
+        }
+        return validQuickCardIds.has(id);
+      });
+      if (!filtered.length) {
+        if (current.length) {
+          delete taskOrderMap[key];
+          changed = true;
+        }
+        return;
+      }
+      if (filtered.length !== current.length) {
+        taskOrderMap[key] = filtered;
+        changed = true;
+      }
+    });
+    if (changed) {
+      persistTaskOrder();
+    }
+  }
+
+  function getCellStorageKey(cell) {
+    if (!cell) {
+      return null;
+    }
+    if (cell.dataset && cell.dataset.date) {
+      return cell.dataset.date;
+    }
+    if (cell.classList && cell.classList.contains('unconfirmed')) {
+      return UNCONFIRMED_ORDER_KEY;
+    }
+    return null;
+  }
+
+  function getTaskStorageId(element) {
+    if (!element || !element.dataset) {
+      return null;
+    }
+    if (element.dataset.quickCardId) {
+      return element.dataset.quickCardId;
+    }
+    if (element.dataset.cid) {
+      return `cid:${element.dataset.cid}`;
+    }
+    if (element.dataset.pid && element.dataset.phase) {
+      const partValue = normalizePartValue(element.dataset.part);
+      return `phase:${element.dataset.pid}:${element.dataset.phase}:${partValue}`;
+    }
+    return null;
+  }
+
+  function getCellTaskIds(cell) {
+    if (!cell) {
+      return [];
+    }
+    return Array.from(cell.querySelectorAll('.task')).map(getTaskStorageId).filter(Boolean);
+  }
+
+  function captureTaskOrderForCell(cell) {
+    const key = getCellStorageKey(cell);
+    if (!key) {
+      return;
+    }
+    const ids = getCellTaskIds(cell);
+    if (!ids.length) {
+      if (taskOrderMap[key]) {
+        delete taskOrderMap[key];
+        persistTaskOrder();
+      }
+      return;
+    }
+    const prev = taskOrderMap[key] || [];
+    const changed = prev.length !== ids.length || ids.some((value, index) => prev[index] !== value);
+    if (!changed) {
+      return;
+    }
+    taskOrderMap[key] = ids;
+    persistTaskOrder();
+  }
+
+  function applyTaskOrderToCell(cell) {
+    const key = getCellStorageKey(cell);
+    if (!key) {
+      return;
+    }
+    const ids = taskOrderMap[key];
+    if (!Array.isArray(ids) || !ids.length) {
+      return;
+    }
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    if (!tasks.length) {
+      return;
+    }
+    const byId = new Map();
+    tasks.forEach(el => {
+      const storageId = getTaskStorageId(el);
+      if (storageId) {
+        byId.set(storageId, el);
+      }
+    });
+    ids.forEach(id => {
+      const element = byId.get(id);
+      if (element) {
+        cell.appendChild(element);
+        byId.delete(id);
+      }
+    });
+    byId.forEach((element) => {
+      cell.appendChild(element);
+    });
+    const finalIds = getCellTaskIds(cell);
+    const stored = taskOrderMap[key] || [];
+    const changed = finalIds.length
+      ? (stored.length !== finalIds.length || finalIds.some((value, index) => stored[index] !== value))
+      : stored.length > 0;
+    if (changed) {
+      if (finalIds.length) {
+        taskOrderMap[key] = finalIds;
+      } else {
+        delete taskOrderMap[key];
+      }
+      persistTaskOrder();
+    }
+  }
+
+  function applyStoredOrderToCalendar() {
+    document.querySelectorAll('.pedidos-calendar td.day-cell[data-date], .pedidos-calendar td.unconfirmed').forEach(cell => {
+      applyTaskOrderToCell(cell);
+    });
+  }
+
+  function loadQuickCardsFromStorage() {
+    if (!quickCardStorageEnabled) {
+      return [];
+    }
+    try {
+      const raw = window.localStorage.getItem(QUICK_CARD_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map(entry => {
+          if (!entry || typeof entry !== 'object') return null;
+          const id = typeof entry.id === 'string' ? entry.id : null;
+          const date = typeof entry.date === 'string' ? entry.date : null;
+          const title = typeof entry.title === 'string' ? entry.title : null;
+          if (!id || !date || !title) return null;
+          return { id, date, title };
+        })
+        .filter(Boolean);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function persistQuickCards() {
+    if (!quickCardStorageEnabled) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(QUICK_CARD_STORAGE_KEY, JSON.stringify(quickCardStore));
+    } catch (error) {
+      // Ignore persistence issues (e.g. quota exceeded)
+    }
+  }
+
+  function updateQuickCardStoreDate(cardId, date) {
+    if (!cardId) {
+      return;
+    }
+    let changed = false;
+    quickCardStore = quickCardStore.map(card => {
+      if (card.id === cardId) {
+        if (card.date !== date) {
+          changed = true;
+          return { id: card.id, date, title: card.title };
+        }
+      }
+      return card;
+    });
+    if (changed) {
+      persistQuickCards();
+    }
+  }
+
+  function generateQuickCardId() {
+    return `qc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function hideAllQuickCardDeleteButtons(except = null) {
+    document.querySelectorAll('.task.quick-card.quick-card-show-delete').forEach(card => {
+      if (except && card === except) {
+        return;
+      }
+      card.classList.remove('quick-card-show-delete');
+    });
+  }
+
+  function removeQuickCardById(id) {
+    if (!id) return;
+    const nextStore = quickCardStore.filter(card => card.id !== id);
+    if (nextStore.length !== quickCardStore.length) {
+      quickCardStore = nextStore;
+      persistQuickCards();
+      removeTaskIdFromOrder(id);
+    }
+  }
+
+  function createQuickCardElement(card) {
+    const element = document.createElement('div');
+    element.className = 'task quick-card';
+    element.setAttribute('draggable', 'true');
+    element.dataset.quickCardId = card.id;
+    element.dataset.project = card.title;
+    element.dataset.title = card.title;
+    element.dataset.client = '';
+    element.dataset.code = '';
+    if (card.date === UNCONFIRMED_ORDER_KEY) {
+      element.dataset.day = '';
+      element.dataset.due = '';
+    } else {
+      element.dataset.day = card.date;
+      element.dataset.due = card.date;
+    }
+
+    const main = document.createElement('span');
+    main.className = 'task-main';
+    main.textContent = card.title;
+    element.appendChild(main);
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'quick-card-delete';
+    deleteButton.setAttribute('aria-label', 'Eliminar tarjeta');
+    deleteButton.textContent = '✖';
+    deleteButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const parentCell = element.closest('td.day-cell[data-date], td.unconfirmed');
+      const cardId = element.dataset.quickCardId;
+      element.remove();
+      removeQuickCardById(cardId);
+      hideAllQuickCardDeleteButtons();
+      scheduleCalendarHeightRecalc();
+      if (parentCell) {
+        captureTaskOrderForCell(parentCell);
+      }
+      const filterField = document.getElementById('filter-input');
+      if (filterField && filterField.value) {
+        filterField.dispatchEvent(new Event('input'));
+      }
+    });
+    element.appendChild(deleteButton);
+
+    element.addEventListener('click', (event) => {
+      if (event.target.closest('.quick-card-delete')) {
+        return;
+      }
+      event.stopPropagation();
+      hideAllQuickCardDeleteButtons(element);
+      element.classList.add('quick-card-show-delete');
+    });
+
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        hideAllQuickCardDeleteButtons(element);
+        element.classList.add('quick-card-show-delete');
+      }
+    });
+
+    element.tabIndex = 0;
+
+    return element;
+  }
+
+  function attachQuickCardToCalendar(card, targetCell = null, captureOrder = true) {
+    let cell = targetCell;
+    if (!cell) {
+      if (card.date === UNCONFIRMED_ORDER_KEY) {
+        cell = document.querySelector('.pedidos-calendar td.unconfirmed');
+      } else if (card.date) {
+        cell = document.querySelector(`.pedidos-calendar td.day-cell[data-date="${card.date}"]`);
+      }
+    }
+    if (!cell) {
+      return null;
+    }
+    const element = createQuickCardElement(card);
+    cell.appendChild(element);
+    initTaskDrag(element);
+    if (captureOrder) {
+      captureTaskOrderForCell(cell);
+    }
+    return element;
+  }
+
+  function refreshQuickCardsFromStore() {
+    document.querySelectorAll('.task.quick-card[data-quick-card-id]').forEach(el => el.remove());
+    quickCardStore.forEach(card => {
+      attachQuickCardToCalendar(card, null, false);
+    });
+    const validIds = new Set(quickCardStore.map(card => card.id));
+    pruneTaskOrder(validIds);
+    applyStoredOrderToCalendar();
+    document.querySelectorAll('.pedidos-calendar .task').forEach(initTaskDrag);
+    scheduleCalendarHeightRecalc();
+    const filterField = document.getElementById('filter-input');
+    if (filterField && filterField.value) {
+      filterField.dispatchEvent(new Event('input'));
+    }
+  }
+
+  function recalcCalendarHeights() {
+    const rows = document.querySelectorAll('.pedidos-calendar tbody tr');
+    if (!rows.length) return;
+    rows.forEach(row => {
+      const rowCells = row.querySelectorAll('td.day-cell, td.week-label');
+      rowCells.forEach(cell => {
+        cell.style.height = '';
+      });
+    });
+    rows.forEach(row => {
+      const rowCells = row.querySelectorAll('td.day-cell, td.week-label');
+      if (!rowCells.length) {
+        return;
+      }
+      let maxHeight = 0;
+      rowCells.forEach(cell => {
+        if (cell.offsetHeight > maxHeight) {
+          maxHeight = cell.offsetHeight;
+        }
+      });
+      rowCells.forEach(cell => {
+        cell.style.height = `${maxHeight}px`;
+      });
+    });
+  }
+
+  const requestHeightFrame = window.requestAnimationFrame
+    ? window.requestAnimationFrame.bind(window)
+    : (cb => setTimeout(cb, 16));
+  const cancelHeightFrame = window.cancelAnimationFrame
+    ? window.cancelAnimationFrame.bind(window)
+    : clearTimeout;
+  let pendingHeightFrame = null;
+
+  function scheduleCalendarHeightRecalc() {
+    if (pendingHeightFrame !== null) {
+      cancelHeightFrame(pendingHeightFrame);
+      pendingHeightFrame = null;
+    }
+    pendingHeightFrame = requestHeightFrame(() => {
+      pendingHeightFrame = null;
+      recalcCalendarHeights();
+    });
+  }
+
+  const calendarWrapper = document.querySelector('.pedidos-calendar-container');
+  const calendarBody = document.querySelector('.pedidos-calendar tbody');
+  if (calendarBody) {
+    const heightObserver = new MutationObserver(() => scheduleCalendarHeightRecalc());
+    heightObserver.observe(calendarBody, { childList: true, subtree: true });
+  }
+  if (calendarWrapper && 'ResizeObserver' in window) {
+    const resizeObserver = new ResizeObserver(() => scheduleCalendarHeightRecalc());
+    resizeObserver.observe(calendarWrapper);
+  }
+  window.addEventListener('resize', scheduleCalendarHeightRecalc, { passive: true });
+  window.addEventListener('orientationchange', scheduleCalendarHeightRecalc);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => scheduleCalendarHeightRecalc());
+  }
+
+  if (quickCardStorageEnabled) {
+    window.addEventListener('storage', (event) => {
+      if (event.key === QUICK_CARD_STORAGE_KEY) {
+        quickCardStore = loadQuickCardsFromStorage();
+        refreshQuickCardsFromStore();
+      } else if (event.key === QUICK_CARD_ORDER_STORAGE_KEY) {
+        taskOrderMap = loadTaskOrderFromStorage();
+        applyStoredOrderToCalendar();
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.task.quick-card')) {
+      hideAllQuickCardDeleteButtons();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideAllQuickCardDeleteButtons();
+    }
+  });
+
+  taskOrderMap = loadTaskOrderFromStorage();
+  quickCardStore = loadQuickCardsFromStorage();
+  refreshQuickCardsFromStore();
+
+  if (quickCardForm) {
+    quickCardForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const dateValue = quickCardDate ? quickCardDate.value : '';
+      const titleValue = quickCardTitle ? quickCardTitle.value.trim() : '';
+      if (!dateValue || !titleValue) {
+        return;
+      }
+      const targetCell = document.querySelector(`.pedidos-calendar td.day-cell[data-date="${dateValue}"]`);
+      if (!targetCell) {
+        alert('La fecha seleccionada no está visible en el calendario.');
+        return;
+      }
+      const newCard = {
+        id: generateQuickCardId(),
+        date: dateValue,
+        title: titleValue,
+      };
+      const created = attachQuickCardToCalendar(newCard, targetCell);
+      if (!created) {
+        alert('No se pudo crear la tarjeta en el calendario.');
+        return;
+      }
+      quickCardStore = quickCardStore.concat([newCard]);
+      persistQuickCards();
+      scheduleCalendarHeightRecalc();
+      const filterField = document.getElementById('filter-input');
+      if (filterField && filterField.value) {
+        filterField.dispatchEvent(new Event('input'));
+      }
+      if (quickCardForm) {
+        quickCardForm.reset();
+      }
+      hideAllQuickCardDeleteButtons();
+      created.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      if (typeof created.focus === 'function') {
+        try {
+          created.focus({ preventScroll: true });
+        } catch (error) {
+          created.focus();
+        }
+      }
+    });
+  }
+
+  function parseSortableCell(cell) {
+    if (!cell) {
+      return { blank: true, value: '', type: 'text' };
+    }
+    const raw = cell.dataset.sort !== undefined ? cell.dataset.sort : cell.textContent.trim();
+    const type = cell.dataset.sortType || 'text';
+    const rawString = raw === undefined || raw === null ? '' : `${raw}`;
+    const isBlank = rawString.trim() === '';
+    if (type === 'number') {
+      const num = Number(rawString);
+      return { blank: isBlank, value: Number.isNaN(num) ? 0 : num, type };
+    }
+    if (type === 'date') {
+      if (isBlank) {
+        return { blank: true, value: 0, type };
+      }
+      let time = Number.NaN;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawString)) {
+        time = Date.parse(rawString);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawString)) {
+        const [day, month, year] = rawString.split('/').map(Number);
+        if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+          time = Date.UTC(year, month - 1, day);
+        }
+      } else {
+        time = Date.parse(rawString);
+      }
+      if (Number.isNaN(time)) {
+        return { blank: true, value: 0, type };
+      }
+      return { blank: false, value: time, type };
+    }
+    return { blank: isBlank, value: rawString.toLowerCase(), type: 'text' };
+  }
+
+  function applyColumna1Sort(table, th, order) {
+    if (!table || !th) return;
+    const tbody = table.tBodies[0];
+    if (!tbody) return;
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const index = headers.indexOf(th);
+    if (index === -1) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+      const aCell = a.children[index];
+      const bCell = b.children[index];
+      const aVal = parseSortableCell(aCell);
+      const bVal = parseSortableCell(bCell);
+      if (aVal.blank && bVal.blank) return 0;
+      if (aVal.blank !== bVal.blank) {
+        return aVal.blank ? 1 : -1;
+      }
+      let comparison = 0;
+      if (aVal.type === 'number' && bVal.type === 'number') {
+        comparison = aVal.value - bVal.value;
+      } else if (aVal.type === 'date' && bVal.type === 'date') {
+        comparison = aVal.value - bVal.value;
+      } else if (TABLE_COLLATOR) {
+        comparison = TABLE_COLLATOR.compare(aVal.value, bVal.value);
+      } else {
+        comparison = aVal.value < bVal.value ? -1 : aVal.value > bVal.value ? 1 : 0;
+      }
+      if (comparison === 0) return 0;
+      return order === 'asc' ? (comparison < 0 ? -1 : 1) : (comparison < 0 ? 1 : -1);
+    });
+    rows.forEach((row) => tbody.appendChild(row));
+  }
+
+  function updateColumna1HeaderState(headers, active, order) {
+    headers.forEach((header) => {
+      if (header === active) {
+        header.dataset.sortOrder = order;
+        header.classList.toggle('sorted-asc', order === 'asc');
+        header.classList.toggle('sorted-desc', order === 'desc');
+      } else {
+        header.dataset.sortOrder = '';
+        header.classList.remove('sorted-asc', 'sorted-desc');
+      }
+    });
+  }
+
+  function reapplyColumna1Sort(table) {
+    if (!table) return;
+    const active = table.querySelector('thead th.sorted-asc, thead th.sorted-desc');
+    if (!active) return;
+    const order = active.dataset.sortOrder || (active.classList.contains('sorted-desc') ? 'desc' : 'asc');
+    applyColumna1Sort(table, active, order || 'asc');
+  }
+
+  function initColumna1Sorting(root = document) {
+    root.querySelectorAll('.columna-1-table').forEach((table) => {
+      const tbody = table.tBodies[0];
+      if (!tbody) return;
+      const headers = Array.from(table.querySelectorAll('thead th'));
+      headers.forEach((th, index) => {
+        if (th.dataset.sortableInit === '1') return;
+        th.dataset.sortableInit = '1';
+        th.classList.add('sortable');
+        th.addEventListener('click', () => {
+          const order = th.dataset.sortOrder === 'asc' ? 'desc' : 'asc';
+          updateColumna1HeaderState(headers, th, order);
+          applyColumna1Sort(table, th, order);
+        });
+      });
+    });
+  }
 
   function escapeHtml(value) {
     if (value === undefined || value === null) return '';
@@ -622,7 +1322,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function resolveRowPid(row) {
     if (!row) return null;
     let pid = row.dataset.pid;
-    if (pid && PROJECT_DATA[pid]) return pid;
+    if (pid && PROJECT_DATA[pid]) {
+      const cell = row.querySelector('.observations-cell');
+      if (cell) syncObservationsCell(cell, pid);
+      return pid;
+    }
 
     const code = norm(row.dataset.code);
     const project = norm(row.dataset.project);
@@ -655,10 +1359,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (pid) {
         row.dataset.pid = pid;
+        const cell = row.querySelector('.observations-cell');
+        if (cell) syncObservationsCell(cell, pid);
         return pid;
       }
     }
     return null;
+  }
+
+  function clearStartDayHighlight() {
+    if (startDayHighlightCell && startDayHighlightCell.isConnected) {
+      startDayHighlightCell.classList.remove(START_DAY_HIGHLIGHT_CLASS);
+    }
+    startDayHighlightCell = null;
+  }
+
+  function applyStartDayHighlight(dateValue) {
+    const iso = normalizeDateToIso(dateValue);
+    clearStartDayHighlight();
+    if (!iso) return;
+    const cell = document.querySelector(`.pedidos-calendar td[data-date='${iso}']`);
+    if (cell) {
+      cell.classList.add(START_DAY_HIGHLIGHT_CLASS);
+      startDayHighlightCell = cell;
+    }
+  }
+
+  function resolvePlannedStartByPid(pid) {
+    if (!pid) return '';
+    const candidates = new Set();
+    const startEntry = START_DATA && START_DATA[pid];
+    if (startEntry && typeof startEntry === 'object') {
+      Object.values(startEntry).forEach(value => {
+        const iso = normalizeDateToIso(value);
+        if (iso) candidates.add(iso);
+      });
+    }
+    const info = PROJECT_DATA && PROJECT_DATA[pid];
+    if (info) {
+      ['plan_start', 'montar_start', 'start', 'start_date'].forEach(key => {
+        const iso = normalizeDateToIso(info && info[key]);
+        if (iso) candidates.add(iso);
+      });
+      if (info.segment_starts && typeof info.segment_starts === 'object') {
+        Object.values(info.segment_starts).forEach(value => {
+          const iso = normalizeDateToIso(value);
+          if (iso) candidates.add(iso);
+        });
+      }
+    }
+    if (!candidates.size) return '';
+    return Array.from(candidates).sort()[0];
+  }
+
+  function resolvePlannedStartFromRow(row) {
+    if (!row) return '';
+    const direct = normalizeDateToIso(row.dataset.plan);
+    if (direct) return direct;
+    const pid = resolveRowPid(row);
+    if (!pid) return '';
+    return resolvePlannedStartByPid(pid);
+  }
+
+  function highlightProjectStartByPid(pid) {
+    applyStartDayHighlight(resolvePlannedStartByPid(pid));
+  }
+
+  function highlightProjectStartByRow(row) {
+    applyStartDayHighlight(resolvePlannedStartFromRow(row));
   }
 
   function afterMove(data, originalDate) {
@@ -816,6 +1584,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const metaLines = [];
     const clientDate = pickClientDate(info);
     if (clientDate) metaLines.push(`<div>Fecha cliente: ${clientDate}</div>`);
+    const safeProjectAttr = escapeHtml(context.project || info.name || '');
+    const safePidAttr = escapeHtml(context.pid || '');
+    metaLines.push(`<div><button type="button" class="view-calendar-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver calendario</button></div>`);
     if (info.due_date && info.due_date !== '0') metaLines.push(`<div>Límite: ${info.due_date}</div>`);
     if (info.material_confirmed_date && info.material_confirmed_date !== '0') metaLines.push(`<div>Material confirmado: ${info.material_confirmed_date}</div>`);
     if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
@@ -892,6 +1663,30 @@ document.addEventListener('DOMContentLoaded', () => {
     popup.style.left = (anchorRect.left + window.scrollX + 5) + 'px';
     popup.style.top = (anchorRect.bottom + window.scrollY + 5) + 'px';
     popup.style.display = 'block';
+
+    const viewCalendarBtn = popup.querySelector('.view-calendar-btn');
+    if (viewCalendarBtn) {
+      viewCalendarBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        try {
+          const url = new URL(COMPLETE_URL, window.location.origin);
+          const pidValue = viewCalendarBtn.dataset.pid || '';
+          if (pidValue) {
+            url.searchParams.set('project_id', pidValue);
+            url.searchParams.set('highlight', pidValue);
+          }
+          const projectName = viewCalendarBtn.dataset.project || '';
+          if (projectName) {
+            const ofMatch = projectName.match(/\bOF\s*(\d{4})\b/i);
+            const filterValue = ofMatch ? ofMatch[1] : projectName;
+            url.searchParams.set('project', filterValue);
+          }
+          window.open(url.toString(), '_blank');
+        } catch (error) {
+          console.error('No se pudo abrir el calendario de planificación:', error);
+        }
+      });
+    }
 
     const del = document.getElementById('del-btn');
     if (del) {
@@ -1058,76 +1853,221 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
-  const cells = document.querySelectorAll('.pedidos-calendar td:not(.week-label):not(.unconfirmed)');
-  let maxH = 0;
-  cells.forEach(c => { if (c.offsetHeight > maxH) maxH = c.offsetHeight; });
-  cells.forEach(c => c.style.height = maxH + 'px');
+  recalcCalendarHeights();
 
-  let dragged = null;
-  const tasks = document.querySelectorAll('.pedidos-calendar .task');
-  tasks.forEach(t => {
-    t.addEventListener('dragstart', e => {
-      dragged = t;
-      const partValue = normalizePartValue(t.dataset.part);
-      const data = {
-        pid: t.dataset.pid,
-        phase: t.dataset.phase,
-        part: partValue || null,
-        worker: t.dataset.worker,
-        cid: t.dataset.cid
-      };
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify(data));
+  let draggedTask = null;
+  let dragSourceCell = null;
+
+  function buildTaskDragPayload(element) {
+    const payload = {};
+    if (!element || !element.dataset) {
+      return payload;
+    }
+    if (element.dataset.pid) {
+      payload.pid = element.dataset.pid;
+    }
+    if (element.dataset.phase) {
+      payload.phase = element.dataset.phase;
+    }
+    const partValue = normalizePartValue(element.dataset.part);
+    if (partValue) {
+      payload.part = partValue;
+    }
+    if (element.dataset.worker) {
+      payload.worker = element.dataset.worker;
+    }
+    if (element.dataset.cid) {
+      payload.cid = element.dataset.cid;
+    }
+    if (element.dataset.quickCardId) {
+      payload.quickCardId = element.dataset.quickCardId;
+    }
+    return payload;
+  }
+
+  function handleTaskDragStart(event) {
+    draggedTask = event.currentTarget;
+    dragSourceCell = draggedTask ? draggedTask.closest('td[data-date], td.unconfirmed') : null;
+    const payload = buildTaskDragPayload(draggedTask);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      try {
+        event.dataTransfer.setData('text/plain', JSON.stringify(payload));
+      } catch (error) {
+        // Ignore serialization issues
+      }
+    }
+    if (draggedTask) {
+      draggedTask.classList.add('task-dragging');
+    }
+  }
+
+  function handleTaskDragEnd() {
+    if (draggedTask) {
+      draggedTask.classList.remove('task-dragging');
+    }
+    draggedTask = null;
+    dragSourceCell = null;
+  }
+
+  function initTaskDrag(taskElement) {
+    if (!taskElement || taskElement.dataset.dragInit === '1') {
+      return;
+    }
+    taskElement.dataset.dragInit = '1';
+    taskElement.addEventListener('dragstart', handleTaskDragStart);
+    taskElement.addEventListener('dragend', handleTaskDragEnd);
+  }
+
+  function getTaskDropReference(cell, clientY) {
+    const siblings = Array.from(cell.querySelectorAll('.task:not(.task-dragging)')).filter(element => element.offsetParent !== null);
+    let closest = null;
+    let closestOffset = Number.NEGATIVE_INFINITY;
+    siblings.forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      const offset = clientY - rect.top - (rect.height / 2);
+      if (offset < 0 && offset > closestOffset) {
+        closestOffset = offset;
+        closest = element;
+      }
     });
-    t.addEventListener('dragend', () => { dragged = null; });
-  });
+    return closest;
+  }
+
+  function finalizeQuickCardDrop(element, targetCell) {
+    if (!element || !element.dataset || !element.dataset.quickCardId) {
+      return;
+    }
+    const quickId = element.dataset.quickCardId;
+    const targetKey = getCellStorageKey(targetCell);
+    if (targetKey === UNCONFIRMED_ORDER_KEY) {
+      element.dataset.day = '';
+      element.dataset.due = '';
+      updateQuickCardStoreDate(quickId, UNCONFIRMED_ORDER_KEY);
+    } else if (targetKey) {
+      element.dataset.day = targetKey;
+      element.dataset.due = targetKey;
+      updateQuickCardStoreDate(quickId, targetKey);
+    }
+    if (targetCell) {
+      captureTaskOrderForCell(targetCell);
+    }
+    if (dragSourceCell && dragSourceCell !== targetCell) {
+      captureTaskOrderForCell(dragSourceCell);
+    }
+  }
+
+  function handleTaskDropOnCell(cell, event) {
+    event.preventDefault();
+    let data;
+    try {
+      data = JSON.parse(event.dataTransfer.getData('text/plain'));
+    } catch (error) {
+      data = {};
+    }
+    const reference = getTaskDropReference(cell, event.clientY);
+    let activeTask = draggedTask;
+    if (!activeTask && data && data.quickCardId) {
+      activeTask = document.querySelector(`.task.quick-card[data-quick-card-id="${data.quickCardId}"]`);
+    }
+    if (activeTask) {
+      if (reference) {
+        cell.insertBefore(activeTask, reference);
+      } else {
+        cell.appendChild(activeTask);
+      }
+      captureTaskOrderForCell(cell);
+      if (dragSourceCell && dragSourceCell !== cell) {
+        captureTaskOrderForCell(dragSourceCell);
+      }
+      scheduleCalendarHeightRecalc();
+    }
+    if (data && data.pid) {
+      fetch("{{ url_for('move_phase') }}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
+      }).then(resp => { if (resp.ok) location.reload(); });
+    } else if (data && data.cid) {
+      fetch("{{ url_for('update_pedido_date') }}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({cid: data.cid, date: cell.dataset.date})
+      }).then(resp => { if (resp.ok) location.reload(); });
+    }
+    const movedQuickCard = activeTask && activeTask.dataset && activeTask.dataset.quickCardId;
+    if (movedQuickCard) {
+      finalizeQuickCardDrop(activeTask, cell);
+      scheduleCalendarHeightRecalc();
+    }
+    if (activeTask) {
+      activeTask.classList.remove('task-dragging');
+    }
+    draggedTask = null;
+    dragSourceCell = null;
+  }
 
   const dayCells = document.querySelectorAll('.pedidos-calendar td[data-date]');
   dayCells.forEach(cell => {
-    cell.addEventListener('dragover', e => e.preventDefault());
-    cell.addEventListener('drop', e => {
+    cell.addEventListener('dragover', e => {
       e.preventDefault();
-      let data;
-      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
-      if (data.pid) {
-        fetch("{{ url_for('move_phase') }}", {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          credentials: 'same-origin',
-          body: JSON.stringify({pid: data.pid, phase: data.phase, date: cell.dataset.date, worker: data.worker, part: data.part})
-        }).then(resp => { if (resp.ok) location.reload(); });
-      } else if (data.cid) {
-        fetch("{{ url_for('update_pedido_date') }}", {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          credentials: 'same-origin',
-          body: JSON.stringify({cid: data.cid, date: cell.dataset.date})
-        }).then(resp => { if (resp.ok) location.reload(); });
-      } else if (dragged) {
-        cell.appendChild(dragged);
-        dragged = null;
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
       }
+    });
+    cell.addEventListener('drop', event => {
+      handleTaskDropOnCell(cell, event);
     });
   });
 
   const unconfirmedCell = document.querySelector('.pedidos-calendar td.unconfirmed');
   if (unconfirmedCell) {
-    unconfirmedCell.addEventListener('dragover', e => e.preventDefault());
+    unconfirmedCell.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+      }
+    });
     unconfirmedCell.addEventListener('drop', e => {
       e.preventDefault();
       let data;
-      try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch(err) { data = {}; }
-      if (data.cid) {
+      try {
+        data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      } catch (error) {
+        data = {};
+      }
+      let activeTask = draggedTask;
+      if (!activeTask && data && data.quickCardId) {
+        activeTask = document.querySelector(`.task.quick-card[data-quick-card-id="${data.quickCardId}"]`);
+      }
+      if (activeTask) {
+        unconfirmedCell.appendChild(activeTask);
+        captureTaskOrderForCell(unconfirmedCell);
+        if (dragSourceCell && dragSourceCell !== unconfirmedCell) {
+          captureTaskOrderForCell(dragSourceCell);
+        }
+      }
+      if (data && data.cid) {
         fetch("{{ url_for('update_pedido_date') }}", {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           credentials: 'same-origin',
           body: JSON.stringify({cid: data.cid, date: null})
         }).then(resp => { if (resp.ok) location.reload(); });
-      } else if (dragged) {
-        unconfirmedCell.appendChild(dragged);
-        dragged = null;
       }
+      if (activeTask && activeTask.dataset && activeTask.dataset.quickCardId) {
+        finalizeQuickCardDrop(activeTask, unconfirmedCell);
+        scheduleCalendarHeightRecalc();
+      } else if (activeTask) {
+        scheduleCalendarHeightRecalc();
+      }
+      if (activeTask) {
+        activeTask.classList.remove('task-dragging');
+      }
+      draggedTask = null;
+      dragSourceCell = null;
     });
   }
 
@@ -1140,25 +2080,121 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function normalizeFilterValue(value) {
+    return (value === undefined || value === null) ? '' : `${value}`.toLowerCase();
+  }
+
+  const filterStorage = (() => {
+    try {
+      if (typeof window === 'undefined' || !window.sessionStorage) {
+        return null;
+      }
+      const probeKey = '__pedidosFilterProbe__';
+      window.sessionStorage.setItem(probeKey, '1');
+      window.sessionStorage.removeItem(probeKey);
+      return window.sessionStorage;
+    } catch (error) {
+      return null;
+    }
+  })();
+
+  function persistFilterValue(value) {
+    if (!filterStorage) {
+      return;
+    }
+    try {
+      if (value) {
+        filterStorage.setItem(FILTER_STORAGE_KEY, value);
+      } else {
+        filterStorage.removeItem(FILTER_STORAGE_KEY);
+      }
+    } catch (error) {
+      // Ignore persistence issues
+    }
+  }
+
+  function loadStoredFilterValue() {
+    if (!filterStorage) {
+      return null;
+    }
+    try {
+      const value = filterStorage.getItem(FILTER_STORAGE_KEY);
+      return value === null ? null : value;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function updateFilterQueryParam(value) {
+    if (typeof window === 'undefined' || !window.history || typeof window.history.replaceState !== 'function') {
+      return;
+    }
+    try {
+      const url = new URL(window.location.href);
+      if (value) {
+        url.searchParams.set('filter', value);
+      } else {
+        url.searchParams.delete('filter');
+      }
+      window.history.replaceState(null, '', url.toString());
+    } catch (error) {
+      // Ignore history issues
+    }
+  }
+
+  function elementTextIncludes(element, query) {
+    if (!query) return true;
+    if (!element) return false;
+    return element.textContent.toLowerCase().includes(query);
+  }
+
   const filterInput = document.getElementById('filter-input');
   filterInput.addEventListener('input', () => {
-    const q = filterInput.value.toLowerCase();
+    const rawValue = filterInput.value;
+    const trimmedValue = rawValue.trim();
+    const q = normalizeFilterValue(trimmedValue);
     document.querySelectorAll('.pedidos-calendar .task').forEach(t => {
-      const proj = (t.dataset.project || '').toLowerCase();
-      const cli = (t.dataset.client || '').toLowerCase();
-      const code = (t.dataset.code || '').toLowerCase();
-      t.style.display = (!q || proj.includes(q) || cli.includes(q) || code.includes(q)) ? '' : 'none';
+      const proj = normalizeFilterValue(t.dataset.project);
+      const cli = normalizeFilterValue(t.dataset.client);
+      const code = normalizeFilterValue(t.dataset.code);
+      const text = normalizeFilterValue(t.textContent);
+      const showTask = !q || proj.includes(q) || cli.includes(q) || code.includes(q) || text.includes(q);
+      t.style.display = showTask ? '' : 'none';
     });
     document.querySelectorAll('.columna-1 .project-row').forEach(row => {
-      const proj = (row.dataset.project || '').toLowerCase();
-      const title = (row.dataset.title || '').toLowerCase();
-      const cli = (row.dataset.client || '').toLowerCase();
-      const display = (row.dataset.display || '').toLowerCase();
-      const code = (row.dataset.code || '').toLowerCase();
-      const show = (!q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q));
+      const proj = normalizeFilterValue(row.dataset.project);
+      const title = normalizeFilterValue(row.dataset.title);
+      const cli = normalizeFilterValue(row.dataset.client);
+      const display = normalizeFilterValue(row.dataset.display);
+      const code = normalizeFilterValue(row.dataset.code);
+      const rowTextMatches = elementTextIncludes(row, q);
+      let linkMatches = false;
+      if (q) {
+        linkMatches = Array.from(row.querySelectorAll('.link-title')).some(link => {
+          const linkTitle = normalizeFilterValue(link.dataset.title);
+          const linkLane = normalizeFilterValue(link.dataset.lane);
+          const linkColumn = normalizeFilterValue(link.dataset.column);
+          const linkText = normalizeFilterValue(link.textContent);
+          return linkTitle.includes(q) || linkLane.includes(q) || linkColumn.includes(q) || linkText.includes(q);
+        });
+      }
+      const show = !q || proj.includes(q) || cli.includes(q) || title.includes(q) || display.includes(q) || code.includes(q) || rowTextMatches || linkMatches;
       row.style.display = show ? '' : 'none';
     });
+    updateFilterQueryParam(trimmedValue);
+    persistFilterValue(trimmedValue);
+    scheduleCalendarHeightRecalc();
   });
+
+  const storedFilterValue = initialFilterValue !== null ? null : loadStoredFilterValue();
+
+  if (filterInput && initialFilterValue !== null) {
+    filterInput.value = initialFilterValue;
+    filterInput.dispatchEvent(new Event('input'));
+  } else if (filterInput && storedFilterValue) {
+    filterInput.value = storedFilterValue;
+    filterInput.dispatchEvent(new Event('input'));
+  }
 
   function parseISODateParts(value) {
     const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value || '');
@@ -1179,6 +2215,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.round((laterUtc - earlierUtc) / 86400000);
   }
 
+  function normalizeDateToIso(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    const text = `${value}`.trim();
+    if (!text) return '';
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    const euroMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (euroMatch) {
+      return `${euroMatch[3]}-${euroMatch[2]}-${euroMatch[1]}`;
+    }
+    return '';
+  }
+
   function formatDueDisplay(value) {
     const parts = parseISODateParts(value);
     if (!parts) return '';
@@ -1186,6 +2240,162 @@ document.addEventListener('DOMContentLoaded', () => {
     const month = String(parts.month + 1).padStart(2, '0');
     const year = String(parts.year);
     return `${day}/${month}/${year}`;
+  }
+
+  function getProjectEntry(pid) {
+    if (!pid || !PROJECT_DATA) return null;
+    if (PROJECT_DATA[pid]) return PROJECT_DATA[pid];
+    const numericPid = Number(pid);
+    if (Number.isFinite(numericPid) && PROJECT_DATA[numericPid]) {
+      return PROJECT_DATA[numericPid];
+    }
+    return null;
+  }
+
+  function getProjectObservations(pid) {
+    const entry = getProjectEntry(pid);
+    if (!entry) return '';
+    const value = entry.observations;
+    return value === undefined || value === null ? '' : `${value}`;
+  }
+
+  function setProjectObservations(pid, value) {
+    if (!pid || !PROJECT_DATA) return;
+    const entry = getProjectEntry(pid);
+    if (entry) {
+      entry.observations = value;
+      return;
+    }
+    if (!PROJECT_DATA[pid]) {
+      PROJECT_DATA[pid] = { observations: value };
+    } else {
+      PROJECT_DATA[pid].observations = value;
+    }
+  }
+
+  function updateObservationsStatus(statusEl, state, message) {
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.classList.remove('is-saving', 'is-error', 'is-success');
+    if (state === 'saving') {
+      statusEl.classList.add('is-saving');
+    } else if (state === 'error') {
+      statusEl.classList.add('is-error');
+    } else if (state === 'success') {
+      statusEl.classList.add('is-success');
+    }
+  }
+
+  function syncObservationsCell(cell, pid) {
+    if (!cell) return;
+    const input = cell.querySelector('.observations-input');
+    const text = pid ? getProjectObservations(pid) : '';
+    cell.dataset.sort = text.toLocaleLowerCase('es-ES');
+    if (input) {
+      if (pid) {
+        input.disabled = false;
+        input.dataset.pid = pid;
+      } else {
+        input.disabled = true;
+        delete input.dataset.pid;
+      }
+      if (input.value !== text) {
+        input.value = text;
+      }
+    }
+  }
+
+  function createObservationsCell(pid) {
+    const cell = document.createElement('td');
+    cell.className = 'observations-cell';
+    const textarea = document.createElement('textarea');
+    textarea.className = 'observations-input';
+    textarea.placeholder = pid ? 'Añade observaciones' : 'Sin proyecto vinculado';
+    if (pid) {
+      textarea.dataset.pid = pid;
+    } else {
+      textarea.disabled = true;
+    }
+    cell.appendChild(textarea);
+    const status = document.createElement('div');
+    status.className = 'observations-status';
+    status.setAttribute('aria-live', 'polite');
+    cell.appendChild(status);
+    syncObservationsCell(cell, pid);
+    return cell;
+  }
+
+  function persistObservationsInput(input) {
+    if (!input || input.dataset.obsSaving === '1') return;
+    const pid = input.dataset.pid;
+    if (!pid) return;
+    const text = input.value;
+    const current = getProjectObservations(pid);
+    const statusEl = input.nextElementSibling && input.nextElementSibling.classList.contains('observations-status')
+      ? input.nextElementSibling
+      : null;
+    if (text === current) {
+      updateObservationsStatus(statusEl, '', '');
+      return;
+    }
+    const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+    input.dataset.obsSaving = '1';
+    updateObservationsStatus(statusEl, 'saving', 'Guardando...');
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ observations: text })
+    })
+      .then(resp => {
+        if (!resp.ok) {
+          return resp.json().catch(() => ({})).then(data => {
+            throw new Error(data.error || `Error ${resp.status}`);
+          });
+        }
+        return resp.json().catch(() => ({}));
+      })
+      .then(() => {
+        setProjectObservations(pid, text);
+        syncObservationsCell(input.closest('.observations-cell'), pid);
+        updateObservationsStatus(statusEl, 'success', 'Guardado');
+        setTimeout(() => {
+          if (statusEl && statusEl.textContent === 'Guardado') {
+            statusEl.textContent = '';
+            statusEl.classList.remove('is-success');
+          }
+        }, 1500);
+      })
+      .catch(error => {
+        updateObservationsStatus(statusEl, 'error', error && error.message ? error.message : 'No se pudo guardar');
+      })
+      .finally(() => {
+        delete input.dataset.obsSaving;
+      });
+  }
+
+  function initObservationInputs(root = document) {
+    if (!root) return;
+    const scope = root.querySelectorAll ? root : document;
+    scope.querySelectorAll('.observations-input').forEach(input => {
+      if (input.dataset.obsInit === '1') return;
+      input.dataset.obsInit = '1';
+      input.addEventListener('input', () => {
+        const statusEl = input.nextElementSibling && input.nextElementSibling.classList.contains('observations-status')
+          ? input.nextElementSibling
+          : null;
+        updateObservationsStatus(statusEl, '', 'Pendiente de guardar');
+      });
+      input.addEventListener('blur', () => {
+        persistObservationsInput(input);
+      });
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+    });
   }
 
   function buildTaskMap() {
@@ -1486,6 +2696,7 @@ document.addEventListener('DOMContentLoaded', () => {
     applyHighlight(null);
     currentHighlightState = null;
     currentHighlightKey = null;
+    clearStartDayHighlight();
   }
 
   function reapplyHighlight() {
@@ -1518,6 +2729,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const title = t.dataset.title;
         if (!title) return;
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && t.dataset.pid) {
+          highlightProjectStartByPid(t.dataset.pid);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
     const column = document.querySelector('.columna-1');
@@ -1527,17 +2743,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!el) return;
         const title = el.dataset.title;
         if (!title) return;
+        const row = el.closest('.project-row');
         toggleHighlight({ titles: [title] });
+        if (currentHighlightState && row) {
+          highlightProjectStartByRow(row);
+        } else if (!currentHighlightState) {
+          clearStartDayHighlight();
+        }
       });
     }
   }
 
   attachHighlightHandlers();
   updateDueWarnings();
+  initColumna1Sorting();
   initColumnResizing();
 
   const projectList = document.querySelector('.columna-1');
-  document.querySelectorAll('.columna-1 .project-row').forEach(resolveRowPid);
+  document.querySelectorAll('.columna-1 .project-row').forEach(row => {
+    const pid = resolveRowPid(row);
+    const cell = row.querySelector('.observations-cell');
+    if (cell) syncObservationsCell(cell, pid);
+  });
+  initObservationInputs();
   if (projectList) {
     projectList.addEventListener('click', e => {
       const trigger = e.target.closest('.proj-code, .proj-title');
@@ -1555,12 +2783,37 @@ document.addEventListener('DOMContentLoaded', () => {
           clearHighlight();
         }
       }
+      highlightProjectStartByRow(row);
       const pid = resolveRowPid(row);
       if (!pid || !PROJECT_DATA[pid]) return;
       e.stopPropagation();
       const rect = trigger.getBoundingClientRect();
-      openPhasePopup({ pid }, rect);
+      const projectName = row.dataset.project || '';
+      openPhasePopup({ pid, project: projectName }, rect);
     });
+  }
+
+  if (initialHighlightPid) {
+    const highlightRow = Array.from(document.querySelectorAll('.columna-1 .project-row')).find(row => row.dataset.pid === initialHighlightPid);
+    if (highlightRow) {
+      const highlightTitles = Array.from(highlightRow.querySelectorAll('.link-title')).map(link => link.dataset.title).filter(Boolean);
+      if (highlightTitles.length) {
+        toggleHighlight({ titles: highlightTitles });
+      } else {
+        highlightRow.classList.add('highlight');
+      }
+      highlightProjectStartByRow(highlightRow);
+      highlightRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      highlightProjectStartByPid(initialHighlightPid);
+    }
+    const highlightTasks = Array.from(document.querySelectorAll(`.pedidos-calendar .task[data-pid='${initialHighlightPid}']`));
+    if (highlightTasks.length) {
+      highlightTasks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    const updatedUrl = new URL(window.location.href);
+    updatedUrl.searchParams.delete('highlight');
+    history.replaceState(null, '', updatedUrl);
   }
 
   const source = new EventSource("{{ url_for('event_stream') }}");
@@ -1606,6 +2859,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const titleCell = document.createElement('td');
           titleCell.className = 'proj-title-cell';
+          const titleSortValue = (resolvedTitle || projectValue || '').toLocaleLowerCase('es-ES');
+          titleCell.dataset.sort = titleSortValue;
           if (code) {
             const codeSpan = document.createElement('span');
             codeSpan.className = 'proj-code proj-code-badge';
@@ -1624,6 +2879,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const dueCell = document.createElement('td');
           dueCell.className = 'due-cell';
+          dueCell.dataset.sortType = 'date';
+          dueCell.dataset.sort = item.due ? String(item.due).trim() : '';
           if (dueDisplay) {
             const dueSpan = document.createElement('span');
             dueSpan.className = 'proj-due';
@@ -1634,6 +2891,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const startCell = document.createElement('td');
           startCell.className = 'start-cell';
+          startCell.dataset.sortType = 'date';
+          startCell.dataset.sort = planValue;
           if (startDisplay) {
             const startSpan = document.createElement('span');
             startSpan.className = 'proj-start';
@@ -1644,14 +2903,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const orderCell = document.createElement('td');
           orderCell.className = 'order-date-cell';
+          orderCell.dataset.sortType = 'date';
 
           const countCell = document.createElement('td');
           countCell.className = 'order-count-cell';
+          countCell.dataset.sortType = 'number';
 
           const linksCell = document.createElement('td');
           linksCell.className = 'links-cell';
+          linksCell.dataset.sort = '';
           const linkDetails = Array.isArray(item.link_details) ? item.link_details : [];
           const links = Array.isArray(item.links) ? item.links : [];
+          let earliestOrder = '';
+          let firstCount = '';
+          let firstLinkSort = '';
           links.forEach((link, idx) => {
             const detail = linkDetails[idx] || {};
             const orderDiv = document.createElement('div');
@@ -1662,6 +2927,9 @@ document.addEventListener('DOMContentLoaded', () => {
               orderDiv.dataset.order = orderValue;
               orderDiv.textContent = formatDueDisplay(orderValue);
               if (!orderDiv.textContent) orderDiv.textContent = orderValue;
+              if (!earliestOrder || orderValue < earliestOrder) {
+                earliestOrder = orderValue;
+              }
             } else if (orderRaw) {
               orderDiv.textContent = orderRaw;
             } else {
@@ -1676,6 +2944,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Number.isFinite(daysNumber)) {
               countDiv.dataset.days = `${daysNumber}`;
               countDiv.textContent = `${daysNumber}`;
+              if (!firstCount) {
+                firstCount = `${daysNumber}`;
+              }
             } else {
               countDiv.appendChild(document.createTextNode('\u00a0'));
             }
@@ -1696,18 +2967,30 @@ document.addEventListener('DOMContentLoaded', () => {
             linkDiv.dataset.column = columnValue;
             if (tooltip) linkDiv.title = tooltip;
             linkDiv.textContent = link;
+            if (!firstLinkSort && link) {
+              firstLinkSort = link.toLocaleLowerCase('es-ES');
+            }
             linksCell.appendChild(linkDiv);
           });
+          orderCell.dataset.sort = earliestOrder;
+          countCell.dataset.sort = firstCount;
+          linksCell.dataset.sort = firstLinkSort;
           row.appendChild(orderCell);
           row.appendChild(countCell);
           row.appendChild(linksCell);
 
-          resolveRowPid(row);
+          const resolvedPid = resolveRowPid(row);
+          const observationsCell = createObservationsCell(resolvedPid);
+          row.appendChild(observationsCell);
+          initObservationInputs(row);
           container.appendChild(row);
         });
+        const columnaTable = document.querySelector('.columna-1-table');
+        reapplyColumna1Sort(columnaTable);
         filterInput.dispatchEvent(new Event('input'));
         reapplyHighlight();
         updateDueWarnings();
+        scheduleCalendarHeightRecalc();
       });
   };
 });

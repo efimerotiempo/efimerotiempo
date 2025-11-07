@@ -84,6 +84,7 @@
         <h2>Calendario</h2>
         <div class="controls">
             <form id="filter-form" method="get">
+                <input type="hidden" name="project_id" value="{{ project_id_filter }}">
                 <label>Proyecto: <input type="text" name="project" value="{{ project_filter }}"></label>
                 <label>Cliente: <input type="text" name="client" value="{{ client_filter }}"></label>
                 <button type="submit">Filtrar</button>
@@ -382,11 +383,8 @@
             <tr>
                 <th>Nombre</th>
                 <th>Cliente</th>
-                <th>Fecha inicio</th>
                 <th>Fecha límite</th>
-                <th>Fecha material confirmado</th>
-                <th>En plazo</th>
-                <th>Planificado</th>
+                <th>Estado material</th>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
                     <th>{{ ph }}</th>
                 {% endfor %}
@@ -397,61 +395,44 @@
             </thead>
             <tbody>
             {% for p in projects %}
-            <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}" style="background-color: {{ p.color }};">
-                <td>{{ p.name }}</td>
-                <td>{{ p.client }}</td>
-                <td>
-                    {{ p.start_date }}
-                    <form class="proj-start-form" method="post" action="{{ url_for('update_start_date') }}">
-                        <input type="hidden" name="pid" value="{{ p.id }}">
-                        <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                        <input type="date" name="start_date" value="{{ p.start_date }}">
-                    </form>
-                </td>
-                <td>{{ p.due_date }}</td>
-                <td>{{ p.material_confirmed_date }}</td>
-                <td>
-                    {% if p.met %}
-                        <span class="ok">&#10004;</span>
-                    {% else %}
-                        <span class="late">&#10060;</span>
-                    {% endif %}
-                </td>
-                <td class="plan-col">
-                    {% if p.plan_state == 'all' %}
-                        <span class="ok">&#9679;</span>
-                    {% elif p.plan_state == 'partial' %}
-                        <span class="unplanned">&#9679;</span>
-                    {% else %}
-                        <span class="late">&#9679;</span>
-                    {% endif %}
+            <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}">
+                <td data-sort="{{ p.name|default('', true)|lower }}">{{ p.name }}</td>
+                <td data-sort="{{ p.client|default('', true)|lower }}">{{ p.client }}</td>
+                <td data-sort="{{ p.due_date or '' }}" data-sort-type="date">{{ p.due_date }}</td>
+                {% set pid_key = p.id|string if p.id is not none else p.id %}
+                {% set info = project_data.get(pid_key) %}
+                {% set status = p.material_status if p.material_status is defined and p.material_status else (info.material_status if info else 'complete') %}
+                {% set status_label = material_status_labels.get(status, status|capitalize) %}
+                <td data-sort="{{ status_label|lower }}">
+                    <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span>
                 </td>
                 {% for ph in phases if ph not in ['dibujo', 'pedidos'] %}
-                    <td>
                     {% set val = p.phases.get(ph, 0) %}
                     {% if val is sequence %}
-                        {{ val|map('int')|sum }}h<br>
+                        {% set total = val|map('int')|sum %}
                     {% else %}
-                        {{ val|int }}h<br>
+                        {% set total = val|int %}
                     {% endif %}
+                    <td data-sort="{{ total }}" data-sort-type="number">
+                    {{ total }}h<br>
                         {% set assigned = p.assigned.get(ph) if p.assigned and p.assigned.get(ph) else 'Sin planificar' %}
                         <span>{{ assigned }}</span>
                         <form class="phase-hours-form" method="post" action="{{ url_for('update_phase_hours') }}">
                             <input type="hidden" name="pid" value="{{ p.id }}">
                             <input type="hidden" name="phase" value="{{ ph }}">
                             <input type="hidden" name="next" value="{{ url_for('complete') }}">
-                            <input type="number" name="hours" value="{{ val|map('int')|sum if val is sequence else (val|int) }}" min="1">
+                            <input type="number" name="hours" value="{{ total }}" min="1">
                         </form>
                         <span>{{ start_map.get(p.id, {}).get(ph, '') }}</span>
                     </td>
                 {% endfor %}
-                <td><button class="row-update-btn">ACTUALIZAR</button></td>
-                <td>
+                <td data-sort="0"><button class="row-update-btn">ACTUALIZAR</button></td>
+                <td data-sort="0">
                     <form method="post" action="{{ url_for('delete_project', pid=p.id, next=url_for('complete')) }}" class="delete-form">
                         <button class="delete-btn" type="submit">&#10060;</button>
                     </form>
                 </td>
-                <td>
+                <td data-sort="{{ 1 if p.image else 0 }}" data-sort-type="number">
                     {% if p.image %}
                         {{ p.image.rsplit('/', 1)[-1] }}
                     {% else %}
@@ -478,12 +459,96 @@
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
   const SPLIT_URL = "{{ url_for('split_phase_route') }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+
+  function initProjectTableSorting(root = document) {
+    const collator = new Intl.Collator('es', { sensitivity: 'base', numeric: true });
+    root.querySelectorAll('.projects-table').forEach((table) => {
+      const tbody = table.tBodies[0];
+      if (!tbody) return;
+      const headers = table.querySelectorAll('thead th');
+      headers.forEach((th, index) => {
+        th.classList.add('sortable');
+        th.addEventListener('click', () => {
+          const order = th.dataset.sortOrder === 'asc' ? 'desc' : 'asc';
+          headers.forEach((other) => {
+            if (other !== th) {
+              other.dataset.sortOrder = '';
+              other.classList.remove('sorted-asc', 'sorted-desc');
+            }
+          });
+          th.dataset.sortOrder = order;
+          th.classList.toggle('sorted-asc', order === 'asc');
+          th.classList.toggle('sorted-desc', order === 'desc');
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          const parseCellValue = (cell) => {
+            if (!cell) {
+              return { blank: true, value: '', type: 'text' };
+            }
+            const raw = cell.dataset.sort !== undefined ? cell.dataset.sort : cell.textContent.trim();
+            const type = cell.dataset.sortType || 'text';
+            const rawString = raw === undefined || raw === null ? '' : `${raw}`;
+            const isBlank = rawString.trim() === '';
+            if (type === 'number') {
+              const num = Number(rawString);
+              return { blank: isBlank, value: Number.isNaN(num) ? 0 : num, type };
+            }
+            if (type === 'date') {
+              if (isBlank) {
+                return { blank: true, value: 0, type };
+              }
+              let time = Number.NaN;
+              if (/^\d{4}-\d{2}-\d{2}$/.test(rawString)) {
+                time = Date.parse(rawString);
+              } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rawString)) {
+                const [day, month, year] = rawString.split('/').map(Number);
+                if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+                  time = Date.UTC(year, month - 1, day);
+                }
+              } else {
+                time = Date.parse(rawString);
+              }
+              if (Number.isNaN(time)) {
+                return { blank: true, value: 0, type };
+              }
+              return { blank: false, value: time, type };
+            }
+            return { blank: isBlank, value: rawString.toLowerCase(), type: 'text' };
+          };
+          rows.sort((a, b) => {
+            const aCell = a.children[index];
+            const bCell = b.children[index];
+            const aVal = parseCellValue(aCell);
+            const bVal = parseCellValue(bCell);
+            if (aVal.blank && bVal.blank) return 0;
+            if (aVal.blank !== bVal.blank) {
+              return aVal.blank ? 1 : -1;
+            }
+            let comparison = 0;
+            if (aVal.type === 'number' && bVal.type === 'number') {
+              comparison = aVal.value - bVal.value;
+            } else if (aVal.type === 'date' && bVal.type === 'date') {
+              comparison = aVal.value - bVal.value;
+            } else {
+              comparison = collator.compare(aVal.value, bVal.value);
+            }
+            if (comparison === 0) return 0;
+            return order === 'asc' ? (comparison < 0 ? -1 : 1) : (comparison < 0 ? 1 : -1);
+          });
+          rows.forEach((row) => tbody.appendChild(row));
+        });
+      });
+    });
+  }
+
+  initProjectTableSorting();
+  const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";
   const MANUAL_REORDER_URL = "{{ url_for('manual_bucket_reorder_route') }}";
+  const CALENDAR_PEDIDOS_URL = "{{ url_for('calendar_pedidos') }}";
   const HISTORY_URL = "{{ url_for('phase_history') }}";
   const ASSIGN_VACATION_DAY_URL = "{{ url_for('assign_vacation_day') }}";
   const UPDATE_WORKER_DAY_HOURS_URL = "{{ url_for('update_worker_day_hours') }}";
@@ -507,6 +572,64 @@
   const historyList = document.getElementById('history-list');
   const historyClose = historyModal ? historyModal.querySelector('.history-close') : null;
   const historyTitle = document.getElementById('history-title');
+  let detachHistoryViewport = null;
+  let historyPositionFrame = null;
+
+  function centerHistoryModalNow() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    const content = historyModal.querySelector('.history-content');
+    if (!content) return;
+    const viewport = window.visualViewport || null;
+    let viewportWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 0;
+    let viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+    let offsetLeft = 0;
+    let offsetTop = 0;
+    if (viewport) {
+      viewportWidth = viewport.width;
+      viewportHeight = viewport.height;
+      offsetLeft = viewport.offsetLeft || viewport.pageLeft || viewport.left || 0;
+      offsetTop = viewport.offsetTop || viewport.pageTop || viewport.top || 0;
+    }
+    const contentWidth = content.offsetWidth;
+    const contentHeight = content.offsetHeight;
+    const safePadding = 16;
+    const targetLeft = offsetLeft + Math.max((viewportWidth - contentWidth) / 2, safePadding);
+    const targetTop = offsetTop + Math.max((viewportHeight - contentHeight) / 2, safePadding);
+    content.style.position = 'fixed';
+    content.style.left = `${Math.round(targetLeft)}px`;
+    content.style.top = `${Math.round(targetTop)}px`;
+  }
+
+  function scheduleHistoryModalCenter() {
+    if (!historyModal || !historyModal.classList.contains('open')) return;
+    if (historyPositionFrame !== null) return;
+    historyPositionFrame = requestAnimationFrame(() => {
+      historyPositionFrame = null;
+      centerHistoryModalNow();
+    });
+  }
+
+  function bindHistoryViewportTracking() {
+    if (!historyModal || detachHistoryViewport) return;
+    const viewport = window.visualViewport || null;
+    const handler = () => scheduleHistoryModalCenter();
+    window.addEventListener('resize', handler);
+    window.addEventListener('scroll', handler, { passive: true });
+    if (viewport) {
+      viewport.addEventListener('resize', handler);
+      viewport.addEventListener('scroll', handler);
+    }
+    detachHistoryViewport = () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('scroll', handler);
+      if (viewport) {
+        viewport.removeEventListener('resize', handler);
+        viewport.removeEventListener('scroll', handler);
+      }
+      detachHistoryViewport = null;
+    };
+  }
+
   const dayMenuModal = document.getElementById('day-menu-modal');
   const dayMenuClose = dayMenuModal ? dayMenuModal.querySelector('.day-menu-close') : null;
   const dayMenuTitle = document.getElementById('day-menu-title');
@@ -526,6 +649,67 @@
   let pendingBlock = null;
   const SPLIT_WORKDAY_HOURS = 8;
   const SPLIT_ORDINAL_WORDS = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava', 'novena', 'décima'];
+
+  const NO_BORDER_WORKERS = new Set(['Mecanizar', 'Tratamiento']);
+  const NO_BORDER_PHASES = new Set(['vacaciones', 'mecanizar', 'tratamiento']);
+
+  function getWorkerDayLimit(worker, dateText) {
+    if (WORKER_DAY_HOURS && WORKER_DAY_HOURS[worker] && WORKER_DAY_HOURS[worker][dateText] !== undefined) {
+      const parsed = Number(WORKER_DAY_HOURS[worker][dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    if (DAILY_HOURS && DAILY_HOURS[dateText] !== undefined) {
+      const parsed = Number(DAILY_HOURS[dateText]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return 8;
+  }
+
+  function findWorkerRow(worker) {
+    if (!worker) return null;
+    return Array.from(document.querySelectorAll('tr[data-worker]')).find(row => row.dataset.worker === worker) || null;
+  }
+
+  function findWorkerDayCell(worker, dateText) {
+    if (!worker || !dateText) return null;
+    const row = findWorkerRow(worker);
+    if (!row) return null;
+    return Array.from(row.querySelectorAll('td[data-date]')).find(td => td.dataset.date === dateText) || null;
+  }
+
+  function recomputeWorkerDayCell(worker, dateText) {
+    const cell = findWorkerDayCell(worker, dateText);
+    if (!cell) return;
+    const tasks = Array.from(cell.querySelectorAll('.task'));
+    let total = 0;
+    let hasNoBorderPhase = NO_BORDER_WORKERS.has(worker);
+    tasks.forEach(task => {
+      const phase = (task.dataset.phase || '').toLowerCase();
+      if (NO_BORDER_PHASES.has(phase)) {
+        hasNoBorderPhase = true;
+      }
+      const hoursVal = Number(task.dataset.hours);
+      if (Number.isFinite(hoursVal)) {
+        total += hoursVal;
+      }
+    });
+    const limit = getWorkerDayLimit(worker, dateText);
+    if (hasNoBorderPhase) {
+      cell.classList.add('vacation-day');
+      cell.classList.remove('incomplete');
+      return;
+    }
+    cell.classList.remove('vacation-day');
+    if (total < limit) {
+      cell.classList.add('incomplete');
+    } else {
+      cell.classList.remove('incomplete');
+    }
+  }
 
   function clampDayHours(value) {
     const num = Number(value);
@@ -684,8 +868,20 @@
   }
 
   function closeHistoryModal() {
-    if (historyModal) {
-      historyModal.classList.remove('open');
+    if (!historyModal) return;
+    historyModal.classList.remove('open');
+    if (historyPositionFrame !== null) {
+      cancelAnimationFrame(historyPositionFrame);
+      historyPositionFrame = null;
+    }
+    if (detachHistoryViewport) {
+      detachHistoryViewport();
+    }
+    const content = historyModal.querySelector('.history-content');
+    if (content) {
+      content.style.left = '';
+      content.style.top = '';
+      content.style.position = '';
     }
   }
 
@@ -693,6 +889,7 @@
     if (!historyList) return;
     if (!Array.isArray(entries) || !entries.length) {
       historyList.innerHTML = '<div class="history-empty">No hay movimientos registrados.</div>';
+      scheduleHistoryModalCenter();
       return;
     }
     const html = entries
@@ -711,6 +908,7 @@
       })
       .join('');
     historyList.innerHTML = html;
+    scheduleHistoryModalCenter();
   }
 
   function openHistory(pid, phase, part, projectName, clientName) {
@@ -725,7 +923,9 @@
       historyTitle.textContent = `Historial - ${baseTitle}${suffix}`;
     }
     historyModal.classList.add('open');
+    bindHistoryViewportTracking();
     historyList.innerHTML = '<div class="history-loading">Cargando...</div>';
+    scheduleHistoryModalCenter();
     const params = new URLSearchParams({ pid, phase });
     if (part) params.append('part', part);
     fetch(`${HISTORY_URL}?${params.toString()}`, {
@@ -736,11 +936,13 @@
       .then(data => {
         const entries = Array.isArray(data.history) ? data.history : [];
         renderHistoryEntries(entries);
+        scheduleHistoryModalCenter();
       })
       .catch(() => {
         if (historyList) {
           historyList.innerHTML = '<div class="history-error">No se pudo cargar el historial.</div>';
         }
+        scheduleHistoryModalCenter();
       });
   }
 
@@ -818,6 +1020,14 @@
         return;
       }
       ev.preventDefault();
+      if (skipNextDayMenu) {
+        skipNextDayMenu = false;
+        if (skipDayMenuReset) {
+          clearTimeout(skipDayMenuReset);
+          skipDayMenuReset = null;
+        }
+        return;
+      }
       openDayMenu(row.dataset.worker, cell.dataset.date);
     });
   });
@@ -1104,6 +1314,13 @@
   const PROJECT_FILTER = {{ project_filter|tojson }};
   const CLIENT_FILTER = {{ client_filter|tojson }};
   const FILTER_ACTIVE = {{ filter_active|tojson }};
+  const projectFilterInput = filterForm ? filterForm.querySelector('input[name="project"]') : null;
+  const projectIdField = filterForm ? filterForm.querySelector('input[name="project_id"]') : null;
+  if (projectFilterInput && projectIdField) {
+    projectFilterInput.addEventListener('input', () => {
+      projectIdField.value = '';
+    });
+  }
 
   function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
@@ -1212,6 +1429,84 @@
     if (!e.shiftKey) return;
     e.preventDefault();
     wrapper.scrollLeft += e.deltaY;
+  });
+
+  let isDragScrolling = false;
+  let dragStartX = 0;
+  let dragStartScroll = 0;
+  let dragWithRightButton = false;
+  let suppressContextMenu = false;
+  let dragMoved = false;
+  let skipNextDayMenu = false;
+  let skipDayMenuReset = null;
+
+  function stopDragScroll() {
+    if (!isDragScrolling && !suppressContextMenu) return;
+    if (dragWithRightButton && dragMoved) {
+      skipNextDayMenu = true;
+      if (skipDayMenuReset) {
+        clearTimeout(skipDayMenuReset);
+      }
+      skipDayMenuReset = setTimeout(() => {
+        skipNextDayMenu = false;
+        skipDayMenuReset = null;
+      }, 200);
+    }
+    isDragScrolling = false;
+    if (suppressContextMenu) {
+      setTimeout(() => { suppressContextMenu = false; }, 0);
+    }
+    dragWithRightButton = false;
+    dragMoved = false;
+    wrapper.classList.remove('dragging');
+  }
+
+  wrapper.addEventListener('mousedown', (e) => {
+    const wantsShiftDrag = e.button === 0 && e.shiftKey;
+    const wantsRightDrag = e.button === 2;
+    if (!wantsShiftDrag && !wantsRightDrag) return;
+    dragStartX = e.clientX;
+    dragStartScroll = wrapper.scrollLeft;
+    isDragScrolling = true;
+    dragWithRightButton = wantsRightDrag;
+    suppressContextMenu = wantsRightDrag;
+    dragMoved = false;
+    if (wantsRightDrag && skipDayMenuReset) {
+      clearTimeout(skipDayMenuReset);
+      skipDayMenuReset = null;
+      skipNextDayMenu = false;
+    }
+    wrapper.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragScrolling) return;
+    const requiredButton = dragWithRightButton ? 2 : 1;
+    if ((e.buttons & requiredButton) === 0) {
+      stopDragScroll();
+      return;
+    }
+    const delta = e.clientX - dragStartX;
+    if (!dragMoved && Math.abs(delta) > 2) {
+      dragMoved = true;
+    }
+    wrapper.scrollLeft = dragStartScroll - delta;
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isDragScrolling) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    stopDragScroll();
+  });
+
+  window.addEventListener('blur', stopDragScroll);
+
+  wrapper.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (suppressContextMenu || isDragScrolling) {
+      return;
+    }
   });
   const todayBtn = document.getElementById('today-btn');
   if (todayBtn) {
@@ -1350,15 +1645,37 @@ let draggedTaskElement = null;
       if (metaLines.length) html += `<div class="popup-section">${metaLines.join('')}</div>`;
       const kanbanFields = info.kanban_display_fields || {};
       const kanbanEntries = Object.entries(kanbanFields).filter(([, value]) => value !== null && value !== undefined && `${value}`.trim() !== '');
+      let addedPedidosButton = false;
       if (kanbanEntries.length) {
         let kanbanHtml = '<div class="popup-section kanban-extra-fields">';
         kanbanEntries.forEach(([label, value]) => {
           const displayValue = `${value}`;
           kanbanHtml += `<div>${label}: ${displayValue}</div>`;
-          });
-          kanbanHtml += '</div>';
-          html += kanbanHtml;
+          if (!addedPedidosButton) {
+            const normalizedLabel = (label || '').toString().trim().toLowerCase();
+            if (normalizedLabel === 'estado pedidos' || normalizedLabel === 'estado de los pedidos') {
+              const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+              const safePidAttr = escapeHtml(t.dataset.pid || '');
+              kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+              addedPedidosButton = true;
+            }
+          }
+        });
+        if (!addedPedidosButton) {
+          const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+          const safePidAttr = escapeHtml(t.dataset.pid || '');
+          kanbanHtml += `<div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div>`;
+          addedPedidosButton = true;
         }
+        kanbanHtml += '</div>';
+        html += kanbanHtml;
+      }
+      if (!addedPedidosButton) {
+        const safeProjectAttr = escapeHtml(info.name || t.dataset.project || '');
+        const safePidAttr = escapeHtml(t.dataset.pid || '');
+        html += `<div class="popup-section kanban-extra-fields"><div><button type="button" class="view-pedidos-btn" data-project="${safeProjectAttr}" data-pid="${safePidAttr}">Ver pedidos</button></div></div>`;
+        addedPedidosButton = true;
+      }
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
       const phaseLines = [];
@@ -1375,7 +1692,7 @@ let draggedTaskElement = null;
           const isActivePhase = ph === t.dataset.phase;
           const partSuffix = isActivePhase ? phasePartSuffix : '';
           let line = `<div class="${classes.join(' ')}">${ph}${partSuffix}: ${total}h`;
-          if (isActivePhase && !isArchivedShadow) {
+          if (isActivePhase) {
             const partValue = normalizedPart;
             const partAttr = partValue ? ` data-part="${partValue}"` : '';
             line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${ph}"${partAttr}>Cambiar horas</button></form>`;
@@ -1436,11 +1753,16 @@ let draggedTaskElement = null;
           </div>
         `);
       } else {
+        const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
         if (info && info.observations) {
           const safeObsValue = escapeHtml(`${info.observations}`);
           actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
         }
-        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones deshabilitadas.</div>');
+        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones limitadas.</div>');
       }
       if (info.image) {
           const imgUrl = `${STATIC_URL}${info.image}`;
@@ -1464,11 +1786,90 @@ let draggedTaskElement = null;
       popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
       popup.style.display = 'block';
       const historyBtn = popup.querySelector('.history-btn');
+      const viewPedidosBtn = popup.querySelector('.view-pedidos-btn');
       if (historyBtn) {
         historyBtn.addEventListener('click', ev => {
           ev.stopPropagation();
           const partValue = normalizePartValue(historyBtn.dataset.part);
           openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, displayName, displayClient);
+        });
+      }
+      if (viewPedidosBtn) {
+        viewPedidosBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          try {
+            const url = new URL(CALENDAR_PEDIDOS_URL, window.location.origin);
+            const projectName = viewPedidosBtn.dataset.project || '';
+            if (projectName) url.searchParams.set('filter', projectName);
+            const pidValue = viewPedidosBtn.dataset.pid || '';
+            if (pidValue) url.searchParams.set('highlight', pidValue);
+            window.open(url.toString(), '_blank');
+          } catch (error) {
+            console.error('No se pudo abrir Calendario pedidos:', error);
+          }
+        });
+      }
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              const affectedCells = new Set();
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  const row = taskEl.closest('tr[data-worker]');
+                  const worker = row ? row.dataset.worker : null;
+                  const date = taskEl.dataset.day || null;
+                  taskEl.remove();
+                  if (worker && date) {
+                    affectedCells.add(`${worker}|||${date}`);
+                  }
+                }
+              });
+              affectedCells.forEach(key => {
+                const [worker, date] = key.split('|||');
+                recomputeWorkerDayCell(worker, date);
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_phases)) {
+                  projectInfo.frozen_phases = projectInfo.frozen_phases.filter(ph => ph !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
       }
       const del = document.getElementById('del-btn');

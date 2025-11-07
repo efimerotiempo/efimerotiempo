@@ -179,6 +179,367 @@ def _cleanup_auto_receiving_placeholder(project):
             return _remove_phase_references(project, AUTO_RECEIVING_PHASE)
     return False
 
+
+def _normalize_part_index(value):
+    """Return the integer index stored for a segmented phase part."""
+
+    if value in (None, '', 'None'):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and float(value).is_integer():
+        return int(value)
+    try:
+        text = str(value).strip()
+    except Exception:
+        return None
+    if not text or text.lower() == 'none':
+        return None
+    try:
+        return int(text)
+    except Exception:
+        return None
+
+
+def _rebalance_archived_phase_hours(entry, pid, phase, new_total, *, part_index=None):
+    """Update archived calendar tasks so their hours add up to ``new_total``."""
+
+    if not entry or new_total is None:
+        return
+    tasks = entry.get('tasks')
+    if not isinstance(tasks, list):
+        return
+    pid_str = str(pid or '').strip()
+    phase_key = str(phase or '').strip().lower()
+    if not pid_str or not phase_key:
+        return
+    try:
+        target_total = int(new_total)
+    except Exception:
+        try:
+            target_total = int(float(new_total))
+        except Exception:
+            return
+    if target_total < 0:
+        target_total = 0
+    matched_payloads = []
+    for item in tasks:
+        if not isinstance(item, dict):
+            continue
+        payload = item.get('task')
+        if not isinstance(payload, dict):
+            continue
+        payload_pid = str(payload.get('pid') or '').strip()
+        if payload_pid != pid_str:
+            continue
+        payload_phase = str(payload.get('phase') or '').strip().lower()
+        if payload_phase != phase_key:
+            continue
+        payload_part = _normalize_part_index(payload.get('part'))
+        if part_index is not None:
+            if payload_part != part_index:
+                continue
+        else:
+            if payload_part is not None:
+                continue
+        matched_payloads.append(payload)
+    if not matched_payloads:
+        return
+    previous_total = sum(max(_phase_total_hours(p.get('hours')), 0) for p in matched_payloads)
+    if previous_total <= 0:
+        matched_payloads[0]['hours'] = target_total
+        for payload in matched_payloads[1:]:
+            payload['hours'] = 0
+        return
+    scaled = []
+    floor_sum = 0
+    for payload in matched_payloads:
+        current = max(_phase_total_hours(payload.get('hours')), 0)
+        scaled_value = (current * target_total) / previous_total if previous_total else 0
+        floor_value = int(scaled_value)
+        fractional = scaled_value - floor_value
+        scaled.append([payload, floor_value, fractional, current])
+        floor_sum += floor_value
+    remainder = target_total - floor_sum
+    if remainder > 0:
+        scaled.sort(key=lambda item: (-item[2], -item[3]))
+        idx = 0
+        while remainder > 0 and scaled:
+            payload, value, frac, current = scaled[idx]
+            scaled[idx][1] = value + 1
+            remainder -= 1
+            idx = (idx + 1) % len(scaled)
+    elif remainder < 0:
+        scaled.sort(key=lambda item: (item[2], item[3]))
+        idx = 0
+        attempts = 0
+        max_attempts = len(scaled) * 4 if scaled else 0
+        while remainder < 0 and scaled and attempts < max_attempts:
+            payload, value, frac, current = scaled[idx]
+            if value > 0:
+                scaled[idx][1] = value - 1
+                remainder += 1
+            idx = (idx + 1) % len(scaled)
+            attempts += 1
+        if remainder < 0:
+            for i in range(len(scaled)):
+                if remainder >= 0:
+                    break
+                if scaled[i][1] > 0:
+                    scaled[i][1] -= 1
+                    remainder += 1
+    for payload, value, _fractional, _current in scaled:
+        payload['hours'] = max(int(value), 0)
+
+
+def _build_archived_frozen_tasks(entry, *, skip_phase=None, skip_part=None):
+    """Return frozen-task payloads for an archived calendar entry."""
+
+    if not isinstance(entry, dict):
+        return []
+
+    skip_phase_key = (skip_phase or '').strip().lower()
+    skip_has_phase = bool(skip_phase_key)
+    skip_part_index = _normalize_part_index(skip_part)
+    project = entry.get('project') or {}
+    pid = str(project.get('id') or entry.get('pid') or '').strip()
+    if not pid:
+        return []
+
+    frozen = []
+    for item in entry.get('tasks') or []:
+        if not isinstance(item, dict):
+            continue
+        worker = item.get('worker')
+        day = item.get('day')
+        payload = item.get('task')
+        if not worker or not day or not isinstance(payload, dict):
+            continue
+        phase = str(payload.get('phase') or '').strip().lower()
+        part_value = _normalize_part_index(payload.get('part'))
+        if skip_has_phase and phase == skip_phase_key:
+            if skip_part_index is None:
+                if part_value is None:
+                    continue
+            elif part_value == skip_part_index:
+                continue
+        hours = _phase_total_hours(payload.get('hours'))
+        if hours <= 0:
+            continue
+        start = payload.get('start') or 0
+        try:
+            start = int(start)
+        except Exception:
+            start = 0
+        frozen_task = copy.deepcopy(payload)
+        frozen_task['pid'] = pid
+        frozen_task['phase'] = payload.get('phase')
+        frozen_task['hours'] = max(int(hours), 0)
+        frozen_task['start'] = max(start, 0)
+        frozen_task['worker'] = worker
+        frozen_task['day'] = day
+        frozen.append(frozen_task)
+
+    frozen.sort(
+        key=lambda t: (
+            str(t.get('day') or ''),
+            t.get('start', 0),
+            str(t.get('worker') or ''),
+        )
+    )
+    return frozen
+
+
+def _extract_archived_tasks_from_schedule(schedule, pid):
+    """Return archived task payloads for ``pid`` from ``schedule``."""
+
+    pid_str = str(pid or '').strip()
+    if not pid_str:
+        return []
+
+    tasks = []
+    for worker, days in schedule.items():
+        if not isinstance(days, dict):
+            continue
+        for day, entries in days.items():
+            if not isinstance(entries, list):
+                continue
+            for task in entries:
+                if str(task.get('pid') or '').strip() != pid_str:
+                    continue
+                task_copy = copy.deepcopy(task)
+                task_copy['archived_shadow'] = True
+                task_copy['frozen'] = True
+                task_copy['color'] = '#d9d9d9'
+                task_copy['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+                task_copy['pid'] = pid_str
+                tasks.append({
+                    'worker': worker,
+                    'day': day,
+                    'task': task_copy,
+                })
+
+    tasks.sort(
+        key=lambda item: (
+            str(item.get('day') or ''),
+            (item.get('task') or {}).get('start', 0),
+            str(item.get('worker') or ''),
+        )
+    )
+    return tasks
+
+
+def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
+    """Reschedule archived tasks after updating ``phase`` hours."""
+
+    if not entries:
+        return False
+
+    pid_str = str(pid or '').strip()
+    phase_key = (phase or '').strip().lower()
+    if not pid_str or not phase_key:
+        return False
+
+    dataset = []
+    entry_map = {}
+    for entry in entries:
+        project = entry.get('project')
+        if not isinstance(project, dict):
+            continue
+        project_pid = str(project.get('id') or entry.get('pid') or '').strip()
+        if not project_pid:
+            continue
+        project_copy = copy.deepcopy(project)
+        project_copy['id'] = project_pid
+        project_copy.setdefault('phases', {})
+        project_copy.setdefault('assigned', {})
+        project_copy.setdefault('auto_hours', {})
+        project_copy.setdefault('frozen_tasks', [])
+        skip_phase = phase if project_pid == pid_str else None
+        skip_part = part_index if project_pid == pid_str else None
+        project_copy['frozen_tasks'] = _build_archived_frozen_tasks(
+            entry,
+            skip_phase=skip_phase,
+            skip_part=skip_part,
+        )
+        preserved_starts = {}
+        if project_pid == pid_str:
+            for item in entry.get('tasks') or []:
+                if not isinstance(item, dict):
+                    continue
+                day_value = item.get('day')
+                payload = item.get('task')
+                if not day_value or not isinstance(payload, dict):
+                    continue
+                phase_value = str(payload.get('phase') or '').strip().lower()
+                if phase_value != phase_key:
+                    continue
+                part_value = _normalize_part_index(payload.get('part'))
+                if part_index is not None and part_value != part_index:
+                    continue
+                try:
+                    day_obj = date.fromisoformat(str(day_value)[:10])
+                    day_iso = day_obj.isoformat()
+                except Exception:
+                    continue
+                try:
+                    start_val = int(payload.get('start', 0) or 0)
+                except Exception:
+                    start_val = 0
+                key = part_value if part_value is not None else None
+                existing = preserved_starts.get(key)
+                if existing:
+                    existing_day = existing[0]
+                    existing_start = existing[1]
+                    if day_obj > existing_day:
+                        continue
+                    if day_obj == existing_day and start_val >= existing_start:
+                        continue
+                preserved_starts[key] = (day_obj, start_val, day_iso)
+        if project_pid == pid_str:
+            seg_starts = project_copy.get('segment_starts')
+            if isinstance(seg_starts, dict):
+                for key in list(seg_starts.keys()):
+                    normalized = str(key).strip().lower()
+                    if normalized != phase_key:
+                        continue
+                    if part_index is None:
+                        seg_starts.pop(key, None)
+                    else:
+                        parts = seg_starts.get(key)
+                        if isinstance(parts, list) and part_index < len(parts):
+                            parts[part_index] = None
+            seg_hours = project_copy.get('segment_start_hours')
+            if isinstance(seg_hours, dict):
+                for key in list(seg_hours.keys()):
+                    normalized = str(key).strip().lower()
+                    if normalized != phase_key:
+                        continue
+                    if part_index is None:
+                        seg_hours.pop(key, None)
+                    else:
+                        hours_list = seg_hours.get(key)
+                        if isinstance(hours_list, list) and part_index < len(hours_list):
+                            hours_list[part_index] = 0
+            if preserved_starts:
+                seg_starts_map = project_copy.setdefault('segment_starts', {})
+                hour_starts_map = project_copy.setdefault('segment_start_hours', {})
+                seg_list = seg_starts_map.setdefault(phase, [])
+                hour_list = hour_starts_map.setdefault(phase, [])
+                for part_key, info in preserved_starts.items():
+                    _, start_hour, day_iso = info
+                    idx = part_key if part_key is not None else 0
+                    while len(seg_list) <= idx:
+                        seg_list.append(None)
+                    while len(hour_list) <= idx:
+                        hour_list.append(0)
+                    seg_list[idx] = day_iso
+                    hour_list[idx] = start_hour
+        project_copy['archived_shadow'] = True
+        project_copy['kanban_archived'] = True
+        project_copy['kanban_column'] = project_copy.get('kanban_column') or 'Ready to Archive'
+        project_copy.setdefault('material_status', 'archived')
+        project_copy.setdefault('material_missing_titles', [])
+        dataset.append(project_copy)
+        entry_map[project_pid] = {
+            'entry': entry,
+            'project_ref': project,
+            'project_copy': project_copy,
+        }
+
+    if pid_str not in entry_map:
+        return False
+
+    try:
+        schedule_map, _conflicts = schedule_projects(dataset)
+    except Exception:
+        return False
+
+    for project_pid, info in entry_map.items():
+        entry = info['entry']
+        project_copy = info['project_copy']
+        project_ref = info['project_ref']
+        tasks = _extract_archived_tasks_from_schedule(schedule_map, project_pid)
+        entry['tasks'] = tasks
+        frozen_payloads = []
+        for item in tasks:
+            payload = copy.deepcopy(item.get('task') or {})
+            payload['worker'] = item.get('worker')
+            payload['day'] = item.get('day')
+            frozen_payloads.append(payload)
+        project_copy['frozen_tasks'] = frozen_payloads
+        project_ref.clear()
+        project_ref.update(project_copy)
+        project_ref['id'] = project_pid
+        project_ref['archived_shadow'] = True
+        project_ref['kanban_archived'] = True
+        project_ref['kanban_column'] = project_ref.get('kanban_column') or 'Ready to Archive'
+        project_ref.setdefault('material_status', 'archived')
+        project_ref.setdefault('material_missing_titles', [])
+
+    return True
+
+
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
@@ -3517,6 +3878,12 @@ def calendar_view():
         material_status_map[str(archived_pid)] = 'archived'
         material_missing_map.setdefault(str(archived_pid), [])
 
+    for row in filtered_projects:
+        pid = row.get('id')
+        if pid is None:
+            continue
+        row['material_status'] = material_status_map.get(str(pid), 'complete')
+
     manual_index = {}
     manual_bucket_items = []
     if manual_entries:
@@ -4837,7 +5204,18 @@ def project_list():
         projects.sort(key=lambda p: orig_order[p['id']], reverse=True)
     start_map = phase_start_map(projects)
     hours_map = load_daily_hours()
+    material_status_map, _ = compute_material_status_map(projects)
+    for proj in projects:
+        pid = proj.get('id')
+        if pid is None:
+            continue
+        proj['material_status'] = material_status_map.get(str(pid), 'complete')
     projects = expand_for_display(projects)
+    for proj in projects:
+        pid = proj.get('id')
+        if pid is None:
+            continue
+        proj['material_status'] = material_status_map.get(str(pid), 'complete')
     return render_template(
         'projects.html',
         projects=projects,
@@ -4849,6 +5227,7 @@ def project_list():
         start_map=start_map,
         hours=hours_map,
         palette=COLORS,
+        material_status_labels=MATERIAL_STATUS_LABELS,
     )
 
 
@@ -5422,11 +5801,25 @@ def complete():
 
     project_filter = request.args.get('project', '').strip()
     client_filter = request.args.get('client', '').strip()
-    filter_active = bool(project_filter or client_filter)
+    project_id_filter = request.args.get('project_id', '').strip()
+    project_name_from_id = ''
+    if project_id_filter:
+        for p in projects:
+            pid = p.get('id')
+            if pid is not None and str(pid) == project_id_filter:
+                project_name_from_id = (p.get('name') or '').strip()
+                break
+    if project_name_from_id and not project_filter:
+        project_filter = project_name_from_id
+    filter_active = bool(project_filter or client_filter or project_id_filter)
 
-    def matches_filters(name, client):
+    def matches_filters(name, client, pid=None):
         project_name = (name or '').lower()
         client_name = (client or '').lower()
+        if project_id_filter:
+            pid_text = '' if pid is None else str(pid)
+            if pid_text != project_id_filter:
+                return False
         if project_filter and project_filter.lower() not in project_name:
             return False
         if client_filter and client_filter.lower() not in client_name:
@@ -5437,17 +5830,17 @@ def complete():
         for worker, days_data in schedule.items():
             for day, tasks in days_data.items():
                 for t in tasks:
-                    t['filter_match'] = matches_filters(t['project'], t['client'])
+                    t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
         filtered_projects = [
             p
             for p in projects
-            if matches_filters(p['name'], p['client'])
+            if matches_filters(p['name'], p['client'], p.get('id'))
         ]
         for g in unplanned_list:
-            match = matches_filters(g['project'], g['client'])
+            match = matches_filters(g['project'], g['client'], g.get('pid'))
             g['filter_match'] = match
             for t in g['tasks']:
-                t['filter_match'] = matches_filters(t['project'], t['client'])
+                t['filter_match'] = matches_filters(t['project'], t['client'], t.get('pid'))
     else:
         filtered_projects = projects
 
@@ -5609,6 +6002,15 @@ def complete():
         project_map[pid] = info
         project_map[str(pid)] = info
     start_map = phase_start_map(projects)
+    for row in filtered_projects:
+        pid = row.get('id')
+        if pid is None:
+            continue
+        row['material_status'] = material_status_map.get(str(pid), 'complete')
+    if project_id_filter and not project_filter:
+        info = project_map.get(project_id_filter)
+        if info:
+            project_filter = (info.get('name') or '').strip()
 
     return render_template(
         'complete.html',
@@ -5619,6 +6021,7 @@ def complete():
         workers=WORKERS,
         project_filter=project_filter,
         client_filter=client_filter,
+        project_id_filter=project_id_filter,
         filter_active=filter_active,
         projects=filtered_projects,
         sort_option=sort_option,
@@ -5766,13 +6169,14 @@ def update_start_date():
 def update_phase_hours():
     """Modify hours for a specific phase."""
     data = request.get_json() or request.form
-    pid = data.get('pid')
+    pid_value = data.get('pid')
     phase = data.get('phase')
     hours_val = data.get('hours')
     part_val = data.get('part')
     next_url = data.get('next') or request.args.get('next') or url_for('project_list')
-    if not pid or not phase or hours_val is None:
+    if not pid_value or not phase or hours_val is None:
         return jsonify({'error': 'Datos incompletos'}), 400
+    pid = str(pid_value)
     try:
         hours = int(hours_val)
     except Exception:
@@ -5786,15 +6190,57 @@ def update_phase_hours():
         if part_index < 0:
             return jsonify({'error': 'Parte inválida'}), 400
     projects = get_projects()
-    proj = next((p for p in projects if p['id'] == pid), None)
+    proj = next((p for p in projects if str(p.get('id')) == pid), None)
+    archived_entries = None
+    archived_entry = None
+    is_archived = False
+    active_project_id = proj.get('id') if proj else None
+    archived_update_hours = None
+    archived_update_part = None
+    if not proj:
+        archived_entries = load_archived_calendar_entries()
+        for entry in archived_entries:
+            entry_pid = str((entry or {}).get('pid') or '')
+            if entry_pid != pid:
+                continue
+            info = entry.get('project')
+            if not isinstance(info, dict):
+                continue
+            proj = info
+            archived_entry = entry
+            is_archived = True
+            active_project_id = proj.get('id') or pid
+            break
     if not proj:
         return jsonify({'error': 'Proyecto no encontrado'}), 404
     proj.setdefault('phases', {})
     proj.setdefault('auto_hours', {})
     if hours <= 0:
         removed = _remove_phase_references(proj, phase)
+        if removed and is_archived and archived_entry:
+            phase_lower = phase.lower()
+            tasks_list = archived_entry.get('tasks')
+            if isinstance(tasks_list, list):
+                archived_entry['tasks'] = [
+                    item
+                    for item in tasks_list
+                    if not (
+                        isinstance(item, dict)
+                        and isinstance(item.get('task'), dict)
+                        and str(item['task'].get('pid') or '').strip() == pid
+                        and str(item['task'].get('phase') or '').strip().lower() == phase_lower
+                    )
+                ]
         if not proj.get('phases'):
-            remove_project_and_preserve_schedule(projects, pid)
+            if is_archived and archived_entries is not None:
+                archived_entries = [e for e in archived_entries if e is not archived_entry]
+                save_archived_calendar_entries(archived_entries)
+                if request.is_json:
+                    return '', 204
+                return redirect(next_url)
+            remove_project_and_preserve_schedule(
+                projects, active_project_id if active_project_id is not None else pid_value
+            )
             if request.is_json:
                 return '', 204
             return redirect(next_url)
@@ -5837,7 +6283,8 @@ def update_phase_hours():
                 return jsonify({'error': 'Horas inválidas registradas en la fase'}), 400
 
             diff = hours - prev_total
-            new_value = current_parts[part_index] + diff
+            previous_part_value = current_parts[part_index]
+            new_value = previous_part_value + diff
             if new_value <= 0:
                 return jsonify({'error': 'La parte resultante debe ser mayor que cero'}), 400
 
@@ -5860,6 +6307,8 @@ def update_phase_hours():
                 worker_list = worker_map[phase]
                 if worker_list is not None and len(worker_list) < len(current_parts):
                     worker_list.extend([assigned.get(phase, UNPLANNED)] * (len(current_parts) - len(worker_list)))
+            archived_update_hours = new_value
+            archived_update_part = part_index
         else:
             proj['phases'][phase] = hours
             if prev_total <= 0:
@@ -5879,6 +6328,8 @@ def update_phase_hours():
                     proj['segment_workers'].pop(phase, None)
                     if not proj['segment_workers']:
                         proj.pop('segment_workers')
+            archived_update_hours = hours
+            archived_update_part = None
         if phase == AUTO_RECEIVING_PHASE:
             proj['auto_hours'].pop(AUTO_RECEIVING_PHASE, None)
         else:
@@ -5887,8 +6338,27 @@ def update_phase_hours():
                     t for t in proj.get('frozen_tasks', []) if t['phase'] != AUTO_RECEIVING_PHASE
                 ]
     proj['frozen_tasks'] = [t for t in proj.get('frozen_tasks', []) if t['phase'] != phase]
-    schedule_projects(projects)
-    save_projects(projects)
+    rescheduled = False
+    if is_archived and archived_entries is not None:
+        if archived_entry and archived_update_hours is not None:
+            rescheduled = _reschedule_archived_phase_hours(
+                archived_entries,
+                pid,
+                phase,
+                part_index=archived_update_part,
+            )
+            if not rescheduled:
+                _rebalance_archived_phase_hours(
+                    archived_entry,
+                    pid,
+                    phase,
+                    archived_update_hours,
+                    part_index=archived_update_part,
+                )
+        save_archived_calendar_entries(archived_entries)
+    else:
+        schedule_projects(projects)
+        save_projects(projects)
     if request.is_json:
         return '', 204
     return redirect(next_url)
@@ -6602,6 +7072,102 @@ def toggle_freeze(pid, phase):
     if request.is_json:
         return '', 204
     return redirect(request.referrer or url_for('calendar_view'))
+
+
+@app.route('/remove_archived_phase', methods=['POST'])
+def remove_archived_phase():
+    data = request.get_json(silent=True) or {}
+    pid = str(data.get('pid') or '').strip()
+    phase = str(data.get('phase') or '').strip()
+    if not pid or not phase:
+        return jsonify({'error': 'Datos incompletos'}), 400
+
+    target_phase = phase.lower()
+    entries = load_archived_calendar_entries()
+    if not entries:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    updated_entries = []
+    removed_count = 0
+
+    def _phase_matches(value):
+        text = str(value or '').strip()
+        return text.lower() == target_phase if text else False
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            updated_entries.append(entry)
+            continue
+
+        entry_pid = str(entry.get('pid') or '').strip()
+        if entry_pid != pid:
+            updated_entries.append(entry)
+            continue
+
+        tasks = entry.get('tasks')
+        if not isinstance(tasks, list):
+            # Nothing usable, keep entry as-is
+            updated_entries.append(entry)
+            continue
+
+        kept_tasks = []
+        for item in tasks:
+            if not isinstance(item, dict):
+                continue
+            payload = item.get('task')
+            if not isinstance(payload, dict):
+                continue
+            payload_phase = payload.get('phase')
+            if _phase_matches(payload_phase):
+                removed_count += 1
+                continue
+            kept_tasks.append(item)
+
+        if kept_tasks:
+            entry['tasks'] = kept_tasks
+            project_info = entry.get('project')
+            if isinstance(project_info, dict):
+                phases = project_info.get('phases')
+                if isinstance(phases, dict):
+                    for key in list(phases.keys()):
+                        if _phase_matches(key):
+                            phases.pop(key, None)
+                assigned = project_info.get('assigned')
+                if isinstance(assigned, dict):
+                    for key in list(assigned.keys()):
+                        if _phase_matches(key):
+                            assigned.pop(key, None)
+                auto_hours = project_info.get('auto_hours')
+                if isinstance(auto_hours, dict):
+                    for key in list(auto_hours.keys()):
+                        if _phase_matches(key):
+                            auto_hours.pop(key, None)
+                frozen_tasks = project_info.get('frozen_tasks')
+                if isinstance(frozen_tasks, list):
+                    project_info['frozen_tasks'] = [
+                        t
+                        for t in frozen_tasks
+                        if not _phase_matches((t or {}).get('phase'))
+                    ]
+                sequence = project_info.get('phase_sequence')
+                if isinstance(sequence, list):
+                    project_info['phase_sequence'] = [
+                        item
+                        for item in sequence
+                        if not _phase_matches(item)
+                    ]
+            updated_entries.append(entry)
+        else:
+            # No tasks remain for this archived project; drop the entry entirely
+            if removed_count == 0:
+                # We attempted to remove but found no matching tasks
+                updated_entries.append(entry)
+
+    if removed_count == 0:
+        return jsonify({'error': 'Fase no encontrada'}), 404
+
+    save_archived_calendar_entries(updated_entries)
+    return jsonify({'removed': removed_count})
 
 
 @app.route('/toggle_block/<pid>', methods=['POST'])
