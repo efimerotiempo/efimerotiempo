@@ -1418,11 +1418,51 @@
       };
     }
 
-    function adjustScrollableAreas(doc) {
+    function adjustScrollableAreas(doc, rootElement) {
       const HostHTMLElement = (doc.defaultView && doc.defaultView.HTMLElement) || window.HTMLElement;
       const cleanups = [];
-      const candidates = Array.from(doc.querySelectorAll('*'));
-      candidates.push(doc.body, doc.documentElement);
+      const seen = new Set();
+
+      function addCandidate(el) {
+        if (!el || seen.has(el)) {
+          return;
+        }
+        seen.add(el);
+        candidates.push(el);
+      }
+
+      const candidates = [];
+      const roots = [];
+      if (rootElement && rootElement instanceof HostHTMLElement) {
+        roots.push(rootElement);
+      }
+      if (!rootElement) {
+        if (doc.body) {
+          roots.push(doc.body);
+        }
+        if (doc.documentElement && doc.documentElement !== doc.body) {
+          roots.push(doc.documentElement);
+        }
+      } else if (rootElement === doc.body || rootElement === doc.documentElement) {
+        if (doc.body && rootElement !== doc.body) {
+          roots.push(doc.body);
+        }
+        if (doc.documentElement && rootElement !== doc.documentElement) {
+          roots.push(doc.documentElement);
+        }
+      }
+
+      roots.forEach((root) => {
+        addCandidate(root);
+        if (root && typeof root.querySelectorAll === 'function') {
+          Array.from(root.querySelectorAll('*')).forEach(addCandidate);
+        }
+      });
+
+      if (!candidates.length) {
+        Array.from(doc.querySelectorAll('*')).forEach(addCandidate);
+      }
+
       candidates.forEach((el) => {
         if (!el || typeof el !== 'object') {
           return;
@@ -1488,9 +1528,9 @@
     }
 
     async function captureDocumentCanvas(doc, html2canvasFn, element) {
-      const cleanup = adjustScrollableAreas(doc);
+      const target = element || doc.documentElement || doc.body;
+      const cleanup = adjustScrollableAreas(doc, target);
       try {
-        const target = element || doc.documentElement || doc.body;
         const dims = elementDimensions(target);
         const view = doc.defaultView || window;
         return await html2canvasFn(target || doc.body, {
@@ -1515,12 +1555,29 @@
       try {
         await waitForDocumentFonts(document, 8000, 'pestaña actual');
         const targets = [];
-        if (document.documentElement) targets.push(document.documentElement);
-        if (document.body && document.body !== document.documentElement) targets.push(document.body);
-        const mainContainer = document.querySelector('.complete-container');
-        if (mainContainer) targets.push(mainContainer);
+        const preferredSelectors = [
+          '.complete-container',
+          'main',
+          '#content',
+          '.content',
+        ];
+        preferredSelectors.forEach((selector) => {
+          const el = document.querySelector(selector);
+          if (el && !targets.includes(el)) {
+            targets.push(el);
+          }
+        });
+        const body = document.body;
+        const docEl = document.documentElement;
+        if (body && !targets.includes(body)) targets.push(body);
+        if (docEl && !targets.includes(docEl)) targets.push(docEl);
         for (const target of targets) {
-          const canvas = await captureWithRetry(() => captureDocumentCanvas(document, html2canvasFn, target), 3, 350);
+          const canvas = await captureWithRetry(
+            () => captureDocumentCanvas(document, html2canvasFn, target),
+            3,
+            400,
+            20000
+          );
           if (canvas) {
             return canvas;
           }
@@ -1563,10 +1620,39 @@
         await wait(1000);
         await waitForDocumentFonts(iframeDoc, 8000, 'pestaña remota');
         const targets = [];
-        if (iframeDoc.documentElement) targets.push(iframeDoc.documentElement);
-        if (iframeDoc.body && iframeDoc.body !== iframeDoc.documentElement) targets.push(iframeDoc.body);
+        const preferredSelectors = [
+          '.complete-container',
+          '.pedidos-calendar-container',
+          '.kanban',
+          '.kanban-container',
+          '.gantt-container',
+          '.gantt-wrapper',
+          '.vacations-container',
+          '.resources-container',
+          '.observations-container',
+          'main',
+          '#content',
+          '.content'
+        ];
+        preferredSelectors.forEach((selector) => {
+          const el = iframeDoc.querySelector(selector);
+          if (el && !targets.includes(el)) {
+            targets.push(el);
+          }
+        });
+        if (iframeDoc.body && !targets.includes(iframeDoc.body)) {
+          targets.push(iframeDoc.body);
+        }
+        if (iframeDoc.documentElement && !targets.includes(iframeDoc.documentElement)) {
+          targets.push(iframeDoc.documentElement);
+        }
         for (const target of targets) {
-          const canvas = await captureWithRetry(() => captureDocumentCanvas(iframeDoc, html2canvasFn, target), 2, 350);
+          const canvas = await captureWithRetry(
+            () => captureDocumentCanvas(iframeDoc, html2canvasFn, target),
+            2,
+            400,
+            20000
+          );
           if (canvas) {
             return canvas;
           }
@@ -1708,10 +1794,23 @@
       return true;
     }
 
-    async function captureWithRetry(captureFn, attempts = 2, delayMs = 300) {
+    async function captureWithRetry(captureFn, attempts = 2, delayMs = 300, timeoutMs = 20000) {
       let lastCanvas = null;
+      const timeoutToken = Symbol('capture-timeout');
       for (let attempt = 0; attempt < attempts; attempt += 1) {
-        lastCanvas = await captureFn();
+        try {
+          const result = await Promise.race([
+            captureFn(),
+            wait(timeoutMs).then(() => timeoutToken)
+          ]);
+          if (result === timeoutToken) {
+            console.warn(`Captura excedió ${timeoutMs} ms; reintentando…`);
+          } else {
+            lastCanvas = result;
+          }
+        } catch (err) {
+          console.warn('Error capturando el contenido', err);
+        }
         if (lastCanvas && !isCanvasMostlyBlank(lastCanvas)) {
           return lastCanvas;
         }
