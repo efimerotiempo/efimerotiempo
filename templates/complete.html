@@ -450,8 +450,8 @@
         </table>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-Ic4cj2L/95B2S/bRMyCV2wE8p8nH3UX0YPD+s/COM24kTx5cDIeEJD7BqXc9EjoP" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-J0xOeGZ5ER5YjZL+QkNo4fU6Y4ZCkxzgv2Fne5+5ZTCDxbFzNw2K6JqqPiFZUvJ0" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
   const PROJECT_DATA = {{ project_data|tojson }};
