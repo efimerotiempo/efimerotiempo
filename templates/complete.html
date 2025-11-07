@@ -1418,6 +1418,30 @@
       };
     }
 
+    function applyScaleTransform(element, scaleFactor) {
+      if (!element || !(scaleFactor < 0.999)) {
+        return () => {};
+      }
+      const previousTransform = element.style.transform;
+      const previousOrigin = element.style.transformOrigin;
+      const hadTransform = element.style.transform !== '';
+      const hadOrigin = element.style.transformOrigin !== '';
+      element.style.transformOrigin = 'top left';
+      element.style.transform = `scale(${scaleFactor})`;
+      return () => {
+        if (hadTransform) {
+          element.style.transform = previousTransform;
+        } else {
+          element.style.removeProperty('transform');
+        }
+        if (hadOrigin) {
+          element.style.transformOrigin = previousOrigin;
+        } else {
+          element.style.removeProperty('transform-origin');
+        }
+      };
+    }
+
     function adjustScrollableAreas(doc, rootElement) {
       const HostHTMLElement = (doc.defaultView && doc.defaultView.HTMLElement) || window.HTMLElement;
       const cleanups = [];
@@ -1530,11 +1554,44 @@
     async function captureDocumentCanvas(doc, html2canvasFn, element) {
       const target = element || doc.documentElement || doc.body;
       const cleanup = adjustScrollableAreas(doc, target);
+      let restoreScale = () => {};
       try {
-        const dims = elementDimensions(target);
+        const MAX_CAPTURE_WIDTH = 14000;
+        const MAX_CAPTURE_HEIGHT = 16000;
+        const MAX_OUTPUT_PX = 10000;
+        let dims = elementDimensions(target);
+        const scaleCandidates = [];
+        if (dims.width > MAX_CAPTURE_WIDTH) {
+          scaleCandidates.push(MAX_CAPTURE_WIDTH / dims.width);
+        }
+        if (dims.height > MAX_CAPTURE_HEIGHT) {
+          scaleCandidates.push(MAX_CAPTURE_HEIGHT / dims.height);
+        }
+        if (scaleCandidates.length) {
+          const appliedScale = Math.max(0.25, Math.min(1, ...scaleCandidates));
+          restoreScale = applyScaleTransform(target, appliedScale);
+          await wait(50);
+          const rect = typeof target.getBoundingClientRect === 'function'
+            ? target.getBoundingClientRect()
+            : null;
+          dims = {
+            width: Math.max(1, Math.round(rect && rect.width ? rect.width : dims.width * appliedScale)),
+            height: Math.max(1, Math.round(rect && rect.height ? rect.height : dims.height * appliedScale))
+          };
+        }
         const view = doc.defaultView || window;
+        const deviceScale = view && typeof view.devicePixelRatio === 'number'
+          ? view.devicePixelRatio
+          : (typeof window.devicePixelRatio === 'number' ? window.devicePixelRatio : 1);
+        const maxScaleByWidth = MAX_OUTPUT_PX / Math.max(1, dims.width);
+        const maxScaleByHeight = MAX_OUTPUT_PX / Math.max(1, dims.height);
+        const cappedScale = Math.min(2, Math.max(0.5, deviceScale || 1));
+        const scale = Math.max(
+          0.5,
+          Math.min(cappedScale, maxScaleByWidth, maxScaleByHeight)
+        );
         return await html2canvasFn(target || doc.body, {
-          scale: 2,
+          scale,
           useCORS: true,
           backgroundColor: '#ffffff',
           windowWidth: dims.width,
@@ -1545,6 +1602,11 @@
           scrollY: -(view?.scrollY || 0)
         });
       } finally {
+        try {
+          restoreScale();
+        } catch (err) {
+          console.warn('No se pudo restaurar el escalado tras la captura', err);
+        }
         cleanup();
       }
     }
