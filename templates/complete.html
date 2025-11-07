@@ -1581,11 +1581,24 @@
 
     function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 0.92) {
       return new Promise((resolve, reject) => {
+        const fallbackToDataUrl = () => {
+          try {
+            const dataUrl = canvas.toDataURL(type, quality);
+            if (typeof dataUrl === 'string') {
+              resolve(dataUrl);
+            } else {
+              reject(new Error('No se pudo generar la imagen del PDF'));
+            }
+          } catch (fallbackError) {
+            reject(fallbackError);
+          }
+        };
+
         try {
           if (typeof canvas.toBlob === 'function') {
             canvas.toBlob((blob) => {
               if (!blob) {
-                reject(new Error('No se pudo convertir la imagen a blob'));
+                fallbackToDataUrl();
                 return;
               }
               const reader = new FileReader();
@@ -1597,18 +1610,14 @@
                 }
               };
               reader.onerror = () => {
-                reject(new Error('No se pudo leer la imagen generada'));
+                fallbackToDataUrl();
               };
               reader.readAsDataURL(blob);
             }, type, quality);
-          } else {
-            const dataUrl = canvas.toDataURL(type, quality);
-            if (typeof dataUrl === 'string') {
-              resolve(dataUrl);
-            } else {
-              reject(new Error('No se pudo generar la imagen del PDF'));
-            }
+            return;
           }
+
+          fallbackToDataUrl();
         } catch (blobError) {
           reject(blobError);
         }
