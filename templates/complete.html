@@ -1370,23 +1370,29 @@
   if (summaryPdfBtn) {
     const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    function documentDimensions(doc) {
-      const { body, documentElement: html } = doc;
+    function elementDimensions(element) {
+      if (!element) {
+        return { width: 0, height: 0 };
+      }
+      const rect = typeof element.getBoundingClientRect === 'function'
+        ? element.getBoundingClientRect()
+        : { width: 0, height: 0 };
       const width = Math.max(
-        body.scrollWidth,
-        body.offsetWidth,
-        html.scrollWidth,
-        html.offsetWidth,
-        html.clientWidth
+        element.scrollWidth || 0,
+        element.offsetWidth || 0,
+        element.clientWidth || 0,
+        rect.width || 0
       );
       const height = Math.max(
-        body.scrollHeight,
-        body.offsetHeight,
-        html.scrollHeight,
-        html.offsetHeight,
-        html.clientHeight
+        element.scrollHeight || 0,
+        element.offsetHeight || 0,
+        element.clientHeight || 0,
+        rect.height || 0
       );
-      return { width, height };
+      return {
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height))
+      };
     }
 
     function adjustScrollableAreas(doc) {
@@ -1458,17 +1464,20 @@
       };
     }
 
-    async function captureDocumentCanvas(doc, html2canvasFn) {
+    async function captureDocumentCanvas(doc, html2canvasFn, element) {
       const cleanup = adjustScrollableAreas(doc);
       try {
-        const dims = documentDimensions(doc);
+        const target = element || doc.documentElement || doc.body;
+        const dims = elementDimensions(target);
         const view = doc.defaultView || window;
-        return await html2canvasFn(doc.body, {
+        return await html2canvasFn(target || doc.body, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           windowWidth: dims.width,
           windowHeight: dims.height,
+          width: dims.width,
+          height: dims.height,
           scrollX: -(view?.scrollX || 0),
           scrollY: -(view?.scrollY || 0)
         });
@@ -1481,7 +1490,25 @@
       const originalScroll = { x: window.scrollX, y: window.scrollY };
       window.scrollTo(0, 0);
       try {
-        return await captureDocumentCanvas(document, html2canvasFn);
+        if (document.fonts && typeof document.fonts.ready === 'object') {
+          try {
+            await document.fonts.ready;
+          } catch (err) {
+            console.warn('No se pudieron cargar las fuentes antes de la captura', err);
+          }
+        }
+        const targets = [];
+        if (document.documentElement) targets.push(document.documentElement);
+        if (document.body && document.body !== document.documentElement) targets.push(document.body);
+        const mainContainer = document.querySelector('.complete-container');
+        if (mainContainer) targets.push(mainContainer);
+        for (const target of targets) {
+          const canvas = await captureWithRetry(() => captureDocumentCanvas(document, html2canvasFn, target), 3, 350);
+          if (canvas) {
+            return canvas;
+          }
+        }
+        return null;
       } finally {
         window.scrollTo(originalScroll.x, originalScroll.y);
       }
@@ -1517,7 +1544,23 @@
         const iframeDoc = iframeWindow.document;
         iframeWindow.scrollTo(0, 0);
         await wait(1000);
-        return await captureDocumentCanvas(iframeDoc, html2canvasFn);
+        if (iframeDoc.fonts && typeof iframeDoc.fonts.ready === 'object') {
+          try {
+            await iframeDoc.fonts.ready;
+          } catch (err) {
+            console.warn('No se pudieron cargar las fuentes en la pestaña remota', err);
+          }
+        }
+        const targets = [];
+        if (iframeDoc.documentElement) targets.push(iframeDoc.documentElement);
+        if (iframeDoc.body && iframeDoc.body !== iframeDoc.documentElement) targets.push(iframeDoc.body);
+        for (const target of targets) {
+          const canvas = await captureWithRetry(() => captureDocumentCanvas(iframeDoc, html2canvasFn, target), 2, 350);
+          if (canvas) {
+            return canvas;
+          }
+        }
+        return null;
       } finally {
         iframe.remove();
       }
@@ -1622,6 +1665,50 @@
           reject(blobError);
         }
       });
+    }
+
+    function isCanvasMostlyBlank(canvas) {
+      if (!canvas || !canvas.width || !canvas.height) {
+        return true;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return true;
+      }
+      const sampleCols = Math.min(canvas.width, 6);
+      const sampleRows = Math.min(canvas.height, 6);
+      for (let row = 0; row < sampleRows; row += 1) {
+        for (let col = 0; col < sampleCols; col += 1) {
+          const x = sampleCols === 1
+            ? 0
+            : Math.round((col / (sampleCols - 1)) * (canvas.width - 1));
+          const y = sampleRows === 1
+            ? 0
+            : Math.round((row / (sampleRows - 1)) * (canvas.height - 1));
+          const pixel = ctx.getImageData(x, y, 1, 1).data;
+          const alpha = pixel[3];
+          if (alpha > 16) {
+            if (pixel[0] < 245 || pixel[1] < 245 || pixel[2] < 245) {
+              return false;
+            }
+          }
+        }
+      }
+      return true;
+    }
+
+    async function captureWithRetry(captureFn, attempts = 2, delayMs = 300) {
+      let lastCanvas = null;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        lastCanvas = await captureFn();
+        if (lastCanvas && !isCanvasMostlyBlank(lastCanvas)) {
+          return lastCanvas;
+        }
+        if (attempt < attempts - 1) {
+          await wait(delayMs);
+        }
+      }
+      return (lastCanvas && !isCanvasMostlyBlank(lastCanvas)) ? lastCanvas : null;
     }
 
     function scaleCanvasForPdf(canvas) {
