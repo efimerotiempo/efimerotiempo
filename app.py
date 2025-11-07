@@ -5328,54 +5328,6 @@ def delete_note(nid):
     return redirect(next_url)
 
 
-@app.route('/update_pedido_date', methods=['POST'])
-def update_pedido_date():
-    data = request.get_json() or {}
-    cid = data.get('cid')
-    date_str = data.get('date')
-    if not cid:
-        return '', 400
-    if date_str:
-        try:
-            d = date.fromisoformat(date_str)
-        except Exception:
-            return '', 400
-        stored = f"{d.day:02d}/{d.month:02d}"
-    else:
-        stored = None
-    cards = load_kanban_cards()
-    cid = str(cid)
-    updated = False
-    for entry in cards:
-        card = entry.get('card') or {}
-        existing = card.get('taskid') or card.get('cardId') or card.get('id')
-        if str(existing) == cid:
-            if stored is not None:
-                entry['stored_title_date'] = stored
-                entry.pop('previous_title_date', None)
-            else:
-                prev = entry.get('stored_title_date')
-                if not prev:
-                    title = (card.get('title') or '').strip()
-                    m = re.search(r"\((\d{2})/(\d{2})\)", title)
-                    if m:
-                        prev = f"{int(m.group(1)):02d}/{int(m.group(2)):02d}"
-                    else:
-                        d_dead = parse_kanban_date(card.get('deadline'))
-                        if d_dead:
-                            prev = f"{d_dead.day:02d}/{d_dead.month:02d}"
-                entry['previous_title_date'] = prev
-                entry['stored_title_date'] = None
-                card['deadline'] = None
-            updated = True
-            break
-    if updated:
-        save_kanban_cards(cards)
-        broadcast_event({'type': 'kanban_update'})
-        return jsonify({'stored_date': stored})
-    return '', 404
-
-
 @app.route('/observaciones')
 def observation_list():
     projects = [p for p in get_visible_projects() if p.get('observations')]
