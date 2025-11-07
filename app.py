@@ -17,14 +17,9 @@ import sys
 import importlib.util
 import random
 from queue import Queue
+from html.parser import HTMLParser
 
 from localtime import local_today, local_now
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import mm
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
-from xml.sax.saxutils import escape
-from bs4 import BeautifulSoup
 
 # Always load this repository's ``schedule.py`` regardless of the working
 # directory or any installed package named ``schedule``.  After importing, pull
@@ -127,22 +122,79 @@ _SUMMARY_TABS = [
 ]
 
 
+class _SummaryHTMLStripper(HTMLParser):
+    """Extrae texto legible desde fragmentos HTML sin depender de bibliotecas externas."""
+
+    _BLOCK_TAGS = {
+        'p', 'div', 'section', 'article', 'header', 'footer', 'li', 'ul', 'ol', 'table',
+        'thead', 'tbody', 'tfoot', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
+    }
+
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+        self._skip = 0
+        self._nav = 0
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in ('script', 'style'):
+            self._skip += 1
+            return
+        if tag == 'nav':
+            self._nav += 1
+            return
+        if self._skip or self._nav:
+            return
+        if tag in self._BLOCK_TAGS:
+            self._append_line_break()
+        elif tag == 'br':
+            self._parts.append('\n')
+        elif tag in ('td', 'th'):
+            self._parts.append('\t')
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in ('script', 'style'):
+            if self._skip:
+                self._skip -= 1
+            return
+        if tag == 'nav':
+            if self._nav:
+                self._nav -= 1
+            return
+        if self._skip or self._nav:
+            return
+        if tag in self._BLOCK_TAGS:
+            self._append_line_break()
+
+    def handle_data(self, data):
+        if self._skip or self._nav:
+            return
+        if data:
+            self._parts.append(data)
+
+    def _append_line_break(self):
+        if not self._parts:
+            return
+        if not self._parts[-1].endswith('\n'):
+            self._parts.append('\n')
+
+    def get_text(self):
+        text = ''.join(self._parts)
+        text = text.replace('\r', '')
+        text = text.replace('\t', ' ')
+        text = re.sub(r' +', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        lines = [line.rstrip() for line in text.split('\n')]
+        cleaned = '\n'.join(lines).strip()
+        return cleaned
+
+
 def _html_to_text_for_pdf(html):
-    soup = BeautifulSoup(html, 'html.parser')
-    for element in soup(['script', 'style']):
-        element.decompose()
-    body = soup.body or soup
-    if body:
-        nav = body.find('nav')
-        if nav:
-            nav.decompose()
-        for hr in body.find_all('hr'):
-            hr.decompose()
-    text = body.get_text(separator='\n', strip=True) if body else soup.get_text(separator='\n', strip=True)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    # Quitar espacios en blanco repetidos al inicio de las líneas
-    cleaned_lines = [line.rstrip() for line in text.splitlines()]
-    return '\n'.join(cleaned_lines).strip()
+    parser = _SummaryHTMLStripper()
+    parser.feed(html)
+    return parser.get_text()
 
 
 def _normalize_tab_sections(text):
@@ -154,6 +206,136 @@ def _normalize_tab_sections(text):
         if cleaned:
             blocks.append(cleaned)
     return blocks
+
+
+def _escape_pdf_text(text):
+    if text is None:
+        return ''
+    escaped = text.replace('\\', r'\\').replace('(', r'\(').replace(')', r'\)')
+    return escaped
+
+
+def _chunk_lines(lines, max_lines):
+    page = []
+    for line in lines:
+        if len(page) == max_lines:
+            yield page
+            page = []
+        page.append(line)
+    if page:
+        yield page
+
+
+def _build_plaintext_pdf(lines, title, now):
+    if not lines:
+        lines = ['Sin contenido disponible.']
+    max_lines = 55
+    pages = list(_chunk_lines(lines, max_lines)) or [['Sin contenido disponible.']]
+    objects = []
+
+    def add_object(payload):
+        if isinstance(payload, str):
+            payload_bytes = payload.encode('latin-1', 'replace')
+        else:
+            payload_bytes = payload
+        objects.append(payload_bytes)
+        return len(objects)
+
+    def add_stream(stream_bytes):
+        header = f"<< /Length {len(stream_bytes)} >>\nstream\n".encode('latin-1')
+        footer = b"\nendstream"
+        return add_object(header + stream_bytes + footer)
+
+    font_obj_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    content_ids = []
+    page_ids = []
+    page_width = 595
+    page_height = 842
+    left_margin = 40
+    top_margin = 40
+    line_height = 14
+    start_y = page_height - top_margin
+
+    for page_lines in pages:
+        commands = [
+            "BT",
+            "/F1 11 Tf",
+            f"1 0 0 1 {left_margin} {start_y} Tm",
+            f"{line_height} TL",
+        ]
+        for line in page_lines:
+            line = line.rstrip()
+            if line:
+                commands.append(f"({_escape_pdf_text(line)}) Tj")
+            commands.append("T*")
+        commands.append("ET")
+        stream_bytes = "\n".join(commands).encode('latin-1', 'replace')
+        content_id = add_stream(stream_bytes)
+        content_ids.append(content_id)
+        page_dict = (
+            "<< /Type /Page /Parent {parent} 0 R /MediaBox [0 0 {w} {h}] "
+            "/Resources << /Font << /F1 {font} 0 R >> >> /Contents {content} 0 R >>"
+        ).format(
+            parent='{pages}',
+            w=page_width,
+            h=page_height,
+            font=font_obj_id,
+            content=content_id,
+        )
+        page_ids.append(add_object(page_dict))
+
+    kids = ' '.join(f"{pid} 0 R" for pid in page_ids)
+    pages_obj_id = add_object(
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>" if page_ids else "<< /Type /Pages /Count 0 >>"
+    )
+
+    # Rebind parent references now that we know the /Pages object id
+    def rebuild_page_object(pid, content_id):
+        page_dict = (
+            f"<< /Type /Page /Parent {pages_obj_id} 0 R /MediaBox [0 0 {page_width} {page_height}] "
+            f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> /Contents {content_id} 0 R >>"
+        )
+        objects[pid - 1] = page_dict.encode('latin-1')
+
+    for pid, content_id in zip(page_ids, content_ids):
+        rebuild_page_object(pid, content_id)
+
+    catalog_obj_id = add_object(f"<< /Type /Catalog /Pages {pages_obj_id} 0 R >>")
+    creation_date = now.strftime('%Y%m%d%H%M%S')
+    info_obj_id = add_object(
+        "<< /Producer (efimerotiempo) /Title ({title}) /CreationDate (D:{date}) >>".format(
+            title=_escape_pdf_text(title),
+            date=creation_date,
+        )
+    )
+
+    output = BytesIO()
+    output.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(output.tell())
+        output.write(f"{index} 0 obj\n".encode('latin-1'))
+        output.write(obj)
+        if not obj.endswith(b"\n"):
+            output.write(b"\n")
+        output.write(b"endobj\n")
+
+    xref_pos = output.tell()
+    output.write(f"xref\n0 {len(objects) + 1}\n".encode('latin-1'))
+    output.write(b"0000000000 65535 f \n")
+    for offset in offsets:
+        output.write(f"{offset:010d} 00000 n \n".encode('latin-1'))
+    output.write(b"trailer\n")
+    trailer = "<< /Size {size} /Root {root} 0 R /Info {info} 0 R >>\n".format(
+        size=len(objects) + 1,
+        root=catalog_obj_id,
+        info=info_obj_id,
+    )
+    output.write(trailer.encode('latin-1'))
+    output.write(b"startxref\n")
+    output.write(f"{xref_pos}\n".encode('latin-1'))
+    output.write(b"%%EOF")
+    return output.getvalue()
 
 
 def _phase_total_hours(value):
@@ -6105,62 +6287,39 @@ def complete_pdf():
         except Exception:
             continue
         sections.append((title, path))
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm,
-    )
-    styles = getSampleStyleSheet()
-    heading_style = styles['Heading2']
-    body_style = styles['BodyText']
-    body_style.fontSize = 9
-    body_style.leading = 11
-    elements = []
-    intro_title = styles['Heading1']
-    intro_body = styles['Normal']
-    intro_body.fontSize = 10
-    intro_body.leading = 12
-    elements.append(Paragraph('Resumen global de pestañas', intro_title))
-    elements.append(
-        Paragraph(
-            escape(f"Generado el {now.strftime('%d/%m/%Y %H:%M:%S')}"),
-            intro_body,
-        )
-    )
-    elements.append(Spacer(1, 12))
+    lines = [
+        'Resumen global de pestañas',
+        f"Generado el {now.strftime('%d/%m/%Y %H:%M:%S')}",
+        '',
+    ]
     auth_header = None
     if AUTH_USER or AUTH_PASS:
         token = base64.b64encode(f"{AUTH_USER}:{AUTH_PASS}".encode('utf-8')).decode('ascii')
         auth_header = {'Authorization': f'Basic {token}'}
     with app.test_client() as client:
-        for index, (title, path) in enumerate(sections):
-            if index > 0:
-                elements.append(PageBreak())
-            elements.append(Paragraph(escape(title), heading_style))
+        for title, path in sections:
+            lines.append(title)
+            lines.append('')
             request_kwargs = {}
             if auth_header:
                 request_kwargs['headers'] = auth_header
             response = client.get(path, **request_kwargs)
             if response.status_code != 200:
                 error_text = f"No se pudo cargar la pestaña (estado {response.status_code})."
-                elements.append(Paragraph(escape(error_text), body_style))
+                lines.append(error_text)
+                lines.append('')
                 continue
             text = _html_to_text_for_pdf(response.get_data(as_text=True))
             blocks = _normalize_tab_sections(text)
             if not blocks:
-                elements.append(Paragraph(escape('Sin contenido disponible.'), body_style))
+                lines.append('Sin contenido disponible.')
+                lines.append('')
                 continue
             for block in blocks:
-                safe_block = escape(block).replace('\n', '<br/>')
-                elements.append(Paragraph(safe_block, body_style))
-                elements.append(Spacer(1, 6))
-    doc.build(elements)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
+                lines.extend(block.split('\n'))
+                lines.append('')
+    lines = [line.rstrip() for line in lines]
+    pdf_bytes = _build_plaintext_pdf(lines, 'Resumen global de pestañas', now)
     filename = now.strftime('%Y%m%d_%H%M%S') + '.pdf'
     headers = {
         'Content-Disposition': f'attachment; filename="{filename}"',
