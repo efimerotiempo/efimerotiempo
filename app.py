@@ -5328,23 +5328,6 @@ def delete_note(nid):
     return redirect(next_url)
 
 
-@app.route('/update_worker_note', methods=['POST'])
-def update_worker_note():
-    data = request.get_json() or {}
-    worker = data.get('worker')
-    text = data.get('text', '')
-    if not worker:
-        return jsonify({'error': 'Falta recurso'}), 400
-    notes = load_worker_notes()
-    notes[worker] = {
-        'text': text,
-        'edited': local_now().isoformat(timespec='minutes'),
-    }
-    save_worker_notes(notes)
-    dt = datetime.fromisoformat(notes[worker]['edited'])
-    return jsonify({'edited': dt.strftime('%H:%M %d/%m')})
-
-
 @app.route('/update_pedido_date', methods=['POST'])
 def update_pedido_date():
     data = request.get_json() or {}
