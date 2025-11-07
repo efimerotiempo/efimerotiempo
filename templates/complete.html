@@ -1562,26 +1562,48 @@
       banner.textContent = `Generando PDF (${index}/${total}) · ${title}`;
     }
 
+    async function reportPdfError(error) {
+      const payload = {
+        message: error && typeof error.message === 'string' ? error.message : String(error),
+        stack: error && typeof error.stack === 'string' ? error.stack : undefined,
+      };
+      try {
+        await fetch('/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+      } catch (reportErr) {
+        console.error('Error enviando el reporte del PDF', reportErr);
+      }
+    }
+
     function appendCanvasToPdf(pdf, canvas, isFirstPage) {
       if (!canvas.width || !canvas.height) {
         return isFirstPage;
       }
-      const imageData = canvas.toDataURL('image/png');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
-      const imgHeight = canvas.height * imgWidth / canvas.width;
-      let remainingHeight = imgHeight;
-      let position = 0;
-      let sliceIndex = 0;
-      while (remainingHeight > 0) {
+      const scale = imgWidth / canvas.width;
+      const pageHeightPx = Math.max(1, Math.floor(pageHeight / scale));
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      for (let y = 0, sliceIndex = 0; y < canvas.height; y += pageHeightPx, sliceIndex += 1) {
+        const sliceHeight = Math.min(pageHeightPx, canvas.height - y);
+        sliceCanvas.height = sliceHeight;
+        const ctx = sliceCanvas.getContext('2d');
+        if (!ctx) {
+          break;
+        }
+        ctx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceHeight, 0, 0, sliceCanvas.width, sliceHeight);
+        const imageData = sliceCanvas.toDataURL('image/png');
         if (sliceIndex > 0 || !isFirstPage) {
           pdf.addPage();
         }
-        pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-        remainingHeight -= pageHeight;
-        position -= pageHeight;
-        sliceIndex += 1;
+        pdf.addImage(imageData, 'PNG', 0, 0, imgWidth, sliceHeight * scale);
         isFirstPage = false;
       }
       return false;
@@ -1624,6 +1646,7 @@
         pdf.save(filename);
       } catch (error) {
         console.error('Error generando el PDF', error);
+        await reportPdfError(error);
         alert('No se pudo generar el PDF. Inténtalo de nuevo más tarde.');
       } finally {
         summaryPdfBtn.disabled = false;

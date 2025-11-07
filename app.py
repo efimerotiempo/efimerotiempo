@@ -594,6 +594,18 @@ def _require_auth():
     if not auth or not _check_auth(auth.username, auth.password):
         return _authenticate()
 
+
+@app.route('/client-error', methods=['POST'])
+def log_client_error():
+    data = request.get_json(silent=True) or {}
+    message = data.get('message')
+    stack = data.get('stack')
+    if message:
+        app.logger.error('Client error: %s', message)
+    if stack:
+        app.logger.error(stack)
+    return ('', 204)
+
 COLORS = [
     '#ffd9e8', '#ffe4c4', '#e0ffff', '#d0f0c0', '#fef9b7', '#ffe8d6',
     '#dcebf1', '#e6d3f8', '#fdfd96', '#e7f5ff', '#ccffcc', '#e9f7fd',
