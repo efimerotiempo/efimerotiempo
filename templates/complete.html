@@ -1579,7 +1579,7 @@
       }
     }
 
-    function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 0.92) {
+    function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 0.85) {
       return new Promise((resolve, reject) => {
         const fallbackToDataUrl = () => {
           try {
@@ -1624,27 +1624,56 @@
       });
     }
 
+    function scaleCanvasForPdf(canvas) {
+      const MAX_WIDTH = 1800;
+      if (!canvas || canvas.width <= MAX_WIDTH) {
+        return canvas;
+      }
+      const ratio = MAX_WIDTH / canvas.width;
+      const target = document.createElement('canvas');
+      target.width = Math.max(1, Math.round(canvas.width * ratio));
+      target.height = Math.max(1, Math.round(canvas.height * ratio));
+      const ctx = target.getContext('2d');
+      if (!ctx) {
+        return canvas;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(canvas, 0, 0, target.width, target.height);
+      return target;
+    }
+
     async function appendCanvasToPdf(pdf, canvas, isFirstPage) {
-      if (!canvas.width || !canvas.height) {
+      const workingCanvas = scaleCanvasForPdf(canvas);
+      if (!workingCanvas || !workingCanvas.width || !workingCanvas.height) {
         return isFirstPage;
       }
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pageWidth;
-      const scale = imgWidth / canvas.width;
+      const scale = imgWidth / workingCanvas.width;
       const pageHeightPx = Math.max(1, Math.floor(pageHeight / scale));
       const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = canvas.width;
+      sliceCanvas.width = workingCanvas.width;
       let pageAdded = false;
-      for (let y = 0, sliceIndex = 0; y < canvas.height; y += pageHeightPx, sliceIndex += 1) {
-        const sliceHeight = Math.min(pageHeightPx, canvas.height - y);
+      for (let y = 0, sliceIndex = 0; y < workingCanvas.height; y += pageHeightPx, sliceIndex += 1) {
+        const sliceHeight = Math.min(pageHeightPx, workingCanvas.height - y);
         sliceCanvas.height = sliceHeight;
         const ctx = sliceCanvas.getContext('2d');
         if (!ctx) {
           break;
         }
         ctx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-        ctx.drawImage(canvas, 0, y, canvas.width, sliceHeight, 0, 0, sliceCanvas.width, sliceHeight);
+        ctx.drawImage(
+          workingCanvas,
+          0,
+          y,
+          workingCanvas.width,
+          sliceHeight,
+          0,
+          0,
+          sliceCanvas.width,
+          sliceHeight
+        );
         const imageData = await canvasToDataUrl(sliceCanvas);
         if (sliceIndex > 0 || !isFirstPage) {
           pdf.addPage();
