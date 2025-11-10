@@ -198,6 +198,21 @@ table.schedule td.weekend-cell {
 }
 .history-close:hover { color: #c00; }
 .history-list { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.pdf-progress-banner {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    padding: 10px 16px;
+    background: rgba(17, 25, 40, 0.9);
+    color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 4000;
+    pointer-events: none;
+}
 .history-entry { border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; color: #333; }
 .history-entry:last-child { border-bottom: none; padding-bottom: 0; }
 .history-entry-time { font-weight: 600; margin-bottom: 4px; }
@@ -933,13 +948,31 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 .hours-row select { width: 60px; }
 .hours-btn-container {
-    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
     margin-bottom: 5px;
 }
-#hours-btn {
+.hours-btn-container button {
     cursor: pointer;
-    font-size: 1.5em;
     padding: 10px 20px;
+    border: 1px solid #2f3d4a;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #2f3d4a;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.hours-btn-container button:hover {
+    background-color: #2f3d4a;
+    color: #fff;
+}
+#hours-btn {
+    font-size: 1.5em;
+}
+#summary-pdf-btn {
+    font-size: 1.2em;
 }
 .conflict-modal {
     display: none;
