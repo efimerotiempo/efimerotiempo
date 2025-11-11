@@ -1495,6 +1495,11 @@ SUBCONTRATACIONES_UNCONFIRMED_COLUMNS = {
     'Planif. OTROS',
 }
 
+SUBCONTRATACIONES_TREATMENT_KEYS = {
+    normalize_key('Tratamiento'),
+    normalize_key('Tratamiento final'),
+}
+
 PEDIDOS_EXTRA_LANE_COLUMNS = {
     'Planif. Premec.',
     'Premecanizado',
@@ -1550,6 +1555,11 @@ SUBCONTRATACIONES_COLOR_OVERRIDES.update(
         normalize_key(col): SUBCONTRATACIONES_ORANGE_COLOR
         for col in SUBCONTRATACIONES_ORANGE_COLUMNS
     }
+)
+
+SOLDAR_PHASE_PRIORITY = (
+    'soldar',
+    'soldar 2º',
 )
 
 CALENDAR_MONTH_NAMES = [
@@ -2400,7 +2410,186 @@ def attach_phase_starts(links_table, projects=None):
     return enriched
 
 
-def compute_pedidos_entries(compras_raw, column_colors, today):
+def _gather_identifier_candidates(*values):
+    candidates = []
+    for raw in values:
+        if raw in (None, ''):
+            continue
+        text = str(raw).strip()
+        if not text:
+            continue
+        candidates.append(text)
+        split_value, _ = split_project_and_client(text)
+        if split_value and split_value != text:
+            candidates.append(split_value)
+    for value in list(candidates):
+        match = PROJECT_TITLE_PATTERN.search(value)
+        if match:
+            candidates.append(match.group(0))
+    return candidates
+
+
+def _collect_project_identifier_candidates(project):
+    values = []
+    name = project.get('name')
+    if name:
+        values.append(name)
+        code = _normalize_order_code(name)
+        if code and code != name:
+            values.append(code)
+    custom_id = project.get('custom_card_id')
+    if custom_id:
+        values.append(custom_id)
+    display_fields = project.get('kanban_display_fields') or {}
+    if isinstance(display_fields, dict):
+        for key in (
+            'ID personalizado',
+            'ID personalizado de tarjeta',
+            'ID personalizado tarjeta',
+        ):
+            value = display_fields.get(key)
+            if value:
+                values.append(value)
+    return _gather_identifier_candidates(*values)
+
+
+def build_phase_finish_lookup(projects, phase_names):
+    if not projects or not phase_names:
+        return {}
+
+    ordered_keys = []
+    target_keys = set()
+    for phase in phase_names:
+        norm = normalize_key(phase)
+        if not norm or norm in target_keys:
+            continue
+        ordered_keys.append(norm)
+        target_keys.add(norm)
+
+    if not ordered_keys:
+        return {}
+
+    schedule_map = compute_schedule_map(projects)
+    per_pid = {}
+    for pid, items in schedule_map.items():
+        pid_str = str(pid)
+        for _, day, phase, *_ in items:
+            norm_phase = normalize_key(phase)
+            if norm_phase not in target_keys:
+                continue
+            if isinstance(day, date):
+                day_obj = day
+            else:
+                try:
+                    day_obj = date.fromisoformat(str(day)[:10])
+                except Exception:
+                    continue
+            phases = per_pid.setdefault(pid_str, {})
+            current = phases.get(norm_phase)
+            if current is None or day_obj > current:
+                phases[norm_phase] = day_obj
+
+    if not per_pid:
+        return {}
+
+    finish_by_pid = {}
+    for pid_str, phase_map in per_pid.items():
+        for phase_key in ordered_keys:
+            finish_day = phase_map.get(phase_key)
+            if finish_day:
+                finish_by_pid[pid_str] = finish_day
+                break
+
+    if not finish_by_pid:
+        return {}
+
+    by_norm = {}
+    for project in projects:
+        pid = project.get('id')
+        if not pid:
+            continue
+        finish_day = finish_by_pid.get(str(pid))
+        if not finish_day:
+            continue
+        for value in _collect_project_identifier_candidates(project):
+            norm = normalize_key(value)
+            if not norm:
+                continue
+            existing = by_norm.get(norm)
+            if existing is None or finish_day > existing:
+                by_norm[norm] = finish_day
+
+    return {'by_pid': finish_by_pid, 'by_norm': by_norm}
+
+
+def _resolve_phase_finish_for_card(card, title, custom_id, lookup):
+    if not lookup:
+        return None
+
+    if isinstance(lookup, dict):
+        by_norm = lookup.get('by_norm') or {}
+    else:
+        by_norm = lookup
+
+    if not by_norm:
+        return None
+
+    candidates = []
+    candidates.extend(_gather_identifier_candidates(title, custom_id))
+
+    if isinstance(card, dict):
+        values = []
+        for key in (
+            'customCardId',
+            'customcardid',
+            'customId',
+            'customid',
+        ):
+            value = card.get(key)
+            if value:
+                values.append(value)
+        fields_raw = card.get('customfields') or card.get('customFields')
+        parsed_fields = _decode_json(fields_raw)
+        if isinstance(parsed_fields, dict):
+            for key, value in parsed_fields.items():
+                key_text = str(key).casefold()
+                if any(token in key_text for token in ('id', 'pedido', 'proyecto')):
+                    values.append(value)
+        elif isinstance(parsed_fields, list):
+            for item in parsed_fields:
+                if not isinstance(item, dict):
+                    continue
+                label = str(
+                    item.get('name')
+                    or item.get('label')
+                    or item.get('text')
+                    or ''
+                ).casefold()
+                if not label:
+                    continue
+                if any(token in label for token in ('id', 'pedido', 'proyecto')):
+                    value = item.get('value') or item.get('text')
+                    if value:
+                        values.append(value)
+        if values:
+            candidates.extend(_gather_identifier_candidates(*values))
+
+    seen = set()
+    for candidate in candidates:
+        norm = normalize_key(candidate)
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        finish_day = by_norm.get(norm)
+        if finish_day:
+            return finish_day
+
+    return None
+
+
+def compute_pedidos_entries(
+    compras_raw, column_colors, today, *, soldar_finish_lookup=None
+):
     calendar_data = {
         key: {'scheduled': {}, 'unconfirmed': []}
         for key in ('pedidos', 'subcontrataciones')
@@ -2464,6 +2653,16 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
                     d = parse_kanban_date(card.get('deadline'))
             else:
                 d = parse_kanban_date(card.get('deadline'))
+
+        if (
+            target_key == 'subcontrataciones'
+            and column_key in SUBCONTRATACIONES_TREATMENT_KEYS
+        ):
+            finish_day = _resolve_phase_finish_for_card(
+                card, title, custom_id, soldar_finish_lookup
+            )
+            if isinstance(finish_day, date):
+                d = finish_day
 
         color = column_colors.get(column, '#999999')
         override = target_config['color_overrides'].get(column_key)
@@ -4216,8 +4415,14 @@ def calendar_pedidos():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
+    soldar_lookup = build_phase_finish_lookup(projects, SOLDAR_PHASE_PRIORITY)
     base_links = build_project_links(compras_raw)
-    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    calendar_payload = compute_pedidos_entries(
+        compras_raw,
+        column_colors,
+        today,
+        soldar_finish_lookup=soldar_lookup,
+    )
     pedidos_calendar = calendar_payload['pedidos']
     subcontr_calendar = calendar_payload['subcontrataciones']
     calendar_titles = calendar_payload['titles']
@@ -4474,8 +4679,14 @@ def project_links_api():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
+    soldar_lookup = build_phase_finish_lookup(projects, SOLDAR_PHASE_PRIORITY)
     base_links = build_project_links(compras_raw)
-    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    calendar_payload = compute_pedidos_entries(
+        compras_raw,
+        column_colors,
+        today,
+        soldar_finish_lookup=soldar_lookup,
+    )
     calendar_titles = calendar_payload['titles']
     pedidos_calendar = calendar_payload['pedidos']
     subcontr_calendar = calendar_payload['subcontrataciones']
@@ -5047,7 +5258,14 @@ def _should_highlight_order(order_day, planned_start, *, window=3, today=None):
 def gantt_orders_view():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
-    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    projects = get_visible_projects()
+    soldar_lookup = build_phase_finish_lookup(projects, SOLDAR_PHASE_PRIORITY)
+    calendar_payload = compute_pedidos_entries(
+        compras_raw,
+        column_colors,
+        today,
+        soldar_finish_lookup=soldar_lookup,
+    )
     pedidos_calendar = calendar_payload['pedidos']
     pedidos = pedidos_calendar['scheduled']
     unconfirmed = pedidos_calendar['unconfirmed']
@@ -5069,7 +5287,6 @@ def gantt_orders_view():
             if cid and code:
                 order_to_code.setdefault(cid, code)
 
-    projects = get_visible_projects()
     scheduled_projects = copy.deepcopy(projects)
     schedule_data, _ = schedule_projects(scheduled_projects)
 
