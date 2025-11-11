@@ -75,7 +75,7 @@
     <tr data-worker="{{ worker }}">
         <td class="resource-col">
             <div class="worker-label">{{ worker }}</div>
-            <textarea class="worker-note" data-worker="{{ worker }}">{{ worker_notes.get(worker, {}).get('text','') }}</textarea>
+            <textarea class="worker-note" data-worker="{{ worker }}" data-saved-height="{{ worker_notes.get(worker, {}).get('height') or '' }}">{{ worker_notes.get(worker, {}).get('text','') }}</textarea>
             {% set wn = worker_notes.get(worker) %}
             <div class="worker-note-time">{% if wn and wn.edited %}{{ wn.edited }}{% endif %}</div>
         </td>
@@ -1378,16 +1378,52 @@
   }
   document.querySelectorAll('.modal-content, .conflict-content, .info-popup, .history-content').forEach(makeDraggable);
 
-  document.querySelectorAll('.worker-note').forEach(area => {
+  const workerNotes = document.querySelectorAll('.worker-note');
+
+  function autosizeWorkerNote(area, targetHeight) {
+    if (!area) return 0;
+    const baseMin = Number(area.dataset.baseMinHeight || 0);
+    area.style.height = 'auto';
+    const measured = typeof targetHeight === 'number' && targetHeight > 0
+      ? targetHeight
+      : Math.max(area.scrollHeight, baseMin);
+    const finalHeight = Math.max(measured, baseMin);
+    area.style.height = `${finalHeight}px`;
+    area.dataset.currentHeight = String(finalHeight);
+    return finalHeight;
+  }
+
+  workerNotes.forEach(area => {
+    const computed = window.getComputedStyle(area);
+    const minHeight = parseFloat(computed.minHeight) || parseFloat(computed.height) || area.offsetHeight;
+    if (minHeight > 0) {
+      area.dataset.baseMinHeight = String(Math.round(minHeight));
+    }
+    const saved = parseInt(area.dataset.savedHeight || '', 10);
+    if (!Number.isNaN(saved) && saved > 0) {
+      autosizeWorkerNote(area, saved);
+    } else {
+      autosizeWorkerNote(area);
+    }
+    area.addEventListener('input', () => {
+      autosizeWorkerNote(area);
+    });
     area.addEventListener('change', () => {
+      const latestHeight = parseInt(area.dataset.currentHeight || '', 10) || Math.round(area.offsetHeight);
       fetch(WORKER_NOTE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ worker: area.dataset.worker, text: area.value })
+        body: JSON.stringify({ worker: area.dataset.worker, text: area.value, height: latestHeight })
       }).then(r => r.json()).then(data => {
         const t = area.nextElementSibling;
         if (t && data.edited) t.textContent = data.edited;
+        if (data.height) {
+          area.dataset.savedHeight = String(data.height);
+          autosizeWorkerNote(area, data.height);
+        }
+      }).catch(err => {
+        console.error('Error guardando la nota del recurso', err);
       });
     });
   });

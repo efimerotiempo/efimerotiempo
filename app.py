@@ -4045,7 +4045,17 @@ def calendar_view():
                 fmt = datetime.fromisoformat(ts).strftime('%H:%M %d/%m')
             except ValueError:
                 fmt = ''
-        worker_note_map[w] = {'text': text, 'edited': fmt}
+        height_val = None
+        raw_height = info.get('height')
+        if raw_height is not None:
+            try:
+                height_val = int(float(raw_height))
+            except (TypeError, ValueError):
+                height_val = None
+        if isinstance(height_val, int) and height_val > 0:
+            worker_note_map[w] = {'text': text, 'edited': fmt, 'height': height_val}
+        else:
+            worker_note_map[w] = {'text': text, 'edited': fmt}
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
@@ -5967,7 +5977,17 @@ def complete():
                 fmt = datetime.fromisoformat(ts).strftime('%H:%M %d/%m')
             except ValueError:
                 fmt = ''
-        worker_note_map[w] = {'text': text, 'edited': fmt}
+        height_val = None
+        raw_height = info.get('height')
+        if raw_height is not None:
+            try:
+                height_val = int(float(raw_height))
+            except (TypeError, ValueError):
+                height_val = None
+        if isinstance(height_val, int) and height_val > 0:
+            worker_note_map[w] = {'text': text, 'edited': fmt, 'height': height_val}
+        else:
+            worker_note_map[w] = {'text': text, 'edited': fmt}
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
     )
@@ -6135,16 +6155,45 @@ def update_worker_note():
     data = request.get_json() or {}
     worker = data.get('worker')
     text = data.get('text', '')
+    raw_height = data.get('height')
     if not worker:
         return jsonify({'error': 'Falta recurso'}), 400
+    height_val = None
+    if isinstance(raw_height, (int, float)):
+        height_val = int(raw_height)
+    else:
+        try:
+            if raw_height is not None:
+                height_val = int(float(raw_height))
+        except (TypeError, ValueError):
+            height_val = None
+    if isinstance(height_val, int):
+        if height_val < 0:
+            height_val = None
+        elif height_val > 3000:
+            height_val = 3000
     notes = load_worker_notes()
-    notes[worker] = {
+    previous = notes.get(worker) or {}
+    payload = {
         'text': text,
         'edited': local_now().isoformat(timespec='minutes'),
     }
+    if isinstance(height_val, int) and height_val > 0:
+        payload['height'] = height_val
+    elif previous.get('height') is not None:
+        try:
+            prev_height = int(float(previous['height']))
+        except (TypeError, ValueError):
+            prev_height = None
+        if isinstance(prev_height, int) and prev_height > 0:
+            payload['height'] = prev_height
+    notes[worker] = payload
     save_worker_notes(notes)
-    dt = datetime.fromisoformat(notes[worker]['edited'])
-    return jsonify({'edited': dt.strftime('%H:%M %d/%m')})
+    dt = datetime.fromisoformat(payload['edited'])
+    response = {'edited': dt.strftime('%H:%M %d/%m')}
+    if 'height' in payload:
+        response['height'] = int(payload['height'])
+    return jsonify(response)
 
 
 @app.route('/update_pedido_date', methods=['POST'])
