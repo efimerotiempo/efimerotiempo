@@ -4091,18 +4091,34 @@ def calendar_pedidos():
 
 
     # --- ARMAR CALENDARIO SEMANAL ---
-    start = today - timedelta(weeks=3)
-    start -= timedelta(days=start.weekday())
-    for d in list(pedidos.keys()):
-        if d < start:
-            pedidos.setdefault(start, []).extend(pedidos.pop(d))
+    scheduled_dates = [
+        d for d, items in pedidos.items() if isinstance(d, date) and items
+    ]
 
-    current_month_start = date(today.year, today.month, 1)
-    months_ahead = 2
-    end_month = current_month_start
-    for _ in range(months_ahead):
-        end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
-    month_end = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    if scheduled_dates:
+        first_day = min(scheduled_dates)
+        last_day = max(scheduled_dates)
+        start = first_day - timedelta(days=first_day.weekday())
+        end_week = last_day - timedelta(days=last_day.weekday())
+        visible_end = end_week + timedelta(days=4)
+    else:
+        start = today - timedelta(weeks=3)
+        start -= timedelta(days=start.weekday())
+
+        current_month_start = date(today.year, today.month, 1)
+        months_ahead = 2
+        end_month = current_month_start
+        for _ in range(months_ahead):
+            end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+        visible_end = (
+            (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+            - timedelta(days=1)
+        )
+        end_week = visible_end - timedelta(days=visible_end.weekday())
+
+    if end_week < start:
+        end_week = start
+        visible_end = start + timedelta(days=4)
 
     MONTHS = [
         'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -4111,7 +4127,7 @@ def calendar_pedidos():
 
     weeks = []
     current = start
-    while current <= month_end:
+    while current <= end_week:
         week = {'number': current.isocalendar()[1], 'days': []}
         for i in range(5):  # solo lunes-viernes
             day = current + timedelta(days=i)
@@ -4123,7 +4139,7 @@ def calendar_pedidos():
             else:
                 if day.weekday() == 0 and 1 < day.day <= 7:
                     month_label = MONTHS[day.month - 1].capitalize()
-            tasks = pedidos.get(day, []) if start <= day <= month_end else []
+            tasks = pedidos.get(day, []) if start <= day <= visible_end else []
             week['days'].append(
                 {
                     'date': day,
