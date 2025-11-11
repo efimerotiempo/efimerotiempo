@@ -1758,6 +1758,18 @@ def _collect_compras_entries(entries, allowed_lanes, column_colors):
         if lane_name.lower() not in allowed_lanes:
             continue
         column = (card.get('columnname') or card.get('columnName') or '').strip()
+        if not column:
+            cached_column = entry.get('last_column')
+            if isinstance(cached_column, str):
+                column = cached_column.strip()
+            elif cached_column:
+                column = str(cached_column).strip()
+            if column:
+                # Make a shallow copy so downstream consumers (and future
+                # saves) can rely on the normalized column value.
+                card = dict(card)
+                card.setdefault('columnname', column)
+                card.setdefault('columnName', column)
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
         if not cid:
             continue
@@ -7315,6 +7327,20 @@ def kanbanize_webhook():
                 last_column = prev_column_value.strip()
             elif prev_column_value:
                 last_column = str(prev_column_value).strip()
+        if last_column:
+            existing_column = (
+                card.get('columnname')
+                or card.get('columnName')
+                or card.get('column')
+            )
+            if not (isinstance(existing_column, str) and existing_column.strip()):
+                # Preserve the column in the cached card so subsequent loads
+                # keep rendering the pedido even when Kanbanize events omit
+                # the column fields.
+                card = dict(card)
+                card['columnname'] = last_column
+                card['columnName'] = last_column
+                card['column'] = last_column
         entry = {'timestamp': payload_timestamp, 'card': card, 'stored_title_date': stored_date}
         if last_column:
             entry['last_column'] = last_column
