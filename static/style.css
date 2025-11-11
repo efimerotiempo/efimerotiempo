@@ -666,6 +666,15 @@ body.columna-1-resizing * {
     color: #2e7d32;
 }
 
+.columna-1-table col[data-col-key="observations"] {
+    width: 0 !important;
+}
+
+.columna-1-table th.observations-header,
+.columna-1-table td.observations-cell {
+    display: none !important;
+}
+
 .columna-1 .link-title.due-late {
     color: red;
 }

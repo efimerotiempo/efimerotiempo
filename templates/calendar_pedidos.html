@@ -118,7 +118,7 @@
             <th scope="col">Fecha pedido</th>
             <th scope="col">Conteo</th>
             <th scope="col">Fases</th>
-            <th scope="col">Observaciones</th>
+            <th scope="col" class="observations-header">Observaciones</th>
           </tr>
         </thead>
         <tbody class="columna-1-content">
@@ -2733,8 +2733,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function attachHighlightHandlers() {
-    const calendar = document.querySelector('.pedidos-calendar');
-    if (calendar) {
+    document.querySelectorAll('.pedidos-calendar').forEach((calendar) => {
       calendar.addEventListener('click', e => {
         const t = e.target.closest('.task');
         if (!t) return;
@@ -2747,7 +2746,7 @@ document.addEventListener('DOMContentLoaded', () => {
           clearStartDayHighlight();
         }
       });
-    }
+    });
     const column = document.querySelector('.columna-1');
     if (column) {
       column.addEventListener('click', e => {
