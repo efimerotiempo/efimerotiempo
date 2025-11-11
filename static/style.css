@@ -445,6 +445,18 @@ table.pedidos-calendar td.week-label {
     gap: 20px;
 }
 
+.pedidos-calendar-stack {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.pedidos-calendar-stack > h2 {
+    margin: 0;
+}
+
 .pedidos-calendar-container {
     flex: 0 1 auto;
     min-width: 0;

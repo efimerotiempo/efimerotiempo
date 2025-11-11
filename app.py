@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from datetime import date, timedelta, datetime
-from itertools import zip_longest
+from itertools import zip_longest, chain
 from collections import defaultdict
 import uuid
 import os
@@ -1440,16 +1440,10 @@ ARCHIVE_LANES = {'Acero al Carbono', 'Inoxidable - Aluminio'}
 
 # Column and lane filters for the orders calendar and associated tables
 PEDIDOS_ALLOWED_COLUMNS = {
-    'Plegado/Curvado',
-    'Planif. Bekola',
-    'Planif. AZ',
     'Comerciales varios',
     'Tubo/perfil/llanta/chapa',
     'Oxicorte',
     'Laser',
-    'Premecanizado',
-    'Planif. Premec.',
-    'Plegado/curvado - Fabricación',
     'Material Incompleto',
     'Material NO CONFORME',
     'Listo para iniciar',
@@ -1465,7 +1459,33 @@ PENDING_VERIFICATION_COLUMN_KEYS = {
     normalize_key('Pdte. Verificación'),
 }
 
-PEDIDOS_UNCONFIRMED_COLUMNS = {
+PEDIDOS_UNCONFIRMED_COLUMNS = set()
+
+SUBCONTRATACIONES_BLUE_COLUMNS = {
+    'Plegado/Curvado',
+    'Planif. Premec.',
+    'Planf. TAU',
+    'Planif. Bekola',
+    'Planif. AZ',
+    'Planif. OTROS',
+    'Tratamiento',
+}
+
+SUBCONTRATACIONES_ORANGE_COLUMNS = {
+    'Plegado/curvado - Fabricación',
+    'Premecanizado',
+    'Tau',
+    'Bekola',
+    'AZ',
+    'OTROS',
+    'Tratamiento final',
+}
+
+SUBCONTRATACIONES_ALLOWED_COLUMNS = (
+    SUBCONTRATACIONES_BLUE_COLUMNS | SUBCONTRATACIONES_ORANGE_COLUMNS
+)
+
+SUBCONTRATACIONES_UNCONFIRMED_COLUMNS = {
     'Tau',
     'Bekola',
     'AZ',
@@ -1511,6 +1531,54 @@ PEDIDOS_OFFSET_TO_PLAN_END_KEYS = {
     normalize_key(col) for col in PEDIDOS_OFFSET_TO_PLAN_END_COLUMNS
 }
 PEDIDOS_SEGUIMIENTO_LANE_KEY = normalize_key('Seguimiento compras')
+
+SUBCONTRATACIONES_ALLOWED_KEYS = {
+    normalize_key(col) for col in SUBCONTRATACIONES_ALLOWED_COLUMNS
+}
+SUBCONTRATACIONES_UNCONFIRMED_KEYS = {
+    normalize_key(col) for col in SUBCONTRATACIONES_UNCONFIRMED_COLUMNS
+}
+
+SUBCONTRATACIONES_BLUE_COLOR = '#1f6bff'
+SUBCONTRATACIONES_ORANGE_COLOR = '#ff8b3d'
+SUBCONTRATACIONES_COLOR_OVERRIDES = {
+    normalize_key(col): SUBCONTRATACIONES_BLUE_COLOR
+    for col in SUBCONTRATACIONES_BLUE_COLUMNS
+}
+SUBCONTRATACIONES_COLOR_OVERRIDES.update(
+    {
+        normalize_key(col): SUBCONTRATACIONES_ORANGE_COLOR
+        for col in SUBCONTRATACIONES_ORANGE_COLUMNS
+    }
+)
+
+CALENDAR_MONTH_NAMES = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+]
+
+CALENDAR_CONFIGS = {
+    'pedidos': {
+        'allowed_keys': PEDIDOS_ALLOWED_KEYS,
+        'unconfirmed_keys': PEDIDOS_UNCONFIRMED_KEYS,
+        'color_overrides': {},
+    },
+    'subcontrataciones': {
+        'allowed_keys': SUBCONTRATACIONES_ALLOWED_KEYS,
+        'unconfirmed_keys': SUBCONTRATACIONES_UNCONFIRMED_KEYS,
+        'color_overrides': SUBCONTRATACIONES_COLOR_OVERRIDES,
+    },
+}
 
 MATERIAL_EXCLUDED_COLUMNS = {
     normalize_key('Ready to Archive'),
@@ -2333,8 +2401,10 @@ def attach_phase_starts(links_table, projects=None):
 
 
 def compute_pedidos_entries(compras_raw, column_colors, today):
-    pedidos = {}
-    unconfirmed = []
+    calendar_data = {
+        key: {'scheduled': {}, 'unconfirmed': []}
+        for key in ('pedidos', 'subcontrataciones')
+    }
     calendar_titles = set()
 
     for data in compras_raw.values():
@@ -2353,15 +2423,25 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
         column_key = normalize_key(column)
         lane_key = normalize_key(lane_name)
 
-        column_allowed = (
-            column_key in PEDIDOS_ALLOWED_KEYS
-            or column_key in PEDIDOS_UNCONFIRMED_KEYS
-        )
-
-        if not column_allowed or lane_key != PEDIDOS_SEGUIMIENTO_LANE_KEY:
+        if lane_key != PEDIDOS_SEGUIMIENTO_LANE_KEY:
             continue
 
         if column_key in PEDIDOS_HIDDEN_KEYS:
+            continue
+
+        target_key = None
+        target_config = None
+        for config_key in ('pedidos', 'subcontrataciones'):
+            config = CALENDAR_CONFIGS[config_key]
+            if (
+                column_key in config['allowed_keys']
+                or column_key in config['unconfirmed_keys']
+            ):
+                target_key = config_key
+                target_config = config
+                break
+
+        if target_key is None:
             continue
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
@@ -2372,7 +2452,7 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
                 d = date(today.year, month, day)
             except Exception:
                 d = parse_kanban_date(card.get('deadline'))
-        elif column_key in PEDIDOS_UNCONFIRMED_KEYS:
+        elif column_key in target_config['unconfirmed_keys']:
             d = None
         else:
             m = re.search(r"\((\d{2})/(\d{2})\)", title)
@@ -2385,9 +2465,14 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             else:
                 d = parse_kanban_date(card.get('deadline'))
 
+        color = column_colors.get(column, '#999999')
+        override = target_config['color_overrides'].get(column_key)
+        if override:
+            color = override
+
         entry = {
             'project': title,
-            'color': column_colors.get(column, '#999999'),
+            'color': color,
             'hours': None,
             'lane': lane_name,
             'client': client_name,
@@ -2398,14 +2483,78 @@ def compute_pedidos_entries(compras_raw, column_colors, today):
             'kanban_date': stored_date or card.get('deadline') or '',
         }
 
+        bucket = calendar_data[target_key]
         if d:
-            pedidos.setdefault(d, []).append(entry)
+            bucket['scheduled'].setdefault(d, []).append(entry)
         else:
-            unconfirmed.append(entry)
+            bucket['unconfirmed'].append(entry)
 
         calendar_titles.add(title)
 
-    return pedidos, unconfirmed, calendar_titles
+    return {
+        'pedidos': calendar_data['pedidos'],
+        'subcontrataciones': calendar_data['subcontrataciones'],
+        'titles': calendar_titles,
+    }
+
+
+def build_calendar_weeks(scheduled, today):
+    scheduled_dates = [
+        d for d, items in scheduled.items() if isinstance(d, date) and items
+    ]
+
+    if scheduled_dates:
+        first_day = min(scheduled_dates)
+        last_day = max(scheduled_dates)
+        start = first_day - timedelta(days=first_day.weekday())
+        end_week = last_day - timedelta(days=last_day.weekday())
+        visible_end = end_week + timedelta(days=4)
+    else:
+        start = today - timedelta(weeks=3)
+        start -= timedelta(days=start.weekday())
+
+        current_month_start = date(today.year, today.month, 1)
+        months_ahead = 2
+        end_month = current_month_start
+        for _ in range(months_ahead):
+            end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+        visible_end = (
+            (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
+            - timedelta(days=1)
+        )
+        end_week = visible_end - timedelta(days=visible_end.weekday())
+
+    if end_week < start:
+        end_week = start
+        visible_end = start + timedelta(days=4)
+
+    weeks = []
+    current = start
+    while current <= end_week:
+        week = {'number': current.isocalendar()[1], 'days': []}
+        for i in range(5):
+            day = current + timedelta(days=i)
+            month_label = ''
+            first_weekday = date(day.year, day.month, 1).weekday()
+            if first_weekday < 5:
+                if day.day == 1:
+                    month_label = CALENDAR_MONTH_NAMES[day.month - 1]
+            else:
+                if day.weekday() == 0 and 1 < day.day <= 7:
+                    month_label = CALENDAR_MONTH_NAMES[day.month - 1]
+            tasks = scheduled.get(day, []) if start <= day <= visible_end else []
+            week['days'].append(
+                {
+                    'date': day,
+                    'day': f"{day.day:02d}",
+                    'month': month_label,
+                    'tasks': tasks,
+                }
+            )
+        weeks.append(week)
+        current += timedelta(weeks=1)
+
+    return weeks
 
 
 def annotate_order_details(entries, *, today=None):
@@ -4058,17 +4207,24 @@ def calendar_pedidos():
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
     base_links = build_project_links(compras_raw)
-    pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
-        compras_raw, column_colors, today
-    )
+    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    pedidos_calendar = calendar_payload['pedidos']
+    subcontr_calendar = calendar_payload['subcontrataciones']
+    calendar_titles = calendar_payload['titles']
     calendar_ids = set()
-    for entries in pedidos.values():
-        for item in entries:
-            cid = item.get('cid')
-            if cid:
-                calendar_ids.add(str(cid))
-    for item in unconfirmed:
-        cid = item.get('cid')
+    for bucket in (
+        pedidos_calendar['scheduled'].values(),
+        subcontr_calendar['scheduled'].values(),
+    ):
+        for entries in bucket:
+            for item in entries:
+                cid = item.get('cid')
+                if cid:
+                    calendar_ids.add(str(cid))
+    for entry in chain(
+        pedidos_calendar['unconfirmed'], subcontr_calendar['unconfirmed']
+    ):
+        cid = entry.get('cid')
         if cid:
             calendar_ids.add(str(cid))
     filtered_links = filter_project_links_by_titles(
@@ -4089,67 +4245,8 @@ def calendar_pedidos():
     })
     info_title = ' / '.join(info_names)
 
-
-    # --- ARMAR CALENDARIO SEMANAL ---
-    scheduled_dates = [
-        d for d, items in pedidos.items() if isinstance(d, date) and items
-    ]
-
-    if scheduled_dates:
-        first_day = min(scheduled_dates)
-        last_day = max(scheduled_dates)
-        start = first_day - timedelta(days=first_day.weekday())
-        end_week = last_day - timedelta(days=last_day.weekday())
-        visible_end = end_week + timedelta(days=4)
-    else:
-        start = today - timedelta(weeks=3)
-        start -= timedelta(days=start.weekday())
-
-        current_month_start = date(today.year, today.month, 1)
-        months_ahead = 2
-        end_month = current_month_start
-        for _ in range(months_ahead):
-            end_month = (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
-        visible_end = (
-            (end_month.replace(day=28) + timedelta(days=4)).replace(day=1)
-            - timedelta(days=1)
-        )
-        end_week = visible_end - timedelta(days=visible_end.weekday())
-
-    if end_week < start:
-        end_week = start
-        visible_end = start + timedelta(days=4)
-
-    MONTHS = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-    ]
-
-    weeks = []
-    current = start
-    while current <= end_week:
-        week = {'number': current.isocalendar()[1], 'days': []}
-        for i in range(5):  # solo lunes-viernes
-            day = current + timedelta(days=i)
-            month_label = ''
-            first_weekday = date(day.year, day.month, 1).weekday()
-            if first_weekday < 5:
-                if day.day == 1:
-                    month_label = MONTHS[day.month - 1].capitalize()
-            else:
-                if day.weekday() == 0 and 1 < day.day <= 7:
-                    month_label = MONTHS[day.month - 1].capitalize()
-            tasks = pedidos.get(day, []) if start <= day <= visible_end else []
-            week['days'].append(
-                {
-                    'date': day,
-                    'day': f"{day.day:02d}",
-                    'month': month_label,
-                    'tasks': tasks,
-                }
-            )
-        weeks.append(week)
-        current += timedelta(weeks=1)
+    weeks = build_calendar_weeks(pedidos_calendar['scheduled'], today)
+    subcontr_weeks = build_calendar_weeks(subcontr_calendar['scheduled'], today)
 
     material_status_map, material_missing_map = compute_material_status_map(
         projects, include_missing_titles=True
@@ -4178,7 +4275,9 @@ def calendar_pedidos():
         'calendar_pedidos.html',
         weeks=weeks,
         today=today,
-        unconfirmed=unconfirmed,
+        unconfirmed=pedidos_calendar['unconfirmed'],
+        subcontr_weeks=subcontr_weeks,
+        subcontr_unconfirmed=subcontr_calendar['unconfirmed'],
         project_links=links_table,
         project_data=project_map,
         start_map=start_map,
@@ -4366,17 +4465,24 @@ def project_links_api():
     compras_raw, column_colors = load_compras_raw()
     projects = get_visible_projects()
     base_links = build_project_links(compras_raw)
-    pedidos, unconfirmed, calendar_titles = compute_pedidos_entries(
-        compras_raw, column_colors, today
-    )
+    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    calendar_titles = calendar_payload['titles']
+    pedidos_calendar = calendar_payload['pedidos']
+    subcontr_calendar = calendar_payload['subcontrataciones']
     calendar_ids = set()
-    for entries in pedidos.values():
-        for item in entries:
-            cid = item.get('cid')
-            if cid:
-                calendar_ids.add(str(cid))
-    for item in unconfirmed:
-        cid = item.get('cid')
+    for bucket in (
+        pedidos_calendar['scheduled'].values(),
+        subcontr_calendar['scheduled'].values(),
+    ):
+        for entries in bucket:
+            for item in entries:
+                cid = item.get('cid')
+                if cid:
+                    calendar_ids.add(str(cid))
+    for entry in chain(
+        pedidos_calendar['unconfirmed'], subcontr_calendar['unconfirmed']
+    ):
+        cid = entry.get('cid')
         if cid:
             calendar_ids.add(str(cid))
     filtered_links = filter_project_links_by_titles(
@@ -4931,7 +5037,10 @@ def _should_highlight_order(order_day, planned_start, *, window=3, today=None):
 def gantt_orders_view():
     today = local_today()
     compras_raw, column_colors = load_compras_raw()
-    pedidos, unconfirmed, _ = compute_pedidos_entries(compras_raw, column_colors, today)
+    calendar_payload = compute_pedidos_entries(compras_raw, column_colors, today)
+    pedidos_calendar = calendar_payload['pedidos']
+    pedidos = pedidos_calendar['scheduled']
+    unconfirmed = pedidos_calendar['unconfirmed']
     base_links = build_project_links(compras_raw)
 
     order_to_code = {}
