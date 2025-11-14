@@ -5,6 +5,7 @@ from collections import defaultdict
 import uuid
 import os
 import copy
+import time
 import json
 import re
 import unicodedata
@@ -103,6 +104,10 @@ MATERIAL_STATUS_LABELS = {
     'archived': 'MATERIAL ARCHIVADO',
     'complete': 'MATERIAL COMPLETO',
 }
+
+
+KANBAN_CARD_FETCH_COOLDOWN_SECONDS = 60
+_KANBAN_CARD_FETCH_CACHE = {}
 
 
 def _phase_total_hours(value):
@@ -4031,7 +4036,7 @@ def refresh_kanban_card_cache():
         if current_id in seen:
             continue
         seen.add(current_id)
-        card = _fetch_kanban_card(current_id, with_links=True)
+        card = _fetch_kanban_card(current_id, with_links=True, force=True)
         if not card:
             continue
 
@@ -4061,9 +4066,35 @@ def refresh_kanban_card_cache():
     return refreshed
 
 
-def _fetch_kanban_card(card_id, with_links=False):
-    """Retrieve card details from Kanbanize via the REST API."""
-    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{card_id}"
+def _fetch_kanban_card(card_id, with_links=False, force=False):
+    """Retrieve card details from Kanbanize via the REST API.
+
+    A short-lived in-memory cache limits how often the same card is requested
+    from Kanbanize.  Pass ``force=True`` to bypass the cooldown and issue a new
+    request immediately.
+    """
+
+    normalized_id = _normalize_card_id(card_id)
+    if not normalized_id:
+        return None
+
+    cache_key = (normalized_id, bool(with_links))
+    now = time.monotonic()
+
+    if not force:
+        cached = _KANBAN_CARD_FETCH_CACHE.get(cache_key)
+        if cached:
+            timestamp, payload = cached
+            if now - timestamp < KANBAN_CARD_FETCH_COOLDOWN_SECONDS:
+                return copy.deepcopy(payload)
+        if not with_links:
+            cached = _KANBAN_CARD_FETCH_CACHE.get((normalized_id, True))
+            if cached:
+                timestamp, payload = cached
+                if now - timestamp < KANBAN_CARD_FETCH_COOLDOWN_SECONDS:
+                    return copy.deepcopy(payload)
+
+    url = f"{KANBANIZE_BASE_URL}/api/v2/boards/{KANBANIZE_BOARD_TOKEN}/cards/{normalized_id}"
     if with_links:
         url += "?withLinks=1"
     req = Request(url, headers={'apikey': KANBANIZE_API_KEY})
@@ -4072,7 +4103,17 @@ def _fetch_kanban_card(card_id, with_links=False):
             if resp.status == 200:
                 data = json.load(resp)
                 if isinstance(data, dict):
-                    return data.get('data') or data
+                    payload = data.get('data') or data
+                    if isinstance(payload, dict):
+                        stored = copy.deepcopy(payload)
+                        fetched_at = time.monotonic()
+                        _KANBAN_CARD_FETCH_CACHE[cache_key] = (fetched_at, stored)
+                        if with_links:
+                            _KANBAN_CARD_FETCH_CACHE[(normalized_id, False)] = (
+                                fetched_at,
+                                stored,
+                            )
+                        return copy.deepcopy(stored)
     except Exception as e:
         print('Kanbanize API error:', e)
     return None
@@ -7644,8 +7685,11 @@ def kanbanize_webhook():
     print("Payload recibido:", data)
 
     card = data.get("card", {})
+    if not isinstance(card, dict):
+        card = {}
 
     payload_timestamp = data.get("timestamp")
+
     def pick(d, *keys):
         for k in keys:
             if k in d and d[k] is not None:
@@ -7660,15 +7704,76 @@ def kanbanize_webhook():
         return re.sub(r'\s+', ' ', s or '').strip().lower()
 
     cid = pick(card, 'taskid', 'cardId', 'id')
-    if cid:
-        fetched = _fetch_kanban_card(cid, with_links=True)
-        if isinstance(fetched, dict):
-            card = fetched
+    normalized_cid = _normalize_card_id(cid)
+    prev_card = last_kanban_card(cid)
+    prev_card_tags = _extract_card_tags(prev_card)
+    prev_lane = pick(prev_card, 'lanename', 'laneName', 'lane')
+    prev_column = pick(prev_card, 'columnname', 'columnName', 'column')
 
-    card_tags = _extract_card_tags(card)
+    recent_fetch_entry = None
+    if normalized_cid:
+        recent_fetch_entry = (
+            _KANBAN_CARD_FETCH_CACHE.get((normalized_cid, True))
+            or _KANBAN_CARD_FETCH_CACHE.get((normalized_cid, False))
+        )
+    now_monotonic = time.monotonic()
+    recently_fetched = False
+    if recent_fetch_entry:
+        fetch_timestamp, _ = recent_fetch_entry
+        if now_monotonic - fetch_timestamp < KANBAN_CARD_FETCH_COOLDOWN_SECONDS:
+            recently_fetched = True
 
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
+
+    prev_lane_norm = norm(prev_lane)
+    prev_column_norm = norm(prev_column)
+    lane_norm = norm(lane)
+    column_norm = norm(column)
+
+    lane_changed = bool(lane_norm and lane_norm != prev_lane_norm)
+    column_changed = bool(column_norm and column_norm != prev_column_norm)
+
+    fetched = None
+    if normalized_cid:
+        if not prev_card:
+            fetched = _fetch_kanban_card(normalized_cid, with_links=True, force=True)
+        elif lane_changed or column_changed:
+            if not recently_fetched:
+                fetched = _fetch_kanban_card(normalized_cid, with_links=True, force=True)
+        elif not card and not recently_fetched:
+            fetched = _fetch_kanban_card(normalized_cid, with_links=True)
+
+    if isinstance(fetched, dict):
+        base_card = fetched
+    elif prev_card:
+        base_card = copy.deepcopy(prev_card)
+    else:
+        base_card = {}
+
+    if isinstance(card, dict) and base_card is not card:
+        base_card.update(card)
+
+    card = base_card
+
+    if normalized_cid and isinstance(card, dict):
+        cache_snapshot = copy.deepcopy(card)
+        cache_timestamp = time.monotonic()
+        _KANBAN_CARD_FETCH_CACHE[(normalized_cid, False)] = (
+            cache_timestamp,
+            cache_snapshot,
+        )
+        if 'links' in cache_snapshot:
+            _KANBAN_CARD_FETCH_CACHE[(normalized_cid, True)] = (
+                cache_timestamp,
+                cache_snapshot,
+            )
+
+    lane = pick(card, 'lanename', 'laneName', 'lane')
+    column = pick(card, 'columnname', 'columnName', 'column')
+    lane_norm = norm(lane)
+    column_norm = norm(column)
+
     if isinstance(column, str):
         clean_column = column.strip()
     elif column:
@@ -7676,15 +7781,9 @@ def kanbanize_webhook():
     else:
         clean_column = ''
 
-    # Retrieve the most recent stored version of this card to detect which
-    # fields actually changed in Kanbanize.
-    prev_card = last_kanban_card(cid)
-    prev_card_tags = _extract_card_tags(prev_card)
+    card_tags = _extract_card_tags(card)
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
-
-    lane_norm = norm(lane)
-    column_norm = norm(column)
 
     # Guardar tarjetas del lane Seguimiento compras
     if lane_norm == "seguimiento compras":
