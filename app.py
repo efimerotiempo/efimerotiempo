@@ -788,6 +788,14 @@ def inject_archived_tasks(schedule):
             if not worker or not day or not isinstance(payload, dict):
                 continue
             task = copy.deepcopy(payload)
+            hours_val = _phase_total_hours(task.get('hours'))
+            task['hours'] = max(int(hours_val), 0)
+            start_val = task.get('start') or 0
+            try:
+                start_val = int(start_val)
+            except Exception:
+                start_val = 0
+            task['start'] = max(start_val, 0)
             task['archived_shadow'] = True
             task['frozen'] = True
             task['color'] = '#d9d9d9'
