@@ -961,6 +961,15 @@ def inject_archived_tasks(schedule):
             project_infos[pid] = info_copy
     return entries, project_infos
 
+
+def build_schedule_with_archived(projects):
+    """Return schedule/conflicts with archived tasks preloaded."""
+
+    base_schedule = {}
+    archived_entries, archived_project_map = inject_archived_tasks(base_schedule)
+    schedule, conflicts = schedule_projects(projects, base_schedule=base_schedule)
+    return schedule, conflicts, archived_entries, archived_project_map
+
 MIN_DATE = date(2024, 1, 1)
 MAX_DATE = date(2026, 12, 31)
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -4253,9 +4262,8 @@ def home():
 @app.route('/calendar')
 def calendar_view():
     projects = get_visible_projects()
-    schedule, conflicts = schedule_projects(projects)
+    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(projects)
     annotate_schedule_frozen_background(schedule)
-    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
@@ -6171,9 +6179,8 @@ def resources():
 @app.route('/complete')
 def complete():
     projects = get_visible_projects()
-    schedule, conflicts = schedule_projects(projects)
+    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(projects)
     annotate_schedule_frozen_background(schedule)
-    _archived_entries, archived_project_map = inject_archived_tasks(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()

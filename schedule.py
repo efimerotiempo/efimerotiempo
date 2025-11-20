@@ -760,11 +760,31 @@ def _build_vacation_map():
     return vac_map
 
 
-def schedule_projects(projects):
-    """Return schedule and conflicts after assigning all phases."""
+def schedule_projects(projects, base_schedule=None):
+    """Return schedule and conflicts after assigning all phases.
+
+    If ``base_schedule`` is provided, its tasks are copied into the initial
+    worker schedule so they block time slots while scheduling the remaining
+    phases.
+    """
+
     projects.sort(key=lambda p: p['start_date'])
     inactive = set(load_inactive_workers())
     worker_schedule = {w: {} for w in WORKERS if w not in inactive}
+
+    for worker, days in (base_schedule or {}).items():
+        if worker in inactive:
+            continue
+        target_days = worker_schedule.setdefault(worker, {})
+        for day, tasks in (days or {}).items():
+            if not isinstance(tasks, list):
+                continue
+            copied = [copy.deepcopy(t) for t in tasks if isinstance(t, dict)]
+            if not copied:
+                continue
+            bucket = target_days.setdefault(day, [])
+            bucket.extend(copied)
+            bucket.sort(key=lambda t: t.get('start', 0))
     hours_map = load_daily_hours()
     worker_day_map = load_worker_day_hours()
     vac_map = _build_vacation_map()
