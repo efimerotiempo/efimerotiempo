@@ -780,6 +780,19 @@ def inject_archived_tasks(schedule):
     hours_map = load_daily_hours()
     worker_day_overrides = load_worker_day_hours()
 
+    day_usage = {}
+    for worker, days in (schedule or {}).items():
+        if not isinstance(days, dict):
+            continue
+        for day_iso, items in days.items():
+            if not isinstance(items, list):
+                continue
+            total = 0
+            for task in items:
+                total += max(_phase_total_hours((task or {}).get('hours')), 0)
+            if total > 0:
+                day_usage.setdefault(worker, {})[day_iso] = total
+
     def _archived_day_limit(worker, day_iso):
         limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
         worker_override = (worker_day_overrides.get(worker) or {}).get(day_iso)
@@ -842,6 +855,13 @@ def inject_archived_tasks(schedule):
                 current_day = next_workday(current_day)
                 current_start = 0
                 continue
+            used = (day_usage.get(worker, {}) or {}).get(day_iso, 0)
+            if used >= limit:
+                current_day = next_workday(current_day)
+                current_start = 0
+                continue
+            if current_start < used:
+                current_start = used
             if current_start >= limit:
                 current_day = next_workday(current_day)
                 current_start = 0
@@ -865,6 +885,9 @@ def inject_archived_tasks(schedule):
                 pass
             segments.append((day_iso, seg))
             remaining -= allocate
+            day_usage.setdefault(worker, {})[day_iso] = (
+                (day_usage.get(worker, {}) or {}).get(day_iso, 0) + allocate
+            )
             current_day = next_workday(current_day)
             current_start = 0
         return segments
