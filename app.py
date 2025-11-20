@@ -777,6 +777,97 @@ def remove_archived_calendar_entry(pid=None, kanban_id=None, names=None):
 def inject_archived_tasks(schedule):
     entries = load_archived_calendar_entries()
     project_infos = {}
+    hours_map = load_daily_hours()
+    worker_day_overrides = load_worker_day_hours()
+
+    def _archived_day_limit(worker, day_iso):
+        limit = HOURS_LIMITS.get(worker, HOURS_PER_DAY)
+        worker_override = (worker_day_overrides.get(worker) or {}).get(day_iso)
+        if worker_override is not None:
+            try:
+                return float(worker_override)
+            except Exception:
+                return HOURS_PER_DAY
+        day_override = hours_map.get(day_iso)
+        if day_override is not None and limit != float('inf'):
+            try:
+                limit = min(limit, float(day_override))
+            except Exception:
+                pass
+        if limit == float('inf') or limit is None:
+            return HOURS_PER_DAY
+        try:
+            return float(limit)
+        except Exception:
+            return HOURS_PER_DAY
+
+    def _expand_archived_task(task, worker, day_str):
+        try:
+            day_obj = date.fromisoformat(str(day_str)[:10])
+            day_iso = day_obj.isoformat()
+        except Exception:
+            day_obj = local_today()
+            day_iso = day_obj.isoformat()
+
+        try:
+            raw_hours = _phase_total_hours(task.get('hours'))
+            hours_val = max(int(raw_hours), 0)
+        except Exception:
+            hours_val = 0
+        try:
+            start_val = int(task.get('start') or 0)
+        except Exception:
+            start_val = 0
+
+        template = copy.deepcopy(task)
+        template['hours'] = hours_val
+        template['start'] = start_val
+        template['archived_shadow'] = True
+        template['frozen'] = True
+        template['color'] = '#d9d9d9'
+        template['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
+        if 'pid' in template:
+            template['pid'] = str(template['pid'])
+
+        segments = []
+        remaining = hours_val
+        current_day = day_obj
+        current_start = start_val
+        safety = 0
+        while remaining > 0 and safety < 400:
+            safety += 1
+            day_iso = current_day.isoformat()
+            limit = _archived_day_limit(worker, day_iso)
+            if limit is None or limit <= 0:
+                current_day = next_workday(current_day)
+                current_start = 0
+                continue
+            if current_start >= limit:
+                current_day = next_workday(current_day)
+                current_start = 0
+                continue
+            available = max(limit - current_start, 0)
+            if available <= 0:
+                current_day = next_workday(current_day)
+                current_start = 0
+                continue
+            allocate = min(remaining, available)
+            seg = copy.deepcopy(template)
+            seg['hours'] = allocate
+            seg['start'] = current_start
+            try:
+                start_time, end_time = _schedule_mod._calc_datetimes(
+                    current_day, current_start, allocate
+                )
+                seg['start_time'] = start_time
+                seg['end_time'] = end_time
+            except Exception:
+                pass
+            segments.append((day_iso, seg))
+            remaining -= allocate
+            current_day = next_workday(current_day)
+            current_start = 0
+        return segments
     for entry in entries:
         tasks = entry.get('tasks') or []
         for item in tasks:
@@ -787,37 +878,24 @@ def inject_archived_tasks(schedule):
             payload = item.get('task')
             if not worker or not day or not isinstance(payload, dict):
                 continue
-            task = copy.deepcopy(payload)
-            hours_val = _phase_total_hours(task.get('hours'))
-            task['hours'] = max(int(hours_val), 0)
-            start_val = task.get('start') or 0
-            try:
-                start_val = int(start_val)
-            except Exception:
-                start_val = 0
-            task['start'] = max(start_val, 0)
-            task['archived_shadow'] = True
-            task['frozen'] = True
-            task['color'] = '#d9d9d9'
-            task['frozen_background'] = 'rgba(128, 128, 128, 0.35)'
-            if 'pid' in task:
-                task['pid'] = str(task['pid'])
-            tasks_list = schedule.setdefault(worker, {}).setdefault(day, [])
-            duplicate = False
-            for existing in tasks_list:
-                if (
-                    existing.get('pid') == task.get('pid')
-                    and existing.get('phase') == task.get('phase')
-                    and existing.get('part') == task.get('part')
-                    and existing.get('start') == task.get('start')
-                    and existing.get('hours') == task.get('hours')
-                ):
-                    duplicate = True
-                    break
-            if duplicate:
-                continue
-            tasks_list.append(task)
-            tasks_list.sort(key=lambda t: t.get('start', 0))
+            segments = _expand_archived_task(payload, worker, day)
+            for day_iso, task in segments:
+                tasks_list = schedule.setdefault(worker, {}).setdefault(day_iso, [])
+                duplicate = False
+                for existing in tasks_list:
+                    if (
+                        existing.get('pid') == task.get('pid')
+                        and existing.get('phase') == task.get('phase')
+                        and existing.get('part') == task.get('part')
+                        and existing.get('start') == task.get('start')
+                        and existing.get('hours') == task.get('hours')
+                    ):
+                        duplicate = True
+                        break
+                if duplicate:
+                    continue
+                tasks_list.append(task)
+                tasks_list.sort(key=lambda t: t.get('start', 0))
 
         info = entry.get('project')
         if isinstance(info, dict):
