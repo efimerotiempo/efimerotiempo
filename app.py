@@ -7688,6 +7688,8 @@ def kanbanize_webhook():
     if not isinstance(card, dict):
         card = {}
 
+    payload_card = dict(card)
+
     payload_timestamp = data.get("timestamp")
 
     def pick(d, *keys):
@@ -7710,6 +7712,17 @@ def kanbanize_webhook():
     prev_lane = pick(prev_card, 'lanename', 'laneName', 'lane')
     prev_column = pick(prev_card, 'columnname', 'columnName', 'column')
 
+    column_supplied = any(k in payload_card for k in ('columnname', 'columnName', 'column'))
+    lane_supplied = any(k in payload_card for k in ('lanename', 'laneName', 'lane'))
+    deadline_supplied = 'deadline' in payload_card
+    attachments_supplied = 'Attachments' in payload_card
+    tags_supplied = any(
+        k in payload_card for k in ('tags', 'tagList', 'tagListData', 'tagNames', 'tag_names')
+    )
+    custom_fields_supplied = any(
+        k in payload_card for k in ('customFields', 'customfields', 'custom_fields')
+    )
+
     recent_fetch_entry = None
     if normalized_cid:
         recent_fetch_entry = (
@@ -7731,10 +7744,11 @@ def kanbanize_webhook():
     lane_norm = norm(lane)
     column_norm = norm(column)
 
-    lane_changed = bool(lane_norm and lane_norm != prev_lane_norm)
-    column_changed = bool(column_norm and column_norm != prev_column_norm)
+    lane_changed = bool((lane_supplied or lane_norm) and lane_norm != prev_lane_norm)
+    column_changed = bool((column_supplied or column_norm) and column_norm != prev_column_norm)
 
     fetched = None
+    card_refreshed = False
     if normalized_cid:
         if not prev_card:
             fetched = _fetch_kanban_card(normalized_cid, with_links=True, force=True)
@@ -7745,6 +7759,7 @@ def kanbanize_webhook():
             fetched = _fetch_kanban_card(normalized_cid, with_links=True)
 
     if isinstance(fetched, dict):
+        card_refreshed = True
         base_card = fetched
     elif prev_card:
         base_card = copy.deepcopy(prev_card)
@@ -7771,8 +7786,16 @@ def kanbanize_webhook():
 
     lane = pick(card, 'lanename', 'laneName', 'lane')
     column = pick(card, 'columnname', 'columnName', 'column')
+
+    if not column_supplied and not card_refreshed and prev_column:
+        column = prev_column
+    if not lane_supplied and not card_refreshed and prev_lane:
+        lane = prev_lane
+
     lane_norm = norm(lane)
     column_norm = norm(column)
+    lane_changed = bool((lane_supplied or card_refreshed) and lane_norm != prev_lane_norm)
+    column_changed = bool((column_supplied or card_refreshed) and column_norm != prev_column_norm)
 
     if isinstance(column, str):
         clean_column = column.strip()
@@ -7781,7 +7804,10 @@ def kanbanize_webhook():
     else:
         clean_column = ''
 
-    card_tags = _extract_card_tags(card)
+    if tags_supplied or card_refreshed:
+        card_tags = _extract_card_tags(card)
+    else:
+        card_tags = prev_card_tags
 
     print("Evento Kanbanize → lane:", lane, "column:", column, "cid:", cid)
 
@@ -7962,63 +7988,40 @@ def kanbanize_webhook():
     print("Tarjeta recibida:")
     print(card)
 
-    custom_fields_missing = 'customFields' not in card and 'customfields' not in card
+    def _custom_dict(raw):
+        if isinstance(raw, list):
+            return {f.get('name'): f.get('value') for f in raw if isinstance(f, dict)}
+        if isinstance(raw, dict):
+            return dict(raw)
+        return {}
 
-    raw_custom = (
-        card.get('customFields')
-        or card.get('customfields')
-        or ({
-            field.get('name'): field.get('value')
-            for field in card.get('custom_fields', [])
-            if isinstance(field, dict)
-        }
-        if not custom_fields_missing
-        else None)
-    )
+    prev_raw_custom = prev_card.get('customFields') or prev_card.get('customfields') or {}
+    prev_custom = _custom_dict(prev_raw_custom)
+    prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
 
-    if raw_custom is None:
-        raw_custom = prev_card.get('customFields') or prev_card.get('customfields') or {}
+    custom = dict(prev_custom)
+    custom_changes = set()
+    if custom_fields_supplied:
+        raw_custom = (
+            card.get('customFields')
+            or card.get('customfields')
+            or {
+                field.get('name'): field.get('value')
+                for field in card.get('custom_fields', [])
+                if isinstance(field, dict)
+            }
+        )
+        incoming_custom = _custom_dict(raw_custom)
+        incoming_custom.setdefault('CALDERERIA', incoming_custom.get('CALDERERÍA'))
+        for key, value in incoming_custom.items():
+            if custom.get(key) != value:
+                custom_changes.add(key)
+            custom[key] = value
 
-    if isinstance(raw_custom, list):
-        custom = {
-            f.get('name'): f.get('value')
-            for f in raw_custom if isinstance(f, dict)
-        }
-    elif isinstance(raw_custom, dict):
-        custom = dict(raw_custom)
-    else:
-        custom = {}
-    custom.setdefault('CALDERERIA', custom.get('CALDERERÍA'))
     popup_raw = {field: custom.get(field) for field in KANBAN_POPUP_FIELDS}
     card['customFields'] = custom
 
-    prev_raw_custom = prev_card.get('customFields') or {}
-    if isinstance(prev_raw_custom, list):
-        prev_custom = {
-            f.get('name'): f.get('value')
-            for f in prev_raw_custom if isinstance(f, dict)
-        }
-    elif isinstance(prev_raw_custom, dict):
-        prev_custom = dict(prev_raw_custom)
-    else:
-        prev_custom = {}
-    prev_custom.setdefault('CALDERERIA', prev_custom.get('CALDERERÍA'))
     prev_popup_raw = {field: prev_custom.get(field) for field in KANBAN_POPUP_FIELDS}
-
-    deadline_str = card.get('deadline')
-    fecha_cli_str = (
-        custom.get('Fecha Cliente')
-        or custom.get('Fecha cliente')
-        or custom.get('Fecha pedido')
-    )
-    if deadline_str:
-        due_date_obj = parse_kanban_date(deadline_str)
-        due_confirmed_flag = True
-    else:
-        due_date_obj = parse_kanban_date(fecha_cli_str)
-        due_confirmed_flag = False
-    mat_str = custom.get('Fecha material confirmado')
-    material_date_obj = parse_kanban_date(mat_str)
 
     prev_deadline_str = prev_card.get('deadline')
     prev_fecha_cli_str = (
@@ -8034,6 +8037,30 @@ def kanbanize_webhook():
         prev_due_confirmed_flag = False
     prev_mat_str = prev_custom.get('Fecha material confirmado')
     prev_material_date_obj = parse_kanban_date(prev_mat_str)
+
+    deadline_str = card.get('deadline') if deadline_supplied else prev_deadline_str
+    fecha_cli_str = (
+        custom.get('Fecha Cliente')
+        or custom.get('Fecha cliente')
+        or custom.get('Fecha pedido')
+    )
+    if deadline_supplied:
+        if deadline_str:
+            due_date_obj = parse_kanban_date(deadline_str)
+            due_confirmed_flag = True
+        else:
+            due_date_obj = None
+            due_confirmed_flag = True
+    else:
+        if deadline_str:
+            due_date_obj = parse_kanban_date(deadline_str)
+            due_confirmed_flag = True
+        else:
+            due_date_obj = parse_kanban_date(fecha_cli_str)
+            due_confirmed_flag = False
+
+    mat_str = custom.get('Fecha material confirmado')
+    material_date_obj = parse_kanban_date(mat_str)
 
     def obtener_duracion(campo):
         valor = custom.get(campo)
@@ -8207,7 +8234,11 @@ def kanbanize_webhook():
     )
     prev_cliente = prev_card.get('title') or "Sin cliente"
 
-    attachments_raw = data.get('Attachments') or card.get('Attachments') or []
+    if attachments_supplied or card_refreshed:
+        attachments_raw = card.get('Attachments') or []
+    else:
+        attachments_raw = prev_card.get('Attachments') or []
+
     kanban_files = []
     if isinstance(attachments_raw, list):
         for a in attachments_raw:
@@ -8254,11 +8285,11 @@ def kanbanize_webhook():
         prev_clean_column = ''
 
     column_changed = clean_column != prev_clean_column
-    attachments_changed = prev_kanban_files != kanban_files
+    attachments_changed = (attachments_supplied or card_refreshed) and prev_kanban_files != kanban_files
     display_fields_changed = display_fields != prev_display_fields
     normalized_tags = sorted(card_tags)
     prev_normalized_tags = sorted(prev_card_tags)
-    tags_changed = normalized_tags != prev_normalized_tags
+    tags_changed = (tags_supplied or card_refreshed) and normalized_tags != prev_normalized_tags
     has_no_planner_tag = 'no planificador' in card_tags
 
     def _extract_archived_flag(card_data):
