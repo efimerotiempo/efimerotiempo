@@ -7962,7 +7962,23 @@ def kanbanize_webhook():
     print("Tarjeta recibida:")
     print(card)
 
-    raw_custom = card.get('customFields') or {}
+    custom_fields_missing = 'customFields' not in card and 'customfields' not in card
+
+    raw_custom = (
+        card.get('customFields')
+        or card.get('customfields')
+        or ({
+            field.get('name'): field.get('value')
+            for field in card.get('custom_fields', [])
+            if isinstance(field, dict)
+        }
+        if not custom_fields_missing
+        else None)
+    )
+
+    if raw_custom is None:
+        raw_custom = prev_card.get('customFields') or prev_card.get('customfields') or {}
+
     if isinstance(raw_custom, list):
         custom = {
             f.get('name'): f.get('value')
