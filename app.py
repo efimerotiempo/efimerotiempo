@@ -8450,6 +8450,22 @@ def kanbanize_webhook():
         broadcast_event({"type": "kanban_update"})
         return jsonify({"mensaje": "Tarjeta ignorada (tag No planificador)"}), 200
 
+    name_changed = prev_nombre_proyecto != nombre_proyecto
+    client_changed = prev_cliente != cliente
+
+    due_fields_changed = deadline_supplied or card_refreshed or any(
+        field in custom_changes for field in ('Fecha Cliente', 'Fecha cliente', 'Fecha pedido')
+    )
+    due_changed = (
+        due_fields_changed
+        and ((prev_due_date_obj != due_date_obj) or (prev_due_confirmed_flag != due_confirmed_flag))
+    )
+
+    material_changed = (
+        (card_refreshed or 'Fecha material confirmado' in custom_changes)
+        and prev_material_date_obj != material_date_obj
+    )
+
     if existing:
         changed = False
         if column_changed and existing.get('kanban_column') != clean_column:
@@ -8464,16 +8480,16 @@ def kanbanize_webhook():
             if existing.get('kanban_id') != task_id:
                 existing['kanban_id'] = task_id
                 changed = True
-        if prev_nombre_proyecto != nombre_proyecto and existing.get('name') != nombre_proyecto:
+        if name_changed and existing.get('name') != nombre_proyecto:
             existing['name'] = nombre_proyecto
             changed = True
-        if prev_cliente != cliente and existing.get('client') != cliente:
+        if client_changed and existing.get('client') != cliente:
             existing['client'] = cliente
             changed = True
         if not existing.get('color') or not re.fullmatch(r"#[0-9A-Fa-f]{6}", existing.get('color', '')):
             existing['color'] = _next_api_color()
             changed = True
-        if (prev_due_date_obj != due_date_obj) or (prev_due_confirmed_flag != due_confirmed_flag):
+        if due_changed:
             if due_date_obj:
                 existing['due_date'] = due_date_obj.isoformat()
                 existing['due_confirmed'] = due_confirmed_flag
@@ -8482,7 +8498,7 @@ def kanbanize_webhook():
                 existing['due_date'] = ''
                 existing['due_confirmed'] = False
             changed = True
-        if prev_material_date_obj != material_date_obj:
+        if material_changed:
             existing['material_confirmed_date'] = material_date_obj.isoformat() if material_date_obj else ''
             changed = True
         if image_path and existing.get('image') != image_path:
