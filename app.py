@@ -2811,6 +2811,16 @@ def compute_pedidos_entries(
 
         cid = card.get('taskid') or card.get('cardId') or card.get('id')
 
+        raw_fields = card.get('customFields') or card.get('customfields')
+        custom_fields = _coerce_custom_field_map(raw_fields)
+        mecanizado_date = parse_kanban_date(
+            custom_fields.get('Fecha Mec.') or custom_fields.get('Fecha Mec')
+        )
+        tratamiento_date = parse_kanban_date(
+            custom_fields.get('Fecha Trat.') or custom_fields.get('Fecha Trat')
+        )
+        subcontr_date = mecanizado_date or tratamiento_date
+
         if stored_date:
             try:
                 day, month = [int(x) for x in stored_date.split('/')]
@@ -2830,7 +2840,9 @@ def compute_pedidos_entries(
             else:
                 d = parse_kanban_date(card.get('deadline'))
 
-        if (
+        if target_key == 'subcontrataciones' and subcontr_date:
+            d = subcontr_date
+        elif (
             target_key == 'subcontrataciones'
             and column_key in SUBCONTRATACIONES_TREATMENT_KEYS
         ):
@@ -2861,6 +2873,16 @@ def compute_pedidos_entries(
         bucket = calendar_data[target_key]
         if d:
             bucket['scheduled'].setdefault(d, []).append(entry)
+            if target_key == 'subcontrataciones' and subcontr_date:
+                simulated_day = _add_business_days(subcontr_date, 7)
+                if simulated_day:
+                    simulated_entry = dict(entry)
+                    simulated_entry['simulated'] = True
+                    simulated_entry['simulated_parent'] = cid
+                    simulated_entry['color'] = '#b0b0b0'
+                    bucket['scheduled'].setdefault(simulated_day, []).append(
+                        simulated_entry
+                    )
         else:
             bucket['unconfirmed'].append(entry)
 
@@ -5437,6 +5459,18 @@ def _subtract_business_days(day, count):
         current -= timedelta(days=1)
         if current.weekday() not in WEEKEND:
             removed += 1
+    return current
+
+
+def _add_business_days(day, count):
+    if not isinstance(day, date) or count <= 0:
+        return day
+    current = day
+    added = 0
+    while added < count:
+        current += timedelta(days=1)
+        if current.weekday() not in WEEKEND:
+            added += 1
     return current
 
 

@@ -46,7 +46,7 @@
                 {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
                 <div class="day-number">{{ d.day }}</div>
                 {% for t in d.tasks %}
-                <div class="task" draggable="true"
+                <div class="task{% if t.get('simulated') %} simulated{% endif %}" draggable="true"
                      data-pid="{{ t.get('pid') or '' }}"
                      data-phase="{{ t.get('phase') or '' }}"
                      data-day="{{ d.date.isoformat() }}"
@@ -71,7 +71,7 @@
             {% if loop.first %}
             <td class="unconfirmed" rowspan="{{ week_count }}">
                 {% for t in calendar.unconfirmed %}
-                  <div class="task" draggable="true"
+                  <div class="task{% if t.get('simulated') %} simulated{% endif %}" draggable="true"
                        data-pid="{{ t.get('pid') or '' }}"
                        data-phase="{{ t.get('phase') or '' }}"
                        data-worker="{{ t.get('worker') or '' }}"
