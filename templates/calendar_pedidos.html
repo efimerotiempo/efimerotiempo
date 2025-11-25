@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Calendario pedidos</h2>
 <form id="quick-card-form" class="quick-card-form">
   <label class="quick-card-field" for="quick-card-date">
     <span>Fecha</span>
@@ -13,77 +12,90 @@
   <button type="submit">Crear tarjeta</button>
 </form>
 <input type="text" id="filter-input" placeholder="Filtrar por título o cliente">
+{% set calendar_definitions = [
+  {'key': 'pedidos', 'title': 'Calendario pedidos', 'weeks': weeks, 'unconfirmed': unconfirmed},
+  {'key': 'subcontrataciones', 'title': 'Calendario subcontrataciones', 'weeks': subcontr_weeks, 'unconfirmed': subcontr_unconfirmed}
+] %}
 <div class="pedidos-wrapper">
-<div class="pedidos-calendar-container">
-<table class="pedidos-calendar">
-    <thead>
-    <tr>
-        <th class="week-header">Semana</th>
-        <th class="day-header">Lun</th>
-        <th class="day-header">Mar</th>
-        <th class="day-header">Mié</th>
-        <th class="day-header">Jue</th>
-        <th class="day-header">Vie</th>
-        <th rowspan="{{ weeks|length + 1 }}" class="unconfirmed-header">Sin fecha de entrega confirmada</th>
-    </tr>
-    </thead>
-    <tbody>
-    {% for week in weeks %}
-    <tr>
-        <td class="week-label">Semana {{ week.number }}</td>
-        {% for d in week.days %}
-        <td data-date="{{ d.date.isoformat() }}" class="day-cell{% if d.date == today %} today{% endif %}">
-            {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
-            <div class="day-number">{{ d.day }}</div>
-            {% for t in d.tasks %}
-            <div class="task" draggable="true"
-                 data-pid="{{ t.get('pid') or '' }}"
-                 data-phase="{{ t.get('phase') or '' }}"
-                 data-day="{{ d.date.isoformat() }}"
-                 data-worker="{{ t.get('worker') or '' }}"
-                 data-cid="{{ t.get('cid') or '' }}"
-                 data-project="{{ t.project }}"
-                 data-title="{{ t.project }}"
-                 data-code="{{ t.get('custom_card_id') or '' }}"
-                 data-client="{{ t.get('client') or '' }}"
-                 data-due="{{ d.date.isoformat() }}"
-                 data-lane="{{ t.get('lane') or '' }}"
-                 {% if t.get('part') is not none %}data-part="{{ t.get('part') }}"{% endif %}
-                 style="border-color: {{ t.get('color', '#999999') }};">
-                <span class="task-main">{{ t.project }}</span>
-                {% if t.hours %}
-                <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
-                {% endif %}
-            </div>
+  <div class="pedidos-calendar-stack">
+  {% for calendar in calendar_definitions %}
+    <h2>{{ calendar.title }}</h2>
+    {% set week_count = calendar.weeks|length %}
+    {% if week_count < 1 %}
+      {% set week_count = 1 %}
+    {% endif %}
+    <div class="pedidos-calendar-container" data-calendar="{{ calendar.key }}">
+      <table class="pedidos-calendar" data-calendar="{{ calendar.key }}">
+        <thead>
+        <tr>
+            <th class="week-header">Semana</th>
+            <th class="day-header">Lun</th>
+            <th class="day-header">Mar</th>
+            <th class="day-header">Mié</th>
+            <th class="day-header">Jue</th>
+            <th class="day-header">Vie</th>
+            <th rowspan="{{ week_count + 1 }}" class="unconfirmed-header">Sin fecha de entrega confirmada</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for week in calendar.weeks %}
+        <tr>
+            <td class="week-label">Semana {{ week.number }}</td>
+            {% for d in week.days %}
+            <td data-date="{{ d.date.isoformat() }}" class="day-cell{% if d.date == today %} today{% endif %}">
+                {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
+                <div class="day-number">{{ d.day }}</div>
+                {% for t in d.tasks %}
+                <div class="task" draggable="true"
+                     data-pid="{{ t.get('pid') or '' }}"
+                     data-phase="{{ t.get('phase') or '' }}"
+                     data-day="{{ d.date.isoformat() }}"
+                     data-worker="{{ t.get('worker') or '' }}"
+                     data-cid="{{ t.get('cid') or '' }}"
+                     data-project="{{ t.project }}"
+                     data-title="{{ t.project }}"
+                     data-code="{{ t.get('custom_card_id') or '' }}"
+                     data-client="{{ t.get('client') or '' }}"
+                     data-due="{{ d.date.isoformat() }}"
+                     data-lane="{{ t.get('lane') or '' }}"
+                     {% if t.get('part') is not none %}data-part="{{ t.get('part') }}"{% endif %}
+                     style="border-color: {{ t.get('color', '#999999') }};">
+                    <span class="task-main">{{ t.project }}</span>
+                    {% if t.hours %}
+                    <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </td>
             {% endfor %}
-        </td>
+            {% if loop.first %}
+            <td class="unconfirmed" rowspan="{{ week_count }}">
+                {% for t in calendar.unconfirmed %}
+                  <div class="task" draggable="true"
+                       data-pid="{{ t.get('pid') or '' }}"
+                       data-phase="{{ t.get('phase') or '' }}"
+                       data-worker="{{ t.get('worker') or '' }}"
+                       data-cid="{{ t.get('cid') or '' }}"
+                       data-project="{{ t.project }}"
+                       data-title="{{ t.project }}"
+                       data-code="{{ t.get('custom_card_id') or '' }}"
+                       data-client="{{ t.get('client') or '' }}"
+                       data-lane="{{ t.get('lane') or '' }}"
+                       style="border-color: {{ t.get('color', '#999999') }};">
+                    <span class="task-main">{{ t.project }}</span>
+                    {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
+                    {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
+                </div>
+                {% endfor %}
+            </td>
+            {% endif %}
+        </tr>
         {% endfor %}
-        {% if loop.first %}
-        <td class="unconfirmed" rowspan="{{ weeks|length }}">
-            {% for t in unconfirmed %}
-              <div class="task" draggable="true"
-                   data-pid="{{ t.get('pid') or '' }}"
-                   data-phase="{{ t.get('phase') or '' }}"
-                   data-worker="{{ t.get('worker') or '' }}"
-                   data-cid="{{ t.get('cid') or '' }}"
-                   data-project="{{ t.project }}"
-                   data-title="{{ t.project }}"
-                   data-code="{{ t.get('custom_card_id') or '' }}"
-                   data-client="{{ t.get('client') or '' }}"
-                   data-lane="{{ t.get('lane') or '' }}"
-                   style="border-color: {{ t.get('color', '#999999') }};">
-                <span class="task-main">{{ t.project }}</span>
-                {% if t.prev_date %}<span class="task-date">({{ t.prev_date }})</span>{% endif %}
-                {% if t.hours %}<span class="task-hours">{{ t.hours }}h</span>{% endif %}
-            </div>
-            {% endfor %}
-        </td>
-        {% endif %}
-    </tr>
-    {% endfor %}
-    </tbody>
-    </table>
-</div>
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+  </div>
 <div class="columna-1">
     <div class="columna-1-title" id="columna-1-info-title" data-default-title="{{ project_info_title or '' }}">{{ project_info_title or '' }}</div>
     <h3>Columna 1</h3>
@@ -106,7 +118,7 @@
             <th scope="col">Fecha pedido</th>
             <th scope="col">Conteo</th>
             <th scope="col">Fases</th>
-            <th scope="col">Observaciones</th>
+            <th scope="col" class="observations-header">Observaciones</th>
           </tr>
         </thead>
         <tbody class="columna-1-content">
@@ -257,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
-  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const SPLIT_URL = "";
+  const UNSPLIT_URL = "";
   const TABLE_COLLATOR = typeof Intl !== 'undefined'
     ? new Intl.Collator('es', { sensitivity: 'base', numeric: true })
     : null;
@@ -1619,12 +1631,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
       const partHoursAttr = totalPhaseHours !== null ? ` data-hours="${totalPhaseHours}"` : '';
-      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
-      if (info.phases && Array.isArray(info.phases[context.phase])) {
-        splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+      if (SPLIT_URL && UNSPLIT_URL) {
+        let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
+        if (info.phases && Array.isArray(info.phases[context.phase])) {
+          splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+        }
+        splitLine += `</div>`;
+        actionLines.push(splitLine);
       }
-      splitLine += `</div>`;
-      actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
       const unplanPart = normalizePartValue(context.part);
       const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
@@ -2721,8 +2735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function attachHighlightHandlers() {
-    const calendar = document.querySelector('.pedidos-calendar');
-    if (calendar) {
+    document.querySelectorAll('.pedidos-calendar').forEach((calendar) => {
       calendar.addEventListener('click', e => {
         const t = e.target.closest('.task');
         if (!t) return;
@@ -2735,7 +2748,7 @@ document.addEventListener('DOMContentLoaded', () => {
           clearStartDayHighlight();
         }
       });
-    }
+    });
     const column = document.querySelector('.columna-1');
     if (column) {
       column.addEventListener('click', e => {

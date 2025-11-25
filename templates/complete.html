@@ -46,7 +46,12 @@
         </form>
     </div>
     <div class="hours-btn-container">
+        <label class="optional-phase-toggle">
+            <input type="checkbox" id="optional-phase-toggle" {% if import_optional_phases %}checked{% endif %}>
+            Importar mecanizados y tratamientos.
+        </label>
         <button id="hours-btn" type="button">Editar jornada laboral</button>
+        <button id="summary-pdf-btn" type="button">Resumen en PDF</button>
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
@@ -132,7 +137,7 @@
     <tr data-worker="{{ worker }}">
         <td class="resource-col">
             <div class="worker-label">{{ worker }}</div>
-            <textarea class="worker-note" data-worker="{{ worker }}">{{ worker_notes.get(worker, {}).get('text','') }}</textarea>
+            <textarea class="worker-note" data-worker="{{ worker }}" data-saved-height="{{ worker_notes.get(worker, {}).get('height') or '' }}">{{ worker_notes.get(worker, {}).get('text','') }}</textarea>
             {% set wn = worker_notes.get(worker) %}
             <div class="worker-note-time">{% if wn and wn.edited %}{{ wn.edited }}{% endif %}</div>
         </td>
@@ -449,7 +454,10 @@
         </table>
     </div>
 </div>
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script>
+  window.addEventListener('DOMContentLoaded', () => {
   const PROJECT_DATA = {{ project_data|tojson }};
   const PHASES = {{ phases|tojson }};
   const STATIC_URL = "{{ url_for('static', filename='') }}";
@@ -457,8 +465,9 @@
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
-  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
-  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const SPLIT_URL = "";
+  const UNSPLIT_URL = "";
+  const ADD_PHASE_INSTANCE_URL = "{{ url_for('add_phase_instance') }}";
 
   function initProjectTableSorting(root = document) {
     const collator = new Intl.Collator('es', { sensitivity: 'base', numeric: true });
@@ -543,6 +552,7 @@
   initProjectTableSorting();
   const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
+  const OPTIONAL_PHASE_TOGGLE_URL = "{{ url_for('toggle_optional_phases') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
@@ -1349,19 +1359,743 @@
   }
   document.querySelectorAll('.modal-content, .conflict-content, .info-popup, .history-content').forEach(makeDraggable);
 
-  document.querySelectorAll('.worker-note').forEach(area => {
+  const workerNotes = document.querySelectorAll('.worker-note');
+
+  function autosizeWorkerNote(area, targetHeight) {
+    if (!area) return 0;
+    const baseMin = Number(area.dataset.baseMinHeight || 0);
+    area.style.height = 'auto';
+    const measured = typeof targetHeight === 'number' && targetHeight > 0
+      ? targetHeight
+      : Math.max(area.scrollHeight, baseMin);
+    const finalHeight = Math.max(measured, baseMin);
+    area.style.height = `${finalHeight}px`;
+    area.dataset.currentHeight = String(finalHeight);
+    return finalHeight;
+  }
+
+  workerNotes.forEach(area => {
+    const computed = window.getComputedStyle(area);
+    const minHeight = parseFloat(computed.minHeight) || parseFloat(computed.height) || area.offsetHeight;
+    if (minHeight > 0) {
+      area.dataset.baseMinHeight = String(Math.round(minHeight));
+    }
+    const saved = parseInt(area.dataset.savedHeight || '', 10);
+    if (!Number.isNaN(saved) && saved > 0) {
+      autosizeWorkerNote(area, saved);
+    } else {
+      autosizeWorkerNote(area);
+    }
+    area.addEventListener('input', () => {
+      autosizeWorkerNote(area);
+    });
     area.addEventListener('change', () => {
+      const latestHeight = parseInt(area.dataset.currentHeight || '', 10) || Math.round(area.offsetHeight);
       fetch(WORKER_NOTE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ worker: area.dataset.worker, text: area.value })
+        body: JSON.stringify({ worker: area.dataset.worker, text: area.value, height: latestHeight })
       }).then(r => r.json()).then(data => {
         const t = area.nextElementSibling;
         if (t && data.edited) t.textContent = data.edited;
+        if (data.height) {
+          area.dataset.savedHeight = String(data.height);
+          autosizeWorkerNote(area, data.height);
+        }
+      }).catch(err => {
+        console.error('Error guardando la nota del recurso', err);
       });
     });
   });
+  const summaryPdfBtn = document.getElementById('summary-pdf-btn');
+  if (summaryPdfBtn) {
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function waitForDocumentFonts(doc, timeoutMs = 8000, label = 'documento') {
+      if (!doc || !doc.fonts || typeof doc.fonts.ready !== 'object' || typeof doc.fonts.ready.then !== 'function') {
+        return;
+      }
+      let timedOut = false;
+      try {
+        await Promise.race([
+          doc.fonts.ready,
+          new Promise((resolve) => {
+            setTimeout(() => {
+              timedOut = true;
+              resolve();
+            }, timeoutMs);
+          })
+        ]);
+      } catch (err) {
+        console.warn(`Error esperando a las fuentes (${label}) antes de la captura`, err);
+      }
+      if (timedOut) {
+        console.warn(`Continuando sin esperar más por las fuentes (${label}) tras ${timeoutMs} ms`);
+      }
+    }
+
+    function elementDimensions(element) {
+      if (!element) {
+        return { width: 0, height: 0 };
+      }
+      const rect = typeof element.getBoundingClientRect === 'function'
+        ? element.getBoundingClientRect()
+        : { width: 0, height: 0 };
+      const width = Math.max(
+        element.scrollWidth || 0,
+        element.offsetWidth || 0,
+        element.clientWidth || 0,
+        rect.width || 0
+      );
+      const height = Math.max(
+        element.scrollHeight || 0,
+        element.offsetHeight || 0,
+        element.clientHeight || 0,
+        rect.height || 0
+      );
+      return {
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height))
+      };
+    }
+
+    function applyScaleTransform(element, scaleFactor) {
+      if (!element || !(scaleFactor < 0.999)) {
+        return () => {};
+      }
+      const previousTransform = element.style.transform;
+      const previousOrigin = element.style.transformOrigin;
+      const hadTransform = element.style.transform !== '';
+      const hadOrigin = element.style.transformOrigin !== '';
+      element.style.transformOrigin = 'top left';
+      element.style.transform = `scale(${scaleFactor})`;
+      return () => {
+        if (hadTransform) {
+          element.style.transform = previousTransform;
+        } else {
+          element.style.removeProperty('transform');
+        }
+        if (hadOrigin) {
+          element.style.transformOrigin = previousOrigin;
+        } else {
+          element.style.removeProperty('transform-origin');
+        }
+      };
+    }
+
+    function adjustScrollableAreas(doc, rootElement) {
+      const HostHTMLElement = (doc.defaultView && doc.defaultView.HTMLElement) || window.HTMLElement;
+      const cleanups = [];
+      const seen = new Set();
+
+      function addCandidate(el) {
+        if (!el || seen.has(el)) {
+          return;
+        }
+        seen.add(el);
+        candidates.push(el);
+      }
+
+      const candidates = [];
+      const roots = [];
+      if (rootElement && rootElement instanceof HostHTMLElement) {
+        roots.push(rootElement);
+      }
+      if (!rootElement) {
+        if (doc.body) {
+          roots.push(doc.body);
+        }
+        if (doc.documentElement && doc.documentElement !== doc.body) {
+          roots.push(doc.documentElement);
+        }
+      } else if (rootElement === doc.body || rootElement === doc.documentElement) {
+        if (doc.body && rootElement !== doc.body) {
+          roots.push(doc.body);
+        }
+        if (doc.documentElement && rootElement !== doc.documentElement) {
+          roots.push(doc.documentElement);
+        }
+      }
+
+      roots.forEach((root) => {
+        addCandidate(root);
+        if (root && typeof root.querySelectorAll === 'function') {
+          Array.from(root.querySelectorAll('*')).forEach(addCandidate);
+        }
+      });
+
+      if (!candidates.length) {
+        Array.from(doc.querySelectorAll('*')).forEach(addCandidate);
+      }
+
+      candidates.forEach((el) => {
+        if (!el || typeof el !== 'object') {
+          return;
+        }
+        if (!(el instanceof HostHTMLElement) || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') {
+          return;
+        }
+        const needsWidth = el.scrollWidth > el.clientWidth;
+        const needsHeight = el.scrollHeight > el.clientHeight;
+        if (!needsWidth && !needsHeight) {
+          return;
+        }
+        const computed = doc.defaultView ? doc.defaultView.getComputedStyle(el) : null;
+        if (computed && computed.display === 'inline') {
+          return;
+        }
+        const prev = {
+          overflow: el.style.overflow,
+          overflowX: el.style.overflowX,
+          overflowY: el.style.overflowY,
+          maxWidth: el.style.maxWidth,
+          maxHeight: el.style.maxHeight,
+          width: el.style.width,
+          height: el.style.height,
+          scrollLeft: el.scrollLeft,
+          scrollTop: el.scrollTop
+        };
+        cleanups.push(() => {
+          el.style.overflow = prev.overflow;
+          el.style.overflowX = prev.overflowX;
+          el.style.overflowY = prev.overflowY;
+          el.style.maxWidth = prev.maxWidth;
+          el.style.maxHeight = prev.maxHeight;
+          el.style.width = prev.width;
+          el.style.height = prev.height;
+          el.scrollLeft = prev.scrollLeft;
+          el.scrollTop = prev.scrollTop;
+        });
+        el.style.overflow = 'visible';
+        el.style.overflowX = 'visible';
+        el.style.overflowY = 'visible';
+        el.style.maxWidth = 'none';
+        el.style.maxHeight = 'none';
+        if (needsWidth) {
+          el.style.width = `${el.scrollWidth}px`;
+          el.scrollLeft = 0;
+        }
+        if (needsHeight) {
+          el.style.height = `${el.scrollHeight}px`;
+          el.scrollTop = 0;
+        }
+      });
+      return () => {
+        while (cleanups.length) {
+          const restore = cleanups.pop();
+          try {
+            restore();
+          } catch (err) {
+            console.error('Error restaurando estilos tras captura', err);
+          }
+        }
+      };
+    }
+
+    async function captureDocumentCanvas(doc, html2canvasFn, element) {
+      const target = element || doc.documentElement || doc.body;
+      const cleanup = adjustScrollableAreas(doc, target);
+      let restoreScale = () => {};
+      try {
+        const MAX_CAPTURE_WIDTH = 14000;
+        const MAX_CAPTURE_HEIGHT = 16000;
+        const MAX_OUTPUT_PX = 10000;
+        let dims = elementDimensions(target);
+        const scaleCandidates = [];
+        if (dims.width > MAX_CAPTURE_WIDTH) {
+          scaleCandidates.push(MAX_CAPTURE_WIDTH / dims.width);
+        }
+        if (dims.height > MAX_CAPTURE_HEIGHT) {
+          scaleCandidates.push(MAX_CAPTURE_HEIGHT / dims.height);
+        }
+        if (scaleCandidates.length) {
+          const appliedScale = Math.max(0.25, Math.min(1, ...scaleCandidates));
+          restoreScale = applyScaleTransform(target, appliedScale);
+          await wait(50);
+          const rect = typeof target.getBoundingClientRect === 'function'
+            ? target.getBoundingClientRect()
+            : null;
+          dims = {
+            width: Math.max(1, Math.round(rect && rect.width ? rect.width : dims.width * appliedScale)),
+            height: Math.max(1, Math.round(rect && rect.height ? rect.height : dims.height * appliedScale))
+          };
+        }
+        const view = doc.defaultView || window;
+        const deviceScale = view && typeof view.devicePixelRatio === 'number'
+          ? view.devicePixelRatio
+          : (typeof window.devicePixelRatio === 'number' ? window.devicePixelRatio : 1);
+        const maxScaleByWidth = MAX_OUTPUT_PX / Math.max(1, dims.width);
+        const maxScaleByHeight = MAX_OUTPUT_PX / Math.max(1, dims.height);
+        const cappedScale = Math.min(2, Math.max(0.5, deviceScale || 1));
+        const scale = Math.max(
+          0.5,
+          Math.min(cappedScale, maxScaleByWidth, maxScaleByHeight)
+        );
+        return await html2canvasFn(target || doc.body, {
+          scale,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          windowWidth: dims.width,
+          windowHeight: dims.height,
+          width: dims.width,
+          height: dims.height,
+          scrollX: -(view?.scrollX || 0),
+          scrollY: -(view?.scrollY || 0)
+        });
+      } finally {
+        try {
+          restoreScale();
+        } catch (err) {
+          console.warn('No se pudo restaurar el escalado tras la captura', err);
+        }
+        cleanup();
+      }
+    }
+
+    async function captureCurrentPage(html2canvasFn) {
+      const originalScroll = { x: window.scrollX, y: window.scrollY };
+      window.scrollTo(0, 0);
+      try {
+        await waitForDocumentFonts(document, 8000, 'pestaña actual');
+        const targets = [];
+        const preferredSelectors = [
+          '.complete-container',
+          'main',
+          '#content',
+          '.content',
+        ];
+        preferredSelectors.forEach((selector) => {
+          const el = document.querySelector(selector);
+          if (el && !targets.includes(el)) {
+            targets.push(el);
+          }
+        });
+        const body = document.body;
+        const docEl = document.documentElement;
+        if (body && !targets.includes(body)) targets.push(body);
+        if (docEl && !targets.includes(docEl)) targets.push(docEl);
+        for (const target of targets) {
+          const canvas = await captureWithRetry(
+            () => captureDocumentCanvas(document, html2canvasFn, target),
+            3,
+            400,
+            20000
+          );
+          if (canvas) {
+            return canvas;
+          }
+        }
+        return null;
+      } finally {
+        window.scrollTo(originalScroll.x, originalScroll.y);
+      }
+    }
+
+    async function captureExternalPage(url, html2canvasFn) {
+      const iframe = document.createElement('iframe');
+      iframe.src = url;
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-100000px';
+      iframe.style.top = '0';
+      iframe.style.width = '1400px';
+      iframe.style.height = '900px';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      iframe.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(iframe);
+      try {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout cargando pestaña'));
+          }, 20000);
+          iframe.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          iframe.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Error cargando pestaña'));
+          };
+        });
+        const iframeWindow = iframe.contentWindow;
+        const iframeDoc = iframeWindow.document;
+        iframeWindow.scrollTo(0, 0);
+        await wait(1000);
+        await waitForDocumentFonts(iframeDoc, 8000, 'pestaña remota');
+        const targets = [];
+        const preferredSelectors = [
+          '.complete-container',
+          '.pedidos-calendar-container',
+          '.kanban',
+          '.kanban-container',
+          '.gantt-container',
+          '.gantt-wrapper',
+          '.vacations-container',
+          '.resources-container',
+          '.observations-container',
+          'main',
+          '#content',
+          '.content'
+        ];
+        preferredSelectors.forEach((selector) => {
+          const el = iframeDoc.querySelector(selector);
+          if (el && !targets.includes(el)) {
+            targets.push(el);
+          }
+        });
+        if (iframeDoc.body && !targets.includes(iframeDoc.body)) {
+          targets.push(iframeDoc.body);
+        }
+        if (iframeDoc.documentElement && !targets.includes(iframeDoc.documentElement)) {
+          targets.push(iframeDoc.documentElement);
+        }
+        for (const target of targets) {
+          const canvas = await captureWithRetry(
+            () => captureDocumentCanvas(iframeDoc, html2canvasFn, target),
+            3,
+            400,
+            22000
+          );
+          if (canvas) {
+            return canvas;
+          }
+        }
+        return null;
+      } finally {
+        iframe.remove();
+      }
+    }
+
+    function collectPlannerPages() {
+      const navLinks = Array.from(document.querySelectorAll('nav a'));
+      const seen = new Set();
+      const pages = [];
+      const currentPath = window.location.pathname;
+      navLinks.forEach((link) => {
+        const url = new URL(link.href, window.location.href);
+        if (seen.has(url.pathname)) {
+          return;
+        }
+        seen.add(url.pathname);
+        pages.push({
+          title: link.textContent.trim() || url.pathname,
+          url: url.href,
+          pathname: url.pathname,
+          isCurrent: url.pathname === currentPath
+        });
+      });
+      pages.sort((a, b) => {
+        if (a.isCurrent) return -1;
+        if (b.isCurrent) return 1;
+        return 0;
+      });
+      return pages;
+    }
+
+    function createProgressBanner() {
+      const banner = document.createElement('div');
+      banner.className = 'pdf-progress-banner';
+      banner.textContent = 'Preparando PDF…';
+      document.body.appendChild(banner);
+      return banner;
+    }
+
+    function updateProgress(banner, index, total, title) {
+      if (!banner) return;
+      banner.textContent = `Generando PDF (${index}/${total}) · ${title}`;
+    }
+
+    async function reportPdfError(error) {
+      const payload = {
+        message: error && typeof error.message === 'string' ? error.message : String(error),
+        stack: error && typeof error.stack === 'string' ? error.stack : undefined,
+      };
+      try {
+        await fetch('/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload),
+        });
+      } catch (reportErr) {
+        console.error('Error enviando el reporte del PDF', reportErr);
+      }
+    }
+
+    function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const fallbackToDataUrl = () => {
+          try {
+            const dataUrl = canvas.toDataURL(type, quality);
+            if (typeof dataUrl === 'string') {
+              resolve(dataUrl);
+            } else {
+              reject(new Error('No se pudo generar la imagen del PDF'));
+            }
+          } catch (fallbackError) {
+            reject(fallbackError);
+          }
+        };
+
+        try {
+          if (typeof canvas.toBlob === 'function') {
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                fallbackToDataUrl();
+                return;
+              }
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                if (typeof reader.result === 'string') {
+                  resolve(reader.result);
+                } else {
+                  reject(new Error('Resultado de imagen inválido'));
+                }
+              };
+              reader.onerror = () => {
+                fallbackToDataUrl();
+              };
+              reader.readAsDataURL(blob);
+            }, type, quality);
+            return;
+          }
+
+          fallbackToDataUrl();
+        } catch (blobError) {
+          reject(blobError);
+        }
+      });
+    }
+
+    function isCanvasMostlyBlank(canvas) {
+      if (!canvas || !canvas.width || !canvas.height) {
+        return true;
+      }
+
+      const width = canvas.width;
+      const height = canvas.height;
+      const totalPixels = width * height;
+      const WHITE_THRESHOLD = 245;
+      const ALPHA_THRESHOLD = 16;
+      const MAX_PREVIEW_PIXELS = 40000; // ~200x200
+
+      try {
+        const scale = totalPixels > MAX_PREVIEW_PIXELS
+          ? Math.sqrt(MAX_PREVIEW_PIXELS / totalPixels)
+          : 1;
+        const previewWidth = Math.max(1, Math.round(width * scale));
+        const previewHeight = Math.max(1, Math.round(height * scale));
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = previewWidth;
+        previewCanvas.height = previewHeight;
+        const previewCtx = previewCanvas.getContext('2d');
+        if (previewCtx) {
+          previewCtx.imageSmoothingEnabled = true;
+          previewCtx.drawImage(canvas, 0, 0, previewWidth, previewHeight);
+          const data = previewCtx.getImageData(0, 0, previewWidth, previewHeight).data;
+          for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            if (alpha > ALPHA_THRESHOLD) {
+              if (data[i] < WHITE_THRESHOLD || data[i + 1] < WHITE_THRESHOLD || data[i + 2] < WHITE_THRESHOLD) {
+                return false;
+              }
+            }
+          }
+        }
+      } catch (previewError) {
+        console.warn('No se pudo analizar la miniatura del canvas', previewError);
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return true;
+      }
+
+      const targetSamples = Math.min(2500, Math.max(100, Math.floor(totalPixels / 4000)));
+      const step = Math.max(1, Math.floor(Math.sqrt(totalPixels / targetSamples)));
+
+      const samplePositions = [];
+      const pushSample = (x, y) => {
+        const clampedX = Math.min(width - 1, Math.max(0, Math.round(x)));
+        const clampedY = Math.min(height - 1, Math.max(0, Math.round(y)));
+        samplePositions.push([clampedX, clampedY]);
+      };
+
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          pushSample(x, y);
+          if (step > 4) {
+            pushSample(x + Math.floor(step / 2), y + Math.floor(step / 2));
+          }
+        }
+      }
+
+      pushSample(width / 2, height / 2);
+      pushSample(width / 4, height / 4);
+      pushSample((3 * width) / 4, height / 4);
+      pushSample(width / 4, (3 * height) / 4);
+      pushSample((3 * width) / 4, (3 * height) / 4);
+      pushSample(width - 1, height - 1);
+
+      const seen = new Set();
+      for (let i = 0; i < samplePositions.length; i += 1) {
+        const [sx, sy] = samplePositions[i];
+        const key = `${sx},${sy}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const pixel = ctx.getImageData(sx, sy, 1, 1).data;
+        const alpha = pixel[3];
+        if (alpha > ALPHA_THRESHOLD) {
+          if (pixel[0] < WHITE_THRESHOLD || pixel[1] < WHITE_THRESHOLD || pixel[2] < WHITE_THRESHOLD) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    async function captureWithRetry(captureFn, attempts = 2, delayMs = 300, timeoutMs = 20000) {
+      let lastCanvas = null;
+      const timeoutToken = Symbol('capture-timeout');
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          const result = await Promise.race([
+            captureFn(),
+            wait(timeoutMs).then(() => timeoutToken)
+          ]);
+          if (result === timeoutToken) {
+            console.warn(`Captura excedió ${timeoutMs} ms; reintentando…`);
+          } else {
+            lastCanvas = result;
+          }
+        } catch (err) {
+          console.warn('Error capturando el contenido', err);
+        }
+        if (lastCanvas && !isCanvasMostlyBlank(lastCanvas)) {
+          return lastCanvas;
+        }
+        if (attempt < attempts - 1) {
+          await wait(delayMs);
+        }
+      }
+      if (lastCanvas && isCanvasMostlyBlank(lastCanvas)) {
+        console.warn('La captura parece vacía tras varios intentos; usando el último resultado disponible.');
+      }
+      return lastCanvas;
+    }
+
+    function scaleCanvasForPdf(canvas) {
+      const MAX_WIDTH = 1800;
+      if (!canvas || canvas.width <= MAX_WIDTH) {
+        return canvas;
+      }
+      const ratio = MAX_WIDTH / canvas.width;
+      const target = document.createElement('canvas');
+      target.width = Math.max(1, Math.round(canvas.width * ratio));
+      target.height = Math.max(1, Math.round(canvas.height * ratio));
+      const ctx = target.getContext('2d');
+      if (!ctx) {
+        return canvas;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(canvas, 0, 0, target.width, target.height);
+      return target;
+    }
+
+    async function appendCanvasToPdf(pdf, canvas, isFirstPage) {
+      const workingCanvas = scaleCanvasForPdf(canvas);
+      if (!workingCanvas || !workingCanvas.width || !workingCanvas.height) {
+        return isFirstPage;
+      }
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const scale = imgWidth / workingCanvas.width;
+      const pageHeightPx = Math.max(1, Math.floor(pageHeight / scale));
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = workingCanvas.width;
+      let pageAdded = false;
+      for (let y = 0, sliceIndex = 0; y < workingCanvas.height; y += pageHeightPx, sliceIndex += 1) {
+        const sliceHeight = Math.min(pageHeightPx, workingCanvas.height - y);
+        sliceCanvas.height = sliceHeight;
+        const ctx = sliceCanvas.getContext('2d');
+        if (!ctx) {
+          break;
+        }
+        ctx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(
+          workingCanvas,
+          0,
+          y,
+          workingCanvas.width,
+          sliceHeight,
+          0,
+          0,
+          sliceCanvas.width,
+          sliceHeight
+        );
+        const imageData = await canvasToDataUrl(sliceCanvas);
+        if (sliceIndex > 0 || !isFirstPage) {
+          pdf.addPage();
+        }
+        pdf.addImage(imageData, 'JPEG', 0, 0, imgWidth, sliceHeight * scale);
+        isFirstPage = false;
+        pageAdded = true;
+      }
+      return pageAdded ? false : isFirstPage;
+    }
+
+    summaryPdfBtn.addEventListener('click', async () => {
+      const html2canvasFn = window.html2canvas;
+      const jspdfNS = window.jspdf || {};
+      const { jsPDF } = jspdfNS;
+      if (typeof html2canvasFn !== 'function' || typeof jsPDF !== 'function') {
+        alert('No se pudo cargar el generador de PDF. Recarga la página e inténtalo de nuevo.');
+        return;
+      }
+      const pages = collectPlannerPages();
+      if (!pages.length) {
+        alert('No se encontraron pestañas para generar el PDF.');
+        return;
+      }
+      const originalLabel = summaryPdfBtn.textContent;
+      summaryPdfBtn.disabled = true;
+      const progressBanner = createProgressBanner();
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      let firstPage = true;
+      try {
+        for (let i = 0; i < pages.length; i += 1) {
+          const page = pages[i];
+          summaryPdfBtn.textContent = `Generando… (${i + 1}/${pages.length})`;
+          updateProgress(progressBanner, i + 1, pages.length, page.title);
+          const canvas = page.isCurrent
+            ? await captureCurrentPage(html2canvasFn)
+            : await captureExternalPage(page.url, html2canvasFn);
+          if (!canvas) {
+            throw new Error(`No se pudo capturar la pestaña "${page.title}"`);
+          }
+          firstPage = await appendCanvasToPdf(pdf, canvas, firstPage);
+        }
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const filename = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.pdf`;
+        pdf.save(filename);
+      } catch (error) {
+        console.error('Error generando el PDF', error);
+        await reportPdfError(error);
+        alert('No se pudo generar el PDF. Inténtalo de nuevo más tarde.');
+      } finally {
+        summaryPdfBtn.disabled = false;
+        summaryPdfBtn.textContent = originalLabel;
+        if (progressBanner) {
+          progressBanner.remove();
+        }
+      }
+    });
+  }
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');
@@ -1370,8 +2104,28 @@
     hoursRow.style.display = open ? 'none' : 'table-row';
     thead.classList.toggle('open', !open);
   }
+  const optionalPhaseToggle = document.getElementById('optional-phase-toggle');
   if (hoursBtn) {
     hoursBtn.addEventListener('click', toggleHours);
+  }
+  if (optionalPhaseToggle) {
+    optionalPhaseToggle.addEventListener('change', () => {
+      const enabled = optionalPhaseToggle.checked;
+      const savedScroll = wrapper ? wrapper.scrollLeft : null;
+      fetch(OPTIONAL_PHASE_TOGGLE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ enabled })
+      }).then(() => {
+        if (savedScroll !== null) {
+          sessionStorage.setItem(SCROLL_KEY, savedScroll);
+        }
+        location.reload();
+      }).catch(err => {
+        console.error('Error actualizando la importación de mecanizados y tratamientos', err);
+      });
+    });
   }
   document.querySelectorAll('.hours-form').forEach(f => {
     f.addEventListener('change', () => {
@@ -1678,6 +2432,7 @@ let draggedTaskElement = null;
       }
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
+      const basePhaseSet = new Set(PHASES);
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -1701,8 +2456,34 @@ let draggedTaskElement = null;
           phaseLines.push(line);
         }
       });
+      const manualPhaseLines = [];
+      Object.entries(projectPhases).forEach(([phKey, val]) => {
+        if (phKey === 'dibujo' || phKey === 'pedidos') return;
+        const baseName = phKey.split('#')[0];
+        const isBasePhase = basePhaseSet.has(phKey) || (!phKey.includes('#') && basePhaseSet.has(baseName));
+        if (isBasePhase) return;
+        let total = 0;
+        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        else total = parseInt(val) || 0;
+        if (total > 0) {
+          const assigned = assignedMap[phKey] || 'Sin planificar';
+          const classes = ['phase-entry', 'manual-phase-entry'];
+          classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+          const isActivePhase = phKey === t.dataset.phase;
+          const partSuffix = isActivePhase ? phasePartSuffix : '';
+          let line = `<div class="${classes.join(' ')}">${phKey}${partSuffix}: ${total}h`;
+          if (isActivePhase) {
+            const partValue = normalizedPart;
+            const partAttr = partValue ? ` data-part="${partValue}"` : '';
+            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${phKey}"${partAttr}>Cambiar horas</button></form>`;
+          }
+          line += `</div>`;
+          manualPhaseLines.push(line);
+        }
+      });
       let phaseSection = '';
       if (phaseLines.length) phaseSection += phaseLines.join('');
+      if (manualPhaseLines.length) phaseSection += manualPhaseLines.join('');
       if (t.dataset.phase === 'pedidos') {
         const acopio = projectPhases['pedidos'];
         if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
@@ -1727,14 +2508,8 @@ let draggedTaskElement = null;
           const parsedDataset = Number(t.dataset.hours);
           if (Number.isFinite(parsedDataset)) totalPhaseHours = parsedDataset;
         }
-        const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
-        const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
-        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
-        if (Array.isArray(projectPhases[t.dataset.phase])) {
-          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
-        }
-        splitLine += `</div>`;
-        actionLines.push(splitLine);
+        const basePhaseName = (t.dataset.phase || '').split('#')[0];
+        actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
         actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
         const unplanPart = normalizedPart;
         const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
@@ -1807,6 +2582,29 @@ let draggedTaskElement = null;
           } catch (error) {
             console.error('No se pudo abrir Calendario pedidos:', error);
           }
+        });
+      }
+      const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
+      if (addPhaseBtn) {
+        addPhaseBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const hours = prompt('Horas para la nueva fase:');
+          if (hours === null) return;
+          fetch(ADD_PHASE_INSTANCE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ pid: addPhaseBtn.dataset.pid, phase: addPhaseBtn.dataset.phase, hours })
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                alert(data.error || 'Error creando fase');
+                return;
+              }
+              location.reload();
+            })
+            .catch(() => alert('Error creando fase'));
         });
       }
       const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
@@ -1946,101 +2744,6 @@ let draggedTaskElement = null;
               obsSave.disabled = false;
             });
         });
-      }
-      const split = document.getElementById('split-btn');
-      if (split) {
-        split.addEventListener('click', ev => {
-          ev.stopPropagation();
-          splitModal.dataset.pid = split.dataset.pid;
-          splitModal.dataset.phase = split.dataset.phase;
-          splitModal.dataset.date = split.dataset.date;
-          prepareSplitModal(split);
-          splitModal.style.display = 'block';
-        });
-      }
-      const unsplit = document.getElementById('unsplit-btn');
-      if (unsplit) {
-        unsplit.addEventListener('click', ev => {
-          ev.stopPropagation();
-          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
-            fetch(UNSPLIT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
-            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
-          }
-        });
-      }
-      if (splitForm && !splitForm.dataset.enhanced) {
-        splitForm.addEventListener('submit', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (!splitModal) return;
-          const manuals = getSplitManualInputs();
-          if (!manuals.length) {
-            alert('Debes indicar al menos una parte.');
-            return;
-          }
-          const parts = [];
-          let invalid = false;
-          manuals.forEach(input => {
-            const value = parseSplitHours(input.value);
-            if (!Number.isInteger(value) || value <= 0) {
-              input.classList.add('split-input-error');
-              invalid = true;
-              return;
-            }
-            parts.push(value);
-          });
-          const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
-          const total = parseSplitHours(splitModal.dataset.totalHours);
-          let remainderInt = null;
-          if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
-            invalid = true;
-          } else {
-            remainderInt = remainderValue;
-            parts.push(remainderInt);
-          }
-          const sumParts = parts.reduce((acc, value) => acc + value, 0);
-          if (total !== null && Number.isFinite(total) && sumParts !== total) {
-            invalid = true;
-          }
-          if (invalid) {
-            alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
-            updateSplitModalDisplay();
-            return;
-          }
-          const payload = {
-            pid: splitModal.dataset.pid,
-            phase: splitModal.dataset.phase,
-            date: splitModal.dataset.date,
-            parts,
-          };
-          fetch(SPLIT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(payload)
-          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
-        });
-        splitForm.dataset.enhanced = 'true';
-      }
-      if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
-        splitAddPartButton.addEventListener('click', ev => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
-          const input = createSplitPartRow(null, remainderRow);
-          ensureSplitRemainderInput();
-          updateSplitModalDisplay();
-          if (input) {
-            input.focus();
-          }
-        });
-        splitAddPartButton.dataset.bound = 'true';
-      }
-      if (splitCancel) {
-        splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
       }
       const freeze = document.getElementById('freeze-btn');
       if (freeze) {
@@ -2649,41 +3352,42 @@ let draggedTaskElement = null;
       });
     });
   });
-const CONFLICTS = {{ conflicts|tojson }};
-const conflictModal = document.getElementById("conflict-modal");
-const conflictText = document.getElementById("conflict-text");
-const conflictClose = document.getElementById("conflict-close");
-const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
-const NEW_CONFLICTS = CONFLICTS.filter(
-  c => !seen[c.key]
-);
-let conflictIndex = 0;
-function showNextConflict() {
-  if (conflictIndex < NEW_CONFLICTS.length) {
-    const c = NEW_CONFLICTS[conflictIndex];
-    conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
-    conflictModal.style.display = "block";
-  } else {
-    conflictModal.style.display = "none";
+  const CONFLICTS = {{ conflicts|tojson }};
+  const conflictModal = document.getElementById("conflict-modal");
+  const conflictText = document.getElementById("conflict-text");
+  const conflictClose = document.getElementById("conflict-close");
+  const seen = JSON.parse(localStorage.getItem('seenConflicts') || '{}');
+  const NEW_CONFLICTS = CONFLICTS.filter(
+    c => !seen[c.key]
+  );
+  let conflictIndex = 0;
+  function showNextConflict() {
+    if (conflictIndex < NEW_CONFLICTS.length) {
+      const c = NEW_CONFLICTS[conflictIndex];
+      conflictText.textContent = c.project + " - " + (c.client || '') + ": " + c.message;
+      conflictModal.style.display = "block";
+    } else {
+      conflictModal.style.display = "none";
+    }
   }
-}
-if (NEW_CONFLICTS.length) {
-  showNextConflict();
-  conflictClose.addEventListener("click", () => {
-    const c = NEW_CONFLICTS[conflictIndex];
-    seen[c.key] = true;
-    localStorage.setItem('seenConflicts', JSON.stringify(seen));
-    conflictIndex++;
+  if (NEW_CONFLICTS.length) {
     showNextConflict();
-  });
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    if (conflictModal.style.display === 'block') conflictClose.click();
-    if (splitModal.style.display === 'block') splitCancel.click();
-    if (blockModal.style.display === 'block') blockCancel.click();
+    conflictClose.addEventListener("click", () => {
+      const c = NEW_CONFLICTS[conflictIndex];
+      seen[c.key] = true;
+      localStorage.setItem('seenConflicts', JSON.stringify(seen));
+      conflictIndex++;
+      showNextConflict();
+    });
   }
-});
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (conflictModal && conflictClose && conflictModal.style.display === 'block') conflictClose.click();
+      if (splitModal && splitModal.style.display === 'block') splitCancel.click();
+      if (blockModal && blockModal.style.display === 'block') blockCancel.click();
+    }
+  });
+  });
 </script>
 {% endblock %}
