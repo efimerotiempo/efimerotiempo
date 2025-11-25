@@ -144,6 +144,11 @@ table.schedule td.weekend-cell {
     align-items: center;
     justify-content: center;
 }
+.task.simulated {
+    background: #f3f3f3;
+    border-color: #b3b3b3 !important;
+    color: #555;
+}
 .task.frozen {
     background: var(--frozen-background, rgba(204, 229, 255, 0.45));
 }
@@ -978,6 +983,15 @@ tr.collapsed td:not(:first-child) { display: none; }
     flex-wrap: wrap;
     gap: 12px;
     margin-bottom: 5px;
+}
+.optional-phase-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+.optional-phase-toggle input {
+    cursor: pointer;
 }
 .hours-btn-container button {
     cursor: pointer;

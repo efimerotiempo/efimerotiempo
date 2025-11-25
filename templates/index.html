@@ -34,6 +34,10 @@
     <button id="sort-status-btn" class="order-toggle" type="button">Estado material</button>
 </div>
 <div class="hours-btn-container">
+    <label class="optional-phase-toggle">
+        <input type="checkbox" id="optional-phase-toggle" {% if import_optional_phases %}checked{% endif %}>
+        Importar mecanizados y tratamientos.
+    </label>
     <button id="hours-btn" type="button">Editar jornada laboral</button>
 </div>
 <div class="calendar-flex">
@@ -350,10 +354,12 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
-  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const SPLIT_URL = "";
+  const UNSPLIT_URL = "";
+  const ADD_PHASE_INSTANCE_URL = "{{ url_for('add_phase_instance') }}";
   const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
+  const OPTIONAL_PHASE_TOGGLE_URL = "{{ url_for('toggle_optional_phases') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
   const PROJECT_LINKS_URL = "{{ url_for('project_links_api') }}";
@@ -1475,8 +1481,28 @@
     hoursRow.style.display = open ? 'none' : 'table-row';
     thead.classList.toggle('open', !open);
   }
+  const optionalPhaseToggle = document.getElementById('optional-phase-toggle');
   if (hoursBtn) {
     hoursBtn.addEventListener('click', toggleHours);
+  }
+  if (optionalPhaseToggle) {
+    optionalPhaseToggle.addEventListener('change', () => {
+      const enabled = optionalPhaseToggle.checked;
+      const savedScroll = wrapper ? wrapper.scrollLeft : null;
+      fetch(OPTIONAL_PHASE_TOGGLE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ enabled })
+      }).then(() => {
+        if (savedScroll !== null) {
+          sessionStorage.setItem(SCROLL_KEY, savedScroll);
+        }
+        location.reload();
+      }).catch(err => {
+        console.error('Error actualizando la importación de mecanizados y tratamientos', err);
+      });
+    });
   }
   document.querySelectorAll('.hours-form').forEach(f => {
     f.addEventListener('change', () => {
@@ -1742,6 +1768,7 @@ let draggedTaskElement = null;
         : new Set();
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
+      const basePhaseSet = new Set(PHASES);
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -1766,8 +1793,34 @@ let draggedTaskElement = null;
           phaseLines.push(line);
         }
       });
+      const manualPhaseLines = [];
+      Object.entries(projectPhases).forEach(([phKey, val]) => {
+        if (phKey === 'dibujo' || phKey === 'pedidos') return;
+        const baseName = phKey.split('#')[0];
+        const isBasePhase = basePhaseSet.has(phKey) || (!phKey.includes('#') && basePhaseSet.has(baseName));
+        if (isBasePhase) return;
+        let total = 0;
+        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        else total = parseInt(val) || 0;
+        if (total > 0) {
+          const assigned = assignedMap[phKey] || 'Sin planificar';
+          const classes = ['phase-entry', 'manual-phase-entry'];
+          classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+          const isActivePhase = phKey === t.dataset.phase;
+          const partSuffix = isActivePhase ? phasePartSuffix : '';
+          let line = `<div class="${classes.join(' ')}">${phKey}${partSuffix}: ${total}h`;
+          if (isActivePhase) {
+            const partValue = normalizedPart;
+            const partAttr = partValue ? ` data-part="${partValue}"` : '';
+            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${phKey}"${partAttr}>Cambiar horas</button></form>`;
+          }
+          line += `</div>`;
+          manualPhaseLines.push(line);
+        }
+      });
       let phaseSection = '';
       if (phaseLines.length) phaseSection += phaseLines.join('');
+      if (manualPhaseLines.length) phaseSection += manualPhaseLines.join('');
       if (t.dataset.phase === 'pedidos') {
         const acopio = projectPhases['pedidos'];
         if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
@@ -1794,12 +1847,8 @@ let draggedTaskElement = null;
         }
         const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
         const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
-        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
-        if (Array.isArray(projectPhases[t.dataset.phase])) {
-          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
-        }
-        splitLine += `</div>`;
-        actionLines.push(splitLine);
+          const basePhaseName = (t.dataset.phase || '').split('#')[0];
+          actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
         actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
         const unplanPart = normalizedPart;
         const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
@@ -2013,29 +2062,27 @@ let draggedTaskElement = null;
             });
         });
       }
-      const split = document.getElementById('split-btn');
-      if (split) {
-        split.addEventListener('click', ev => {
+      const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
+      if (addPhaseBtn) {
+        addPhaseBtn.addEventListener('click', ev => {
           ev.stopPropagation();
-          splitModal.dataset.pid = split.dataset.pid;
-          splitModal.dataset.phase = split.dataset.phase;
-          splitModal.dataset.date = split.dataset.date;
-          prepareSplitModal(split);
-          splitModal.style.display = 'block';
-        });
-      }
-      const unsplit = document.getElementById('unsplit-btn');
-      if (unsplit) {
-        unsplit.addEventListener('click', ev => {
-          ev.stopPropagation();
-          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
-            fetch(UNSPLIT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'same-origin',
-              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
-            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
-          }
+          const hours = prompt('Horas para la nueva fase:');
+          if (hours === null) return;
+          fetch(ADD_PHASE_INSTANCE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ pid: addPhaseBtn.dataset.pid, phase: addPhaseBtn.dataset.phase, hours })
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                alert(data.error || 'Error creando fase');
+                return;
+              }
+              location.reload();
+            })
+            .catch(err => alert(err.message || 'Error creando fase'));
         });
       }
       if (splitForm && !splitForm.dataset.enhanced) {
