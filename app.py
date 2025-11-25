@@ -8438,6 +8438,19 @@ def kanbanize_webhook():
         'mecanizar': 1 if prev_mecan_flag else 0,
         'tratamiento': 1 if prev_trat_flag else 0,
     }
+    def field_changed(*names):
+        return custom_fields_supplied and any(name in custom_changes for name in names)
+
+    phase_update_allowed = {
+        'preparar material': field_changed('Horas Preparación'),
+        'montar': field_changed('Horas Montaje'),
+        'montar 2º': field_changed('Horas Montaje 2º', 'Horas Montaje 2°'),
+        'soldar 2º': field_changed('Horas Soldadura 2º', 'Horas Soldadura 2°'),
+        'soldar': field_changed('Horas Soldadura'),
+        'pintar': field_changed('Horas Acabado'),
+        'mecanizar': field_changed('MECANIZADO'),
+        'tratamiento': field_changed('TRATAMIENTO'),
+    }
     auto_prep = False
     if (
         prep_hours <= 0
@@ -8647,6 +8660,8 @@ def kanbanize_webhook():
 
         changed_phases = {}
         for ph, new_raw in phase_hours_new_raw.items():
+            if not phase_update_allowed.get(ph):
+                continue
             prev_raw = phase_hours_prev.get(ph, 0)
             if new_raw != prev_raw:
                 changed_phases[ph] = new_phases.get(ph, 0)
