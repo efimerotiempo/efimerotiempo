@@ -2346,22 +2346,48 @@ let draggedTaskElement = null;
     }
     return hours;
   }
-  document.querySelectorAll('tbody td[data-date]').forEach(cell => {
-    cell.addEventListener('dragover', e => { e.preventDefault(); });
-    cell.addEventListener('drop', e => {
-      e.preventDefault();
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const date = cell.dataset.date;
-      const worker = cell.closest('tr').dataset.worker;
-      const info = PROJECT_DATA[data.pid] || {};
-      const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
-      if (lastDrag) {
-        sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+  function parseDragData(event) {
+    let payload = null;
+    try {
+      const raw = event.dataTransfer.getData('text/plain');
+      if (raw) {
+        payload = JSON.parse(raw);
       }
-      const start = getStartHour(cell, e.clientY);
-      const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
-      attemptMove(moveData, 'split', beforeMaterial);
-    });
+    } catch (err) {
+      payload = null;
+    }
+    if (!payload && dragInfo) {
+      payload = { pid: dragInfo.pid, phase: dragInfo.phase, part: dragInfo.part };
+    }
+    return payload;
+  }
+
+  function handleCalendarDrop(cell, event) {
+    const data = parseDragData(event);
+    if (!data) return;
+    const date = cell.dataset.date;
+    const worker = cell.closest('tr').dataset.worker;
+    const info = PROJECT_DATA[data.pid] || {};
+    const beforeMaterial = info.material_confirmed_date && date < info.material_confirmed_date;
+    if (lastDrag) {
+      sessionStorage.setItem('undoMove', JSON.stringify(lastDrag));
+    }
+    const start = getStartHour(cell, event.clientY);
+    const moveData = { pid: data.pid, phase: data.phase, date: date, worker: worker, part: data.part, start: start };
+    attemptMove(moveData, 'split', beforeMaterial);
+  }
+
+  document.addEventListener('dragover', (event) => {
+    const cell = event.target.closest('td[data-date]');
+    if (!cell) return;
+    event.preventDefault();
+  });
+
+  document.addEventListener('drop', (event) => {
+    const cell = event.target.closest('td[data-date]');
+    if (!cell) return;
+    event.preventDefault();
+    handleCalendarDrop(cell, event);
   });
   function attemptMove(moveData, mode, beforeMaterial) {
     doMove(moveData, mode, beforeMaterial);
