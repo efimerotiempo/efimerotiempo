@@ -979,6 +979,15 @@ tr.collapsed td:not(:first-child) { display: none; }
     gap: 12px;
     margin-bottom: 5px;
 }
+.optional-phase-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+.optional-phase-toggle input {
+    cursor: pointer;
+}
 .hours-btn-container button {
     cursor: pointer;
     padding: 10px 20px;

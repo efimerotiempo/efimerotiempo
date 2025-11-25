@@ -46,6 +46,10 @@
         </form>
     </div>
     <div class="hours-btn-container">
+        <label class="optional-phase-toggle">
+            <input type="checkbox" id="optional-phase-toggle" {% if import_optional_phases %}checked{% endif %}>
+            Importar mecanizados y tratamientos.
+        </label>
         <button id="hours-btn" type="button">Editar jornada laboral</button>
         <button id="summary-pdf-btn" type="button">Resumen en PDF</button>
     </div>
@@ -547,6 +551,7 @@
   initProjectTableSorting();
   const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
+  const OPTIONAL_PHASE_TOGGLE_URL = "{{ url_for('toggle_optional_phases') }}";
   const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
   const ROW_URL = "{{ url_for('update_project_row') }}";
   const WORKER_NOTE_URL = "{{ url_for('update_worker_note') }}";
@@ -2098,8 +2103,28 @@
     hoursRow.style.display = open ? 'none' : 'table-row';
     thead.classList.toggle('open', !open);
   }
+  const optionalPhaseToggle = document.getElementById('optional-phase-toggle');
   if (hoursBtn) {
     hoursBtn.addEventListener('click', toggleHours);
+  }
+  if (optionalPhaseToggle) {
+    optionalPhaseToggle.addEventListener('change', () => {
+      const enabled = optionalPhaseToggle.checked;
+      const savedScroll = wrapper ? wrapper.scrollLeft : null;
+      fetch(OPTIONAL_PHASE_TOGGLE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ enabled })
+      }).then(() => {
+        if (savedScroll !== null) {
+          sessionStorage.setItem(SCROLL_KEY, savedScroll);
+        }
+        location.reload();
+      }).catch(err => {
+        console.error('Error actualizando la importación de mecanizados y tratamientos', err);
+      });
+    });
   }
   document.querySelectorAll('.hours-form').forEach(f => {
     f.addEventListener('change', () => {

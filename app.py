@@ -962,11 +962,21 @@ def inject_archived_tasks(schedule):
     return entries, project_infos
 
 
-def build_schedule_with_archived(projects):
+def build_schedule_with_archived(projects, include_optional_phases=True):
     """Return schedule/conflicts with archived tasks preloaded."""
 
     base_schedule = {}
     archived_entries, archived_project_map = inject_archived_tasks(base_schedule)
+    if not include_optional_phases:
+        for worker, days in list(base_schedule.items()):
+            for day, tasks in list(days.items()):
+                filtered = [t for t in tasks if t.get('phase') not in OPTIONAL_PHASES]
+                if filtered:
+                    days[day] = filtered
+                else:
+                    days.pop(day, None)
+            if not days:
+                base_schedule.pop(worker, None)
     schedule, conflicts = schedule_projects(projects, base_schedule=base_schedule)
     return schedule, conflicts, archived_entries, archived_project_map
 
@@ -980,6 +990,33 @@ KANBAN_PREFILL_FILE = os.path.join(DATA_DIR, 'kanban_prefill.json')
 KANBAN_COLUMN_COLORS_FILE = os.path.join(DATA_DIR, 'kanban_column_colors.json')
 TRACKER_FILE = os.path.join(DATA_DIR, 'tracker.json')
 ARCHIVED_CALENDAR_FILE = os.path.join(DATA_DIR, 'archived_calendar.json')
+PLANNER_SETTINGS_FILE = os.path.join(DATA_DIR, 'planner_settings.json')
+OPTIONAL_PHASES = {'mecanizar', 'tratamiento'}
+
+
+def load_planner_settings():
+    if not os.path.exists(PLANNER_SETTINGS_FILE):
+        return {'import_optional_phases': True}
+    try:
+        with open(PLANNER_SETTINGS_FILE, 'r') as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {'import_optional_phases': True}
+    if not isinstance(data, dict):
+        return {'import_optional_phases': True}
+    enabled = data.get('import_optional_phases')
+    return {'import_optional_phases': bool(enabled) if enabled is not None else True}
+
+
+def save_planner_settings(settings):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    payload = {'import_optional_phases': bool(settings.get('import_optional_phases', True))}
+    with open(PLANNER_SETTINGS_FILE, 'w') as f:
+        json.dump(payload, f)
+
+
+def optional_phases_enabled():
+    return bool(load_planner_settings().get('import_optional_phases', True))
 
 if _load_worker_hours_func and _save_worker_hours_func:
     load_worker_hours = _load_worker_hours_func
@@ -3913,6 +3950,32 @@ def project_has_hours(project):
     return any(_phase_value_has_hours(v) for v in phases.values())
 
 
+def _strip_optional_phases(projects, include_optional=True):
+    if include_optional:
+        return projects
+    cleaned = []
+    for p in projects:
+        p_copy = copy.deepcopy(p)
+        phases = p_copy.get('phases') or {}
+        kept_phases = {ph: val for ph, val in phases.items() if ph not in OPTIONAL_PHASES}
+        p_copy['phases'] = kept_phases
+        assigned = p_copy.get('assigned') or {}
+        p_copy['assigned'] = {ph: worker for ph, worker in assigned.items() if ph in kept_phases}
+        auto = p_copy.get('auto_hours') or {}
+        p_copy['auto_hours'] = {ph: flag for ph, flag in auto.items() if ph in kept_phases}
+        seq = p_copy.get('phase_sequence')
+        if seq:
+            p_copy['phase_sequence'] = [ph for ph in seq if ph in kept_phases]
+        frozen_tasks = p_copy.get('frozen_tasks') or []
+        p_copy['frozen_tasks'] = [t for t in frozen_tasks if t.get('phase') not in OPTIONAL_PHASES]
+        for key in ('segment_starts', 'segment_start_hours', 'segment_workers'):
+            segs = p_copy.get(key)
+            if segs:
+                p_copy[key] = {ph: val for ph, val in segs.items() if ph in kept_phases}
+        cleaned.append(p_copy)
+    return cleaned
+
+
 def filter_visible_projects(projects):
     """Filter *projects* down to those with at least one phase with hours."""
 
@@ -3929,10 +3992,14 @@ def filter_visible_projects(projects):
     return visible
 
 
-def get_visible_projects():
+def get_visible_projects(include_optional_phases=None):
     """Return the list of projects that should appear in the UI tabs."""
 
-    return filter_visible_projects(get_projects())
+    if include_optional_phases is None:
+        include_optional_phases = optional_phases_enabled()
+    projects = get_projects()
+    projects = _strip_optional_phases(projects, include_optional=include_optional_phases)
+    return filter_visible_projects(projects)
 
 
 def expand_for_display(projects):
@@ -4261,12 +4328,17 @@ def home():
 
 @app.route('/calendar')
 def calendar_view():
-    projects = get_visible_projects()
-    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(projects)
+    include_optional_phases = optional_phases_enabled()
+    projects = get_visible_projects(include_optional_phases=include_optional_phases)
+    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(
+        projects, include_optional_phases=include_optional_phases
+    )
     annotate_schedule_frozen_background(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
+    if not include_optional_phases:
+        manual_entries = [entry for entry in manual_entries if entry.get('phase') not in OPTIONAL_PHASES]
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -4581,6 +4653,7 @@ def calendar_view():
         material_status_labels=MATERIAL_STATUS_LABELS,
         worker_day_hours=worker_day_overrides,
         worker_limits=worker_limits_map,
+        import_optional_phases=include_optional_phases,
     )
 
 
@@ -6178,12 +6251,17 @@ def resources():
 
 @app.route('/complete')
 def complete():
-    projects = get_visible_projects()
-    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(projects)
+    include_optional_phases = optional_phases_enabled()
+    projects = get_visible_projects(include_optional_phases=include_optional_phases)
+    schedule, conflicts, _archived_entries, archived_project_map = build_schedule_with_archived(
+        projects, include_optional_phases=include_optional_phases
+    )
     annotate_schedule_frozen_background(schedule)
     today = local_today()
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
+    if not include_optional_phases:
+        manual_entries = [entry for entry in manual_entries if entry.get('phase') not in OPTIONAL_PHASES]
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -6537,6 +6615,7 @@ def complete():
         material_status_labels=MATERIAL_STATUS_LABELS,
         worker_day_hours=worker_day_overrides,
         worker_limits=worker_limits_map,
+        import_optional_phases=include_optional_phases,
     )
 
 
@@ -7082,6 +7161,20 @@ def update_image(pid):
     if request.is_json:
         return '', 204
     return redirect(next_url)
+
+
+@app.route('/toggle_optional_phases', methods=['POST'])
+def toggle_optional_phases():
+    data = request.get_json(silent=True) or {}
+    raw_enabled = data.get('enabled')
+    if isinstance(raw_enabled, str):
+        enabled = raw_enabled.strip().lower() not in ('', '0', 'false', 'no', 'off')
+    else:
+        enabled = bool(raw_enabled)
+    settings = load_planner_settings()
+    settings['import_optional_phases'] = enabled
+    save_planner_settings(settings)
+    return jsonify({'import_optional_phases': enabled})
 
 
 @app.route('/update_hours', methods=['POST'])
