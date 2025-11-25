@@ -3543,13 +3543,26 @@ def move_phase_date(
 
     mapping = compute_schedule_map(projects)
     tasks = [t for t in mapping.get(pid, []) if t[2] == phase]
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not tasks and proj:
+        phase_hours = proj.get('phases', {}).get(phase)
+        try:
+            hours = int(phase_hours[part]) if isinstance(phase_hours, list) and part is not None else int(phase_hours)
+        except Exception:
+            hours = None
+        if hours:
+            try:
+                start_day = date.fromisoformat(proj.get('start_date') or local_today().isoformat())
+            except Exception:
+                start_day = local_today()
+            worker = proj.get('assigned', {}).get(phase) or UNPLANNED
+            tasks = [(worker, start_day.isoformat(), phase, hours, part)]
     if not tasks:
         return _fail('Fase no encontrada')
     if part is not None:
         tasks = [t for t in tasks if t[4] == part]
         if not tasks:
             return _fail('Fase no encontrada')
-    proj = next((p for p in projects if p['id'] == pid), None)
     if not proj:
         return _fail('Proyecto no encontrado')
     if phase != 'pedidos' and any(
