@@ -3925,12 +3925,15 @@ def get_projects():
             if p.get('start_date') != today_str:
                 p['start_date'] = today_str
                 changed = True
-
-        segs = p.get('segment_starts')
-        if segs:
-            for ph, val in list(segs.items()):
-                if val and not isinstance(val, list):
-                    segs[ph] = [val]
+        phases = p.get('phases') or {}
+        for ph, val in list(phases.items()):
+            if isinstance(val, list):
+                phases[ph] = _phase_total_hours(val)
+                changed = True
+        for key in ('segment_starts', 'segment_start_hours', 'segment_workers'):
+            if key in p:
+                p.pop(key)
+                changed = True
 
         assigned = p.setdefault('assigned', {})
         for ph, w in list(assigned.items()):
@@ -7278,166 +7281,6 @@ def delete_phase():
                 else:
                     save_projects(projects)
             break
-    return '', 204
-
-
-@app.route('/split_phase', methods=['POST'])
-def split_phase_route():
-    data = request.get_json() or request.form
-    pid = data.get('pid')
-    phase = data.get('phase')
-    date_str = data.get('date')
-    parts_raw = data.get('parts')
-    part_values = []
-    if isinstance(parts_raw, list):
-        part_values = parts_raw
-    elif isinstance(parts_raw, str):
-        try:
-            parsed_parts = json.loads(parts_raw)
-            if isinstance(parsed_parts, list):
-                part_values = parsed_parts
-        except Exception:
-            part_values = []
-
-    if not part_values:
-        part1_str = data.get('part1')
-        part2_str = data.get('part2')
-        if part1_str is None or part2_str is None:
-            return '', 400
-        part_values = [part1_str, part2_str]
-
-    if not pid or not phase or not date_str:
-        return '', 400
-    try:
-        date.fromisoformat(date_str)
-    except Exception:
-        return '', 400
-    parsed_parts = []
-    try:
-        for item in part_values:
-            parsed = int(item)
-            parsed_parts.append(parsed)
-    except Exception:
-        return '', 400
-
-    if len(parsed_parts) < 2:
-        return jsonify({'error': 'Debes crear al menos dos partes'}), 400
-    if any(val <= 0 for val in parsed_parts):
-        return jsonify({'error': 'Las partes deben ser mayores que cero'}), 400
-
-    projects = get_projects()
-    proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj or phase not in proj.get('phases', {}):
-        return '', 400
-
-    val = proj['phases'][phase]
-    total = _phase_total_hours(val)
-    if total <= 0:
-        return jsonify({'error': 'La fase no tiene horas válidas'}), 400
-    if sum(parsed_parts) != total:
-        return jsonify({'error': 'Las horas no coinciden con el total'}), 400
-
-    proj['phases'][phase] = parsed_parts
-
-    seg_map = proj.setdefault('segment_starts', {})
-    prev_starts = list(seg_map.get(phase) or [])
-    if len(prev_starts) >= len(parsed_parts):
-        seg_map[phase] = prev_starts[: len(parsed_parts)]
-    else:
-        seg_map[phase] = prev_starts + [None] * (len(parsed_parts) - len(prev_starts))
-
-    hour_map = proj.setdefault('segment_start_hours', {})
-    prev_hours = list(hour_map.get(phase) or [])
-    if len(prev_hours) >= len(parsed_parts):
-        hour_map[phase] = prev_hours[: len(parsed_parts)]
-    else:
-        hour_map[phase] = prev_hours + [None] * (len(parsed_parts) - len(prev_hours))
-
-    worker = proj.get('assigned', {}).get(phase)
-    worker_map = proj.setdefault('segment_workers', {})
-    prev_workers = list(worker_map.get(phase) or [])
-    if not prev_workers:
-        prev_workers = [worker] * len(parsed_parts)
-    else:
-        if len(prev_workers) >= len(parsed_parts):
-            prev_workers = prev_workers[: len(parsed_parts)]
-        else:
-            prev_workers.extend([worker] * (len(parsed_parts) - len(prev_workers)))
-    worker_map[phase] = prev_workers
-
-    save_projects(projects)
-    return '', 204
-
-
-@app.route('/unsplit_phase', methods=['POST'])
-def unsplit_phase():
-    data = request.get_json() or request.form
-    pid = data.get('pid')
-    phase = data.get('phase')
-    if not pid or not phase:
-        return '', 400
-    projects = get_projects()
-    proj = next((p for p in projects if p['id'] == pid), None)
-    if not proj or phase not in proj.get('phases', {}):
-        return '', 400
-    val = proj['phases'][phase]
-    if not isinstance(val, list) or len(val) <= 1:
-        return '', 400
-    total = sum(int(v) for v in val)
-    mapping = compute_schedule_map(projects)
-    part_hours = {}
-    part_workers = {}
-    for worker, day, ph, hrs, prt in mapping.get(pid, []):
-        if ph == phase and prt is not None and prt < len(val):
-            part_hours[prt] = part_hours.get(prt, 0) + hrs
-            part_workers.setdefault(prt, worker)
-    if part_hours:
-        largest = max(part_hours.items(), key=lambda x: x[1])[0]
-        worker = part_workers.get(largest)
-        if worker:
-            proj.setdefault('assigned', {})[phase] = worker
-    proj['phases'][phase] = total
-    seg_map = proj.get('segment_starts')
-    hour_map = proj.get('segment_start_hours')
-    starts = (seg_map or {}).get(phase) or []
-    hours_list = (hour_map or {}).get(phase) or []
-    chosen_idx = None
-    for idx, start in enumerate(starts):
-        if start:
-            chosen_idx = idx
-            break
-    if chosen_idx is None and starts:
-        first = starts[0]
-        if first:
-            chosen_idx = 0
-    chosen_start = None
-    chosen_hour = None
-    if chosen_idx is not None:
-        chosen_start = starts[chosen_idx]
-        if chosen_start:
-            if hours_list and chosen_idx < len(hours_list):
-                chosen_hour = hours_list[chosen_idx]
-    if seg_map is not None:
-        if chosen_start:
-            seg_map[phase] = [chosen_start]
-        else:
-            seg_map.pop(phase, None)
-        if not seg_map:
-            proj.pop('segment_starts', None)
-    if hour_map is not None:
-        if chosen_start:
-            hour_value = chosen_hour if chosen_hour is not None else 0
-            hour_map[phase] = [hour_value]
-        else:
-            hour_map.pop(phase, None)
-        if not hour_map:
-            proj.pop('segment_start_hours', None)
-    seg_workers = proj.get('segment_workers')
-    if seg_workers and phase in seg_workers:
-        seg_workers.pop(phase, None)
-        if not seg_workers:
-            proj.pop('segment_workers')
-    save_projects(projects)
     return '', 204
 
 

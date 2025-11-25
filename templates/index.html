@@ -354,8 +354,8 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
-  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
+  const SPLIT_URL = "";
+  const UNSPLIT_URL = "";
   const ADD_PHASE_INSTANCE_URL = "{{ url_for('add_phase_instance') }}";
   const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
   const HOURS_URL = "{{ url_for('update_hours') }}";
@@ -1847,14 +1847,8 @@ let draggedTaskElement = null;
         }
         const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
         const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
-        const basePhaseName = (t.dataset.phase || '').split('#')[0];
-        actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
-        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
-        if (Array.isArray(projectPhases[t.dataset.phase])) {
-          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
-        }
-        splitLine += `</div>`;
-        actionLines.push(splitLine);
+          const basePhaseName = (t.dataset.phase || '').split('#')[0];
+          actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
         actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
         const unplanPart = normalizedPart;
         const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
@@ -2066,31 +2060,6 @@ let draggedTaskElement = null;
             .finally(() => {
               obsSave.disabled = false;
             });
-        });
-      }
-      const split = document.getElementById('split-btn');
-      if (split) {
-        split.addEventListener('click', ev => {
-          ev.stopPropagation();
-          splitModal.dataset.pid = split.dataset.pid;
-          splitModal.dataset.phase = split.dataset.phase;
-          splitModal.dataset.date = split.dataset.date;
-          prepareSplitModal(split);
-          splitModal.style.display = 'block';
-        });
-      }
-      const unsplit = document.getElementById('unsplit-btn');
-      if (unsplit) {
-        unsplit.addEventListener('click', ev => {
-          ev.stopPropagation();
-          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
-            fetch(UNSPLIT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'same-origin',
-              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
-            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
-          }
         });
       }
       const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
