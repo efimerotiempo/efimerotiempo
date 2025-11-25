@@ -2508,10 +2508,82 @@ let draggedTaskElement = null;
           const parsedDataset = Number(t.dataset.hours);
           if (Number.isFinite(parsedDataset)) totalPhaseHours = parsedDataset;
         }
-        const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
-        const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
         const basePhaseName = (t.dataset.phase || '').split('#')[0];
         actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
+        actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
+        const unplanPart = normalizedPart;
+        const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
+        actionLines.push(`<div><button id="unplan-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${unplanAttr}>Sin planificar</button></div>`);
+        const obsValue = info && info.observations !== undefined && info.observations !== null
+          ? `${info.observations}`
+          : '';
+        const safeObsValue = escapeHtml(obsValue);
+        actionLines.push(`
+          <div class="popup-observations">
+            <label for="obs-text">Observaciones</label>
+            <textarea id="obs-text" data-pid="${t.dataset.pid}" class="popup-observations-text">${safeObsValue}</textarea>
+            <div class="popup-observations-actions">
+              <button type="button" id="obs-save" data-pid="${t.dataset.pid}">Guardar</button>
+            </div>
+          </div>
+        `);
+      } else {
+        const kanbanColumn = ((info && info.kanban_column) || '').toString().trim().toLowerCase();
+        if (kanbanColumn === 'ready to archive') {
+          const archivePartAttr = normalizedPart ? ` data-part="${normalizedPart}"` : '';
+          actionLines.push(`<div><button type="button" class="remove-archived-phase-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}"${archivePartAttr}>Eliminar fase archivada</button></div>`);
+        }
+        if (info && info.observations) {
+          const safeObsValue = escapeHtml(`${info.observations}`);
+          actionLines.push(`<div class="popup-section"><strong>Observaciones</strong><div>${safeObsValue}</div></div>`);
+        }
+        actionLines.push('<div class="popup-section popup-readonly">Proyecto archivado en Kanbanize. Acciones limitadas.</div>');
+      }
+      if (info.image) {
+          const imgUrl = `${STATIC_URL}${info.image}`;
+          actionLines.push(`<div><a href="${imgUrl}" target="_blank"><img src="${imgUrl}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+        }
+        if (info.kanban_attachments && info.kanban_attachments.length) {
+          info.kanban_attachments.forEach(att => {
+            const url = att.url;
+            const name = (att.name || '').toLowerCase();
+            if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) {
+              actionLines.push(`<div><a href="${url}" target="_blank"><img src="${url}" alt="${att.name || ''}" style="max-width:200px;display:block;margin-top:4px;"></a></div>`);
+            } else {
+              actionLines.push(`<div><a href="${url}" target="_blank">${att.name || url}</a></div>`);
+            }
+          });
+        }
+        if (actionLines.length) html += `<div class="popup-section">${actionLines.join('')}</div>`;
+      popup.innerHTML = html;
+      const rect = t.getBoundingClientRect();
+      popup.style.left = (rect.left + window.scrollX + 5) + 'px';
+      popup.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+      popup.style.display = 'block';
+      const historyBtn = popup.querySelector('.history-btn');
+      const viewPedidosBtn = popup.querySelector('.view-pedidos-btn');
+      if (historyBtn) {
+        historyBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const partValue = normalizePartValue(historyBtn.dataset.part);
+          openHistory(historyBtn.dataset.pid, historyBtn.dataset.phase, partValue, displayName, displayClient);
+        });
+      }
+      if (viewPedidosBtn) {
+        viewPedidosBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          try {
+            const url = new URL(CALENDAR_PEDIDOS_URL, window.location.origin);
+            const projectName = viewPedidosBtn.dataset.project || '';
+            if (projectName) url.searchParams.set('filter', projectName);
+            const pidValue = viewPedidosBtn.dataset.pid || '';
+            if (pidValue) url.searchParams.set('highlight', pidValue);
+            window.open(url.toString(), '_blank');
+          } catch (error) {
+            console.error('No se pudo abrir Calendario pedidos:', error);
+          }
+        });
+      }
       const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
       if (addPhaseBtn) {
         addPhaseBtn.addEventListener('click', ev => {
@@ -2532,79 +2604,146 @@ let draggedTaskElement = null;
               }
               location.reload();
             })
-            .catch(err => alert(err.message || 'Error creando fase'));
+            .catch(() => alert('Error creando fase'));
         });
       }
-      if (splitForm && !splitForm.dataset.enhanced) {
-        splitForm.addEventListener('submit', ev => {
-          ev.preventDefault();
+      const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
+      if (removeArchivedBtn) {
+        removeArchivedBtn.addEventListener('click', ev => {
           ev.stopPropagation();
-          if (!splitModal) return;
-          const manuals = getSplitManualInputs();
-          if (!manuals.length) {
-            alert('Debes indicar al menos una parte.');
-            return;
-          }
-          const parts = [];
-          let invalid = false;
-          manuals.forEach(input => {
-            const value = parseSplitHours(input.value);
-            if (!Number.isInteger(value) || value <= 0) {
-              input.classList.add('split-input-error');
-              invalid = true;
-              return;
-            }
-            parts.push(value);
-          });
-          const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
-          const total = parseSplitHours(splitModal.dataset.totalHours);
-          let remainderInt = null;
-          if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
-            invalid = true;
-          } else {
-            remainderInt = remainderValue;
-            parts.push(remainderInt);
-          }
-          const sumParts = parts.reduce((acc, value) => acc + value, 0);
-          if (total !== null && Number.isFinite(total) && sumParts !== total) {
-            invalid = true;
-          }
-          if (invalid) {
-            alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
-            updateSplitModalDisplay();
-            return;
-          }
-          const payload = {
-            pid: splitModal.dataset.pid,
-            phase: splitModal.dataset.phase,
-            date: splitModal.dataset.date,
-            parts,
-          };
-          fetch(SPLIT_URL, {
+          if (!confirm('¿Eliminar esta fase archivada del calendario?')) return;
+          const payload = { pid: removeArchivedBtn.dataset.pid, phase: removeArchivedBtn.dataset.phase };
+          fetch(REMOVE_ARCHIVED_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(payload)
-          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })).catch(() => ({ ok: resp.ok, data: {} })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                throw new Error(data.error || 'Error eliminando fase archivada');
+              }
+              const targetPid = removeArchivedBtn.dataset.pid;
+              const targetPhase = removeArchivedBtn.dataset.phase;
+              const affectedCells = new Set();
+              document.querySelectorAll('.task').forEach(taskEl => {
+                if (taskEl.dataset.pid === targetPid && taskEl.dataset.phase === targetPhase && taskEl.dataset.archived === 'true') {
+                  const row = taskEl.closest('tr[data-worker]');
+                  const worker = row ? row.dataset.worker : null;
+                  const date = taskEl.dataset.day || null;
+                  taskEl.remove();
+                  if (worker && date) {
+                    affectedCells.add(`${worker}|||${date}`);
+                  }
+                }
+              });
+              affectedCells.forEach(key => {
+                const [worker, date] = key.split('|||');
+                recomputeWorkerDayCell(worker, date);
+              });
+              const projectInfo = PROJECT_DATA[targetPid];
+              if (projectInfo && typeof projectInfo === 'object') {
+                if (projectInfo.phases && Object.prototype.hasOwnProperty.call(projectInfo.phases, targetPhase)) {
+                  delete projectInfo.phases[targetPhase];
+                }
+                if (projectInfo.assigned && Object.prototype.hasOwnProperty.call(projectInfo.assigned, targetPhase)) {
+                  delete projectInfo.assigned[targetPhase];
+                }
+                if (projectInfo.auto_hours && Object.prototype.hasOwnProperty.call(projectInfo.auto_hours, targetPhase)) {
+                  delete projectInfo.auto_hours[targetPhase];
+                }
+                if (Array.isArray(projectInfo.phase_sequence)) {
+                  projectInfo.phase_sequence = projectInfo.phase_sequence.filter(item => item !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_tasks)) {
+                  projectInfo.frozen_tasks = projectInfo.frozen_tasks.filter(item => item && item.phase !== targetPhase);
+                }
+                if (Array.isArray(projectInfo.frozen_phases)) {
+                  projectInfo.frozen_phases = projectInfo.frozen_phases.filter(ph => ph !== targetPhase);
+                }
+              }
+              popup.style.display = 'none';
+            })
+            .catch(err => {
+              alert(err.message || 'Error eliminando fase archivada');
+            });
         });
-        splitForm.dataset.enhanced = 'true';
       }
-      if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
-        splitAddPartButton.addEventListener('click', ev => {
-          ev.preventDefault();
+      const del = document.getElementById('del-btn');
+      if (del) {
+        del.addEventListener('click', ev => {
           ev.stopPropagation();
-          const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
-          const input = createSplitPartRow(null, remainderRow);
-          ensureSplitRemainderInput();
-          updateSplitModalDisplay();
-          if (input) {
-            input.focus();
+          if (confirm('¿Borrar fase?')) {
+            fetch(DELETE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: del.dataset.pid, phase: del.dataset.phase })
+            }).then(() => location.reload());
           }
         });
-        splitAddPartButton.dataset.bound = 'true';
       }
-      if (splitCancel) {
-        splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
+      const unplan = document.getElementById('unplan-btn');
+      if (unplan) {
+        unplan.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const today = madridDateISO();
+          const body = { pid: unplan.dataset.pid, phase: unplan.dataset.phase, date: today, worker: 'Sin planificar' };
+          const partValue = normalizePartValue(unplan.dataset.part);
+          if (partValue) body.part = partValue;
+          fetch(MOVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+            .then(resp => resp.json().then(d => ({ ok: resp.ok, data: d })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                alert(data.error || 'Error');
+                return;
+              }
+              afterMove(data, today);
+            });
+        });
+      }
+      const obsSave = document.getElementById('obs-save');
+      const obsText = document.getElementById('obs-text');
+      if (obsSave && obsText) {
+        obsSave.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const pid = obsSave.dataset.pid;
+          const txt = obsText.value;
+          const url = OBS_URL_TEMPLATE.replace('__PID__', encodeURIComponent(pid));
+          const originalLabel = obsSave.textContent;
+          obsSave.disabled = true;
+          obsSave.textContent = 'Guardando...';
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ observations: txt })
+          })
+            .then(resp => {
+              if (resp.ok) {
+                return resp.text().catch(() => '');
+              }
+              return resp.json().catch(() => ({})).then(data => {
+                throw new Error(data.error || 'Error guardando observaciones');
+              });
+            })
+            .then(() => {
+              if (PROJECT_DATA[pid]) PROJECT_DATA[pid].observations = txt;
+              obsSave.textContent = 'Guardado';
+              setTimeout(() => { obsSave.textContent = originalLabel; }, 1500);
+            })
+            .catch(err => {
+              alert(err.message || 'Error guardando observaciones');
+              obsSave.textContent = originalLabel;
+            })
+            .finally(() => {
+              obsSave.disabled = false;
+            });
+        });
       }
       const freeze = document.getElementById('freeze-btn');
       if (freeze) {
