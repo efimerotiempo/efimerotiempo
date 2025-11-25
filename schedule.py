@@ -46,6 +46,27 @@ PHASE_DEADLINE_FIELDS = {
     'pintar': 'PINTADO',
 }
 
+
+def phase_base(phase_name):
+    if not isinstance(phase_name, str):
+        return phase_name
+    return phase_name.split('#', 1)[0]
+
+
+def iter_phase_keys(phases):
+    keys = list((phases or {}).keys())
+
+    def sort_key(ph):
+        base = phase_base(ph)
+        try:
+            base_idx = PHASE_ORDER.index(base)
+        except ValueError:
+            base_idx = len(PHASE_ORDER)
+        suffix = ph[len(base) :] if isinstance(ph, str) else ''
+        return (base_idx, suffix)
+
+    return sorted(keys, key=sort_key)
+
 UNPLANNED = 'Sin planificar'
 
 BASE_WORKERS = {
@@ -900,7 +921,8 @@ def schedule_projects(projects, base_schedule=None):
             deadline_date = _parse_phase_deadline(deadline_value)
             if deadline_date:
                 phase_deadlines[phase_name] = deadline_date
-        for phase in PHASE_ORDER:
+        for phase in iter_phase_keys(project.get('phases')):
+            base_phase_name = phase_base(phase)
             val = project['phases'].get(phase)
             if not val:
                 continue
@@ -923,7 +945,7 @@ def schedule_projects(projects, base_schedule=None):
                 hour = 0
                 continue
 
-            if phase == 'pedidos' and isinstance(val, str) and '-' in val:
+            if base_phase_name == 'pedidos' and isinstance(val, str) and '-' in val:
                 start_overrides = project.get('segment_starts', {}).get(phase)
                 if start_overrides and start_overrides[0]:
                     current = date.fromisoformat(start_overrides[0])
@@ -1019,7 +1041,7 @@ def schedule_projects(projects, base_schedule=None):
                         material_date=project.get('material_confirmed_date'),
                         auto=project.get('auto_hours', {}).get(phase),
                         due_confirmed=project.get('due_confirmed'),
-                        phase_deadline=phase_deadlines.get(phase),
+                    phase_deadline=phase_deadlines.get(base_phase_name),
                     )
                     record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()

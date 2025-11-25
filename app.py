@@ -970,7 +970,9 @@ def build_schedule_with_archived(projects, include_optional_phases=True):
     if not include_optional_phases:
         for worker, days in list(base_schedule.items()):
             for day, tasks in list(days.items()):
-                filtered = [t for t in tasks if t.get('phase') not in OPTIONAL_PHASES]
+                filtered = [
+                    t for t in tasks if phase_base(t.get('phase')) not in OPTIONAL_PHASES
+                ]
                 if filtered:
                     days[day] = filtered
                 else:
@@ -1250,6 +1252,24 @@ KANBAN_COLUMN_PHASE_TARGETS = {
 
 KANBAN_PHASE_EXCLUSIONS = {'dibujo', 'pedidos'}
 PHASE_INDEX = {phase: idx for idx, phase in enumerate(PHASE_ORDER)}
+
+
+def phase_base(phase_name):
+    if not isinstance(phase_name, str):
+        return phase_name
+    return phase_name.split('#', 1)[0]
+
+
+def sort_phase_keys(phases):
+    keys = list((phases or {}).keys())
+
+    def sort_key(ph):
+        base = phase_base(ph)
+        base_idx = PHASE_INDEX.get(base, len(PHASE_ORDER))
+        suffix = ph[len(base) :] if isinstance(ph, str) else ''
+        return (base_idx, suffix)
+
+    return sorted(keys, key=sort_key)
 
 
 def compute_previous_kanban_phases(column):
@@ -3979,7 +3999,9 @@ def _strip_optional_phases(projects, include_optional=True):
     for p in projects:
         p_copy = copy.deepcopy(p)
         phases = p_copy.get('phases') or {}
-        kept_phases = {ph: val for ph, val in phases.items() if ph not in OPTIONAL_PHASES}
+        kept_phases = {
+            ph: val for ph, val in phases.items() if phase_base(ph) not in OPTIONAL_PHASES
+        }
         p_copy['phases'] = kept_phases
         assigned = p_copy.get('assigned') or {}
         p_copy['assigned'] = {ph: worker for ph, worker in assigned.items() if ph in kept_phases}
@@ -3989,7 +4011,9 @@ def _strip_optional_phases(projects, include_optional=True):
         if seq:
             p_copy['phase_sequence'] = [ph for ph in seq if ph in kept_phases]
         frozen_tasks = p_copy.get('frozen_tasks') or []
-        p_copy['frozen_tasks'] = [t for t in frozen_tasks if t.get('phase') not in OPTIONAL_PHASES]
+        p_copy['frozen_tasks'] = [
+            t for t in frozen_tasks if phase_base(t.get('phase')) not in OPTIONAL_PHASES
+        ]
         for key in ('segment_starts', 'segment_start_hours', 'segment_workers'):
             segs = p_copy.get(key)
             if segs:
@@ -4360,7 +4384,9 @@ def calendar_view():
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
     if not include_optional_phases:
-        manual_entries = [entry for entry in manual_entries if entry.get('phase') not in OPTIONAL_PHASES]
+        manual_entries = [
+            entry for entry in manual_entries if phase_base(entry.get('phase')) not in OPTIONAL_PHASES
+        ]
     unplanned_raw = []
     if UNPLANNED in schedule:
         for day, tasks in schedule.pop(UNPLANNED).items():
@@ -6295,7 +6321,9 @@ def complete():
     worker_notes_raw = load_worker_notes()
     manual_entries = load_manual_bucket_entries()
     if not include_optional_phases:
-        manual_entries = [entry for entry in manual_entries if entry.get('phase') not in OPTIONAL_PHASES]
+        manual_entries = [
+            entry for entry in manual_entries if phase_base(entry.get('phase')) not in OPTIONAL_PHASES
+        ]
     visible = set(active_workers(today))
     unplanned_raw = []
     if UNPLANNED in schedule:
@@ -7411,6 +7439,56 @@ def unsplit_phase():
             proj.pop('segment_workers')
     save_projects(projects)
     return '', 204
+
+
+@app.route('/add_phase_instance', methods=['POST'])
+def add_phase_instance():
+    data = request.get_json() or request.form
+    pid = data.get('pid')
+    phase = data.get('phase')
+    hours_raw = data.get('hours')
+    if not pid or not phase:
+        return jsonify({'error': 'Faltan datos'}), 400
+    try:
+        hours = int(hours_raw)
+    except Exception:
+        return jsonify({'error': 'Horas inválidas'}), 400
+    if hours <= 0:
+        return jsonify({'error': 'Las horas deben ser mayores que cero'}), 400
+    projects = get_projects()
+    proj = next((p for p in projects if p['id'] == pid), None)
+    if not proj or phase not in (proj.get('phases') or {}):
+        return jsonify({'error': 'Proyecto o fase no encontrado'}), 404
+    base = phase_base(phase)
+    existing_keys = [ph for ph in proj.get('phases', {}) if phase_base(ph) == base]
+
+    def _phase_index(ph):
+        if '#' in ph:
+            try:
+                return int(ph.split('#', 1)[1])
+            except Exception:
+                return None
+        return 1
+
+    next_idx = 1
+    for key in existing_keys:
+        idx = _phase_index(key)
+        if idx is None:
+            continue
+        if idx >= next_idx:
+            next_idx = idx + 1
+    new_key = base if next_idx == 1 else f"{base}#{next_idx}"
+    while new_key in proj.get('phases', {}):
+        next_idx += 1
+        new_key = f"{base}#{next_idx}"
+    proj.setdefault('phases', {})[new_key] = hours
+    assigned = proj.setdefault('assigned', {})
+    assigned[new_key] = assigned.get(phase, UNPLANNED)
+    seq = proj.setdefault('phase_sequence', [])
+    if new_key not in seq:
+        seq.append(new_key)
+    save_projects(projects)
+    return jsonify({'phase': new_key}), 201
 
 
 @app.route('/move', methods=['POST'])
