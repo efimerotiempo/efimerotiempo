@@ -2432,6 +2432,7 @@ let draggedTaskElement = null;
       }
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
+      const basePhaseSet = new Set(PHASES);
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
@@ -2455,8 +2456,34 @@ let draggedTaskElement = null;
           phaseLines.push(line);
         }
       });
+      const manualPhaseLines = [];
+      Object.entries(projectPhases).forEach(([phKey, val]) => {
+        if (phKey === 'dibujo' || phKey === 'pedidos') return;
+        const baseName = phKey.split('#')[0];
+        const isBasePhase = basePhaseSet.has(phKey) || (!phKey.includes('#') && basePhaseSet.has(baseName));
+        if (isBasePhase) return;
+        let total = 0;
+        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        else total = parseInt(val) || 0;
+        if (total > 0) {
+          const assigned = assignedMap[phKey] || 'Sin planificar';
+          const classes = ['phase-entry', 'manual-phase-entry'];
+          classes.push(assigned === 'Sin planificar' ? 'unplanned' : 'planned');
+          const isActivePhase = phKey === t.dataset.phase;
+          const partSuffix = isActivePhase ? phasePartSuffix : '';
+          let line = `<div class="${classes.join(' ')}">${phKey}${partSuffix}: ${total}h`;
+          if (isActivePhase) {
+            const partValue = normalizedPart;
+            const partAttr = partValue ? ` data-part="${partValue}"` : '';
+            line += ` <form id="phase-hours-form" style="display:inline"><input type="number" id="phase-hours-input" value="${total}" min="1" required><button type="submit" id="phase-hours-btn" data-pid="${t.dataset.pid}" data-phase="${phKey}"${partAttr}>Cambiar horas</button></form>`;
+          }
+          line += `</div>`;
+          manualPhaseLines.push(line);
+        }
+      });
       let phaseSection = '';
       if (phaseLines.length) phaseSection += phaseLines.join('');
+      if (manualPhaseLines.length) phaseSection += manualPhaseLines.join('');
       if (t.dataset.phase === 'pedidos') {
         const acopio = projectPhases['pedidos'];
         if (acopio && acopio !== '0') phaseSection += `<div>Plazo acopio: ${acopio}</div>`;
