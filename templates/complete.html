@@ -1570,6 +1570,7 @@
           overflow: el.style.overflow,
           overflowX: el.style.overflowX,
           overflowY: el.style.overflowY,
+          transition: el.style.transition,
           maxWidth: el.style.maxWidth,
           maxHeight: el.style.maxHeight,
           width: el.style.width,
@@ -1581,6 +1582,7 @@
           el.style.overflow = prev.overflow;
           el.style.overflowX = prev.overflowX;
           el.style.overflowY = prev.overflowY;
+          el.style.transition = prev.transition;
           el.style.maxWidth = prev.maxWidth;
           el.style.maxHeight = prev.maxHeight;
           el.style.width = prev.width;
@@ -1591,6 +1593,7 @@
         el.style.overflow = 'visible';
         el.style.overflowX = 'visible';
         el.style.overflowY = 'visible';
+        el.style.transition = 'none';
         el.style.maxWidth = 'none';
         el.style.maxHeight = 'none';
         if (needsWidth) {
@@ -1844,7 +1847,7 @@
       }
     }
 
-    function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 0.85) {
+    function canvasToDataUrl(canvas, type = 'image/jpeg', quality = 1.0) {
       return new Promise((resolve, reject) => {
         const fallbackToDataUrl = () => {
           try {
@@ -2008,26 +2011,8 @@
       return lastCanvas;
     }
 
-    function scaleCanvasForPdf(canvas) {
-      const MAX_WIDTH = 1800;
-      if (!canvas || canvas.width <= MAX_WIDTH) {
-        return canvas;
-      }
-      const ratio = MAX_WIDTH / canvas.width;
-      const target = document.createElement('canvas');
-      target.width = Math.max(1, Math.round(canvas.width * ratio));
-      target.height = Math.max(1, Math.round(canvas.height * ratio));
-      const ctx = target.getContext('2d');
-      if (!ctx) {
-        return canvas;
-      }
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(canvas, 0, 0, target.width, target.height);
-      return target;
-    }
-
     async function appendCanvasToPdf(pdf, canvas, isFirstPage) {
-      const workingCanvas = scaleCanvasForPdf(canvas);
+      const workingCanvas = canvas;
       if (!workingCanvas || !workingCanvas.width || !workingCanvas.height) {
         return isFirstPage;
       }
@@ -2058,7 +2043,7 @@
           sliceCanvas.width,
           sliceHeight
         );
-        const imageData = await canvasToDataUrl(sliceCanvas);
+        const imageData = await canvasToDataUrl(sliceCanvas, 'image/jpeg', 1.0);
         if (sliceIndex > 0 || !isFirstPage) {
           pdf.addPage();
         }
@@ -2085,7 +2070,7 @@
       const originalLabel = summaryPdfBtn.textContent;
       summaryPdfBtn.disabled = true;
       const progressBanner = createProgressBanner();
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      let pdf = null;
       let firstPage = true;
       try {
         for (let i = 0; i < pages.length; i += 1) {
@@ -2098,12 +2083,22 @@
           if (!canvas) {
             throw new Error(`No se pudo capturar la pestaña "${page.title}"`);
           }
+          if (!pdf) {
+            const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+            pdf = new jsPDF({
+              orientation,
+              unit: 'px',
+              format: [canvas.width, canvas.height],
+            });
+          }
           firstPage = await appendCanvasToPdf(pdf, canvas, firstPage);
         }
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         const filename = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.pdf`;
-        pdf.save(filename);
+        if (pdf) {
+          pdf.save(filename);
+        }
       } catch (error) {
         console.error('Error generando el PDF', error);
         await reportPdfError(error);
