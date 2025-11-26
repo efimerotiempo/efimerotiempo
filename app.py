@@ -1,5 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
-from weasyprint import HTML
+try:
+    from weasyprint import HTML
+    _WEASYPRINT_ERROR = None
+except Exception as exc:
+    HTML = None
+    _WEASYPRINT_ERROR = exc
 from datetime import date, timedelta, datetime
 from itertools import zip_longest, chain
 from collections import defaultdict
@@ -8888,8 +8893,25 @@ def tracker():
 
 @app.route('/exportar_pdf')
 def exportar_pdf():
+    if HTML is None:
+        app.logger.error('WeasyPrint no está disponible: %s', _WEASYPRINT_ERROR)
+        return Response(
+            'WeasyPrint no está disponible en este servidor. Revisa que las dependencias del sistema estén instaladas.',
+            status=503,
+            mimetype='text/plain'
+        )
+
     resumen_url = urllib.parse.urljoin(request.url_root, 'resumen')
-    pdf = HTML(resumen_url).write_pdf()
+    try:
+        pdf = HTML(resumen_url).write_pdf()
+    except Exception as exc:
+        app.logger.exception('Error generando el PDF con WeasyPrint')
+        return Response(
+            'No se pudo generar el PDF. Contacta con el administrador.',
+            status=500,
+            mimetype='text/plain'
+        )
+
     response = Response(pdf, mimetype='application/pdf')
     response.headers['Content-Disposition'] = 'attachment; filename=resumen.pdf'
     return response
