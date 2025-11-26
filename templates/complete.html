@@ -3041,17 +3041,15 @@ let draggedTaskElement = null;
     doMove(moveData, 'split', beforeMaterial);
   }
 
-  document.addEventListener('dragover', (event) => {
-    const cell = event.target.closest('td[data-date]');
-    if (!cell) return;
-    event.preventDefault();
-  });
-
-  document.addEventListener('drop', (event) => {
-    const cell = event.target.closest('td[data-date]');
-    if (!cell) return;
-    event.preventDefault();
-    handleCalendarDrop(cell, event);
+  document.querySelectorAll('tbody td[data-date]').forEach((cell) => {
+    cell.addEventListener('dragover', (event) => {
+      if (!parseDragData(event)) return;
+      event.preventDefault();
+    });
+    cell.addEventListener('drop', (event) => {
+      event.preventDefault();
+      handleCalendarDrop(cell, event);
+    });
   });
   function doMove(moveData, mode, beforeMaterial) {
     moveData.mode = mode;
