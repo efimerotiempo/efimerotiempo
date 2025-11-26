@@ -8891,9 +8891,21 @@ def tracker():
 
 @app.get('/exportar_pdf')
 def exportar_pdf():
-    url = "http://127.0.0.1:5000/complete"
+    html = complete()
+    css_path = os.path.join(app.root_path, 'static', 'style.css')
+    options = {
+        'enable-local-file-access': '',
+        'quiet': '',
+        'load-error-handling': 'ignore',
+    }
     try:
-        pdf = pdfkit.from_url(url, False, configuration=config)
+        pdf = pdfkit.from_string(
+            html,
+            False,
+            configuration=config,
+            options=options,
+            css=css_path,
+        )
     except Exception:
         app.logger.exception('Error generando el PDF con wkhtmltopdf')
         return Response(
