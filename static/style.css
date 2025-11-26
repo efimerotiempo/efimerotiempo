@@ -1274,4 +1274,19 @@ tr.collapsed td:not(:first-child) { display: none; }
     body {
         zoom: 0.8;
     }
+
+    /* Expand the calendar so wkhtmltopdf capture renders every column */
+    .calendar-flex {
+        display: block;
+    }
+
+    .schedule-wrapper {
+        overflow: visible !important;
+        width: auto !important;
+    }
+
+    table.schedule {
+        width: auto !important;
+        max-width: none !important;
+    }
 }

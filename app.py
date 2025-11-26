@@ -8897,6 +8897,10 @@ def exportar_pdf():
         'enable-local-file-access': '',
         'quiet': '',
         'load-error-handling': 'ignore',
+        'print-media-type': '',
+        'orientation': 'Landscape',
+        'page-size': 'A2',
+        'viewport-size': '2560x1440',
     }
     try:
         pdf = pdfkit.from_string(
