@@ -331,7 +331,8 @@ table.schedule td.weekend-cell {
     border-radius: 6px;
     padding: 8px;
     min-height: 60px;
-    max-height: 400px;
+    /* Altura para que se vean ~15 fases antes de mostrar el scroll */
+    max-height: calc(15 * 32px);
     display: flex;
     flex-direction: column;
     gap: 6px;
