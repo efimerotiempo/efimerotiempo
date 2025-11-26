@@ -1,6 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
-from fastapi import APIRouter, FastAPI, Response as FastAPIResponse
-from starlette.middleware.wsgi import WSGIMiddleware
 from weasyprint import HTML
 from datetime import date, timedelta, datetime
 from itertools import zip_longest, chain
@@ -8888,21 +8886,14 @@ def tracker():
     return render_template('tracker.html', logs=logs)
 
 
-api_router = APIRouter()
-
-
-@api_router.get('/exportar_pdf')
+@app.route('/exportar_pdf')
 def exportar_pdf():
-    pdf = HTML('http://127.0.0.1:8000/resumen').write_pdf()
-    return FastAPIResponse(pdf, media_type='application/pdf')
-
-
-fastapi_app = FastAPI()
-fastapi_app.include_router(api_router)
-fastapi_app.mount('/', WSGIMiddleware(app))
+    resumen_url = urllib.parse.urljoin(request.url_root, 'resumen')
+    pdf = HTML(resumen_url).write_pdf()
+    response = Response(pdf, mimetype='application/pdf')
+    response.headers['Content-Disposition'] = 'attachment; filename=resumen.pdf'
+    return response
 
 
 if __name__ == '__main__':
-    import uvicorn
-
-    uvicorn.run('app:fastapi_app', host='0.0.0.0', port=8000, reload=True)
+    app.run(host='0.0.0.0', port=8000, debug=True)
