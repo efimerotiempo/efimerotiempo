@@ -311,7 +311,7 @@ table.schedule td.weekend-cell {
   user-select: none;
 }
 .unplanned-panel {
-    width: 2500px;
+    width: 2000px;
     border-left: 1px solid #ccc;
     padding: 5px;
     position: relative;
