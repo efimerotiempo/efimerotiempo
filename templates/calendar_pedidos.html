@@ -1631,12 +1631,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
       const partHoursAttr = totalPhaseHours !== null ? ` data-hours="${totalPhaseHours}"` : '';
-      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
       if (info.phases && Array.isArray(info.phases[context.phase])) {
-        splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
+        const splitLine = `<div><button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button></div>`;
+        actionLines.push(splitLine);
       }
-      splitLine += `</div>`;
-      actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
       const unplanPart = normalizePartValue(context.part);
       const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
