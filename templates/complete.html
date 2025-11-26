@@ -21,6 +21,27 @@
     </tr>
 {% endmacro %}
 
+{% macro project_title(name, pid=None) %}
+    {%- set info = None -%}
+    {%- if pid is not none -%}
+        {%- set info = project_data.get(pid|string) or project_data.get(pid) -%}
+    {%- endif -%}
+    {%- set tags = [] -%}
+    {%- if info and info.kanban_tags is defined and info.kanban_tags -%}
+        {%- if info.kanban_tags is string -%}
+            {%- set tags = [info.kanban_tags] -%}
+        {%- else -%}
+            {%- set tags = info.kanban_tags -%}
+        {%- endif -%}
+    {%- endif -%}
+    {%- set normalized = tags | map('lower') | list -%}
+    {%- if 'revisado' in normalized -%}
+        <strong>R -</strong> {{ name }}
+    {%- else -%}
+        {{ name }}
+    {%- endif -%}
+{% endmacro %}
+
 {% block content %}
 <div class="complete-container">
     <div class="complete-top">
@@ -63,11 +84,11 @@
         </form>
         <ul>
 {% for c in conflicts %}
-            <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ c.project }} - {{ c.client }}</a>: {{ c.message }}
+            <li class="{% if c.source == 'kanbanize' %}kanban-conflict{% endif %}"><a href="#" class="conflict-link" data-project="{{ c.project }}" {% if c.pid %}data-pid="{{ c.pid }}" data-offset="{{ c.offset }}"{% endif %}>{{ project_title(c.project, c.pid) }} - {{ c.client }}</a>: {{ c.message }}
                 {% if c.changes %}
                 <ul>
                 {% for ch in c.changes %}
-                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}" {% if ch.offset is not none %}data-offset="{{ ch.offset }}"{% endif %}>{{ ch.name }}</a> - {{ ch.client }}
+                    <li><a href="#" class="affected-link" data-project="{{ ch.name }}" data-pid="{{ ch.id }}" {% if ch.offset is not none %}data-offset="{{ ch.offset }}"{% endif %}>{{ project_title(ch.name, ch.id) }}</a> - {{ ch.client }}
                         {% if ch.met %}
                             <span class="ok">&#10004;</span>
                         {% else %}
@@ -182,7 +203,7 @@
                 {% endif %}
                 {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ d.isoformat() %}
                 {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    <span class="task-project{% if material_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
+                    <span class="task-project{% if material_missing %} task-project-missing{% endif %}">{{ project_title(t.project, t.pid) }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                 </span>
                 {% if t.hours %}
                 <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -241,7 +262,7 @@
                         {% endif %}
                         {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
                         <span class="material-status-flag {{ item.material_css }}">{{ item.material_label }}</span>
-                        <span class="task-project{% if missing %} task-project-missing{% endif %}">{{ item.project }}</span>{% if item.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ item.client|truncate(15, True) }} - {{ item.phase }}{% if item.part is not none %} ({{ item.part|int + 1 }}){% endif %}
+                        <span class="task-project{% if missing %} task-project-missing{% endif %}">{{ project_title(item.project, item.pid) }}</span>{% if item.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ item.client|truncate(15, True) }} - {{ item.phase }}{% if item.part is not none %} ({{ item.part|int + 1 }}){% endif %}
                         </span>
                         {% if item.hours %}
                         <span class="task-hours">{% if item.auto and item.phase not in ['mecanizar', 'tratamiento'] %}<span class="auto-hour">{{ item.hours }}h</span>{% else %}{{ item.hours }}h{% endif %}</span>
@@ -258,7 +279,7 @@
             {% set folder_match = g.get('filter_match', True) %}
             {% set folder_missing = section.status == 'missing' %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ section.status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ project_title(g.project, g.pid) }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
@@ -278,7 +299,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ project_title(t.project, t.pid) }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -298,7 +319,7 @@
             {% set status_label = material_status_labels.get(status, status|capitalize) %}
             {% set folder_missing = status == 'missing' %}
             <div class="unplanned-folder{% if filter_active and not folder_match %} filter-muted{% endif %}" data-pid="{{ g.pid }}" data-status="{{ status }}" data-due="{{ g.due_date or '' }}" data-filter-match="{{ 'true' if folder_match else 'false' }}">
-                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ g.project }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
+                <div class="folder-header"><button type="button" class="folder-toggle">&#43;</button> <span class="material-status-flag material-status-{{ status }}">{{ status_label }}</span> <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ project_title(g.project, g.pid) }}</span> - {{ g.client }}{% if g.due_date %} - <span class="folder-due">{{ g.due_date }}</span>{% endif %}</div>
                 <div class="folder-content" style="display:none;">
                 {% for t in g.tasks %}
                 {% set matches_filter = t.get('filter_match', True) %}
@@ -318,7 +339,7 @@
                     {% endif %}
                     {% set key = t.pid ~ '|' ~ t.phase ~ '|' ~ t.day %}
                     {% if key in split_points %}<span class="split-dot">&#9679;</span> {% endif %}
-                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ t.project }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
+                    <span class="task-project{% if folder_missing %} task-project-missing{% endif %}">{{ project_title(t.project, t.pid) }}</span>{% if t.blocked %}<span class="blocked-sign">&#128683;</span>{% endif %} - {{ t.client|truncate(15, True) }} - {{ t.phase }}{% if t.part is not none %} ({{ t.part|int + 1 }}){% endif %}
                     </span>
                     {% if t.hours %}
                     <span class="task-hours">{% if t.auto %}<span class="auto-hour">{{ t.hours }}h</span>{% else %}{{ t.hours }}h{% endif %}</span>
@@ -401,7 +422,7 @@
             <tbody>
             {% for p in projects %}
             <tr data-pid="{{ p.id }}" class="{% if p.frozen_tasks %}frozen{% endif %}">
-                <td data-sort="{{ p.name|default('', true)|lower }}">{{ p.name }}</td>
+                <td data-sort="{{ p.name|default('', true)|lower }}">{{ project_title(p.name, p.id) }}</td>
                 <td data-sort="{{ p.client|default('', true)|lower }}">{{ p.client }}</td>
                 <td data-sort="{{ p.due_date or '' }}" data-sort-type="date">{{ p.due_date }}</td>
                 {% set pid_key = p.id|string if p.id is not none else p.id %}
