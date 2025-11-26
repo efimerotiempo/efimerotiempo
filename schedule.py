@@ -663,14 +663,23 @@ def _sanitize_manual_entries(entries):
             continue
         pid = item.get('pid')
         phase = item.get('phase')
+        part = item.get('part')
         if pid in (None, '') or phase in (None, ''):
             continue
         pid_str = str(pid)
-        key = (pid_str, str(phase))
+        part_val = None
+        if part not in (None, '', 'None'):
+            try:
+                part_val = int(part)
+            except Exception:
+                continue
+        key = (pid_str, str(phase), part_val)
         if key in seen:
             continue
         seen.add(key)
         entry = {'pid': pid_str, 'phase': str(phase)}
+        if part_val is not None:
+            entry['part'] = part_val
         cleaned.append(entry)
     return cleaned
 
@@ -695,7 +704,10 @@ def save_manual_unplanned(entries):
 
 
 def phase_history_key(pid, phase, part=None):
-    return f"{str(pid)}|{phase}"
+    part_value = ''
+    if part not in (None, '', 'None'):
+        part_value = str(part)
+    return f"{str(pid)}|{phase}|{part_value}"
 
 
 def load_phase_history():
@@ -842,6 +854,22 @@ def schedule_projects(projects, base_schedule=None):
 
     preload_frozen(worker_schedule)
 
+    def record_segment_start(project, phase_name, index, start_day, start_hour):
+        if start_day is None:
+            return
+        seg_map = project.setdefault('segment_starts', {})
+        hour_map = project.setdefault('segment_start_hours', {})
+        seg_list = seg_map.setdefault(phase_name, [])
+        hour_list = hour_map.setdefault(phase_name, [])
+        while len(seg_list) <= index:
+            seg_list.append(None)
+        while len(hour_list) <= index:
+            hour_list.append(None)
+        if seg_list[index] is None:
+            seg_list[index] = start_day.isoformat()
+        if hour_list[index] is None:
+            hour_list[index] = start_hour if start_hour is not None else 0
+
     for worker, days in vac_map.items():
         for day in days:
             if worker in worker_schedule:
@@ -944,62 +972,78 @@ def schedule_projects(projects, base_schedule=None):
                     project_blocked=project.get('blocked', False),
                     material_date=project.get('material_confirmed_date'),
                 )
+                record_segment_start(project, phase, 0, seg_start, seg_start_hour)
             else:
-                try:
-                    hours = int(val)
-                except Exception:
-                    continue
-                days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
-                if not planned:
-                    worker = UNPLANNED
-                else:
-                    worker = assigned.get(phase)
-                    if not worker or worker in inactive:
-                        worker = UNPLANNED
-                        assigned[phase] = UNPLANNED
-
-                override = None
-                hour_override = None
+                segs = val if isinstance(val, list) else [val]
+                seg_workers = project.get('segment_workers', {}).get(phase) if isinstance(val, list) else None
                 start_overrides = project.get('segment_starts', {}).get(phase)
                 start_hour_overrides = project.get('segment_start_hours', {}).get(phase)
-                if start_overrides:
-                    first = start_overrides[0]
-                    if first:
-                        override = date.fromisoformat(first)
-                if start_hour_overrides:
-                    hour_override = start_hour_overrides[0] if start_hour_overrides else None
-                test_start = override or current
-                test_end = test_start
-                for _ in range(days_needed - 1):
-                    test_end = next_workday(test_end)
-                manual = False
-                if override:
-                    current = override
-                    hour = hour_override or 0
-                    manual = True
-                current, hour, end_date, seg_start, seg_start_hour = assign_phase(
-                    worker_schedule[worker],
-                    current,
-                    hour,
-                    phase,
-                    project['name'],
-                    project['client'],
-                    hours,
-                    project['due_date'],
-                    project.get('color', '#ddd'),
-                    worker,
-                    project['start_date'],
-                    project['id'],
-                    hours_map,
-                    worker_day_map,
-                    part=None,
-                    manual=manual,
-                    project_blocked=project.get('blocked', False),
-                    material_date=project.get('material_confirmed_date'),
-                    auto=project.get('auto_hours', {}).get(phase),
-                    due_confirmed=project.get('due_confirmed'),
+                for idx, seg in enumerate(segs):
+                    hours = int(seg)
+                    days_needed = (hours + HOURS_PER_DAY - 1) // HOURS_PER_DAY
+                    if not planned:
+                        worker = UNPLANNED
+                    else:
+                        worker = None
+                        if seg_workers and idx < len(seg_workers):
+                            worker = seg_workers[idx]
+                        if not worker:
+                            worker = assigned.get(phase)
+                        if not worker or worker in inactive:
+                            worker = UNPLANNED
+                            if seg_workers:
+                                if len(seg_workers) <= idx:
+                                    seg_workers.extend([None] * (idx + 1 - len(seg_workers)))
+                                seg_workers[idx] = UNPLANNED
+                            else:
+                                assigned[phase] = UNPLANNED
+
+                    override = None
+                    hour_override = None
+                    if start_overrides and idx < len(start_overrides) and start_overrides[idx]:
+                        override = date.fromisoformat(start_overrides[idx])
+                    if start_hour_overrides and idx < len(start_hour_overrides):
+                        hour_override = start_hour_overrides[idx]
+                    test_start = override or current
+                    test_end = test_start
+                    for _ in range(days_needed - 1):
+                        test_end = next_workday(test_end)
+                    # Allow scheduling even if the phase exceeds a confirmed due date.
+                    # Previously, phases moved past a client deadline were treated as
+                    # unplanned and removed from the calendar. This prevented them
+                    # from being visualized after the move. By removing the forced
+                    # ``UNPLANNED`` assignment, phases remain in the schedule and are
+                    # displayed in the selected cell while still triggering the
+                    # appropriate deadline warning elsewhere.
+                    manual = False
+                    if override:
+                        current = override
+                        hour = hour_override or 0
+                        manual = True
+                    current, hour, end_date, seg_start, seg_start_hour = assign_phase(
+                        worker_schedule[worker],
+                        current,
+                        hour,
+                        phase,
+                        project['name'],
+                        project['client'],
+                        hours,
+                        project['due_date'],
+                        project.get('color', '#ddd'),
+                        worker,
+                        project['start_date'],
+                        project['id'],
+                        hours_map,
+                        worker_day_map,
+                        part=idx if isinstance(val, list) else None,
+                        manual=manual,
+                        project_blocked=project.get('blocked', False),
+                        material_date=project.get('material_confirmed_date'),
+                        auto=project.get('auto_hours', {}).get(phase),
+                        due_confirmed=project.get('due_confirmed'),
                     phase_deadline=phase_deadlines.get(base_phase_name),
-                )
+                    )
+                    record_segment_start(project, phase, idx, seg_start, seg_start_hour)
         project['end_date'] = end_date.isoformat()
         if project.get('due_date'):
             try:
