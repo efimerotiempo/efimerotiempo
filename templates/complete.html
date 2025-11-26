@@ -72,7 +72,9 @@
             Importar mecanizados y tratamientos.
         </label>
         <button id="hours-btn" type="button">Editar jornada laboral</button>
-        <button id="summary-pdf-btn" type="button">Resumen en PDF</button>
+        <a href="{{ url_for('exportar_pdf') }}" target="_blank" rel="noopener">
+            <button id="summary-pdf-btn" type="button">Resumen en PDF</button>
+        </a>
     </div>
     <div class="complete-conflicts">
         <h3>Conflictos</h3>
@@ -1427,37 +1429,6 @@
       });
     });
   });
-  const summaryPdfBtn = document.getElementById('summary-pdf-btn');
-  if (summaryPdfBtn) {
-    summaryPdfBtn.addEventListener('click', async () => {
-      const originalLabel = summaryPdfBtn.textContent;
-      summaryPdfBtn.disabled = true;
-      summaryPdfBtn.textContent = 'Generando…';
-      try {
-        const response = await fetch('/exportar_pdf', { credentials: 'same-origin' });
-        if (!response.ok) {
-          throw new Error('No se pudo generar el PDF');
-        }
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const now = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        link.download = `resumen_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error('Error descargando el PDF', error);
-        alert('No se pudo generar el PDF. Inténtalo de nuevo más tarde.');
-      } finally {
-        summaryPdfBtn.disabled = false;
-        summaryPdfBtn.textContent = originalLabel;
-      }
-    });
-  }
   const hoursBtn = document.getElementById('hours-btn');
   const hoursRow = document.getElementById('hours-row');
   const thead = document.querySelector('.schedule thead');

@@ -1,10 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
-try:
-    from weasyprint import HTML
-    _WEASYPRINT_ERROR = None
-except Exception as exc:
-    HTML = None
-    _WEASYPRINT_ERROR = exc
+import pdfkit
 from datetime import date, timedelta, datetime
 from itertools import zip_longest, chain
 from collections import defaultdict
@@ -553,6 +548,9 @@ def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
 
 
 app = Flask(__name__)
+config = pdfkit.configuration(
+    wkhtmltopdf=r"C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"
+)
 
 
 def _safe_url(endpoint, **values):
@@ -8891,23 +8889,15 @@ def tracker():
     return render_template('tracker.html', logs=logs)
 
 
-@app.route('/exportar_pdf')
+@app.get('/exportar_pdf')
 def exportar_pdf():
-    if HTML is None:
-        app.logger.error('WeasyPrint no está disponible: %s', _WEASYPRINT_ERROR)
-        return Response(
-            'WeasyPrint no está disponible en este servidor. Revisa que las dependencias del sistema estén instaladas.',
-            status=503,
-            mimetype='text/plain'
-        )
-
-    resumen_url = urllib.parse.urljoin(request.url_root, 'resumen')
+    url = "http://127.0.0.1:5000/complete"
     try:
-        pdf = HTML(resumen_url).write_pdf()
-    except Exception as exc:
-        app.logger.exception('Error generando el PDF con WeasyPrint')
+        pdf = pdfkit.from_url(url, False, configuration=config)
+    except Exception:
+        app.logger.exception('Error generando el PDF con wkhtmltopdf')
         return Response(
-            'No se pudo generar el PDF. Contacta con el administrador.',
+            'No se pudo generar el PDF. Revisa la configuración de wkhtmltopdf.',
             status=500,
             mimetype='text/plain'
         )
@@ -8918,4 +8908,4 @@ def exportar_pdf():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
