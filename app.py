@@ -1,4 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from fastapi import APIRouter, FastAPI, Response as FastAPIResponse
+from starlette.middleware.wsgi import WSGIMiddleware
+from weasyprint import HTML
 from datetime import date, timedelta, datetime
 from itertools import zip_longest, chain
 from collections import defaultdict
@@ -6694,6 +6697,11 @@ def complete():
     )
 
 
+@app.route('/resumen')
+def resumen():
+    return complete()
+
+
 @app.route('/update_worker_note', methods=['POST'])
 def update_worker_note():
     data = request.get_json() or {}
@@ -8880,5 +8888,21 @@ def tracker():
     return render_template('tracker.html', logs=logs)
 
 
+api_router = APIRouter()
+
+
+@api_router.get('/exportar_pdf')
+def exportar_pdf():
+    pdf = HTML('http://127.0.0.1:8000/resumen').write_pdf()
+    return FastAPIResponse(pdf, media_type='application/pdf')
+
+
+fastapi_app = FastAPI()
+fastapi_app.include_router(api_router)
+fastapi_app.mount('/', WSGIMiddleware(app))
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=9000)
+    import uvicorn
+
+    uvicorn.run('app:fastapi_app', host='0.0.0.0', port=8000, reload=True)

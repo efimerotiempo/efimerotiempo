@@ -1265,3 +1265,13 @@ tr.collapsed td:not(:first-child) { display: none; }
 .cronologico-preview-client {
     color: #666;
 }
+
+@media print {
+    .no-print {
+        display: none;
+    }
+
+    body {
+        zoom: 0.8;
+    }
+}
