@@ -8899,7 +8899,8 @@ def exportar_pdf():
         'load-error-handling': 'ignore',
         'print-media-type': '',
         'orientation': 'Landscape',
-        'page-size': 'A2',
+        'page-size': 'A0',
+        'zoom': '0.5',
         'viewport-size': '2560x1440',
     }
     try:

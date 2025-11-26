@@ -1272,7 +1272,7 @@ tr.collapsed td:not(:first-child) { display: none; }
     }
 
     body {
-        zoom: 0.8;
+        zoom: 0.5;
     }
 
     /* Expand the calendar so wkhtmltopdf capture renders every column */
