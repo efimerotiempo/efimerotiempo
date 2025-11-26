@@ -110,7 +110,7 @@ const STATIC_URL = "{{ url_for('static', filename='') }}";
 const MOVE_URL = "{{ url_for('move_phase') }}";
 const DELETE_URL = "{{ url_for('delete_phase') }}";
 const START_URL = "{{ url_for('update_phase_start') }}";
-const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+const SPLIT_URL = "{{ split_phase_url }}";
 const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
 const PHASE_HOURS_URL = "{{ url_for('update_phase_hours') }}";
 const OBS_URL_TEMPLATE = "{{ url_for('update_observations', pid='__PID__') }}";

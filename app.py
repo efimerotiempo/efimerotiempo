@@ -9,6 +9,7 @@ import time
 import json
 import re
 import unicodedata
+from werkzeug.routing import BuildError
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
 import urllib.parse
@@ -546,6 +547,18 @@ def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
 
 
 app = Flask(__name__)
+
+
+def _safe_url(endpoint, **values):
+    try:
+        return url_for(endpoint, **values)
+    except BuildError:
+        return ''
+
+
+@app.context_processor
+def inject_optional_urls():
+    return {'split_phase_url': _safe_url('split_phase_route')}
 app.url_map.strict_slashes = False
 
 
