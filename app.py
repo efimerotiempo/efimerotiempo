@@ -8932,6 +8932,7 @@ def exportar_pdf():
         <html lang=\"es\">
         <head>
           <meta charset=\"utf-8\">
+          <title>{{ pdf_title }}</title>
           <style>
             .pdf-page { page-break-after: always; }
             .pdf-page:last-child { page-break-after: auto; }
@@ -8949,6 +8950,7 @@ def exportar_pdf():
         </html>
         """,
         pages=''.join(html_pages),
+        pdf_title=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
     css_path = os.path.join(app.root_path, 'static', 'style.css')
     options = {
@@ -8977,8 +8979,10 @@ def exportar_pdf():
             mimetype='text/plain'
         )
 
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
+    filename = f"resumen_{timestamp}.pdf"
     response = Response(pdf, mimetype='application/pdf')
-    response.headers['Content-Disposition'] = 'attachment; filename=resumen.pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
 
