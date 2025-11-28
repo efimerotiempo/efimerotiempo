@@ -465,8 +465,8 @@
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
   const PROJ_START_URL = "{{ url_for('update_start_date') }}";
-  const SPLIT_URL = "";
-  const UNSPLIT_URL = "";
+  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const ADD_PHASE_INSTANCE_URL = "{{ url_for('add_phase_instance') }}";
 
   function initProjectTableSorting(root = document) {
@@ -2508,8 +2508,16 @@ let draggedTaskElement = null;
           const parsedDataset = Number(t.dataset.hours);
           if (Number.isFinite(parsedDataset)) totalPhaseHours = parsedDataset;
         }
+        const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
+        const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
         const basePhaseName = (t.dataset.phase || '').split('#')[0];
         actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
+        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
+        if (Array.isArray(projectPhases[t.dataset.phase])) {
+          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+        }
+        splitLine += `</div>`;
+        actionLines.push(splitLine);
         actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
         const unplanPart = normalizedPart;
         const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
@@ -2582,29 +2590,6 @@ let draggedTaskElement = null;
           } catch (error) {
             console.error('No se pudo abrir Calendario pedidos:', error);
           }
-        });
-      }
-      const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
-      if (addPhaseBtn) {
-        addPhaseBtn.addEventListener('click', ev => {
-          ev.stopPropagation();
-          const hours = prompt('Horas para la nueva fase:');
-          if (hours === null) return;
-          fetch(ADD_PHASE_INSTANCE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ pid: addPhaseBtn.dataset.pid, phase: addPhaseBtn.dataset.phase, hours })
-          })
-            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
-            .then(({ ok, data }) => {
-              if (!ok) {
-                alert(data.error || 'Error creando fase');
-                return;
-              }
-              location.reload();
-            })
-            .catch(() => alert('Error creando fase'));
         });
       }
       const removeArchivedBtn = popup.querySelector('.remove-archived-phase-btn');
@@ -2744,6 +2729,124 @@ let draggedTaskElement = null;
               obsSave.disabled = false;
             });
         });
+      }
+      const split = document.getElementById('split-btn');
+      if (split) {
+        split.addEventListener('click', ev => {
+          ev.stopPropagation();
+          splitModal.dataset.pid = split.dataset.pid;
+          splitModal.dataset.phase = split.dataset.phase;
+          splitModal.dataset.date = split.dataset.date;
+          prepareSplitModal(split);
+          splitModal.style.display = 'block';
+        });
+      }
+      const unsplit = document.getElementById('unsplit-btn');
+      if (unsplit) {
+        unsplit.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (confirm('¿Deshacer divisi\u00f3n de esta fase?')) {
+            fetch(UNSPLIT_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pid: unsplit.dataset.pid, phase: unsplit.dataset.phase })
+            }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+          }
+        });
+      }
+      const addPhaseBtn = popup.querySelector('.add-phase-instance-btn');
+      if (addPhaseBtn) {
+        addPhaseBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          const hours = prompt('Horas para la nueva fase:');
+          if (hours === null) return;
+          fetch(ADD_PHASE_INSTANCE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ pid: addPhaseBtn.dataset.pid, phase: addPhaseBtn.dataset.phase, hours })
+          })
+            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok) {
+                alert(data.error || 'Error creando fase');
+                return;
+              }
+              location.reload();
+            })
+            .catch(err => alert(err.message || 'Error creando fase'));
+        });
+      }
+      if (splitForm && !splitForm.dataset.enhanced) {
+        splitForm.addEventListener('submit', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (!splitModal) return;
+          const manuals = getSplitManualInputs();
+          if (!manuals.length) {
+            alert('Debes indicar al menos una parte.');
+            return;
+          }
+          const parts = [];
+          let invalid = false;
+          manuals.forEach(input => {
+            const value = parseSplitHours(input.value);
+            if (!Number.isInteger(value) || value <= 0) {
+              input.classList.add('split-input-error');
+              invalid = true;
+              return;
+            }
+            parts.push(value);
+          });
+          const remainderValue = splitRemainderInput ? parseSplitHours(splitRemainderInput.value) : null;
+          const total = parseSplitHours(splitModal.dataset.totalHours);
+          let remainderInt = null;
+          if (!Number.isInteger(remainderValue) || remainderValue === null || remainderValue <= 0) {
+            invalid = true;
+          } else {
+            remainderInt = remainderValue;
+            parts.push(remainderInt);
+          }
+          const sumParts = parts.reduce((acc, value) => acc + value, 0);
+          if (total !== null && Number.isFinite(total) && sumParts !== total) {
+            invalid = true;
+          }
+          if (invalid) {
+            alert('Revisa las horas de cada parte. Deben ser enteros positivos y sumar el total de la fase.');
+            updateSplitModalDisplay();
+            return;
+          }
+          const payload = {
+            pid: splitModal.dataset.pid,
+            phase: splitModal.dataset.phase,
+            date: splitModal.dataset.date,
+            parts,
+          };
+          fetch(SPLIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+          }).then(resp => { if (resp.ok) location.reload(); else resp.json().then(d => alert(d.error || 'Error')); });
+        });
+        splitForm.dataset.enhanced = 'true';
+      }
+      if (splitAddPartButton && !splitAddPartButton.dataset.bound) {
+        splitAddPartButton.addEventListener('click', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const remainderRow = splitRemainderInput ? splitRemainderInput.closest('.split-part-row') : null;
+          const input = createSplitPartRow(null, remainderRow);
+          ensureSplitRemainderInput();
+          updateSplitModalDisplay();
+          if (input) {
+            input.focus();
+          }
+        });
+        splitAddPartButton.dataset.bound = 'true';
+      }
+      if (splitCancel) {
+        splitCancel.addEventListener('click', () => { splitModal.style.display = 'none'; });
       }
       const freeze = document.getElementById('freeze-btn');
       if (freeze) {

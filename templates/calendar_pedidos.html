@@ -46,7 +46,7 @@
                 {% if d.month %}<div class="month-divider">{{ d.month }}</div>{% endif %}
                 <div class="day-number">{{ d.day }}</div>
                 {% for t in d.tasks %}
-                <div class="task" draggable="true"
+                <div class="task{% if t.get('simulated') %} simulated{% endif %}" draggable="true"
                      data-pid="{{ t.get('pid') or '' }}"
                      data-phase="{{ t.get('phase') or '' }}"
                      data-day="{{ d.date.isoformat() }}"
@@ -71,7 +71,7 @@
             {% if loop.first %}
             <td class="unconfirmed" rowspan="{{ week_count }}">
                 {% for t in calendar.unconfirmed %}
-                  <div class="task" draggable="true"
+                  <div class="task{% if t.get('simulated') %} simulated{% endif %}" draggable="true"
                        data-pid="{{ t.get('pid') or '' }}"
                        data-phase="{{ t.get('phase') or '' }}"
                        data-worker="{{ t.get('worker') or '' }}"
@@ -269,8 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const SPLIT_URL = "";
-  const UNSPLIT_URL = "";
+  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const TABLE_COLLATOR = typeof Intl !== 'undefined'
     ? new Intl.Collator('es', { sensitivity: 'base', numeric: true })
     : null;
@@ -1631,14 +1631,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const totalHoursAttr = totalPhaseHours !== null ? ` data-total-hours="${totalPhaseHours}"` : '';
       const partHoursAttr = totalPhaseHours !== null ? ` data-hours="${totalPhaseHours}"` : '';
-      if (SPLIT_URL && UNSPLIT_URL) {
-        let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
-        if (info.phases && Array.isArray(info.phases[context.phase])) {
-          splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
-        }
-        splitLine += `</div>`;
-        actionLines.push(splitLine);
+      let splitLine = `<div><button id="split-btn" data-pid="${context.pid}" data-phase="${context.phase}" data-date="${context.day || ''}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
+      if (info.phases && Array.isArray(info.phases[context.phase])) {
+        splitLine += ` <button id="unsplit-btn" data-pid="${context.pid}" data-phase="${context.phase}">Deshacer división</button>`;
       }
+      splitLine += `</div>`;
+      actionLines.push(splitLine);
       actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${context.pid}" data-phase="${context.phase}">&#10060; Borrar fase</button></div>`);
       const unplanPart = normalizePartValue(context.part);
       const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';
