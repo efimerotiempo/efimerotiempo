@@ -11,7 +11,7 @@ pip install -r requirements.txt  # o al menos Flask
 python app.py
 ```
 
-La aplicación escucha por defecto en `http://localhost:5000`. La primera pantalla que se abre es la vista **Completo**, que combina el calendario principal y la tabla de proyectos.
+La aplicación escucha por defecto en `http://localhost:9000`. La primera pantalla que se abre es la vista **Completo**, que combina el calendario principal y la tabla de proyectos.
 
 ### Datos persistentes
 
