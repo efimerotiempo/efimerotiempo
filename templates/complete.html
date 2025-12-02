@@ -1766,13 +1766,49 @@ let draggedTaskElement = null;
       const projectPhases = info.phases || {};
       const assignedMap = info.assigned || {};
       const basePhaseSet = new Set(PHASES);
+
+      const extractTaskHours = (el) => {
+        if (!el) return null;
+        const dsHours = el.dataset.hours;
+        if (dsHours !== undefined && dsHours !== null && `${dsHours}`.trim() !== '') {
+          const parsed = Number(dsHours);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+        const hoursNode = el.querySelector('.task-hours');
+        if (hoursNode) {
+          const match = hoursNode.textContent.match(/([0-9]+(?:[.,][0-9]+)?)/);
+          if (match) {
+            const parsed = Number(match[1].replace(',', '.'));
+            if (Number.isFinite(parsed)) return parsed;
+          }
+        }
+        return null;
+      };
+
+      const collectPhaseHoursFromDom = (pid) => {
+        const map = {};
+        document.querySelectorAll(`.task[data-pid="${pid}"]`).forEach((node) => {
+          const phaseKey = node.dataset.phase;
+          if (!phaseKey) return;
+          const parsed = extractTaskHours(node);
+          if (!Number.isFinite(parsed)) return;
+          map[phaseKey] = (map[phaseKey] || 0) + parsed;
+        });
+        return map;
+      };
+
+      const domPhaseHours = collectPhaseHoursFromDom(t.dataset.pid);
+      const resolvePhaseHours = (phaseKey) => {
+        if (domPhaseHours[phaseKey] !== undefined) return domPhaseHours[phaseKey];
+        const val = projectPhases[phaseKey];
+        if (Array.isArray(val)) return val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
+        return parseInt(val) || 0;
+      };
+
       const phaseLines = [];
       PHASES.forEach(ph => {
         if (ph === 'dibujo' || ph === 'pedidos') return;
-        const val = projectPhases[ph];
-        let total = 0;
-        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
-        else total = parseInt(val) || 0;
+        const total = resolvePhaseHours(ph);
         if (total > 0) {
           const assigned = assignedMap[ph] || 'Sin planificar';
           const classes = ['phase-entry'];
@@ -1795,9 +1831,7 @@ let draggedTaskElement = null;
         const baseName = phKey.split('#')[0];
         const isBasePhase = basePhaseSet.has(phKey) || (!phKey.includes('#') && basePhaseSet.has(baseName));
         if (isBasePhase) return;
-        let total = 0;
-        if (Array.isArray(val)) total = val.map(v => parseInt(v)).reduce((a,b) => a + b, 0);
-        else total = parseInt(val) || 0;
+        const total = resolvePhaseHours(phKey);
         if (total > 0) {
           const assigned = assignedMap[phKey] || 'Sin planificar';
           const classes = ['phase-entry', 'manual-phase-entry'];
@@ -1830,7 +1864,9 @@ let draggedTaskElement = null;
         actionLines.push(`<div><button id="freeze-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" style="color:red;font-weight:bold">${(info.frozen_phases && info.frozen_phases.includes(t.dataset.phase)) ? 'Descongelar' : 'Congelar'}</button></div>`);
         const phaseHoursEntry = (info.phases && info.phases[t.dataset.phase]) || null;
         let totalPhaseHours = null;
-        if (Array.isArray(phaseHoursEntry)) {
+        if (domPhaseHours[t.dataset.phase] !== undefined) {
+          totalPhaseHours = domPhaseHours[t.dataset.phase];
+        } else if (Array.isArray(phaseHoursEntry)) {
           totalPhaseHours = phaseHoursEntry
             .map(v => Number(v) || 0)
             .reduce((acc, val) => acc + val, 0);
