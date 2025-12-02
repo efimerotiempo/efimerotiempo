@@ -771,7 +771,7 @@ body.columna-1-resizing * {
 
 .today { border: 3px solid red !important; }
 .weekend, .weekend-cell {
-    background: #000;
+    background: #ccc;
 }
 
 tr.collapsed td:not(:first-child) { display: none; }
