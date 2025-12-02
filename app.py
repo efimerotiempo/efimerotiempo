@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template, render_template_string, request, redirect, url_for, jsonify, Response
+import pdfkit
 from datetime import date, timedelta, datetime
 from itertools import zip_longest, chain
 from collections import defaultdict
@@ -9,6 +10,7 @@ import time
 import json
 import re
 import unicodedata
+from werkzeug.routing import BuildError
 from werkzeug.utils import secure_filename
 from urllib.request import Request, urlopen
 import urllib.parse
@@ -546,6 +548,21 @@ def _reschedule_archived_phase_hours(entries, pid, phase, *, part_index=None):
 
 
 app = Flask(__name__)
+config = pdfkit.configuration(
+    wkhtmltopdf=r"C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"
+)
+
+
+def _safe_url(endpoint, **values):
+    try:
+        return url_for(endpoint, **values)
+    except BuildError:
+        return ''
+
+
+@app.context_processor
+def inject_optional_urls():
+    return {'split_phase_url': _safe_url('split_phase_route')}
 app.url_map.strict_slashes = False
 
 
@@ -6681,6 +6698,11 @@ def complete():
     )
 
 
+@app.route('/resumen')
+def resumen():
+    return complete()
+
+
 @app.route('/update_worker_note', methods=['POST'])
 def update_worker_note():
     data = request.get_json() or {}
@@ -8867,5 +8889,102 @@ def tracker():
     return render_template('tracker.html', logs=logs)
 
 
+def _extract_body_content(html):
+    match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
+    return match.group(1) if match else html
+
+
+def _render_tab(title, path, view_func):
+    with app.test_request_context(path):
+        html = view_func()
+    if hasattr(html, 'get_data'):
+        html = html.get_data(as_text=True)
+    body = _extract_body_content(html)
+    return f"<section class=\"pdf-page\"><h1>{title}</h1>{body}</section>"
+
+
+@app.get('/exportar_pdf')
+def exportar_pdf():
+    tabs = [
+        ('Completo', '/complete', complete),
+        ('Calendario pedidos', '/calendario-pedidos', calendar_pedidos),
+        ('Orden carpetas', '/orden-carpetas', orden_carpetas_view),
+        ('Gantt', '/gantt', gantt_view),
+        ('Gantt pedidos', '/gantt-pedidos', gantt_orders_view),
+        ('Notas', '/notas', note_list),
+        ('Observaciones', '/observaciones', observation_list),
+        ('Vacaciones', '/vacaciones', vacation_list),
+        ('Recursos', '/recursos', resources),
+    ]
+    try:
+        html_pages = [_render_tab(title, path, func) for title, path, func in tabs]
+    except Exception:
+        app.logger.exception('Error renderizando las pestañas para el PDF')
+        return Response(
+            'No se pudo generar el PDF. Revisa los registros del servidor.',
+            status=500,
+            mimetype='text/plain'
+        )
+
+    html = render_template_string(
+        """
+        <!doctype html>
+        <html lang=\"es\">
+        <head>
+          <meta charset=\"utf-8\">
+          <title>{{ pdf_title }}</title>
+          <style>
+            .pdf-page { page-break-after: always; }
+            .pdf-page:last-child { page-break-after: auto; }
+            .pdf-page > h1 {
+              margin: 0 0 12px 0;
+              padding: 8px 0;
+              font-size: 20px;
+              border-bottom: 1px solid #333;
+            }
+          </style>
+        </head>
+        <body class=\"pdf-export\">
+          {{ pages|safe }}
+        </body>
+        </html>
+        """,
+        pages=''.join(html_pages),
+        pdf_title=datetime.now().strftime('%Y-%m-%d %H:%M'),
+    )
+    css_path = os.path.join(app.root_path, 'static', 'style.css')
+    options = {
+        'enable-local-file-access': '',
+        'quiet': '',
+        'load-error-handling': 'ignore',
+        'print-media-type': '',
+        'orientation': 'Landscape',
+        'page-size': 'A0',
+        'zoom': '0.5',
+        'viewport-size': '2560x1440',
+    }
+    try:
+        pdf = pdfkit.from_string(
+            html,
+            False,
+            configuration=config,
+            options=options,
+            css=css_path,
+        )
+    except Exception:
+        app.logger.exception('Error generando el PDF con wkhtmltopdf')
+        return Response(
+            'No se pudo generar el PDF. Revisa la configuración de wkhtmltopdf.',
+            status=500,
+            mimetype='text/plain'
+        )
+
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
+    filename = f"resumen_{timestamp}.pdf"
+    response = Response(pdf, mimetype='application/pdf')
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=9000)
+    app.run(host='0.0.0.0', port=9000, debug=True)

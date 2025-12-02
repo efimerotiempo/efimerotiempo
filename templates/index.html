@@ -354,7 +354,7 @@
   const MOVE_URL = "{{ url_for('move_phase') }}";
   const DELETE_URL = "{{ url_for('delete_phase') }}";
   const START_URL = "{{ url_for('update_phase_start') }}";
-  const SPLIT_URL = "{{ url_for('split_phase_route') }}";
+  const SPLIT_URL = "{{ split_phase_url }}";
   const UNSPLIT_URL = "{{ url_for('unsplit_phase') }}";
   const ADD_PHASE_INSTANCE_URL = "{{ url_for('add_phase_instance') }}";
   const REMOVE_ARCHIVED_URL = "{{ url_for('remove_archived_phase') }}";
@@ -1849,12 +1849,10 @@ let draggedTaskElement = null;
         const partHoursAttr = t.dataset.hours ? ` data-hours="${t.dataset.hours}"` : '';
         const basePhaseName = (t.dataset.phase || '').split('#')[0];
         actionLines.push(`<div><button class="add-phase-instance-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Añadir fase de ${basePhaseName}</button></div>`);
-        let splitLine = `<div><button id="split-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}" data-date="${t.dataset.day}"${totalHoursAttr}${partHoursAttr}>Dividir fase aquí</button>`;
         if (Array.isArray(projectPhases[t.dataset.phase])) {
-          splitLine += ` <button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button>`;
+          const splitLine = `<div><button id="unsplit-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">Deshacer división</button></div>`;
+          actionLines.push(splitLine);
         }
-        splitLine += `</div>`;
-        actionLines.push(splitLine);
         actionLines.push(`<div><button class="phase-delete-btn" id="del-btn" data-pid="${t.dataset.pid}" data-phase="${t.dataset.phase}">&#10060; Borrar fase</button></div>`);
         const unplanPart = normalizedPart;
         const unplanAttr = unplanPart ? ` data-part="${unplanPart}"` : '';

@@ -311,7 +311,7 @@ table.schedule td.weekend-cell {
   user-select: none;
 }
 .unplanned-panel {
-    width: 2500px;
+    width: 500px;
     border-left: 1px solid #ccc;
     padding: 5px;
     position: relative;
@@ -331,11 +331,14 @@ table.schedule td.weekend-cell {
     border-radius: 6px;
     padding: 8px;
     min-height: 60px;
+    /* Altura para que se vean ~15 fases antes de mostrar el scroll */
+    max-height: calc(15 * 32px);
     display: flex;
     flex-direction: column;
     gap: 6px;
     transition: background-color 0.2s ease, border-color 0.2s ease;
     background-color: #f8f8f8;
+    overflow-y: auto;
 }
 .manual-dropzone.drag-over {
     border-color: #4a7bd8;
@@ -768,7 +771,7 @@ body.columna-1-resizing * {
 
 .today { border: 3px solid red !important; }
 .weekend, .weekend-cell {
-    background: #000;
+    background: #ccc;
 }
 
 tr.collapsed td:not(:first-child) { display: none; }
@@ -1261,4 +1264,29 @@ tr.collapsed td:not(:first-child) { display: none; }
 
 .cronologico-preview-client {
     color: #666;
+}
+
+@media print {
+    .no-print {
+        display: none;
+    }
+
+    body {
+        zoom: 0.5;
+    }
+
+    /* Expand the calendar so wkhtmltopdf capture renders every column */
+    .calendar-flex {
+        display: block;
+    }
+
+    .schedule-wrapper {
+        overflow: visible !important;
+        width: auto !important;
+    }
+
+    table.schedule {
+        width: auto !important;
+        max-width: none !important;
+    }
 }
